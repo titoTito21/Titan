@@ -645,6 +645,15 @@ class SettingsFrame(wx.Frame):
                 self.category_load_callbacks[name] = load_callback
         else:
             print(f"[SettingsFrame] Category {name} already registered")
+            # A panel offered for a name that is already taken is not used,
+            # and a wx.Panel is visible the moment it is made - left alone
+            # it would sit on top of whichever category is shown. Hiding it
+            # is what keeps a duplicate registration harmless.
+            try:
+                if panel is not None and panel is not self.categories.get(name):
+                    panel.Hide()
+            except Exception as error:
+                print(f"[SettingsFrame] could not hide the spare panel: {error}")
 
     def rebuild_category_list(self):
         """Rebuild the category list from category_order"""

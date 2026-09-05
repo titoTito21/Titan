@@ -303,6 +303,226 @@ def _shell_addon():
 # --------------------------------------------------------------------------- #
 # Building them all
 # --------------------------------------------------------------------------- #
+
+
+
+def _extend(addons, addon_id, specs):
+    """Add hand-written actions to a provider that already exists.
+
+    The provider is built from a tool table, which answers the questions a
+    model asks; these answer the ones a WINDOW asks - give me the rows, give
+    me the categories, give me the tab bar. They belong on the same provider
+    because a caller looking for Titan-Net should not have to know which
+    half of it they want.
+    """
+    target = next((a for a in addons if a.addon_id == addon_id), None)
+    if target is None:
+        return
+    taken = {action.name for action in target.actions}
+    for name, summary, params, risk, run in specs:
+        if name in taken:
+            continue
+        prepared = {}
+        for pname, pspec in params.items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+        action = ActionSpec(name=name, summary=summary, params=prepared,
+                            risk=risk, mode='any', addon=target)
+        action.run = run
+        target.actions.append(action)
+
+
+def _add_titannet_data(addons):
+    """Titan-Net as records rather than as sentences, for a client."""
+    from src.network.titannet_actions import (get_titannet_data_actions,
+                                              get_titannet_place_actions,
+                                              get_titannet_hub_actions)
+    _extend(addons, 'titannet', get_titannet_data_actions())
+    _extend(addons, 'titannet', get_titannet_place_actions())
+    _extend(addons, 'titannet', get_titannet_hub_actions())
+
+
+def _add_main_window(addons):
+    """Titan's own tab bar, status bar and Program menu."""
+    from src.ui.main_window_actions import get_main_window_actions
+    _extend(addons, 'titan', get_main_window_actions())
+
+
+
+
+def _add_titan_face(addons):
+    """The categories Titan's own non-visual interface has: the widgets, the
+    components' menu, the buffers, the notifications."""
+    from src.ui.main_window_actions import get_titan_face_actions
+    _extend(addons, 'titan', get_titan_face_actions())
+
+
+
+def _add_ai_questions(addons):
+    """Asking Titan's AI from somewhere that has no window of its own."""
+    from src.titan_core.reader_actions import get_ai_actions
+    _extend(addons, 'titan', get_ai_actions())
+
+
+def _add_reader(addons):
+    """Titan's voice, as a reader living in another program needs it."""
+    from src.titan_core.reader_actions import get_reader_actions
+    _extend(addons, 'titan', get_reader_actions())
+
+
+def _add_settings_ui(addons):
+    """Titan's settings WINDOW, added to the `settings` provider.
+
+    The tools that provider is built from answer "which setting does what";
+    these answer "show me the settings", which is a different question and
+    the one a program drawing its own settings screen asks. They live on the
+    same provider because a caller looking for the settings should not have
+    to know which half of them it wants.
+    """
+    from src.settings.settings_actions import get_settings_ui_actions
+
+    target = next((a for a in addons if a.addon_id == 'settings'), None)
+    if target is None:
+        return
+    taken = {action.name for action in target.actions}
+    for name, summary, params, risk, run in get_settings_ui_actions():
+        if name in taken:
+            continue
+        prepared = {}
+        for pname, pspec in params.items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+        action = ActionSpec(name=name, summary=summary, params=prepared,
+                            risk=risk, mode='any', addon=target)
+        action.run = run
+        target.actions.append(action)
+
+
+
+def _addon_actions_json(addon='', **_):
+    """Every action of one add-on as JSON: name, summary, parameters, risk.
+
+    `list_addons` carries the action NAMES, which is enough to navigate but
+    not enough to draw a screen: a program showing somebody Titan's add-ons
+    wants to say what an action does and to ask for its parameters properly,
+    rather than offering a bare word and finding out afterwards. Written
+    here rather than as a tool because a model already has `describe`, which
+    is the same thing in prose.
+    """
+    import json
+
+    from src.titan_core.actions import dispatch
+
+    wanted = str(addon or '').strip()
+    if not wanted:
+        return "Say which add-on to describe."
+    actions = dispatch.list_actions(wanted)
+    if not actions:
+        return f"No Titan add-on called '{wanted}' offers actions."
+    described = []
+    for action in actions:
+        described.append({
+            'name': action.name,
+            'summary': action.summary,
+            'risk': action.risk,
+            'needs_ai': bool(action.needs_ai),
+            'params': [{'name': name,
+                        'type': spec.get('type', 'string'),
+                        'description': spec.get('description', ''),
+                        'required': bool(spec.get('required')),
+                        'enum': list(spec.get('enum') or [])}
+                       for name, spec in (action.params or {}).items()],
+        })
+    return json.dumps({'addon': wanted, 'actions': described},
+                      ensure_ascii=False)
+
+
+
+def _inventory_json(kind='', **_):
+    """Every add-on INSTALLED, as JSON - not only those offering actions.
+
+    `list_addons` answers "what can be driven", which is the right question
+    for a macro and the wrong one for a screen: most applications declare no
+    actions at all, so a window built from that list would show a user four
+    applications out of forty. This walks the same directories Titan's own
+    lists are built from, so an alternative interface shows what Titan's own
+    window shows.
+    """
+    import json
+
+    from src.ai import titan_tools
+
+    wanted = str(kind or '').strip().lower()
+    kinds = titan_tools._ADDON_KINDS
+    if wanted and wanted not in kinds:
+        return (f"Unknown add-on kind '{wanted}'. Known kinds: "
+                + ", ".join(kinds.keys()))
+    chosen = [wanted] if wanted else list(kinds.keys())
+
+    # Applications, games and Titan IM modules are listed by the name Titan
+    # itself shows AND accepts: `_discover_kind` answers with FOLDER names,
+    # and `titan.launch` matches against the name in the manifest, so a
+    # folder called `tcalc` holding an application called "Kalkulator" was
+    # listed as tcalc and then could not be launched by that name. The other
+    # kinds have no launcher and keep the directory listing.
+    launchable = {}
+    try:
+        for kind, name, _run in titan_tools._all_launchable():
+            launchable.setdefault(kind, []).append(name)
+    except Exception:
+        launchable = {}
+
+    out = []
+    for kid in chosen:
+        label, subdir, is_resource = kinds[kid]
+        names = launchable.get(kid)
+        if names is None:
+            try:
+                names = titan_tools._discover_kind(subdir, is_resource)
+            except Exception:
+                names = []
+        out.append({'kind': kid, 'label': label, 'entries': list(names)})
+    return json.dumps({'kinds': out}, ensure_ascii=False)
+
+
+def _add_inventory(addons):
+    """`titan.inventory`, for a program drawing Titan's own lists."""
+    target = next((a for a in addons if a.addon_id == 'titan'), None)
+    if target is None:
+        return
+    if any(action.name == 'inventory' for action in target.actions):
+        return
+    action = ActionSpec(
+        name='inventory',
+        summary="Every add-on installed, as JSON, by kind - applications, "
+                "games, components, Titan IM modules, statusbar applets and "
+                "the rest. What a window listing them needs.",
+        params={'kind': {'type': 'string', 'required': False,
+                         'description': "One kind only, e.g. 'app'."}},
+        risk='auto', mode='any', addon=target)
+    action.run = _inventory_json
+    target.actions.append(action)
+
+
+def _add_addon_details(addons):
+    """`titan.addon_actions`, for a program drawing Titan's own add-on list."""
+    target = next((a for a in addons if a.addon_id == 'titan'), None)
+    if target is None:
+        return
+    if any(action.name == 'addon_actions' for action in target.actions):
+        return
+    action = ActionSpec(
+        name='addon_actions',
+        summary="Every action one add-on offers, as JSON: name, summary, "
+                "parameters and risk. What a screen needs to show them.",
+        params={'addon': {'type': 'string', 'required': True,
+                          'description': "The add-on's id, from list_addons."}},
+        risk='auto', mode='any', addon=target)
+    action.run = _addon_actions_json
+    target.actions.append(action)
+
 def build():
     """Every built-in provider that can be loaded right now.
 
@@ -328,4 +548,36 @@ def build():
         addons.append(_shell_addon())
     except Exception as e:
         print(f"[actions] Built-in 'shell' unavailable: {e}")
+    try:
+        _add_settings_ui(addons)
+    except Exception as e:
+        print(f"[actions] The settings window is not reachable: {e}")
+    try:
+        _add_addon_details(addons)
+    except Exception as e:
+        print(f"[actions] Add-on details unavailable: {e}")
+    try:
+        _add_inventory(addons)
+    except Exception as e:
+        print(f"[actions] The add-on inventory is unavailable: {e}")
+    try:
+        _add_titannet_data(addons)
+    except Exception as e:
+        print(f"[actions] Titan-Net records are unavailable: {e}")
+    try:
+        _add_main_window(addons)
+    except Exception as e:
+        print(f"[actions] Titan's main window is unreadable: {e}")
+    try:
+        _add_reader(addons)
+    except Exception as e:
+        print(f"[actions] The reader speech path is unavailable: {e}")
+    try:
+        _add_titan_face(addons)
+    except Exception as e:
+        print(f"[actions] Titan's other categories are unreadable: {e}")
+    try:
+        _add_ai_questions(addons)
+    except Exception as e:
+        print(f"[actions] Asking the AI is unavailable: {e}")
     return addons

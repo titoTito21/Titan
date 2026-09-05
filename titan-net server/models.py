@@ -1997,6 +1997,11 @@ class Database:
         ('cling', 'Cling',
          "Storage for Titan's Klango subsystem: shared high-score tables and "
          "the per-player records a Klango application keeps."),
+        ('elten_apps', 'Elten applications',
+         "Shared scoreboards for the Elten games Titan runs through its Elten "
+         "API bridge - the ones whose own EltenLink leaderboard is a protected "
+         "table Titan is not the signed launcher to write. A game's scores are "
+         "kept here instead, shared among the Titan players of that game."),
     )
 
     def _ensure_builtin_extensions(self, cursor):

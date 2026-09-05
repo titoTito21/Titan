@@ -263,19 +263,18 @@ end
 # at all, so the Game Room came up saying "the operation failed" before it
 # had listed anything.
 #
-# Both routes now end at the same local table, which means the honest
-# limit: an application's data is real, survives restarts and is shared
-# with nothing. A lobby works; the other players are not in it. The
-# alternative - publishing to somebody's EltenLink account because they
-# opened an application - is the one thing this bridge does not do.
+# Both routes now end at the same `Programs::ServerTable`, which is a real
+# table on EltenLink written as whoever is signed in to Titan IM - with
+# this machine's own copy underneath it, so a game offline keeps its
+# scores and shares them when there is a server to share them with.
 module EltenLink
   module Apps
     class << self
-      def table(_client, _uuid, name)
+      def table(_client, uuid, name)
         program = Program.current
         raise Error.new('this application is not running', 'unavailable') if program.nil?
 
-        (@tables ||= {})[name.to_s] ||= Programs::LocalTable.new(program, name.to_s)
+        program.server_table(name.to_s, uuid)
       end
 
       def resources(_client, _uuid)
@@ -286,11 +285,38 @@ module EltenLink
         false
       end
 
-      def register(*_arguments, **_options)
-        true
+      # Declaring the application and its tables. Elten does this once,
+      # from `server_app`, before a row can be written.
+      def register(_client = nil, name: nil, data: nil, tables: nil,
+                   tables_protected: false, notifications: false, **_rest)
+        EltenBridge.call('elten_app',
+                         { 'do' => 'register', 'name' => name.to_s,
+                           'data' => data, 'tables' => tables,
+                           'protected' => tables_protected ? true : false,
+                           'notifications' => notifications ? true : false })
+      rescue StandardError => error
+        Log.warning("registering the app failed: #{error.message}")
+        false
       end
       alias create register
-      alias update register
+
+      def update(_client = nil, uuid = nil, name: nil, data: nil, tables: nil,
+                 tables_protected: nil, notifications: nil, **_rest)
+        EltenBridge.call('elten_app',
+                         { 'do' => 'update_app', 'uuid' => uuid.to_s,
+                           'name' => name, 'data' => data, 'tables' => tables,
+                           'protected' => tables_protected,
+                           'notifications' => notifications })
+      rescue StandardError => error
+        Log.warning("updating the app failed: #{error.message}")
+        false
+      end
+
+      def info(_client = nil, uuid = nil)
+        EltenBridge.call('elten_app', { 'do' => 'info', 'uuid' => uuid.to_s })
+      rescue StandardError
+        nil
+      end
     end
   end
 

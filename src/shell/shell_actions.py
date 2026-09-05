@@ -935,12 +935,58 @@ def shell_list_addons(**_kwargs):
     return "\n".join(lines)
 
 
+
+def shell_windows_records(**_kwargs):
+    """The open windows as JSON - title, active, minimised.
+
+    `list_windows` answers in numbered lines with the state in words, and
+    those words are translated: a client parsing them works in English and
+    silently stops working in Polish. A window list that something else
+    draws needs the records, so this hands them over and leaves the
+    sentence-shaped one exactly as it was.
+    """
+    import json
+
+    if not IS_WINDOWS:
+        return _no_windows()
+    windows = win_shell.list_windows()
+    return json.dumps({'windows': [{'title': window.title,
+                                    'active': bool(window.active),
+                                    'minimized': bool(window.minimized)}
+                                   for window in windows]},
+                      ensure_ascii=False)
+
+
+
+def shell_state_records(**_kwargs):
+    """Whether the Titan shell is running, as JSON rather than as a sentence.
+
+    `status` says it in the user's own language - "Powloka Titana nie jest
+    uruchomiona" - and a caller deciding whether to offer a desktop cannot
+    read that. Asking it in words worked in English and quietly answered the
+    opposite in Polish, which is the whole reason this exists.
+    """
+    import json
+
+    running = False
+    try:
+        from src.shell import shell_manager
+        running = bool(shell_manager.is_shell_running())
+    except Exception:
+        running = False
+    return json.dumps({'running': running, 'windows_shell': IS_WINDOWS},
+                      ensure_ascii=False)
+
+
 def get_shell_actions():
     """(name, summary, params, risk, callable) for every shell action."""
     string = {'type': 'string'}
     return (
         ('status', "Say whether the Titan shell is running and what it shows.",
          {}, 'auto', shell_status),
+        ('state', "Whether the Titan shell is running, as JSON - the same "
+                   "thing `status` says in the user's own language.",
+         {}, 'auto', shell_state_records),
         ('start', "Start the Titan desktop, taskbar and Start menu.",
          {}, 'confirm', shell_start),
         ('stop', "Stop the Titan shell and give the screen back to Windows.",
@@ -961,6 +1007,9 @@ def get_shell_actions():
          'auto', shell_get_time),
         ('list_windows', "List the open windows, saying which is active.",
          {}, 'auto', shell_list_windows),
+        ('windows', "The open windows as JSON: title, active, minimised - "
+                     "for a program drawing its own window list.",
+         {}, 'auto', shell_windows_records),
         ('activate_window', "Bring an open window to the front.",
          {'title': dict(string, description="The window's title, whole or "
                         "part of it.", required=True)},

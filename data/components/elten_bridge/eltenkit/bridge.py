@@ -565,6 +565,23 @@ def _op_stream_do(app, args):
         stream.seek(args.get('position', 0.0))
     elif what == 'volume':
         stream.set_volume(args.get('volume', 1.0))
+    elif what == 'pan':
+        stream.set_pan(args.get('pan', 0.0))
+    elif what == 'pitch':
+        stream.set_pitch(args.get('pitch', 1.0))
+    elif what == 'tempo':
+        stream.set_tempo(args.get('tempo', 1.0))
+    elif what == 'reset':
+        stream.reset()
+    elif what == 'chapter':
+        target = stream.chapter_near(int(args.get('direction', 1)))
+        if target is not None:
+            stream.seek(target)
+        else:
+            return dict(stream.status(), no_chapter=True)
+    elif what == 'save':
+        ok = stream.save_to(str(args.get('path') or ''))
+        return dict(stream.status(), saved=bool(ok))
     elif what == 'close':
         stream.close()
         with app._stream_lock:
@@ -672,6 +689,22 @@ def _op_sound_pause(app, args):
     return app.sounds.pause(args.get('handle'), bool(args.get('paused', True)))
 
 
+def _op_sound_frequency(app, args):
+    return app.sounds.frequency(args.get('handle'))
+
+
+def _op_sound_pitch(app, args):
+    return app.sounds.set_pitch(args.get('handle'), args.get('pitch', 1.0))
+
+
+def _op_sound_length(app, args):
+    return app.sounds.length(args.get('handle'))
+
+
+def _op_sound_at(app, args):
+    return app.sounds.at(args.get('handle'))
+
+
 def _op_sound_close(app, args):
     return app.sounds.close_sound(args.get('handle'))
 
@@ -744,6 +777,24 @@ def _op_app_version(app, args):
 
 def _op_app_id(app, args):
     return app.entry.id
+
+
+def _op_app_signature(app, args):
+    """Who signed this package - the public half, and never more.
+
+    An application asks so it can say who built it. There is nothing
+    secret here: the certificate ships in front of the payload precisely
+    so a reader can check it.
+    """
+    signature = getattr(app.entry, 'signature', None)
+    if signature is None:
+        return {}
+    try:
+        return {'signed': bool(signature.signed()),
+                'fingerprint': str(signature.fingerprint() or ''),
+                'subject': str(signature.subject() or '')}
+    except Exception:
+        return {}
 
 
 def _op_confirm(app, args):
@@ -1032,6 +1083,89 @@ def _op_elten(app, args):
         raise _Refused(str(error))
 
 
+#: The app-table calls, by the name Ruby asks for them under. Kept as a
+#: table for exactly the reason `CALLS` is: an application names one of
+#: these or it reaches nothing.
+_APP_TABLE_OPS = ('select', 'insert', 'upsert', 'update', 'delete',
+                  'register', 'update_app', 'info', 'signed_in', 'notify',
+                  'shared_select', 'shared_insert', 'shared_available')
+
+
+def _op_elten_app(app, args):
+    """An application's OWN data on EltenLink - its tables, and itself.
+
+    This is what a game's scores really are: `server_table("scores")` and
+    `leaderboard("scores")` are rows in a table on EltenLink's server,
+    belonging to the application's uuid, written as the user who is signed
+    in. Before this they were a JSON file next to the application, so a
+    game's "best scores" was one machine's - a scoreboard with nobody
+    else on it.
+
+    Every call is signed with the session Titan already holds for Titan
+    IM's EltenLink account; an application never sees a credential and
+    cannot name an account. When nobody is signed in this refuses with a
+    sentence, which is what `available?` reports and why every game here
+    keeps its own copy of a score first and shares it afterwards.
+    """
+    from . import eltenlink as eltenlink_module
+    what = str(args.get('do') or '')
+    if what not in _APP_TABLE_OPS:
+        raise _Refused('Titan does not implement the app call %r' % what)
+    uuid = str(args.get('uuid') or '')
+    table = str(args.get('table') or '')
+    try:
+        if what == 'signed_in':
+            return eltenlink_module.signed_in()
+        if what == 'select':
+            return eltenlink_module.table_select(
+                uuid, table, where=args.get('where'), order=args.get('order'),
+                limit=args.get('limit'), offset=args.get('offset'))
+        if what == 'insert':
+            return eltenlink_module.table_insert(uuid, table,
+                                                 args.get('values') or {})
+        if what == 'upsert':
+            return eltenlink_module.table_upsert(uuid, table,
+                                                 args.get('values') or {})
+        if what == 'update':
+            return eltenlink_module.table_update(uuid, table, args.get('id'),
+                                                 args.get('values') or {})
+        if what == 'delete':
+            return eltenlink_module.table_delete(uuid, table, args.get('id'))
+        if what == 'register':
+            return eltenlink_module.app_register(
+                args.get('name'), data=args.get('data'),
+                tables=args.get('tables'),
+                protected=bool(args.get('protected')),
+                notifications=bool(args.get('notifications')))
+        if what == 'update_app':
+            return eltenlink_module.app_update(
+                uuid, name=args.get('name'), data=args.get('data'),
+                tables=args.get('tables'), protected=args.get('protected'),
+                notifications=args.get('notifications'))
+        if what == 'shared_available':
+            from . import titannet_scores
+            return titannet_scores.available()
+        if what == 'shared_select':
+            from . import titannet_scores
+            return titannet_scores.select(
+                uuid, table, where=args.get('where'), order=args.get('order'),
+                limit=args.get('limit'), offset=args.get('offset'))
+        if what == 'shared_insert':
+            from . import titannet_scores
+            return titannet_scores.insert(uuid, table, args.get('values') or {})
+        if what == 'info':
+            return eltenlink_module.app_info(uuid)
+        if what == 'notify':
+            return eltenlink_module.app_notify(
+                uuid, str(args.get('user') or ''), str(args.get('type') or ''),
+                args.get('metadata') or {}, int(args.get('expires_in') or 0))
+    except eltenlink_module.EltenUnavailable as error:
+        raise _Refused(str(error))
+    except Exception as error:
+        raise _Refused('%s: %s' % (type(error).__name__, error))
+    return None
+
+
 class _Refused(Exception):
     """Something Titan will not or cannot do, said in a sentence."""
 
@@ -1080,6 +1214,7 @@ OPERATIONS = {
     'stream_open': _op_stream_open,
     'stream_do': _op_stream_do,
     'elten_whoami': _op_elten_whoami,
+    'elten_app': _op_elten_app,
     'sound_asset': _op_sound_asset,
     'sound_create': _op_sound_create,
     'sound_play': _op_sound_play,
@@ -1088,6 +1223,10 @@ OPERATIONS = {
     'sound_volume': _op_sound_volume,
     'sound_position': _op_sound_position,
     'sound_pause': _op_sound_pause,
+    'sound_frequency': _op_sound_frequency,
+    'sound_pitch': _op_sound_pitch,
+    'sound_length': _op_sound_length,
+    'sound_at': _op_sound_at,
     'sound_close': _op_sound_close,
     'sound_pool_play': _op_sound_pool_play,
     'sound_pool_close': _op_sound_pool_close,
@@ -1097,6 +1236,7 @@ OPERATIONS = {
     'app_description': _op_app_description,
     'app_version': _op_app_version,
     'app_id': _op_app_id,
+    'app_signature': _op_app_signature,
     'confirm': _op_confirm,
     'select_action': _op_select_action,
     'select_item': _op_select_item,
@@ -1143,10 +1283,24 @@ def _note_runner_end(app, args):
 
 
 #: Notifications: nothing is waiting, so these must not answer.
+#:
+#: **`control_set` and `form_close` belong here as well as in
+#: `OPERATIONS`.** They are sent with `notify` - an application changing
+#: its own window is not something it waits for - and a message with no id
+#: is looked up HERE and nowhere else, so for as long as they were only
+#: operations every one of them was read off the wire and dropped on the
+#: floor. What that meant is everything an application does to a window it
+#: has already put up: a list whose rows are replaced, a grid whose board
+#: is dealt again, a header that should follow the folder, a button
+#: relabelled mid-form. The file manager listed its first folder and then
+#: showed that folder for ever, whatever the user pressed, and
+#: AudioMemory's board stayed the empty one it was built with.
 NOTIFICATIONS = {
     'log': _note_log,
     'started': _note_started,
     'ended': _note_ended,
     'runner_begin': _note_runner_begin,
     'runner_end': _note_runner_end,
+    'control_set': _op_control_set,
+    'form_close': _op_form_close,
 }

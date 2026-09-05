@@ -1097,5 +1097,1238 @@ class TheBridgeSpeaksTheUsersLanguage(unittest.TestCase):
         self.assertNotEqual(polish.gettext('Delete'), 'Delete')
 
 
+class _RubyAsk(unittest.TestCase):
+    """A snippet run against the REAL platform on the REAL interpreter.
+
+    The same harness `TheRubySideAnswersEltensOwnShapes` uses, with the
+    whole platform loaded rather than half of it - the settings, the
+    class-level API and the file tree all reach for `paths` and each
+    other, and a preamble that loads only some of them tests a program
+    that does not exist.
+    """
+
+    PREAMBLE = """
+$LOAD_PATH.unshift(%s)
+module EltenBridge
+  class Closed < StandardError; end
+  def self.call(op, args = {})
+    $calls ||= []
+    $calls << [op, args]
+    case op
+    when 'dirs' then {"user"=>Dir.home, "documents"=>Dir.home, "desktop"=>Dir.home, "music"=>Dir.home}
+    when 'path' then File.join(Dir.tmpdir, "elten-test", args["relative"].to_s)
+    when 'app_name' then "Test"
+    when 'form_open' then 1
+    when 'elten_app' then ($elten_app || nil)
+    else nil
+    end
+  end
+  def self.notify(op, args = {}); ($notices ||= []) << [op, args]; nil; end
+  def self.now; Time.now.to_f; end
+  def self.next_event(*_a); :timeout; end
+end
+module Log
+  def self.warning(*_a); end
+  def self.error(*_a); end
+  def self.debug(*_a); end
+  def self.info(*_a); end
+end
+require 'tmpdir'
+require 'loop'
+require 'eapi'
+require 'program'
+require 'controls'
+require 'server'
+require 'paths'
+require 'program_api'
+require 'settings'
+require 'audio'
+require 'media'
+require 'childproc'
+require 'eltenlink'
+require 'eltenapi'
+require 'network'
+"""
+
+    def setUp(self):
+        try:
+            self.ruby = runtime.find()
+        except runtime.RubyMissing as error:
+            self.skipTest(str(error))
+
+    def ask(self, source):
+        preamble = self.PREAMBLE % repr(
+            os.path.join(COMPONENT, 'eapi')).replace("'", '"')
+        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
+        io.open(path, 'w', encoding='utf-8').write(preamble + source)
+        answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                timeout=120, env=self.ruby.environment())
+        self.assertEqual(answer.returncode, 0,
+                         answer.stderr.decode('utf-8', 'replace'))
+        return answer.stdout.decode('utf-8', 'replace').strip()
+
+
+class AnEventReachesTheBlockTheWayEltenSendsIt(_RubyAsk):
+    """`e[4].call(a)` - ONE argument, the whole parameter list.
+
+    Elten's `FormBase#trigger` hands a block the array and lets Ruby's own
+    auto-splat sort it out, so `on(:move) { |pos| pos[0] }` gets the pair
+    and `on(:action) { |name, source, x, y| }` gets them apart. Splatting
+    instead gave the first shape the first number on its own - and
+    `pos[0]` on an Integer is a BIT of it, so AudioMemory read a column
+    out of a number that was the column.
+    """
+
+    def test_one_parameter_receives_the_whole_list(self):
+        source = ('g = GridBox.new(3, 3)\n'
+                  'seen = nil\n'
+                  'g.on(:move) { |pos| seen = pos }\n'
+                  'g.key_pressed("key_right"); g.update\n'
+                  'puts seen.inspect\n')
+        self.assertEqual(self.ask(source), '[1, 0]')
+
+    def test_several_parameters_still_come_apart(self):
+        source = ('g = GridBox.new(3, 3)\n'
+                  'g.bind_action(:flag, key: :f)\n'
+                  'seen = nil\n'
+                  'g.on(:action) { |name, _source, x, y| seen = [name, x, y] }\n'
+                  'g.key_pressed("key_f"); g.update\n'
+                  'puts seen.inspect\n')
+        self.assertEqual(self.ask(source), '[:flag, 0, 0]')
+
+
+class ABoardIsEltensBoard(_RubyAsk):
+    """`GridBox`, method for method against `ui/controls/grid_box.rb`.
+
+    A grid is the one control an application drives from its own loop -
+    `runner.on_tick { grid.update }` - so `update` has to be where it
+    moves, where the edge is reported and where a bound key fires.
+    """
+
+    def test_it_answers_everything_eltens_own_does(self):
+        wanted = ('labels set_cell set_cells replace_cells update_cells '
+                  'cell_label coordinate_label resize value lpos focus '
+                  'update move_by border_direction key_processed '
+                  'bind_action unbind_action reset_action_bindings '
+                  'action_bindings header x y width height').split()
+        source = ('g = GridBox.new(2, 2)\n'
+                  'puts %s.reject { |m| g.respond_to?(m) }.inspect\n'
+                  % repr(wanted).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_a_value_is_where_the_cursor_is_not_what_is_under_it(self):
+        """Elten's `value` is `[x, y]`. Answering the cell instead is a
+        game reading a label where it asked for a position."""
+        source = ('g = GridBox.new(3, 3)\n'
+                  'g.replace_cells([%w[a b c], %w[d e f], %w[g h i]])\n'
+                  'g.set_position(2, 1)\n'
+                  'puts [g.value, g.cell_label, g.coordinate_label].inspect\n')
+        self.assertEqual(self.ask(source), '[[2, 1], "f", "C2"]')
+
+    def test_a_wall_is_reported_with_the_way_it_was_walked_into(self):
+        """AudioMemory reads `pos[2]` and sounds the edge that was hit."""
+        source = ('g = GridBox.new(3, 3)\n'
+                  'seen = nil\n'
+                  'g.on(:border) { |pos| seen = pos }\n'
+                  'g.key_pressed("key_left"); g.update\n'
+                  'puts seen.inspect\n')
+        self.assertEqual(self.ask(source), '[0, 0, :left, -1, 0]')
+
+    def test_a_board_that_grows_tells_titan_its_new_shape(self):
+        """AudioMemory deals a bigger board every round. A grid whose
+        window keeps the old shape has squares the player cannot reach."""
+        source = ('g = GridBox.new(2, 2)\n'
+                  'Form.new([g]).present\n'
+                  '$notices = []\n'
+                  'g.replace_cells(Array.new(4) { Array.new(4, "x") }, resize: true)\n'
+                  'change = $notices.map { |op, args| args }.last\n'
+                  'puts [g.width, g.height, change[:width], change[:height]].inspect\n')
+        self.assertEqual(self.ask(source), '[4, 4, 4, 4]')
+
+    def test_setting_a_position_moves_the_cursor_on_the_screen(self):
+        """`grid.x = 0` between rounds. A plain writer left Ruby and the
+        window disagreeing about where the cursor was."""
+        source = ('g = GridBox.new(3, 3)\n'
+                  'Form.new([g]).present\n'
+                  'g.set_position(2, 2)\n'
+                  '$notices = []\n'
+                  'g.x = 0\n'
+                  'g.y = 0\n'
+                  'puts $notices.map { |_op, args| [args[:x], args[:y]] }.inspect\n')
+        self.assertEqual(self.ask(source), '[[0, nil], [nil, 0]]')
+
+    def test_the_arrows_cannot_be_bound_to_anything_else(self):
+        source = ('g = GridBox.new(2, 2)\n'
+                  'begin\n'
+                  '  g.bind_action(:x, key: :left)\n'
+                  '  puts "allowed"\n'
+                  'rescue ArgumentError\n'
+                  '  puts "refused"\n'
+                  'end\n')
+        self.assertEqual(self.ask(source), 'refused')
+
+
+class AKeyIsAlsoItsNumber(_RubyAsk):
+    """`key_held?(0x11)` is Control.
+
+    Elten's own code asks that way and so do applications - the file
+    manager's Ctrl+D is `runner.on_key(0x44)` guarded by
+    `key_held?(0x11)`. Comparing a Windows virtual key code as a string
+    against a table of names matched nothing, so every shortcut written
+    that way did nothing at all.
+    """
+
+    def test_a_virtual_key_code_finds_the_key_by_name(self):
+        source = ('EltenLoop.instance_variable_set(:@held,\n'
+                  '  {"key_control" => true, "key_d" => true})\n'
+                  'puts [EltenLoop.key_held?(0x11), EltenLoop.key_held?(0x44),\n'
+                  '      EltenLoop.key_held?(0x45)].inspect\n')
+        self.assertEqual(self.ask(source), '[true, true, false]')
+
+    def test_the_letters_and_the_function_keys_are_there_too(self):
+        source = ('puts [EltenLoop::VIRTUAL_KEYS[0x09], '
+                  'EltenLoop::VIRTUAL_KEYS[0x41], '
+                  'EltenLoop::VIRTUAL_KEYS[0x70]].inspect\n')
+        self.assertEqual(self.ask(source), '["key_tab", "key_a", "key_f1"]')
+
+    def test_a_mouse_click_can_be_a_key(self):
+        """A double click in the file tree is Enter, because that is what
+        the application bound - `runner.on_key(:key_enter)`."""
+        source = ('EltenLoop.inject("key_enter")\n'
+                  'puts EltenLoop.key_pressed?(:key_enter).inspect\n')
+        self.assertEqual(self.ask(source), 'true')
+
+
+class TheFileTreeIsEltensFileTree(_RubyAsk):
+    """`FilesTree`, against `ui/controls/files_tree.rb`.
+
+    The file manager opens with `path: ""`, which in Elten is the top of
+    the MACHINE - every drive, then Desktop, Documents and Music.
+    Answering it with the home folder is a file manager that can never
+    reach another drive, because Left from a drive root had nowhere to
+    go.
+    """
+
+    def test_an_empty_path_is_the_list_of_drives(self):
+        source = ('t = FilesTree.new("FileManager", path: "")\n'
+                  'puts [t.root?, t.entries.first, t.entries.size >= 2].inspect\n')
+        answer = self.ask(source)
+        self.assertTrue(answer.startswith('[true, "'), answer)
+        self.assertTrue(answer.endswith('true]'), answer)
+
+    def test_right_goes_in_and_left_comes_back_out_to_the_drives(self):
+        source = ('t = FilesTree.new("FileManager", path: "")\n'
+                  't.key_pressed("key_right"); t.update\n'
+                  'inside = t.path\n'
+                  't.key_pressed("key_left"); t.update\n'
+                  'puts [inside != "", t.root?].inspect\n')
+        self.assertEqual(self.ask(source), '[true, true]')
+
+    def test_it_carries_the_three_menus_elten_gives_it(self):
+        """`bind_filesmenu`, `bind_editmenu` and `bind_createmenu` are
+        separate bindings and become separate submenus - File, Edit and
+        Create - each with the tree's own commands already in it."""
+        source = ('t = FilesTree.new("FileManager", path: "")\n'
+                  't.bind_filesmenu { |m| m.option("Open with") {} }\n'
+                  't.bind_createmenu { |m| m.option("New text file") {} }\n'
+                  'menu = Menu.new("x")\n'
+                  't.context(menu, false)\n'
+                  'puts menu.options.map { |o| o[:label] }.inspect\n')
+        self.assertEqual(self.ask(source), '["File", "Edit", "Create"]')
+
+    def test_a_folder_is_read_on_the_frame_and_not_before_it(self):
+        """Elten's `refresh` marks the tree and the re-read happens on the
+        next `update`, so an application refreshing several times in one
+        operation reads the folder once."""
+        source = ('t = FilesTree.new("t", path: Dir.tmpdir)\n'
+                  't.refresh\n'
+                  'marked = t.instance_variable_get(:@refresh)\n'
+                  't.update\n'
+                  'puts [marked, t.instance_variable_get(:@refresh)].inspect\n')
+        self.assertEqual(self.ask(source), '[true, false]')
+
+
+class AListHasEltensOwnFlags(_RubyAsk):
+    """`MultiSelection` is 1.
+
+    `AnyDir = 1` was wrong in the way that hurts: every application
+    asking for a list of things to tick got one that could not be ticked,
+    and one that believed it had been asked for something else.
+    """
+
+    def test_the_numbers_are_eltens(self):
+        source = ('puts [ListBox::Flags::MultiSelection, '
+                  'ListBox::Flags::LeftRight, ListBox::Flags::Silent, '
+                  'ListBox::Flags::AnyDir, ListBox::Flags::Circular, '
+                  'ListBox::Flags::HotKeys, ListBox::Flags::Tagged].inspect\n')
+        self.assertEqual(self.ask(source), '[1, 2, 4, 8, 16, 32, 64]')
+
+    def test_a_multi_selection_list_can_be_ticked_before_it_is_shown(self):
+        source = ('l = ListBox.new(%w[a b c], flags: ListBox::Flags::MultiSelection)\n'
+                  'l.selected[0] = true\n'
+                  'l.selected[2] = true\n'
+                  'puts [l.multi?, l.multiselections].inspect\n')
+        self.assertEqual(self.ask(source), '[true, [0, 2]]')
+
+
+class AnApplicationsOwnSettings(_RubyAsk):
+    """`show_settings` - Elten's `program_settings.rb`, as a Titan form."""
+
+    def test_every_kind_of_field_becomes_the_control_it_should(self):
+        source = ('store = Programs::ProgramSettings::Store.new(Program)\n'
+                  'collector = Programs::ProgramSettings::Collector.new\n'
+                  'inner = Programs::ProgramSettings::SettingsBuilder.new(collector)\n'
+                  'b = Programs::ProgramSettings::Builder.new(inner, store)\n'
+                  'b.boolean(:a, label: "A", default: true)\n'
+                  'b.integer(:b, label: "B", range: 0..10, default: 3)\n'
+                  'b.text(:c, label: "C", default: "x")\n'
+                  'b.choice(:d, label: "D", choices: {"One" => 1, "Two" => 2}, default: 2)\n'
+                  'd = Programs::ProgramSettings::Dialog.new("T", collector.entries, store)\n'
+                  'puts collector.entries.map { |e| d.send(:control_for, e).class.to_s }.inspect\n')
+        self.assertEqual(self.ask(source),
+                         '["CheckBox", "EditBox", "EditBox", "ListBox"]')
+
+    def test_a_choice_offers_the_labels_and_answers_the_value(self):
+        source = ('store = Programs::ProgramSettings::Store.new(Program)\n'
+                  'collector = Programs::ProgramSettings::Collector.new\n'
+                  'inner = Programs::ProgramSettings::SettingsBuilder.new(collector)\n'
+                  'b = Programs::ProgramSettings::Builder.new(inner, store)\n'
+                  'b.choice(:d, label: "D", choices: {"One" => "one", "Two" => "two"}, default: "two")\n'
+                  'entry = collector.entries[0]\n'
+                  'd = Programs::ProgramSettings::Dialog.new("T", collector.entries, store)\n'
+                  'control = d.send(:control_for, entry)\n'
+                  'puts [control.options, control.index,\n'
+                  '      d.send(:value_of, entry, control)].inspect\n')
+        self.assertEqual(self.ask(source),
+                         '[["One", "Two"], 1, "two"]')
+
+    def test_saving_does_not_deadlock_and_the_value_comes_back(self):
+        """`transaction` holds the lock and the setters it calls take it
+        again: with a plain Mutex an Apply that saved anything at all
+        hung the application."""
+        source = ('store = Programs::ProgramSettings::Store.new(Program)\n'
+                  'collector = Programs::ProgramSettings::Collector.new\n'
+                  'inner = Programs::ProgramSettings::SettingsBuilder.new(collector)\n'
+                  'b = Programs::ProgramSettings::Builder.new(inner, store)\n'
+                  'b.integer(:volume, label: "V", range: 0..100, default: 80)\n'
+                  'store.transaction { collector.entries[0].setter.call(42) }\n'
+                  'puts Programs::ProgramSettings::Store.new(Program).get(:volume, 0).inspect\n')
+        self.assertEqual(self.ask(source), '42')
+
+
+class AnExtensionReallyTicks(_RubyAsk):
+    """`service.tick(interval:)` is the file manager's background
+    playlist. With nothing calling it the playlist advanced to its next
+    track and stopped there for good."""
+
+    def test_a_tick_runs_on_the_frame_and_stops_when_it_is_told_to(self):
+        source = ('$count = 0\n'
+                  'class Ticker < Program\n'
+                  '  extension(:demo) do |service|\n'
+                  '    service.tick(interval: 0.0) { $count += 1 }\n'
+                  '  end\n'
+                  'end\n'
+                  'EltenLoop.run_frame_hooks\n'
+                  'EltenLoop.run_frame_hooks\n'
+                  'ran = $count\n'
+                  'Ticker.stop_extensions\n'
+                  'EltenLoop.run_frame_hooks\n'
+                  'puts [ran, $count].inspect\n')
+        self.assertEqual(self.ask(source), '[2, 2]')
+
+    def test_what_an_extension_declares_can_be_shown_as_settings(self):
+        source = ('class Settable < Program\n'
+                  '  extension(:demo) do |service|\n'
+                  '    service.settings do |s|\n'
+                  '      s.category("Playlists")\n'
+                  '      s.boolean(:show, label: "Show", get: proc { true },\n'
+                  '                       set: proc { |_v| true })\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'collector = Programs::ProgramSettings::Collector.new\n'
+                  'inner = Programs::ProgramSettings::SettingsBuilder.new(collector)\n'
+                  'builder = Programs::ProgramSettings::Builder.new(inner,\n'
+                  '  Programs::ProgramSettings::Store.new(Settable))\n'
+                  'Settable.extensions.each_value do |recorder|\n'
+                  '  recorder.blocks_for("settings").each { |_a, b| b.call(builder) }\n'
+                  'end\n'
+                  'puts [collector.category_label,\n'
+                  '      collector.entries.map(&:label)].inspect\n')
+        self.assertEqual(self.ask(source), '["Playlists", ["Show"]]')
+
+
+class TheWholeProgramApiIsThere(_RubyAsk):
+    """Every name Elten's own `Program` defines, at both levels.
+
+    The list is read out of `src/eapi/program.rb` in Elten's repository.
+    It matters because of what a MISSING method does in somebody else's
+    program: `NoMethodError`, usually inside their own `rescue
+    Exception`, where it becomes a feature quietly not working rather
+    than an error anybody sees.
+    """
+
+    CLASS_METHODS = (
+        'activate app_file app_uuid asset_path author box? build_id '
+        'cache_path close_managed_resources close_sound_pool '
+        'create_sound_from_asset create_spatial_sound_from_asset data_path '
+        'delete_server_app description description_languages '
+        'elten_api_version execution_backend extension get_configuration '
+        'hidden? init leaderboard main_language manage managed_resources '
+        'map_notification menu_label missing_required_assets name_languages '
+        'native_box? notification_received on play_app_sound '
+        'play_sound_from_asset raw_description raw_name read_binary '
+        'read_json read_text register_quickaction register_server_app '
+        'register_server_app! release required_assets '
+        'required_assets_available? send_notification server_app '
+        'server_app_definition server_app_uuid server_resources server_table '
+        'set_configuration show_settings sound_asset sound_asset_data '
+        'sound_asset_path sound_pool supported_languages update_json '
+        'update_server_app update_server_schema! user_menu_options '
+        'validate_required_assets! version write_binary write_json write_text'
+    ).split()
+
+    INSTANCE_METHODS = (
+        'app app_cache app_file app_uuid appsignature asset_path author box? '
+        'build_id cache_path close close_managed_resources close_sound_pool '
+        'communication create_sound_from_asset '
+        'create_spatial_sound_from_asset data_path delete_server_app '
+        'description description_languages elten_api_version '
+        'execution_backend exit finalize finish hidden? leaderboard '
+        'live_sessions main_language manage managed_resources manifest '
+        'menu_label missing_required_assets name_languages native_box? '
+        'notification_action on play_app_sound play_sound_from_asset '
+        'raw_description raw_name read_binary read_json read_text '
+        'register_quickaction release required_assets '
+        'required_assets_available? send_notification server_app_definition '
+        'server_app_uuid server_resources server_table show_settings signal '
+        'signaled sound_asset sound_asset_data sound_asset_path sound_pool '
+        'supported_languages update_json user_menu_options '
+        'validate_required_assets! version write_binary write_json write_text'
+    ).split()
+
+    def test_the_class_answers_all_of_it(self):
+        source = ('class Sample < Program; end\n'
+                  'puts %s.reject { |m| Sample.respond_to?(m) }.inspect\n'
+                  % repr(self.CLASS_METHODS).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_an_instance_answers_all_of_it(self):
+        source = ('class Sample < Program; end\n'
+                  'puts %s.reject { |m| Sample.new.respond_to?(m) }.inspect\n'
+                  % repr(self.INSTANCE_METHODS).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_a_required_asset_that_is_absent_is_reported(self):
+        source = ('class Needy < Program; end\n'
+                  'Needy.manifest = {"required_assets" => {"sounds" => ["nope"]}}\n'
+                  'puts [Needy.required_assets_available?,\n'
+                  '      Needy.missing_required_assets].inspect\n')
+        self.assertEqual(self.ask(source),
+                         '[false, {"sounds" => ["nope"]}]')
+
+    def test_a_hidden_application_says_so(self):
+        """`ffmpeg` and `mcp` declare `menu: {hidden: true}` - they are
+        plug-ins, and listing them offers a row that opens and closes."""
+        source = ('class Plugin < Program; end\n'
+                  'Plugin.manifest = {"name" => "P", "menu" => {"hidden" => true}}\n'
+                  'puts [Plugin.hidden?, Plugin.menu_label].inspect\n')
+        self.assertEqual(self.ask(source), '[true, "Test"]')
+
+
+class AServerTableIsOnTheServer(_RubyAsk):
+    """A game's best scores are everybody's.
+
+    `server_table` and `leaderboard` were a JSON file beside the
+    application, so "Best scores" was a scoreboard with one player on it.
+    They are rows on EltenLink now, written as whoever is signed in to
+    Titan IM - with this machine's own copy underneath, so a score is
+    never lost to a server that is not there.
+    """
+
+    def test_a_row_is_kept_locally_even_when_the_server_refuses(self):
+        source = ('class Scored < Program; end\n'
+                  'Scored.manifest = {"id" => "x"}\n'
+                  'Scored.server_app(uuid: "u", tables: {})\n'
+                  'table = Scored.server_table("scores")\n'
+                  'table.local.delete\n'
+                  'table.insert("points" => 7)\n'
+                  'puts table.local.all.map { |r| r["points"] }.inspect\n')
+        self.assertEqual(self.ask(source), '[7]')
+
+    def test_reading_falls_back_to_this_machines_own_rows(self):
+        source = ('class Scored2 < Program; end\n'
+                  'Scored2.manifest = {"id" => "y"}\n'
+                  'Scored2.server_app(uuid: "u", tables: {})\n'
+                  'table = Scored2.server_table("s2")\n'
+                  'table.local.delete\n'
+                  'table.insert("points" => 3)\n'
+                  'puts table.all.map { |r| r["points"] }.inspect\n')
+        self.assertEqual(self.ask(source), '[3]')
+
+    def test_a_table_with_no_uuid_is_honestly_unavailable(self):
+        source = ('class Scored3 < Program; end\n'
+                  'puts Scored3.server_table("s3").available?.inspect\n')
+        self.assertEqual(self.ask(source), 'false')
+
+
+class AChangeToAWindowReallyArrives(unittest.TestCase):
+    """`control_set` and `form_close` are sent with no id.
+
+    A message with no id is looked up in `NOTIFICATIONS` and nowhere
+    else, so for as long as these were only in `OPERATIONS` every one of
+    them was read off the wire and dropped. What that meant is
+    everything an application does to a window it has already put up: a
+    list whose rows are replaced, a board dealt again, a header that
+    should follow the folder. The file manager listed its first folder
+    and then showed that folder for ever; AudioMemory's board stayed the
+    empty one it was built with.
+    """
+
+    def test_the_notifications_an_application_really_sends_are_handled(self):
+        import re
+        source = io.open(os.path.join(COMPONENT, 'eapi', 'controls.rb'),
+                         encoding='utf-8').read()
+        source += io.open(os.path.join(COMPONENT, 'eapi', 'boot.rb'),
+                          encoding='utf-8').read()
+        source += io.open(os.path.join(COMPONENT, 'eapi', 'bridge.rb'),
+                          encoding='utf-8').read()
+        sent = set(re.findall(r"EltenBridge\.notify\(\s*'([a-z_]+)'", source))
+        self.assertTrue(sent, 'no notifications found at all')
+        missing = sorted(sent - set(bridge.NOTIFICATIONS))
+        self.assertEqual(missing, [],
+                         'sent with no id and answered by nobody: %s' % missing)
+
+    def test_a_control_change_reaches_the_widget(self):
+        recorder = TheDispatchTable.Recorder()
+        seen = []
+
+        class UI(object):
+            def set_control(self, form_id, index, changes):
+                seen.append((form_id, index, dict(changes)))
+                return True
+
+        recorder.ui = UI()
+        recorder._on_gui = lambda call, default=None: call()
+        recorder._handle({'op': 'control_set',
+                          'args': {'form': 1, 'control': 0,
+                                   'options': ['a', 'b']}})
+        self.assertEqual(len(seen), 1, 'the change was dropped')
+        self.assertEqual(seen[0][0], 1)
+
+
+class ASoundAnswersWhatAGameAsks(_RubyAsk):
+    """Purrposterous reads `basefrequency` when a cat is born and pitches
+    against it as the cat gets hungrier. Missing, it ended the game on
+    the first cat - inside the game's own rescue, so what the user saw
+    was a game that started and stopped."""
+
+    def test_the_pitch_and_the_clock_are_all_there(self):
+        wanted = ('basefrequency frequency frequency= pitch pitch= tempo '
+                  'tempo= length position pause resume paused? stopped? '
+                  'opened? closed? status title artist album wait '
+                  'volume volume= pan pan= play stop playing? '
+                  'finished? close').split()
+        source = ('s = EltenSound.new(1, "x")\n'
+                  'puts %s.reject { |m| s.respond_to?(m) }.inspect\n'
+                  % repr(wanted).replace("'", '"'))
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_a_pool_plays_a_sound_and_keeps_a_ceiling(self):
+        """`sound_pool(max_voices:)` answered `self` - the Program - so
+        `pool.play(sound)` reached a method of the application's that
+        took no arguments, and every one-shot Purrposterous plays ended
+        in `ArgumentError` inside its own rescue: a game that walked in
+        silence."""
+        source = ('class Noisy < Program; end\n'
+                  'pool = Noisy.new.sound_pool(max_voices: 2)\n'
+                  'three = (1..3).map { |n| EltenSound.new(n, "s#{n}") }\n'
+                  'three.each { |sound| pool.play(sound) }\n'
+                  'puts [pool.class.to_s, pool.size, pool.max_voices,\n'
+                  '      three[0].closed?].inspect\n')
+        self.assertEqual(self.ask(source), '["SoundPool", 2, 2, true]')
+
+
+class AFieldHasEltensOwnFlags(_RubyAsk):
+    """`MultiLine` is 1 and `ReadOnly` is 2, and they were the other way
+    round - so an application asking for a box to write a message in got
+    a read-only single line, and one asking for a page to READ got an
+    editable field."""
+
+    def test_the_numbers_are_eltens(self):
+        source = ('puts [EditBox::Flags::MultiLine, EditBox::Flags::ReadOnly,\n'
+                  '      EditBox::Flags::Password, EditBox::Flags::Numbers,\n'
+                  '      EditBox::Flags::MarkDown, EditBox::Flags::HTML].inspect\n')
+        self.assertEqual(self.ask(source), '[1, 2, 4, 8, 32, 64]')
+
+    def test_a_multiline_box_is_built_as_one(self):
+        source = ('b = EditBox.new("H", type: EditBox::Flags::MultiLine)\n'
+                  'spec = b.to_spec\n'
+                  'puts [spec[:multiline], spec[:readonly]].inspect\n')
+        self.assertEqual(self.ask(source), '[true, false]')
+
+
+class WhatAControlIsWhenTheWindowIsBuilt(_RubyAsk):
+    """A change made before the window exists is still a change.
+
+    AudioMemory deals the board and only then calls `grid.focus`, so a
+    spec that was the constructor's snapshot arrived on the screen empty
+    and stayed empty.
+    """
+
+    def test_the_spec_is_what_the_control_is_now(self):
+        source = ('g = GridBox.new(2, 2)\n'
+                  'g.replace_cells([%w[a b], %w[c d]])\n'
+                  'l = ListBox.new(%w[one two])\n'
+                  'l.options = %w[three four]\n'
+                  'puts [g.to_spec[:cells], l.to_spec[:options]].inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            '[[["a", "b"], ["c", "d"]], ["three", "four"]]')
+
+    def test_a_property_a_control_really_keeps_is_kept_in_step(self):
+        """`grid.border_sound = false` was remembered, answered, and
+        ignored by the one piece of code that acts on it."""
+        source = ('g = GridBox.new(2, 2)\n'
+                  'g.border_sound = false\n'
+                  'g.speech = false\n'
+                  'puts [g.instance_variable_get(:@border_sound),\n'
+                  '      g.to_spec[:speech]].inspect\n')
+        self.assertEqual(self.ask(source), '[false, false]')
+
+
+class TheRowTheUserIsOnComesBack(_RubyAsk):
+    """The file tree is not a `ListBox`, so the selected row went
+    nowhere and the file manager acted on the top of the folder
+    whichever row was really selected."""
+
+    def test_every_control_answers_for_its_own_state(self):
+        source = ('t = FilesTree.new("t", path: Dir.tmpdir)\n'
+                  'before = t.file\n'
+                  't.apply_wire_change("index" => 1)\n'
+                  'l = ListBox.new(%w[a b c])\n'
+                  'l.apply_wire_change("index" => 2)\n'
+                  'c = CheckBox.new("x")\n'
+                  'c.apply_wire_change("checked" => true)\n'
+                  'e = EditBox.new("x")\n'
+                  'e.apply_wire_change("text" => "typed")\n'
+                  'puts [t.file != before || t.entries.size < 2, l.index,\n'
+                  '      c.checked?, e.text].inspect\n')
+        self.assertEqual(self.ask(source), '[true, 2, true, "typed"]')
+
+
+class TheNetworkIsEltensNetwork(_RubyAsk):
+    """`read_url` is what an application calls before it has a screen -
+    the YouTube client asks for its update manifests from `activate`, and
+    a missing one is `NoMethodError` at class level."""
+
+    def test_the_network_functions_are_there_at_every_level(self):
+        source = ('class Netty < Program; end\n'
+                  'wanted = %w[read_url download_file html_decode html_encode]\n'
+                  'puts [wanted.reject { |m| Netty.respond_to?(m) },\n'
+                  '      wanted.reject { |m| Netty.new.respond_to?(m) }].inspect\n')
+        self.assertEqual(self.ask(source), '[[], []]')
+
+    def test_html_is_decoded_the_way_elten_decodes_it(self):
+        source = ('puts html_decode(%s).inspect\n'
+                  % repr('a &lt;b&gt; &amp; c').replace("'", '"'))
+        self.assertEqual(self.ask(source), '"a <b> & c"')
+
+
+class TheAccountCanComeFromEltenItself(unittest.TestCase):
+    """A user who has Elten installed and logged in has an EltenLink
+    account here without doing anything.
+
+    `login.dat` is Elten's own format and its auto-login key is
+    DPAPI-protected, so it can be read back only by this Windows account
+    on this machine - which is the right property and the same one
+    Titan's own secret store relies on. A key protected with a PIN is
+    deliberately NOT used: the PIN is not on the disk, and asking for one
+    because a game wanted a scoreboard is not something to do unprompted.
+    """
+
+    def setUp(self):
+        from eltenkit import elten_account
+        self.module = elten_account
+
+    def test_a_file_that_is_not_eltens_is_no_account(self):
+        folder = tempfile.mkdtemp(prefix='elten-login-')
+        path = os.path.join(folder, 'login.dat')
+        io.open(path, 'wb').write(b'not an elten file at all')
+        self.assertEqual(self.module.read_login_dat(path), ('', ''))
+
+    def test_an_unencrypted_key_is_read(self):
+        folder = tempfile.mkdtemp(prefix='elten-login-')
+        path = os.path.join(folder, 'login.dat')
+        name, token = b'somebody', b'a-token'
+        raw = (self.module.MAGIC + bytes([3])
+               + struct.pack('<I', len(name)) + name
+               + struct.pack('<I', len(token)) + token
+               + struct.pack('<b', 0))
+        io.open(path, 'wb').write(raw)
+        self.assertEqual(self.module.read_login_dat(path),
+                         ('somebody', 'a-token'))
+
+    def test_a_key_behind_a_pin_is_left_alone(self):
+        folder = tempfile.mkdtemp(prefix='elten-login-')
+        path = os.path.join(folder, 'login.dat')
+        name, token = b'somebody', b'ciphertext'
+        raw = (self.module.MAGIC + bytes([3])
+               + struct.pack('<I', len(name)) + name
+               + struct.pack('<I', len(token)) + token
+               + struct.pack('<b', 2))
+        io.open(path, 'wb').write(raw)
+        self.assertEqual(self.module.read_login_dat(path), ('', ''))
+
+    def test_a_truncated_file_is_no_account_rather_than_a_crash(self):
+        folder = tempfile.mkdtemp(prefix='elten-login-')
+        path = os.path.join(folder, 'login.dat')
+        io.open(path, 'wb').write(self.module.MAGIC + b'\x03\x08')
+        self.assertEqual(self.module.read_login_dat(path), ('', ''))
+
+
+class EveryWidgetReallyBuilds(unittest.TestCase):
+    """One of each control, built for real - and never shown.
+
+    The Ruby half can be right about every control and the window still
+    fail to appear, because what a spec asks for has to be something wx
+    will build: `wx.TextValidator` is a C++ class wxPython does not wrap,
+    and asking for one turned a settings form with a number in it into a
+    screen that did not open. Nothing here is shown, so running the tests
+    puts no window in front of anybody.
+    """
+
+    SPECS = [
+        {'kind': 'button', 'label': 'Go'},
+        {'kind': 'checkbox', 'label': 'Tick', 'checked': True},
+        {'kind': 'editbox', 'header': 'Name', 'text': 'x'},
+        {'kind': 'editbox', 'header': 'Volume', 'text': '10',
+         'numbers': True},
+        {'kind': 'editbox', 'header': 'Body', 'text': '', 'multiline': True},
+        {'kind': 'listbox', 'header': 'List', 'options': ['a', 'b']},
+        {'kind': 'listbox', 'header': 'Ticks', 'options': ['a', 'b'],
+         'multi': True, 'checked': [1]},
+        {'kind': 'gridbox', 'header': 'Board', 'width': 3, 'height': 3,
+         'cells': [['a', 'b', 'c'], ['d', 'e', 'f'], ['g', 'h', 'i']],
+         'x': 1, 'y': 1},
+        {'kind': 'tablebox', 'header': 'T', 'columns': ['a', 'b'],
+         'rows': [['1', '2']]},
+        {'kind': 'choicelist', 'header': 'C',
+         'rows': [{'label': 'r', 'options': ['x', 'y'], 'index': 1}]},
+        {'kind': 'static', 'label': 'Hello'},
+        {'kind': 'player', 'label': 'A station', 'status': 'playing',
+         'duration': 100, 'position': 10, 'playing': True},
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import wx
+        except Exception as error:                     # pragma: no cover
+            raise unittest.SkipTest('no wx here: %s' % error)
+        cls.wx = wx
+        cls.app = wx.App(False) if wx.GetApp() is None else wx.GetApp()
+        cls.frame = wx.Frame(None)                     # never shown
+        cls.panel = wx.Panel(cls.frame)
+        from eltenkit import ui as ui_module
+        cls.ui = ui_module
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.frame.Destroy()
+        except Exception:
+            pass
+
+    def build(self, spec):
+        return self.ui._build_control(self.panel, spec,
+                                      lambda *a, **k: None, None)
+
+    def test_one_of_each_kind_builds(self):
+        for spec in self.SPECS:
+            with self.subTest(kind=spec['kind'], header=spec.get('header')):
+                self.assertIsNotNone(self.build(spec))
+
+    def test_a_board_that_grows_really_grows_on_the_screen(self):
+        """AudioMemory deals a bigger board every round, and a
+        `wx.grid.Grid` keeps whatever shape it was created with - so the
+        extra squares existed in Ruby and nowhere the player could reach."""
+        widget = self.build(self.SPECS[7])
+        widget.apply({'width': 5, 'height': 4,
+                      'cells': [['x'] * 5 for _ in range(4)], 'x': 4, 'y': 3})
+        self.assertEqual((widget.grid.GetNumberCols(),
+                          widget.grid.GetNumberRows()), (5, 4))
+        self.assertEqual((widget.grid.GetGridCursorCol(),
+                          widget.grid.GetGridCursorRow()), (4, 3))
+
+    def test_a_list_of_things_to_tick_is_titans_own_tick_list(self):
+        """`wx.CheckListBox` is owner-drawn, so MSAA reports a list item
+        and says nothing about whether it is ticked. Titan already has
+        the control for this."""
+        widget = self.build(self.SPECS[6])
+        self.assertEqual(type(widget.listbox).__name__, 'CheckList')
+        self.assertTrue(widget.listbox.IsChecked(1))
+
+
+class SpacePressesAButton(unittest.TestCase):
+    """A focused button answers Space, not just Enter and the mouse.
+
+    The form's char hook was intercepting Space (a navigation key) and
+    sending it to the application as a keystroke, so a wx button never
+    fired and a screen of buttons could be reached and not pressed with
+    the space bar.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import wx
+        except Exception as error:                     # pragma: no cover
+            raise unittest.SkipTest('no wx here: %s' % error)
+        cls.wx = wx
+        cls.app = wx.App(False) if wx.GetApp() is None else wx.GetApp()
+        from eltenkit import ui as ui_module
+        cls.ui_module = ui_module
+
+    def press(self, code):
+        wx = self.wx
+        recorder = TheDispatchTable.Recorder()
+        recorder._on_gui = lambda call, default=None: call()
+        gui = self.ui_module.WxUI(None, 'test')
+        recorder.ui = gui
+        form_id = gui.open_form(recorder, [{'kind': 'button', 'label': 'Go'}])
+        widget = gui._forms[form_id].widgets[0]
+        widget.window.SetFocus()
+        event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+        event.SetKeyCode(code)
+        event.SetEventObject(widget.window)
+        gui._forms[form_id].panel.GetEventHandler().ProcessEvent(event)
+        presses = [m for m in recorder.written
+                   if m.get('event') == 'control' and m.get('name') == 'press']
+        gui.close()
+        return len(presses)
+
+    def test_space_presses_a_button(self):
+        self.assertEqual(self.press(self.wx.WXK_SPACE), 1)
+
+    def test_enter_presses_a_button(self):
+        self.assertEqual(self.press(self.wx.WXK_RETURN), 1)
+
+
+class ChildProcSpeaksEltensOwnMethods(_RubyAsk):
+    """`running?`, `avail`, `avail_err`, `terminate` - the YouTube
+    client's whole search loop is built on them, and a method that is
+    merely absent is a `NoMethodError` inside the application: the search
+    ended before yt-dlp had said a word."""
+
+    def test_the_process_answers_the_loop_the_apps_use(self):
+        wanted = 'running? avail avail_err terminate read read_err write close pid'.split()
+        source = ('p = ChildProc.new("cmd /c echo hi", nil)\n'
+                  'sleep 0.2\n'
+                  'puts %s.reject { |m| p.respond_to?(m) }.inspect\n'
+                  % repr(wanted).replace("'", '"'))
+        self.assertEqual(self.ask('require "childproc"\n' + source), '[]')
+
+    def test_output_is_read_the_way_an_app_reads_it(self):
+        source = ('require "childproc"\n'
+                  'p = ChildProc.new("cmd /c echo hello", nil)\n'
+                  'out = +"".b\n'
+                  '100.times do\n'
+                  '  out << p.read.to_s.b if p.avail.to_i > 0\n'
+                  '  break unless p.running?\n'
+                  '  sleep 0.03\n'
+                  'end\n'
+                  'out << p.read.to_s.b if p.avail.to_i > 0\n'
+                  'p.close\n'
+                  'puts out.strip.inspect\n')
+        self.assertEqual(self.ask(source), '"hello"')
+
+
+class AFormCarriesItsHeader(_RubyAsk):
+    """`Form#header=` - Elten's `FormBase` has `attr_accessor :header` and
+    applications set it after building the form (the media catalogue's
+    Options screen does `form.header = _("Options")`). Missing, it ended
+    the application on the screen it was opening."""
+
+    def test_a_form_takes_a_header(self):
+        source = ('f = Form.new([Button.new("x")])\n'
+                  'f.header = "Options"\n'
+                  'puts f.header.inspect\n')
+        self.assertEqual(self.ask(source), '"Options"')
+
+
+class AFormTicksItsTimers(_RubyAsk):
+    """`FormTimer` and `Form#add_timer` - the Game Room refreshes its
+    lobby with `form.add_timer(FormTimer.new(t, repeat: true) { ... })`,
+    and a missing `FormTimer` stopped it before its screen was up."""
+
+    def test_a_form_timer_fires_after_its_time(self):
+        source = ('t = FormTimer.new(0.05, repeat: false) { $fired = true }\n'
+                  'sleep 0.1\n'
+                  't.update\n'
+                  'puts ($fired == true).inspect\n')
+        self.assertEqual(self.ask(source), 'true')
+
+    def test_a_form_holds_a_timer(self):
+        source = ('f = Form.new([Button.new("x")])\n'
+                  'f.add_timer(FormTimer.new(0.0, repeat: true) { })\n'
+                  'puts f.respond_to?(:add_timer).inspect\n')
+        self.assertEqual(self.ask(source), 'true')
+
+
+class EveryAppsMenuIsFlat(_RubyAsk):
+    """No oddities in any application's menu.
+
+    Elten's `context` takes a `submenu` flag - true wraps each binding
+    under a heading (for a menu BAR), false pours the options straight in
+    (a context menu). Titan opened it as a menu bar for Alt and flat for
+    the Applications key, and these applications have no menu bar - so the
+    menu-bar path only ever added an oddity: an unnamed menu became a
+    literal "Context menu" entry you had to open to reach anything. Now
+    every gesture opens the same flat menu.
+    """
+
+    def test_a_bound_menu_has_no_context_menu_wrapper(self):
+        source = ('l = ListBox.new(%w[a b c])\n'
+                  'l.bind_context { |m| m.option("Add") {}; m.option("Remove") {} }\n'
+                  'Form.new([l]).present\n'
+                  'menu = Menu.new("", :context)\n'
+                  'l.context(menu, false)\n'
+                  'puts menu._menu_items.map { |i| i["label"] }.inspect\n')
+        self.assertEqual(self.ask(source), '["Add", "Remove"]')
+
+    def test_opening_it_any_way_gives_the_same_flat_menu(self):
+        """`open_context_menu` builds flat whether Alt or the Applications
+        key asked - the `as_menu_bar` flag is ignored, so there is no
+        second, odder shape of the same menu."""
+        source = ('captured = nil\n'
+                  'l = ListBox.new(%w[a])\n'
+                  'l.bind_context { |m| m.option("Only") {} }\n'
+                  'form = Form.new([l])\n'
+                  'def form.popup_menu(_c, items); $seen = items; nil; end\n'
+                  'form.present\n'
+                  'l.open_context_menu(false)\n'
+                  'flat = $seen.map { |i| i["label"] }\n'
+                  'l.open_context_menu(true)\n'
+                  'bar = $seen.map { |i| i["label"] }\n'
+                  'puts [flat, bar].inspect\n')
+        self.assertEqual(self.ask(source), '[["Only"], ["Only"]]')
+
+
+class AProtectedTableFallsBackToTitanNet(_RubyAsk):
+    """A game whose EltenLink leaderboard is a PROTECTED table - one only
+    Elten's own signed launcher may write - gets a real, shared
+    scoreboard that is Titan's, on Titan-Net. Titan does not mint the
+    launcher stamp: that would be writing Titan-played scores onto
+    somebody else's global leaderboard through the check that exists to
+    stop exactly that."""
+
+    PREAMBLE = _RubyAsk.PREAMBLE
+
+    def ask_with_stub(self, source):
+        # A bridge whose 'elten_app' refuses inserts as PROTECTED and
+        # keeps the shared board in memory, so the fallback can be tested
+        # with no network at all.
+        stub = '''
+module EltenBridge
+  class Closed < StandardError; end
+  @shared = []
+  def self.call(op, args = {})
+    return nil unless op == 'elten_app'
+    case args['do']
+    when 'signed_in' then false
+    when 'shared_available' then true
+    when 'insert' then raise 'this application keeps its rows in a PROTECTED table'
+    when 'select' then raise 'this application keeps its rows in a PROTECTED table'
+    when 'shared_insert' then (@shared << args['values']; args['values'])
+    when 'shared_select' then @shared.dup
+    else nil
+    end
+  end
+  def self.notify(*_a); nil; end
+  def self.now; Time.now.to_f; end
+  def self.next_event(*_a); :timeout; end
+end
+module Log
+  def self.warning(*_a); end
+  def self.error(*_a); end
+  def self.debug(*_a); end
+  def self.info(*_a); end
+end
+$LOAD_PATH.unshift(%s)
+require 'loop'
+require 'eapi'
+require 'program'
+require 'controls'
+require 'server'
+require 'paths'
+require 'program_api'
+require 'settings'
+require 'audio'
+require 'eltenlink'
+require 'eltenapi'
+require 'network'
+''' % repr(os.path.join(COMPONENT, 'eapi')).replace("'", '"')
+        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
+        io.open(path, 'w', encoding='utf-8').write(stub + source)
+        answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                timeout=120, env=self.ruby.environment())
+        self.assertEqual(answer.returncode, 0,
+                         answer.stderr.decode('utf-8', 'replace'))
+        return answer.stdout.decode('utf-8', 'replace').strip()
+
+    def test_a_refused_score_goes_to_the_shared_board_and_reads_back(self):
+        source = ('class Prot < Program; end\n'
+                  'Prot.manifest = {"id" => "u"}\n'
+                  'Prot.server_app(uuid: "u", tables: {}, protected: true)\n'
+                  'table = Prot.server_table("scores")\n'
+                  'table.insert("points" => 9)\n'
+                  'rows = table.all(order: ["points", "desc"])\n'
+                  'puts [table.shared?, rows.map { |r| r["points"] }].inspect\n')
+        self.assertEqual(self.ask_with_stub(source), '[true, [9]]')
+
+    def test_the_game_still_offers_to_share_after_a_refusal(self):
+        source = ('class Prot2 < Program; end\n'
+                  'Prot2.manifest = {"id" => "u"}\n'
+                  'Prot2.server_app(uuid: "u", tables: {}, protected: true)\n'
+                  'table = Prot2.server_table("scores")\n'
+                  'table.insert("points" => 1)\n'
+                  'puts table.available?.inspect\n')
+        self.assertEqual(self.ask_with_stub(source), 'true')
+
+
+class TheRealWidgetsReportThroughTheRealSendEvent(unittest.TestCase):
+    """The widget -> form -> `send_event` path, in real wx.
+
+    This is the test that catches a bug the scripted double cannot: a
+    widget reporting a field whose name collides with one `send_event`
+    already binds. The grid did exactly that - it reported `control=` (the
+    Control modifier) and `send_event` already binds `control` (which
+    control it is), so every arrow key raised `TypeError` inside the wx
+    handler and the board could not be moved at all. Nothing here shows a
+    window; everything is a real wx control fired with real wx events.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import wx
+        except Exception as error:                     # pragma: no cover
+            raise unittest.SkipTest('no wx here: %s' % error)
+        cls.wx = wx
+        cls.app = wx.App(False) if wx.GetApp() is None else wx.GetApp()
+        from eltenkit import ui as ui_module
+        cls.ui_module = ui_module
+
+    def make(self):
+        """A real `WxUI` and a real `Application` that captures the wire."""
+        wx = self.wx
+        recorder = TheDispatchTable.Recorder()
+        recorder._on_gui = lambda call, default=None: call()
+        gui = self.ui_module.WxUI(None, 'test')
+        recorder.ui = gui
+        return recorder, gui
+
+    def messages(self, recorder, name):
+        return [m for m in recorder.written
+                if m.get('event') == 'control' and m.get('name') == name]
+
+    def fire_char(self, window, code, **mods):
+        wx = self.wx
+        event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+        event.SetKeyCode(code)
+        event.SetEventObject(window)
+        window.GetEventHandler().ProcessEvent(event)
+
+    def widget_of(self, gui, form_id, index):
+        return gui._forms[form_id].widgets[index]
+
+    def test_a_grid_arrow_reports_without_raising(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'gridbox', 'header': 'B', 'width': 3, 'height': 3,
+             'cells': [['a', 'b', 'c'], ['d', 'e', 'f'], ['g', 'h', 'i']]}])
+        widget = self.widget_of(gui, form_id, 0)
+        self.fire_char(widget.grid, wx.WXK_RIGHT)
+        moved = self.messages(recorder, 'key_right')
+        self.assertEqual(len(moved), 1,
+                         'the arrow did not reach the application: %r'
+                         % recorder.written[-3:])
+        # The control INDEX is still there, and the modifier is `ctrl`,
+        # not `control` - the collision that broke the board.
+        self.assertEqual(moved[0].get('control'), 0)
+        self.assertIn('ctrl', moved[0])
+        gui.close()
+
+    def test_a_grid_choose_key_reports(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'gridbox', 'header': 'B', 'width': 2, 'height': 2,
+             'cells': [['a', 'b'], ['c', 'd']]}])
+        widget = self.widget_of(gui, form_id, 0)
+        self.fire_char(widget.grid, wx.WXK_RETURN)
+        self.assertEqual(len(self.messages(recorder, 'key_enter')), 1)
+        gui.close()
+
+    def test_space_on_a_listbox_reaches_the_application(self):
+        """The file manager's Space, which reads or plays the file the
+        cursor is on. The widget must forward it - not swallow it as a
+        list selection."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'Files', 'options': ['a.txt',
+                                                               'b.ogg']}])
+        widget = self.widget_of(gui, form_id, 0)
+        self.fire_char(widget.listbox, wx.WXK_SPACE)
+        # It may arrive as a control event, on the key stream, or both -
+        # what matters is that the application heard the space.
+        control = self.messages(recorder, 'key_space')
+        stream = [m for m in recorder.written
+                  if m.get('event') == 'key' and m.get('name') == 'key_space']
+        self.assertTrue(control or stream,
+                        'space never reached the application: %r'
+                        % recorder.written[-4:])
+        gui.close()
+
+    def test_a_listbox_move_reports_the_new_index(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'L', 'options': ['a', 'b', 'c']}])
+        widget = self.widget_of(gui, form_id, 0)
+        # The native selection move an arrow key makes.
+        widget.listbox.SetSelection(2)
+        event = wx.CommandEvent(wx.wxEVT_LISTBOX, widget.listbox.GetId())
+        event.SetEventObject(widget.listbox)
+        widget.listbox.GetEventHandler().ProcessEvent(event)
+        changed = self.messages(recorder, 'changed')
+        self.assertTrue(changed, 'the move was not reported')
+        self.assertEqual(changed[-1].get('index'), 2)
+        gui.close()
+
+    def test_escape_reaches_both_the_form_and_a_runner(self):
+        """Escape on a form-hosted control must do TWO things: the form's
+        own back/cancel, AND land on the key stream so a `Runner` that
+        binds `key_escape` hears it. AudioMemory shows its board on a form
+        and asks "abort the game?" from `runner.on_key(:key_escape)`;
+        without the key on the stream, Escape on the board did nothing and
+        the game could not be left except by closing the window."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'gridbox', 'header': 'B', 'width': 2, 'height': 2,
+             'cells': [['a', 'b'], ['c', 'd']]}])
+        widget = self.widget_of(gui, form_id, 0)
+        self.fire_char(widget.grid, wx.WXK_ESCAPE)
+        escape = self.messages(recorder, 'escape')
+        stream = [m for m in recorder.written
+                  if m.get('event') == 'key' and m.get('name') == 'key_escape']
+        self.assertTrue(escape, 'the form was not told to back out')
+        self.assertTrue(stream, 'a Runner would never hear the Escape')
+        gui.close()
+
+    def test_the_player_keys_are_eltens(self):
+        """Elten's whole player keymap, in real wx: Space, the arrows, the
+        Shift and Ctrl families, Backspace, Home/End, the page keys - and
+        each reports the action the mixer really carries out."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'player', 'label': 'S', 'status': 'playing',
+             'duration': 100, 'position': 5, 'playing': True}])
+        widget = self.widget_of(gui, form_id, 0)
+
+        def player_do(code, shift=False, control=False):
+            event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+            event.SetKeyCode(code)
+            if shift:
+                event.SetShiftDown(True) if hasattr(event, 'SetShiftDown') \
+                    else None
+            event.SetEventObject(widget.state)
+            # wx.KeyEvent modifiers are read-only on some builds; drive the
+            # handler with a tiny shim that reports the modifier state.
+            widget.state.GetEventHandler().ProcessEvent(event)
+            for m in reversed(recorder.written):
+                if m.get('event') == 'control' and m.get('name') == 'player':
+                    return m.get('do')
+            return None
+
+        # Plain keys are unambiguous without faking modifier state.
+        self.assertEqual(player_do(wx.WXK_SPACE), 'toggle')
+        self.assertEqual(player_do(wx.WXK_LEFT), 'back')
+        self.assertEqual(player_do(wx.WXK_RIGHT), 'forward')
+        self.assertEqual(player_do(wx.WXK_UP), 'louder')
+        self.assertEqual(player_do(wx.WXK_DOWN), 'quieter')
+        self.assertEqual(player_do(wx.WXK_HOME), 'start')
+        self.assertEqual(player_do(wx.WXK_END), 'end')
+        self.assertEqual(player_do(wx.WXK_PAGEUP), 'chapter_prev')
+        self.assertEqual(player_do(wx.WXK_PAGEDOWN), 'chapter_next')
+        self.assertEqual(player_do(wx.WXK_BACK), 'reset')
+        gui.close()
+
+    def test_the_seek_bar_seeks_where_it_is_dragged(self):
+        """The mouse - a real draggable seek bar, which Elten (all ear)
+        has no equivalent of and this desktop should."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'player', 'label': 'S', 'duration': 200, 'playing': True}])
+        widget = self.widget_of(gui, form_id, 0)
+        widget.seek.SetValue(500)                      # halfway
+        event = wx.ScrollEvent(wx.wxEVT_SCROLL_CHANGED, widget.seek.GetId())
+        event.SetEventObject(widget.seek)
+        widget.seek.GetEventHandler().ProcessEvent(event)
+        seeks = [m for m in recorder.written
+                 if m.get('name') == 'player' and m.get('do') == 'seek_to']
+        self.assertTrue(seeks, 'dragging the bar did not seek')
+        self.assertAlmostEqual(seeks[-1].get('value'), 100.0, delta=1.0)
+        gui.close()
+
+    def test_a_right_click_opens_the_player_menu(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'player', 'label': 'S', 'duration': 100}])
+        widget = self.widget_of(gui, form_id, 0)
+        event = wx.ContextMenuEvent(wx.wxEVT_CONTEXT_MENU, widget.state.GetId())
+        event.SetEventObject(widget.state)
+        widget.state.GetEventHandler().ProcessEvent(event)
+        self.assertTrue(self.messages(recorder, 'context'),
+                        'the right click did not open the menu')
+        gui.close()
+
+    def test_a_button_press_reports(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [{'kind': 'button', 'label': 'Go'}])
+        widget = self.widget_of(gui, form_id, 0)
+        event = wx.CommandEvent(wx.wxEVT_BUTTON, widget.window.GetId())
+        event.SetEventObject(widget.window)
+        widget.window.GetEventHandler().ProcessEvent(event)
+        self.assertTrue(self.messages(recorder, 'press'))
+        gui.close()
+
+    def test_a_tick_reports_which_row_and_its_state(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'T', 'options': ['a', 'b'],
+             'multi': True}])
+        widget = self.widget_of(gui, form_id, 0)
+        widget.listbox.Check(1, True)
+        event = wx.CommandEvent(wx.wxEVT_CHECKLISTBOX, widget.listbox.GetId())
+        event.SetInt(1)
+        event.SetEventObject(widget.listbox)
+        widget.listbox.GetEventHandler().ProcessEvent(event)
+        ticked = self.messages(recorder, 'ticked')
+        self.assertTrue(ticked, 'the tick was not reported')
+        self.assertEqual(ticked[-1].get('index'), 1)
+        self.assertTrue(ticked[-1].get('checked'))
+        gui.close()
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

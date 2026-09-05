@@ -82,8 +82,20 @@ module EltenBridge
     # stops on a dialog until the user answers it, and that is exactly what
     # Elten's own API is. A call that did not block would turn every form in
     # every application into a race.
+    #: Calls that put something MODAL on the screen. Each one takes the
+    #: keyboard away and Windows gives it back to the FRAME rather than to
+    #: whatever was in it, so the surface a game's keys arrive on has to be
+    #: asked for again afterwards. Purrposterous is the case that proves
+    #: it: its menu is one of these, and after the first round the game
+    #: kept running with nothing able to reach it - a second game that
+    #: could not be played at all.
+    MODAL_OPS = %w[confirm select_action select_item choose_path
+                   display_text input_text popup_menu].freeze
+
     def call(op, args = {})
       raise Closed, 'Titan has closed this application' if @closed
+
+      EltenLoop.surface_changed if MODAL_OPS.include?(op.to_s) && defined?(EltenLoop)
 
       id = nil
       slot = Queue.new

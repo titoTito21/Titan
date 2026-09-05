@@ -367,14 +367,32 @@ class Program
   end
 
   def close_sound_pool
+    @sound_pool&.close
+    @sound_pool = nil
     EltenBridge.call('sound_pool_close')
     nil
   rescue EltenBridge::Closed
     nil
   end
 
-  def sound_pool
-    self
+  # `sound_pool(max_voices:)` - Elten's own, and it is a REAL pool.
+  #
+  # It answered `self` - the Program - so `sound_pool(max_voices: 8)
+  # .play(sound)` reached a method of the application's that took no
+  # arguments, and every one-shot Purrposterous plays (a step, a jump, a
+  # wall) ended in `ArgumentError` inside the game's own rescue: a game
+  # that walked in silence.
+  #
+  # What a pool is for is the ceiling. A game that plays a click per
+  # keypress asks for thirty a second on a held arrow, and a mixer given
+  # all of them runs out of channels and goes quiet - so the oldest voice
+  # is closed when the pool is full, and finished ones are let go on the
+  # way past.
+  def sound_pool(max_voices: SoundPool::DEFAULT_MAX_VOICES)
+    @sound_pool = nil if @sound_pool&.closed?
+    @sound_pool ||= SoundPool.new(max_voices: max_voices)
+    @sound_pool.max_voices = max_voices
+    @sound_pool
   end
 
   # -------------------------------------------------------------- runtime

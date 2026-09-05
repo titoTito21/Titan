@@ -34,6 +34,9 @@ import time
 #: minutes and there is no way to interrupt from inside the utterance.
 MAX_TEXT = 8000
 
+#: What a sound is assumed to have been sampled at when nothing can say.
+DEFAULT_FREQUENCY = 44100
+
 #: How many entries a list dialog may carry, and how long a label may be.
 MAX_ENTRIES = 2000
 MAX_LABEL = 500
@@ -292,6 +295,47 @@ class Sounds(object):
         entry['paused'] = bool(paused)
         return self.mixer.pause(entry['live'], bool(paused))
 
+    def frequency(self, handle):
+        """What the file was sampled at.
+
+        A game reads this once and then sets the playback rate against it:
+        Purrposterous pitches a cat's meow up as it gets hungrier, from
+        `basefrequency * pitch / 100`. It is read from the file itself
+        where that can be done and answered as the mixer's own rate
+        otherwise, which is what an unpitched sound plays at anyway.
+        """
+        entry = self._entry(handle)
+        if entry is None:
+            return DEFAULT_FREQUENCY
+        found = entry.get('frequency')
+        if found:
+            return found
+        found = self.mixer.frequency_of(entry['path'])
+        entry['frequency'] = found
+        return found
+
+    def set_pitch(self, handle, ratio):
+        """Play it faster or slower, which is higher or lower."""
+        entry = self._entry(handle)
+        if entry is None:
+            return False
+        entry['pitch'] = _clamp(ratio, 0.05, 8.0)
+        if entry['live'] is None:
+            return True
+        return self.mixer.set_pitch(entry['live'], entry['pitch'])
+
+    def length(self, handle):
+        entry = self._entry(handle)
+        if entry is None:
+            return 0.0
+        return self.mixer.length_of(entry['path'])
+
+    def at(self, handle):
+        entry = self._entry(handle)
+        if entry is None or entry['live'] is None:
+            return 0.0
+        return self.mixer.position_of(entry['live'])
+
     def stop(self, handle):
         entry = self._entry(handle)
         if entry is None:
@@ -430,9 +474,18 @@ class Stream(object):
         self._closed = False
         self._played = 0.0
         self.volume = 1.0
+        self.pan = 0.0
+        #: Elten's `frequency`/base and `tempo` - pitch+speed together, and
+        #: speed alone. 1.0 is untouched.
+        self.pitch = 1.0
+        self.tempo = 1.0
+        self.chapters = []
+        self.info = {}
         self._seek_to = None
         self._channel = None
         self._chunks = []
+        self._graph = None
+        self._graph_key = None
         self._lock = threading.Lock()
         self._worker = None
         self._pump = None
@@ -490,6 +543,7 @@ class Stream(object):
                 return
             if container.duration:
                 self.duration = float(container.duration) / 1000000.0
+            self._read_metadata(container, track)
             layout = 'stereo' if channels == 2 else 'mono'
             resampler = av.AudioResampler(format='s16', layout=layout,
                                           rate=rate)
@@ -518,12 +572,13 @@ class Stream(object):
                 except (StopIteration, Exception):
                     break
                 for frame in self._frames(packet):
-                    for piece in resampler.resample(frame):
-                        block = piece.to_ndarray().reshape(-1, channels)
-                        spare = numpy.concatenate((spare, block))
-                        while len(spare) >= want:
-                            self._offer(spare[:want])
-                            spare = spare[want:]
+                    for shaped in self._reshape(frame, rate, layout):
+                        for piece in resampler.resample(shaped):
+                            block = piece.to_ndarray().reshape(-1, channels)
+                            spare = numpy.concatenate((spare, block))
+                            while len(spare) >= want:
+                                self._offer(spare[:want])
+                                spare = spare[want:]
             if len(spare) and not self._closed:
                 self._offer(spare)
         except Exception as error:
@@ -541,6 +596,94 @@ class Stream(object):
             return list(packet.decode())
         except Exception:
             return []
+
+    def _reshape(self, frame, rate, layout):
+        """Pitch and tempo, when the listener has asked for them.
+
+        Elten's player changes both: `frequency` moves pitch AND speed
+        together (a record played faster), `tempo` moves speed alone
+        (time-stretch, pitch kept). Titan's mixer cannot do either on a
+        channel, but PyAV's own filters can, so the frames go through a
+        small graph before they reach the mixer - `asetrate` for the
+        pitch, `atempo` for the speed. When nothing has been changed the
+        graph is not built at all and the frame passes straight through.
+        """
+        if abs(self.pitch - 1.0) < 1e-3 and abs(self.tempo - 1.0) < 1e-3:
+            return [frame]
+        graph = self._filter_graph(rate, layout)
+        if graph is None:
+            return [frame]
+        try:
+            graph.push(frame)
+            out = []
+            while True:
+                try:
+                    out.append(graph.pull())
+                except Exception:
+                    break
+            return out
+        except Exception:
+            return [frame]
+
+    def _filter_graph(self, rate, layout):
+        key = (round(self.pitch, 3), round(self.tempo, 3), rate, layout)
+        if key == self._graph_key and self._graph is not None:
+            return self._graph
+        try:
+            import av.filter
+            graph = av.filter.Graph()
+            src = graph.add_abuffer(sample_rate=rate, format='s16',
+                                    layout=layout)
+            last = src
+            if abs(self.pitch - 1.0) >= 1e-3:
+                # asetrate changes pitch and speed; aresample puts the
+                # rate back so the mixer still gets `rate`.
+                setr = graph.add('asetrate', str(int(rate * self.pitch)))
+                last.link_to(setr); last = setr
+                res = graph.add('aresample', str(rate))
+                last.link_to(res); last = res
+            if abs(self.tempo - 1.0) >= 1e-3:
+                # atempo takes 0.5..2.0 per stage; chain for wider.
+                remaining = self.tempo
+                while remaining > 2.0 + 1e-6 or remaining < 0.5 - 1e-6:
+                    step = 2.0 if remaining > 1.0 else 0.5
+                    atempo = graph.add('atempo', str(step))
+                    last.link_to(atempo); last = atempo
+                    remaining /= step
+                atempo = graph.add('atempo', '%.4f' % max(0.5, min(2.0, remaining)))
+                last.link_to(atempo); last = atempo
+            sink = graph.add('abuffersink')
+            last.link_to(sink)
+            graph.configure()
+            self._graph = graph
+            self._graph_key = key
+            return graph
+        except Exception:
+            self._graph = None
+            self._graph_key = key
+            return None
+
+    def _read_metadata(self, container, track):
+        """Chapters and tags - what the player's context menu reads."""
+        try:
+            self.chapters = [
+                {'time': float(chapter.start * chapter.time_base),
+                 'name': (chapter.metadata.get('title')
+                          or 'Chapter %d' % (index + 1))}
+                for index, chapter in enumerate(getattr(container, 'chapters', []) or [])]
+        except Exception:
+            self.chapters = []
+        try:
+            tags = dict(container.metadata or {})
+            tags.update(dict(getattr(track, 'metadata', {}) or {}))
+            self.info = {
+                'title': tags.get('title', ''),
+                'artist': tags.get('artist', ''),
+                'album': tags.get('album', ''),
+                'track': tags.get('track', ''),
+                'copyright': tags.get('copyright', '')}
+        except Exception:
+            self.info = {}
 
     def _offer(self, block):
         try:
@@ -582,14 +725,70 @@ class Stream(object):
                         break
                     time.sleep(0.05)
                     continue
-                clip.set_volume(self.volume * self.mixer._theme_volume())
+                base = self.volume * self.mixer._theme_volume()
+                # Pan on the channel, the way Titan pans everything else -
+                # constant power, so a sound at the centre is not louder
+                # than one to a side.
+                import math
+                angle = (max(-1.0, min(1.0, self.pan)) + 1.0) * (math.pi / 4.0)
+                left = base * math.cos(angle)
+                right = base * math.sin(angle)
                 if channel.get_busy():
                     channel.queue(clip)
                 else:
                     channel.play(clip)
+                try:
+                    channel.set_volume(left, right)
+                except Exception:
+                    clip.set_volume(base)
                 self._played += self.CHUNK_SECONDS
             except Exception:
                 time.sleep(0.1)
+
+    def set_pan(self, value):
+        self.pan = max(-1.0, min(1.0, float(value)))
+        return self.pan
+
+    def set_pitch(self, ratio):
+        # Elten clamps frequency to half..double the sample rate.
+        self.pitch = max(0.5, min(2.0, float(ratio)))
+        return self.pitch
+
+    def set_tempo(self, ratio):
+        self.tempo = max(0.5, min(2.0, float(ratio)))
+        return self.tempo
+
+    def reset(self):
+        """Backspace - everything back to how it started."""
+        self.volume = 0.8
+        self.pan = 0.0
+        self.pitch = 1.0
+        self.tempo = 1.0
+        return True
+
+    def chapter_near(self, direction):
+        """The previous or next chapter's time, or None."""
+        if not self.chapters:
+            return None
+        here = self.position()
+        if direction < 0:
+            earlier = [c for c in self.chapters if c['time'] < here - 5]
+            return max(earlier, key=lambda c: c['time'])['time'] if earlier else None
+        later = [c for c in self.chapters if c['time'] > here]
+        return min(later, key=lambda c: c['time'])['time'] if later else None
+
+    def save_to(self, path):
+        """Download the URL to a file - the player's Save."""
+        try:
+            import shutil
+            import urllib.request
+            with urllib.request.urlopen(self.url, timeout=30) as source, \
+                    open(path, 'wb') as target:
+                shutil.copyfileobj(source, target)
+            return True
+        except Exception as error:
+            self.error = 'could not save: %s' % error
+            return False
 
     def _reserve(self):
         if self._channel is not None:
@@ -667,9 +866,11 @@ class Stream(object):
 
     def status(self):
         return {'opened': bool(self.opened), 'error': self.error,
-                'volume': self.volume,
+                'volume': self.volume, 'pan': self.pan,
+                'pitch': self.pitch, 'tempo': self.tempo,
                 'duration': self.duration, 'position': self.position(),
                 'playing': self.playing(), 'paused': self._paused,
+                'chapters': list(self.chapters), 'info': dict(self.info),
                 'finished': bool(self.finished and not self.playing())}
 
 
@@ -860,6 +1061,72 @@ class Mixer(object):
         try:
             handle.pause() if paused else handle.unpause()
             return True
+        except Exception:
+            return False
+
+    # ----------------------------------------------------------- the rate
+    def frequency_of(self, path):
+        """What a file was sampled at, read from the file itself.
+
+        Asked once per sound and remembered: a game reads it when a sound
+        is created and then pitches against it every frame.
+        """
+        cached = getattr(self, '_rates', None)
+        if cached is None:
+            cached = self._rates = {}
+        if path in cached:
+            return cached[path]
+        found = DEFAULT_FREQUENCY
+        try:
+            import wave
+            with wave.open(path, 'rb') as handle:
+                found = handle.getframerate()
+        except Exception:
+            try:
+                import av
+                container = av.open(path)
+                try:
+                    stream = container.streams.audio[0]
+                    found = int(stream.rate or DEFAULT_FREQUENCY)
+                finally:
+                    container.close()
+            except Exception:
+                found = DEFAULT_FREQUENCY
+        cached[path] = found
+        return found
+
+    def length_of(self, path):
+        """How long it is, in seconds. 0 when nothing can say."""
+        try:
+            pygame = self._pygame_mixer()
+            if pygame is not None:
+                return float(pygame.mixer.Sound(path).get_length())
+        except Exception:
+            pass
+        return 0.0
+
+    def position_of(self, handle):
+        """How far in it is. pygame answers about a CHANNEL only by way of
+        the clock, so this is honest about not knowing rather than
+        guessing: a player that showed an invented position would be
+        worse than one that shows none."""
+        return 0.0
+
+    def set_pitch(self, handle, ratio):
+        """Play it at a different rate.
+
+        There is no rate control on a `pygame` channel and none on an
+        OpenAL source through `spatial_audio`'s current surface, so this
+        is asked for by name and answers honestly when it is not there -
+        a game gets a cat that does not rise in pitch rather than a game
+        that stops.
+        """
+        spatial = self._spatial_module()
+        setter = getattr(spatial, 'set_pitch', None) if spatial else None
+        if setter is None:
+            return False
+        try:
+            return bool(setter(handle, float(ratio)))
         except Exception:
             return False
 

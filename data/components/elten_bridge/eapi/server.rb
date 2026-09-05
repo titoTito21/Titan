@@ -43,6 +43,178 @@ module Programs
   # Deliberately a small subset of what EltenLink's tables do: insert, read
   # back in an order, and count. It is what a leaderboard needs and what the
   # installed games actually call.
+  # **A server table that really is on the server.**
+  #
+  # `server_table("scores")` and `leaderboard("scores")` are rows in a
+  # table belonging to the application's own uuid on EltenLink, written as
+  # whoever is signed in - which is the whole point of them: a game's best
+  # scores are everybody's. Here they were a JSON file beside the
+  # application, so "Best scores" was a scoreboard with one player on it.
+  #
+  # Titan is already signed in to EltenLink through Titan IM, so that is
+  # the session these use. What is kept from the old behaviour is the
+  # local copy: a score is written HERE first and unconditionally, and
+  # shared afterwards - a server that is not there, or a user who has not
+  # signed in, costs a sentence and never a score. It is also what makes
+  # `available?` an honest answer rather than an optimistic one.
+  class ServerTable
+    def initialize(program, name, uuid = nil)
+      @program = program
+      @name = name.to_s
+      @uuid = (uuid || program.server_app_uuid).to_s
+      @local = LocalTable.new(program, name)
+    end
+
+    attr_reader :name, :uuid
+
+    # Whether the network half is there. Asked by every game before it
+    # offers to share a score, and answered without raising.
+    # Whether there is anywhere real to share a score. Asked by every game
+    # before it offers to.
+    #
+    # Two places can be real: Elten itself for an UNPROTECTED table (that
+    # is the genuine Elten leaderboard), and Titan-Net for a table Elten
+    # will not take from Titan. So this stays true once Elten has refused
+    # a protected table, because there is still the Titan-Net board to
+    # share to - the game should still offer.
+    def available?
+      return false if @uuid.empty?
+      return true if shared?
+
+      !!EltenBridge.call('elten_app', { 'do' => 'signed_in' })
+    rescue StandardError
+      shared?
+    end
+
+    # Whether this table is being kept on Titan-Net rather than Elten -
+    # because Elten refused it as protected, which Titan is not the signed
+    # launcher to write.
+    def shared?
+      return true if @shared
+
+      false
+    end
+
+    def shared_available?
+      !!EltenBridge.call('elten_app', { 'do' => 'shared_available' })
+    rescue StandardError
+      false
+    end
+
+    def local
+      @local
+    end
+
+    def insert(data)
+      values = data.is_a?(Hash) ? data : { 'value' => data }
+      row = @local.insert(values)
+
+      # If Elten's own protected table has already turned Titan away, the
+      # score goes to the Titan-Net board and not back to a door that is
+      # shut.
+      if @shared
+        return share_insert(values) || row
+      end
+
+      begin
+        remote = remote_call('insert', 'values' => stringify(values))
+        row = remote if remote.is_a?(Hash)
+      rescue StandardError => error
+        if error.message.to_s.include?('PROTECTED')
+          # Elten will not take a Titan-played score onto its own global
+          # leaderboard, which is its right - so the score goes to
+          # Titan's own shared board, where other Titan players of this
+          # game will see it.
+          @shared = true
+          shared = share_insert(values)
+          row = shared if shared
+        else
+          Log.warning("#{@name}: the row was kept locally only: #{error.message}")
+        end
+      end
+      row
+    end
+    alias add insert
+
+    # The scoreboard, best-effort, from wherever this game's is kept:
+    # Elten for an unprotected table, Titan-Net for one Elten will not
+    # share, and this machine's own copy when neither can be reached.
+    def all(where: nil, order: nil, limit: nil, offset: nil)
+      if @shared
+        return share_select(where, order, limit, offset) ||
+               @local.all(where: where, order: order, limit: limit, offset: offset.to_i)
+      end
+
+      begin
+        rows = remote_call('select', 'where' => where, 'order' => order,
+                                     'limit' => limit, 'offset' => offset)
+        return rows if rows.is_a?(Array)
+      rescue StandardError => error
+        if error.message.to_s.include?('PROTECTED')
+          @shared = true
+          shared = share_select(where, order, limit, offset)
+          return shared if shared
+        else
+          Log.warning("#{@name}: read locally: #{error.message}")
+        end
+      end
+      @local.all(where: where, order: order, limit: limit, offset: offset.to_i)
+    end
+    alias select all
+
+    def upsert(values)
+      remote_call('upsert', 'values' => stringify(values))
+    end
+
+    def update(id, values)
+      remote_call('update', 'id' => id.to_i, 'values' => stringify(values))
+    end
+
+    def delete(id = nil, where: nil)
+      return @local.delete(where: where) if id.nil?
+
+      remote_call('delete', 'id' => id.to_i)
+    end
+
+    def count(where: nil)
+      all(where: where).size
+    end
+
+    private
+
+    def remote_call(what, extra = {})
+      raise 'this application has no server app uuid' if @uuid.empty?
+
+      EltenBridge.call('elten_app', { 'do' => what, 'uuid' => @uuid,
+                                      'table' => @name }.merge(extra))
+    end
+
+    # The Titan-Net board for this game - a real, shared scoreboard that
+    # is Titan's, for the games Elten keeps to its own signed client.
+    def share_insert(values)
+      remote_call('shared_insert', 'values' => stringify(values))
+    rescue StandardError => error
+      Log.warning("#{@name}: the shared score was kept locally only: #{error.message}")
+      nil
+    end
+
+    def share_select(where, order, limit, offset)
+      rows = remote_call('shared_select', 'where' => where, 'order' => order,
+                                          'limit' => limit, 'offset' => offset)
+      rows.is_a?(Array) ? rows : nil
+    rescue StandardError => error
+      Log.warning("#{@name}: the shared board could not be read: #{error.message}")
+      nil
+    end
+
+    # JSON on the wire, so a symbol key is a string key.
+    def stringify(values)
+      return values unless values.is_a?(Hash)
+
+      values.each_with_object({}) { |(key, value), out| out[key.to_s] = value }
+    end
+  end
+
   class LocalTable
     def initialize(program, name)
       @program = program
@@ -238,12 +410,39 @@ class Program
     # There is no EltenLink account here to register against, so this
     # answers the uuid the application already declared rather than
     # inventing one that no server has heard of.
-    def register_server_app!(**_options)
+    # Tell EltenLink about this application and the tables it declared.
+    #
+    # An application that ships a `SERVER_TABLES` schema and calls
+    # `server_app(uuid:, tables:)` expects the server to know about them
+    # before a row is written; a game whose table was never declared gets
+    # a refusal on its first score and reports "the score could not be
+    # shared". It is done once per run, and a machine with nobody signed
+    # in keeps the uuid the manifest named and says nothing.
+    def register_server_app!(name: nil, data: nil, tables: nil,
+                             tables_protected: false, notifications: false,
+                             **_options)
+      definition = server_app_definition
+      uuid = server_app_uuid
+      return uuid if @server_app_registered || uuid.to_s.empty?
+
+      @server_app_registered = true
+      EltenLink::Apps.update(
+        nil, uuid,
+        name: name || display_name,
+        data: data,
+        tables: tables || definition&.tables,
+        tables_protected: tables_protected || definition&.protected?,
+        notifications: notifications || definition&.notifications
+      )
+      uuid
+    rescue StandardError => error
+      Log.warning("the server app could not be declared: #{error.message}")
       server_app_uuid
     end
     alias register_server_app register_server_app!
 
-    def update_server_schema!(**_options)
+    def update_server_schema!(**options)
+      register_server_app!(**options)
       true
     end
 
@@ -261,6 +460,36 @@ class Program
       recorder = ExtensionRecorder.new(name)
       block&.call(recorder)
       @extensions[name.to_s] = recorder
+      recorder.blocks_for('start').each { |_args, started| started&.call }
+      start_extension_frames
+      recorder
+    end
+
+    # One frame hook for every extension this application declared, so
+    # the number of them does not depend on how many were declared.
+    def start_extension_frames
+      return if @extension_frames || !defined?(EltenLoop)
+
+      owner = self
+      @extension_frames = EltenLoop.every_frame do |now|
+        owner.extensions.each_value { |recorder| recorder.run_ticks(now) }
+      end
+    end
+
+    # Told to stop, on the way out - which is where the file manager
+    # closes its playlist down.
+    def stop_extensions(reason = :unload)
+      extensions.each_value do |recorder|
+        recorder.blocks_for('stop').each do |_args, block|
+          begin
+            block&.call(reason)
+          rescue Exception => error
+            Log.warning("extension stop failed: #{error.class}: #{error.message}")
+          end
+        end
+      end
+      EltenLoop.forget_frame_hook(@extension_frames) if @extension_frames && defined?(EltenLoop)
+      @extension_frames = nil
     end
 
     def extensions
@@ -288,9 +517,9 @@ class Program
     end
 
     # Asked for at class level as well as on an instance.
-    def server_table(name, _uuid = nil)
+    def server_table(name, uuid = nil)
       @server_tables ||= {}
-      @server_tables[name.to_s] ||= Programs::LocalTable.new(self, name)
+      @server_tables[name.to_s] ||= Programs::ServerTable.new(self, name, uuid)
     end
 
     def leaderboard(name, order: nil,
@@ -301,8 +530,16 @@ class Program
                                 log_label: log_label)
     end
 
+    # **A name is a name in the application's own data folder, not a path
+    # in whatever directory this process happens to be running in.** The
+    # instance methods have always resolved it that way (`read_text` ->
+    # `data_path`); these did not, so the file manager's `activate` -
+    # which reads its playlists at CLASS level, before any instance
+    # exists - wrote "playlists.json" beside Titan and read it back from
+    # wherever Titan had been started, and a saved playlist was gone the
+    # next time.
     def read_json(path, default: {})
-      raw = File.exist?(path) ? File.read(path, encoding: 'UTF-8') : nil
+      raw = read_text(path, default: nil)
       return default if raw.nil? || raw.empty?
 
       JSON.parse(raw)
@@ -311,9 +548,32 @@ class Program
     end
 
     def write_json(path, data)
+      write_text(path, JSON.pretty_generate(data))
+    end
+
+    def update_json(path, default: {})
+      data = read_json(path, default: default)
+      result = yield(data)
+      write_json(path, data)
+      result
+    end
+
+    def read_text(path, default: '')
+      full = File.absolute_path?(path.to_s) ? path.to_s : data_path(path.to_s)
+      return default if full.nil? || !File.exist?(full)
+
+      File.read(full, encoding: 'UTF-8')
+    rescue StandardError
+      default
+    end
+
+    def write_text(path, text)
       require 'fileutils'
-      FileUtils.mkdir_p(File.dirname(path))
-      File.write(path, JSON.pretty_generate(data), encoding: 'UTF-8')
+      full = File.absolute_path?(path.to_s) ? path.to_s : data_path(path.to_s)
+      return false if full.nil? || full.to_s.empty?
+
+      FileUtils.mkdir_p(File.dirname(full))
+      File.write(full, text.to_s, encoding: 'UTF-8')
       true
     rescue StandardError
       false
@@ -347,6 +607,38 @@ class Program
         self
       end
     end
+
+    def blocks_for(hook)
+      @blocks[hook.to_s] || []
+    end
+
+    # An extension's `tick` really ticks, while the application is open.
+    #
+    # The file manager's background playlist is one - `service.tick(interval:
+    # 0.1) { @playlist_playback.tick }` - and with nothing calling it the
+    # playlist advanced to its next track and stopped there for good.
+    # Elten runs these whether the application is open or not; here they
+    # run while it is, because a bridge doing an application's background
+    # work after the user has closed it is a bridge doing something
+    # nobody asked for.
+    def run_ticks(now)
+      blocks_for('tick').each do |args, block|
+        next if block.nil?
+
+        options = args.find { |value| value.is_a?(Hash) } || {}
+        interval = (options[:interval] || options['interval']).to_f
+        @last ||= {}
+        key = block.object_id
+        next if interval.positive? && @last[key] && now - @last[key] < interval
+
+        @last[key] = now
+        begin
+          block.call
+        rescue Exception => error
+          Log.warning("extension #{@name}: #{error.class}: #{error.message}")
+        end
+      end
+    end
   end
 
   # ----------------------------------------------------------- instance side
@@ -374,10 +666,9 @@ class Program
     self.class.register_quickaction(ident, label, &block)
   end
 
-  # One named table. Local, and honest about it - see the note at the top.
-  def server_table(name, _uuid = nil)
-    @server_tables ||= {}
-    @server_tables[name.to_s] ||= Programs::LocalTable.new(self, name)
+  # One named table, on EltenLink and mirrored here - see `ServerTable`.
+  def server_table(name, uuid = nil)
+    self.class.server_table(name, uuid)
   end
 
   def server_resources(_uuid = nil)

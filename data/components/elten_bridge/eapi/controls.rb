@@ -79,9 +79,18 @@ class EltenControl
     self
   end
 
+  # **Elten hands a block ONE argument: the array of what happened.**
+  # `FormBase#trigger` ends in `e[4].call(a)` where `a` is the whole
+  # parameter list, and Ruby's own auto-splat is what then makes both
+  # shapes an application writes work - `on(:move) { |pos| pos[0] }` gets
+  # the pair, `on(:action) { |name, source, x, y| }` gets them apart.
+  # Splatting here instead gave the first shape the first number on its
+  # own, and `pos[0]` on an Integer is a BIT of it: AudioMemory read the
+  # column out of a number that was the column, played its sounds at
+  # nonsense positions and never sounded the square the cursor was on.
   def trigger(event, *args)
     Array(@handlers[event.to_sym]).each do |block|
-      block.call(*args)
+      block.call(args)
     end
   end
 
@@ -97,16 +106,29 @@ class EltenControl
   def announce_sound_properties
     changes = {}
     SOUND_PROPERTIES.each do |key|
-      changes[key.to_sym] = properties[key] if properties.key?(key)
+      value = sound_property(key)
+      changes[key.to_sym] = value unless value.nil?
     end
     push(changes) unless changes.empty?
     self
   end
 
+  # A control may keep one of these as a real attribute of its own - a
+  # grid's `@silent` and `@border_sound` are what its own `update` reads -
+  # so the instance variable is asked for before the bag of properties
+  # everything else lands in.
+  def sound_property(key)
+    variable = "@#{key}"
+    return instance_variable_get(variable) if instance_variable_defined?(variable)
+
+    properties[key]
+  end
+
   def to_spec
     spec = @spec.merge(kind: @kind.to_s)
     SOUND_PROPERTIES.each do |key|
-      spec[key.to_sym] = properties[key] if properties.key?(key)
+      value = sound_property(key)
+      spec[key.to_sym] = value unless value.nil?
     end
     spec
   end
@@ -123,6 +145,14 @@ class EltenControl
     if key.end_with?('=') && arguments.size == 1
       name = key[0..-2]
       properties[name] = arguments.first
+      # **A control that keeps this as a real attribute must see the new
+      # value.** A grid's own `update` reads `@speech` and
+      # `@border_sound`; writing only into the bag of properties left the
+      # attribute at whatever the constructor set, so
+      # `grid.border_sound = false` was remembered, answered, and ignored
+      # by the one piece of code that acts on it.
+      variable = "@#{name}"
+      instance_variable_set(variable, arguments.first) if instance_variable_defined?(variable)
       push(name.to_sym => arguments.first) if SOUND_PROPERTIES.include?(name)
       return arguments.first
     end
@@ -350,12 +380,23 @@ class EltenControl
   # The user asked for it. Building the menu runs the application's own
   # blocks, so it is built fresh every time - which is the point: what is
   # on it depends on the row the cursor is on.
-  def open_context_menu(as_menu_bar = false)
+  #
+  # **Always FLAT, whichever key opened it.** Elten's own `context` takes a
+  # `submenu` flag - true for a menu BAR (each binding wrapped under a
+  # heading), false for a context menu (the options poured straight in) -
+  # and Titan opened it as a menu bar for Alt and flat for the
+  # Applications key. But these applications have no menu bar in Titan, so
+  # the menu-bar path only ever added an oddity: an unnamed menu became a
+  # literal "Context menu" entry you had to open to reach anything, and
+  # the file tree became "<folder> - File tree". So every gesture -
+  # Applications key, Shift+F10, right mouse button, Alt - now opens the
+  # SAME flat menu, which is what a menu is on this desktop.
+  def open_context_menu(_as_menu_bar = false)
     return false unless hascontext
 
     ensure_shown
     menu = Menu.new('', :context)
-    context(menu, as_menu_bar)
+    context(menu, false)
     menu.popup(self)
     true
   end
@@ -400,6 +441,49 @@ class EltenControl
   def update(*_arguments); ensure_shown; end
   def key_processed(_key); false; end
 
+  # Whether this control needs a frame of its own to work.
+  #
+  # Elten's form calls `update` on the focused field every frame, and two
+  # controls really depend on it: a grid moves there and a file tree
+  # reads its folder there. Everything else on a Titan form is a native
+  # widget that moves itself, so it is asked for nothing.
+  def frame_driven?; false; end
+
+  # A key Titan handed to THIS control, remembered until `update`.
+  #
+  # A control that acts on a key the moment it arrives is a control that
+  # acted somewhere other than where the application asked it to: Elten's
+  # own file tree and grid both do everything in `update`, which is what
+  # lets an application put `@tree.update` in its own loop and know when
+  # it happens.
+  def key_pressed(name, shift: false, control: false, alt: false, **_rest)
+    (@queued ||= []) << { name: name.to_s.downcase, shift: shift,
+                          control: control, alt: alt }
+    self
+  end
+
+  # What the user did to the widget on Titan's side. Overridden by any
+  # control that has state of its own to keep in step.
+  def apply_wire_change(_message); self; end
+
+  # What was pressed this frame: what Titan handed over, or - with no
+  # window in front of this, which is a test or a headless run - what is
+  # on the application's own key stream, where Elten's controls read it.
+  def keys_this_frame(names)
+    found = @queued || []
+    @queued = []
+    return found unless found.empty?
+
+    Array(names).each_with_object([]) do |name, taken|
+      taken << key_state(name) if key_pressed?(name)
+    end
+  end
+
+  def key_state(name)
+    { name: name.to_s, shift: !!modifier_held?(:shift),
+      control: !!modifier_held?(:control), alt: !!modifier_held?(:option) }
+  end
+
   # In Elten there is one screen and building a control puts it on it. Here
   # a control usually arrives inside a `Form`, but it does not have to: the
   # file manager builds a `FilesTree` and drives it from a `Runner`, with no
@@ -416,7 +500,17 @@ class EltenControl
 
   protected
 
+  # **A change made before the window exists is still a change.**
+  #
+  # `to_spec` is what Titan builds the widget out of, and it used to be
+  # the hash the constructor made - so anything an application did between
+  # building a control and showing it was lost. AudioMemory does exactly
+  # that: it deals the board (`replace_cells`) and only then calls
+  # `grid.focus`, so the board arrived on the screen empty and stayed
+  # empty. Every change is folded into the spec here, so the window is
+  # built from what the control IS rather than from what it was.
   def push(changes)
+    changes.each { |key, value| @spec[key.to_sym] = value }
     return if @control_id.nil? || @form.nil?
 
     @form.push_change(@control_id, changes)
@@ -460,6 +554,11 @@ class CheckBox < EltenControl
     @checked = !!checked
   end
 
+  def apply_wire_change(message)
+    @checked = message['checked'] == true if message.key?('checked')
+    self
+  end
+
   def checked?
     @checked
   end
@@ -472,23 +571,42 @@ class CheckBox < EltenControl
 end
 
 class EditBox < EltenControl
-  # Elten's own: a bitmask, so an application can ask for more than one at
-  # once (`EditBox::Flags::ReadOnly | EditBox::Flags::MultiLine`).
+  # **Elten's own numbers**, which are not the ones that were here:
+  # `MultiLine` is 1 and `ReadOnly` is 2, and they were the other way
+  # round. So an application asking for a box to write a message in got a
+  # read-only one line, and one asking for a page to READ got an editable
+  # field - and `display_text`, which Elten builds out of `ReadOnly |
+  # MultiLine`, only worked because the two wrongs added up to the same
+  # number.
   module Flags
-    ReadOnly = 1
-    MultiLine = 2
+    MultiLine = 1
+    ReadOnly = 2
     Password = 4
+    Numbers = 8
+    DisableLineWrapping = 16
+    MarkDown = 32
+    HTML = 64
+    Formattable = 128
+    Transcripted = 256
   end
 
   def initialize(header = '', type: 0, text: '', max_length: -1, **_ignored)
     flags = type.to_i
+    @flags = flags
     multiline = (flags & Flags::MultiLine) != 0
     readonly = (flags & Flags::ReadOnly) != 0
     password = (flags & Flags::Password) != 0
+    numbers = (flags & Flags::Numbers) != 0
     super(:editbox, { header: header.to_s, text: text.to_s,
                       multiline: multiline, readonly: readonly,
-                      password: password, max_length: max_length.to_i })
+                      password: password, numbers: numbers,
+                      max_length: max_length.to_i })
     @text = text.to_s
+  end
+
+  def apply_wire_change(message)
+    @text = message['text'].to_s if message.key?('text')
+    self
   end
 
   def text
@@ -571,16 +689,62 @@ class EditBox < EltenControl
 end
 
 class ListBox < EltenControl
+  # **Elten's own numbers.** `AnyDir = 1` was wrong, and wrong in the way
+  # that hurts: `MultiSelection` IS 1, so every application asking for a
+  # list of things to tick got a list that could not be ticked - and one
+  # that believed it had been asked for something else entirely.
   module Flags
-    AnyDir = 1
+    MultiSelection = 1
+    LeftRight = 2
+    Silent = 4
+    AnyDir = 8
+    Circular = 16
+    HotKeys = 32
+    Tagged = 64
   end
+
+  attr_reader :selected
 
   def initialize(options, header: '', index: 0, flags: 0, quiet: true,
                 empty_label: nil, **_ignored)
     @options = Array(options)
     @index = index.to_i
+    @flags = flags.to_i
+    @multi = (@flags & Flags::MultiSelection).positive?
+    @empty_label = empty_label
+    # A list of ticks is a list of ticks whatever is or is not in it, so
+    # this answers for every row from the start - `control.selected[3] =
+    # true` on a list that has never been ticked must not be a
+    # `NoMethodError` on nil.
+    @selected = Array.new(@options.size, false)
+    @silent = true if (@flags & Flags::Silent).positive?
     super(:listbox, { header: header.to_s, options: @options.map(&:to_s),
-                      index: @index })
+                      index: @index, multi: @multi,
+                      checked: checked_indices,
+                      empty_label: empty_label.to_s })
+  end
+
+  def multi?
+    @multi == true
+  end
+
+  # Which rows are ticked, which is what a multi-selection list is FOR.
+  def multiselections
+    checked_indices
+  end
+
+  def checked_indices
+    return [] unless @multi
+
+    (0...@options.size).select { |index| @selected[index] }
+  end
+
+  # An application ticks rows by writing into `selected`, so what it wrote
+  # has to reach the window. It is written before the form is open as
+  # often as after it, which is why this is pushed rather than assumed.
+  def apply_selection
+    push(checked: checked_indices)
+    self
   end
 
   def options
@@ -590,7 +754,8 @@ class ListBox < EltenControl
   def options=(values)
     @options = Array(values)
     @index = 0 if @index >= @options.size
-    push(options: @options.map(&:to_s))
+    @selected = Array.new(@options.size, false) if @multi
+    push(options: @options.map(&:to_s), checked: checked_indices)
   end
 
   def index
@@ -600,6 +765,11 @@ class ListBox < EltenControl
   def index=(value)
     @index = value.to_i
     push(index: @index)
+  end
+
+  def apply_wire_change(message)
+    @index = message['index'].to_i if message.key?('index')
+    self
   end
 
   # What is highlighted right now - the answer to "which one did they mean"
@@ -700,6 +870,11 @@ class TableBox < EltenControl
     push(index: @index)
   end
 
+  def apply_wire_change(message)
+    @index = message['index'].to_i if message.key?('index')
+    self
+  end
+
   def value
     @rows[@index]
   end
@@ -770,13 +945,58 @@ class FilesTree < EltenControl
     @header = header.to_s
     @hide_files = !!hide_files
     @extensions = Array(extensions).map { |name| name.to_s.downcase }
-    @path = normalise(path.to_s.empty? ? Dir.home : path.to_s)
+    # **An empty path is the top of the machine, not the home folder.**
+    # Elten's own tree lists the logical drives plus Desktop, Documents
+    # and Music there, and the file manager opens with exactly that -
+    # `FilesTree.new(_("FileManager"), path: "")`. Answering it with the
+    # user's home folder is a file manager that cannot reach the other
+    # drives at all, because Left from a drive root had nowhere to go.
+    @path = path.to_s.empty? ? '' : normalise(path.to_s)
+    @specialvoices = use_sounds != false
+    @handle_file_previews = handle_file_previews != false
     @file = nil
     @index = 0
     @entries = []
+    @targets = nil
     @go = false
+    @refresh = false
+    @lastfile = nil
     read
-    super(:listbox, { header: @header, options: labels, index: 0 })
+    super(:listbox, { header: header_text, options: labels, index: 0 })
+  end
+
+  # Whether this control handles the preview keys itself, which is what an
+  # application asks before binding Space to something of its own.
+  def handles_file_preview_keys?
+    @handle_file_previews
+  end
+
+  def frame_driven?; true; end
+
+  # A double click is Enter. Elten has no mouse at all, so there is
+  # nothing to copy here - but a file manager on this desktop that can be
+  # walked with the mouse and not opened with it is half a file manager.
+  # The key goes on the application's own stream, so whatever it bound
+  # Enter to is what happens.
+  def event_name(wire_name)
+    if wire_name.to_s == 'select'
+      EltenLoop.inject('key_enter') if defined?(EltenLoop)
+      return :select
+    end
+    wire_name.to_sym
+  end
+
+  # The header follows the folder, so the name a reader announces on
+  # entering the list says where the user is.
+  def header_text
+    return @header if @path.to_s.empty? && @header != ''
+    return @path if @header == ''
+
+    "#{@header}: #{@path}"
+  end
+
+  def root?
+    @path.to_s.empty?
   end
 
   # ------------------------------------------------------------- where it is
@@ -798,6 +1018,7 @@ class FilesTree < EltenControl
 
   def selected(_c = false)
     return '' if @file.nil?
+    return @targets[@index].to_s if root? && @targets
 
     EltenPath.join(@path, @file)
   end
@@ -815,6 +1036,10 @@ class FilesTree < EltenControl
   # Elten's own numbering, by extension: 0 a folder, 1 audio, 2 text,
   # 3 archive, 4 document, 5 a program, -1 anything else.
   def filetype
+    # A row at the root is a place, and asking the file system about a
+    # drive with nothing in it is Windows' own timeout and then a modal
+    # error dialog over an application that only wanted an icon.
+    return 0 if root?
     return 0 if directory?
 
     extension = File.extname(selected).downcase
@@ -834,18 +1059,64 @@ class FilesTree < EltenControl
     true
   end
 
+  # **Elten's tree carries THREE menus, not one.** `bind_filesmenu`,
+  # `bind_editmenu` and `bind_createmenu` are separate bindings and they
+  # become separate submenus - File, Edit and Create - each with the
+  # tree's own commands already in it. The file manager binds all three
+  # and expects them apart; pouring them into one context menu made
+  # "New text file" sit next to "Paste" under a heading that said File.
+  def bind_filesmenu(&block); (@filemenus ||= []) << block; self; end
+  def bind_editmenu(&block); (@editmenus ||= []) << block; self; end
+  def bind_createmenu(&block); (@createmenus ||= []) << block; self; end
+  def bind_menu(header = '', &block); bind_context(header, &block); end
+
   def context(menu, submenu = true)
-    super
-    add = proc do |into|
+    files = proc do |into|
+      Array(@filemenus).each { |block| block.call(into) }
       into.option(_('Open')) { go }
-      into.option(_('Copy'), nil, 'c') { copy }
-      into.option(_('Paste'), nil, 'v') { paste }
       into.option(_('Rename')) { rename }
       into.option(_('Delete'), nil, :del) { fdelete }
+    end
+    edits = proc do |into|
+      into.option(_('Copy'), nil, 'c') { copy }
+      into.option(_('Paste'), nil, 'v') { paste }
+      Array(@editmenus).each { |block| block.call(into) }
+    end
+    creates = proc do |into|
+      into.option(_('New folder'), nil, 'n') { new_folder }
+      Array(@createmenus).each { |block| block.call(into) }
       into.option(_('Refresh')) { refresh }
     end
-    submenu ? menu.submenu(_('File')) { |inner| add.call(inner) } : add.call(menu)
+    if submenu
+      heading = @header.to_s.empty? ? _('File tree') : "#{@header} - #{_('File tree')}"
+      menu.submenu(heading) do |inner|
+        files.call(inner)
+        edits.call(inner)
+        creates.call(inner)
+      end
+    else
+      menu.submenu(_('File')) { |inner| files.call(inner) }
+      menu.submenu(_('Edit')) { |inner| edits.call(inner) }
+      menu.submenu(_('Create')) { |inner| creates.call(inner) }
+    end
+    super
     menu
+  end
+
+  # Elten's own "New folder", which is in every file tree whether the
+  # application asked for one or not.
+  def new_folder
+    name = Kernel.input_text(_('Folder name'), text: '')
+    return false if name.nil? || name.to_s.strip.empty?
+
+    require 'fileutils'
+    FileUtils.mkdir_p(EltenPath.join(@path, name.to_s))
+    alert(_('The folder has been created.'))
+    refresh
+    true
+  rescue StandardError => error
+    Log.warning("mkdir failed: #{error.class}: #{error.message}")
+    false
   end
 
   # ------------------------------------------------- what Elten's own does
@@ -918,16 +1189,34 @@ class FilesTree < EltenControl
   # ---------------------------------------------------------------- moving
   # `go` - enter the folder under the cursor, or step back out of this one.
   # The application calls it and then `update`.
+  # `go` - open what the cursor is on. Elten's own defers to the next
+  # frame and then updates, which is what the file manager's Enter does.
   def go
     if @file == UP
       up
-    elsif directory?
-      enter(selected)
+    else
+      @go = true
+      update
     end
     self
   end
 
+  # Left. Out of this folder - and out of a drive's own root into the list
+  # of drives, which is the only way to reach another one.
   def up
+    return self if root?
+
+    if root_path?(@path)
+      leaving = @path
+      @path = ''
+      read
+      found = @targets ? @targets.index { |place| same_place?(place, leaving) } : nil
+      @index = found || 0
+      @file = @entries[@index]
+      show
+      return self
+    end
+
     parent = File.dirname(@path)
     return self if parent == @path
 
@@ -944,6 +1233,7 @@ class FilesTree < EltenControl
   end
 
   def enter(folder)
+    close_preview
     @path = normalise(folder)
     read
     @index = 0
@@ -952,12 +1242,31 @@ class FilesTree < EltenControl
     self
   end
 
+  # Elten's `refresh` marks the tree; the re-read happens on the next
+  # frame, so an application that refreshes several times in one
+  # operation reads the folder once.
   def refresh
+    @refresh = true
+    self
+  end
+
+  def refresh!
+    @refresh = false
     read
     @index = 0 if @index >= @entries.size
     @file = @entries[@index]
     show
     self
+  end
+
+  def root_path?(value)
+    text = EltenPath.normalize(value.to_s)
+    text == '/' || !!text.match(/\A[A-Za-z]:\/?\z/)
+  end
+
+  def same_place?(a, b)
+    EltenPath.normalize(a.to_s).downcase.chomp('/') ==
+      EltenPath.normalize(b.to_s).downcase.chomp('/')
   end
 
   def index
@@ -968,6 +1277,19 @@ class FilesTree < EltenControl
     @index = value.to_i
     @file = @entries[@index]
     _say_kind
+  end
+
+  # The row the user is on. Without this the tree never learned where the
+  # cursor had gone - it is not a `ListBox`, so the answer went nowhere -
+  # and the file manager acted on the top of the folder whichever row was
+  # really selected. The file-type sound is left to `update`, which is
+  # where Elten plays it and where it happens once per move.
+  def apply_wire_change(message)
+    return self unless message.key?('index')
+
+    @index = message['index'].to_i
+    @file = @entries[@index]
+    self
   end
 
   def entries
@@ -997,30 +1319,73 @@ class FilesTree < EltenControl
     (@index.to_f / (@entries.size - 1).to_f) * 2.0 - 1.0
   end
 
+  # `update` is the frame, and everything about a file tree happens in it -
+  # which is exactly where Elten's own does it, and why the file manager
+  # can be `runner.on_tick { @tree.update }` and nothing else.
   def update(*_arguments)
     ensure_shown
+    if @refresh
+      @refresh = false
+      read
+      show
+    end
+    keys_this_frame(%w[key_left key_right key_space]).each { |key| act_on(key) }
+    if @go
+      @go = false
+      enter_selected
+    end
+    announce_kind
     self
   end
 
-  # ------------------------------------------------------- Elten's own keys
-  # Right goes into a folder, Left comes back out, Space plays or reads
-  # the file the cursor is on - and with Shift held, the arrows and Space
-  # drive whatever is being previewed. This is Elten's file manager, key
-  # for key (`FilesTree#update` and `handle_preview_keys`), because
-  # somebody who has used it there should not have to learn it again here.
-  def key_pressed(name, shift: false)
-    case name.to_s
-    when 'key_right'
-      shift ? _preview_seek(1) : (go if directory?)
-    when 'key_left'
-      shift ? _preview_seek(-1) : up
-    when 'key_space'
-      shift ? _preview_toggle : preview
-    when 'key_up'
-      _preview_volume(0.05) if shift
-    when 'key_down'
-      _preview_volume(-0.05) if shift
+  def act_on(key)
+    name = key[:name]
+    # With Shift held the arrows and Space drive whatever is being
+    # previewed, which is Elten's own `handle_audio_preview_controls`.
+    if key[:shift] && @handle_file_previews
+      case name
+      when 'key_right' then _preview_seek(1)
+      when 'key_left' then _preview_seek(-1)
+      when 'key_up' then _preview_volume(0.05)
+      when 'key_down' then _preview_volume(-0.05)
+      when 'key_space' then _preview_toggle
+      end
+      return self
     end
+    case name
+    when 'key_right' then enter_selected
+    when 'key_left' then up
+    when 'key_space' then preview if @handle_file_previews
+    end
+    self
+  end
+
+  # Right, or `go`: into the folder under the cursor.
+  def enter_selected
+    target = selected(true)
+    return self if target.to_s.empty?
+
+    begin
+      return self unless File.directory?(target)
+
+      Dir.each_child(target) { break }
+    rescue StandardError => error
+      Log.warning("#{target} could not be opened: #{error.message}")
+      return self
+    end
+    enter(target)
+  end
+
+  # What KIND of thing the cursor is on, said as a sound, once per move.
+  # Elten plays this on every change of selection and it is not
+  # decoration: it is how somebody who cannot see the folder knows a
+  # folder from a song before the name has been read.
+  def announce_kind
+    return self unless @specialvoices
+    return self if @file == @lastfile
+
+    @lastfile = @file
+    _say_kind
     self
   end
 
@@ -1156,6 +1521,8 @@ class FilesTree < EltenControl
   # What is in this folder: folders first, then files, each alphabetically -
   # which is how every file list on this desktop is ordered.
   def read
+    return read_root if root?
+
     folders = []
     files = []
     begin
@@ -1183,10 +1550,31 @@ class FilesTree < EltenControl
     end
     order = ->(names) { names.sort_by { |name| name.downcase } }
     @entries = []
-    @entries << UP unless File.dirname(@path) == @path
+    @entries << UP
     @entries += order.call(folders) + order.call(files)
+    @targets = nil
     @index = 0 if @index >= @entries.size
     @file = @entries[@index]
+  end
+
+  # The top of the machine: every drive, then the three places Elten's own
+  # tree puts there. `@targets` is what each row really is, because
+  # "Documents" is a row whose name is not its path.
+  def read_root
+    drives = EltenSystemHelpers.logical_drives
+    shortcuts = [[_('Desktop'), Dirs.desktop],
+                 [_('Documents'), Dirs.documents],
+                 [_('Music'), Dirs.music]]
+    shortcuts = shortcuts.reject { |_label, place| place.to_s.empty? }
+    @entries = drives + shortcuts.map { |label, _place| label }
+    # A drive is "C:" and a path is "C:/" - joining onto the first one
+    # gives "C:name", which is a RELATIVE path on that drive and not the
+    # folder anybody meant.
+    @targets = drives.map { |drive| EltenPath.with_separator(drive) } +
+               shortcuts.map { |_label, place| place }
+    @index = 0 if @index >= @entries.size
+    @file = @entries[@index]
+    self
   end
 
   def wanted?(name)
@@ -1198,6 +1586,8 @@ class FilesTree < EltenControl
   # A folder says it is one, so a list read aloud is not a wall of names
   # with no shape.
   def labels
+    return root_labels if root?
+
     @entries.map do |name|
       begin
         if name == UP
@@ -1214,7 +1604,16 @@ class FilesTree < EltenControl
   end
 
   def show
-    push(options: labels, index: @index, header: "#{@header} - #{@path}")
+    push(options: labels, index: @index, header: header_text)
+  end
+
+  # `labels` at the root is what the rows are CALLED - a drive letter, or
+  # "Documents" - and everywhere else it is the name with "folder" after
+  # it. Overridden below rather than in `labels` so the root has no
+  # `File.directory?` per row: a drive that is not there (an empty card
+  # reader) answers that only after Windows' own timeout.
+  def root_labels
+    @entries.dup
   end
 end
 
@@ -1490,7 +1889,87 @@ class Player < EltenControl
 
   def fade(*_arguments); self; end
   def is_opus?; false; end
-  def savefile; false; end
+
+  # Elten's own player menu - reached by the Applications key, Shift+F10,
+  # the right mouse button and Alt, and built as a real Windows menu so a
+  # reader announces it as one and the mouse opens it.
+  def hascontext
+    true
+  end
+
+  # Elten's own player menu, and flat like Elten's: the options go
+  # straight onto the menu, not nested under a heading. It is the same
+  # list Elten builds - Play/pause, the position, the duration, the track
+  # info, the chapters, jump to position and (for a URL) save.
+  def context(menu, _submenu = true)
+    menu.option(_('Play/pause')) { paused? ? play : pause }
+    menu.option(_('Get sound position')) { speak(_hms(position)) }
+    menu.option(_('Get sound duration')) { speak(_hms(duration)) }
+    menu.option(_('Track info')) { _say_info }
+    unless chapters.empty?
+      menu.submenu(_('Chapters')) do |sub|
+        chapters.each do |chapter|
+          sub.option(chapter[:name]) { jump_to_position(chapter[:time]) }
+        end
+      end
+    end
+    menu.option(_('Jump to position')) { _jump_dialog }
+    menu.option(_('Save file')) { savefile } if _saveable?
+    menu
+  end
+
+  def _saveable?
+    @file.is_a?(String) && (@file.include?('http:') || @file.include?('https:'))
+  end
+
+  def _say_info
+    fields = { _('Title') => info.title, _('Artist') => info.artist,
+               _('Album') => info.album, _('Track number') => info.track_number,
+               _('Copyright') => info.copyright }
+    said = fields.reject { |_k, v| v.to_s.empty? }
+                 .map { |k, v| "#{k}: #{v}" }.join(', ')
+    speak(said.empty? ? _('There is no track information.') : said)
+  end
+
+  def _jump_dialog
+    answer = Kernel.input_text(_('Jump to (mm:ss or seconds)'), text: '')
+    return if answer.nil? || answer.to_s.strip.empty?
+
+    parts = answer.to_s.split(':').map(&:to_i)
+    seconds = parts.reduce(0) { |total, part| total * 60 + part }
+    jump_to_position(seconds)
+  end
+
+  def _hms(seconds)
+    seconds = seconds.to_i
+    format('%d:%02d:%02d', seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+  end
+
+  # Save the stream to a file the user chooses.
+  def savefile
+    return false unless _saveable?
+
+    name = @label.to_s.gsub(%r{[\r\n\\/:!@\#*?<>'"|+=`]}, '').strip
+    name = File.basename(@file.to_s.split('?').first.to_s) if name.empty?
+    tree = FilesTree.new(_('Destination'), path: File.join(Dirs.music.to_s.empty? ? Dirs.user : Dirs.music, ''), hide_files: true, quiet: true)
+    field = EditBox.new(_('File name'), text: name)
+    save = Button.new(_('Save'))
+    cancel = Button.new(_('Cancel'))
+    form = Form.new([tree, field, save, cancel])
+    form.cancel_button = cancel
+    chosen = nil
+    save.on(:press) { chosen = File.join(tree.path, field.text); form.resume }
+    form.wait
+    return false if chosen.nil?
+
+    answer = EltenBridge.call('stream_do', { 'handle' => @handle,
+                                             'do' => 'save', 'path' => chosen })
+    ok = answer.is_a?(Hash) && answer['saved']
+    alert(ok ? _('Saved') : _('The file could not be saved.'))
+    ok
+  rescue EltenBridge::Closed
+    false
+  end
 
   def close
     return self if @closed
@@ -1516,6 +1995,12 @@ class Player < EltenControl
     wire_name.to_s == 'player' ? :player : wire_name.to_sym
   end
 
+  # Elten's full player keymap, arriving from the real control - and each
+  # one is a thing Titan's mixer really does now, so a key that is offered
+  # is a key that works. Space plays/pauses, the arrows seek and change
+  # the volume, Shift+arrows are the pan and the pitch, Ctrl+up/down are
+  # the tempo, Backspace puts it all back, Home/End are the ends and the
+  # page keys are the chapters.
   def handle_player(what)
     case what.to_s
     when 'toggle' then paused? ? play : pause
@@ -1526,31 +2011,116 @@ class Player < EltenControl
     when 'end' then jump_to_position([duration - 1, 0].max)
     when 'louder' then _volume(VOLUME_STEP)
     when 'quieter' then _volume(-VOLUME_STEP)
+    when 'pan_left' then self.pan = pan - PAN_STEP
+    when 'pan_right' then self.pan = pan + PAN_STEP
+    when 'pitch_up' then self.pitch = pitch + PITCH_STEP
+    when 'pitch_down' then self.pitch = pitch - PITCH_STEP
+    when 'tempo_up' then self.tempo = tempo + TEMPO_STEP
+    when 'tempo_down' then self.tempo = tempo - TEMPO_STEP
+    when 'reset' then reset_playback
+    when 'chapter_prev' then previous_chapter
+    when 'chapter_next' then next_chapter
+    when 'seek_to' then jump_to_position(@seek_target.to_f)
+    when 'volume_to' then self.volume = @seek_target.to_f
     end
     self
   end
 
-  # Elten's own keys on a player, and the same amounts: Left and Right
-  # move by five seconds, Up and Down are the volume, Home and End are
-  # the ends, Space plays and pauses. What is deliberately NOT here is
-  # Elten's tempo and pitch - Titan's mixer plays a sound, it does not
-  # resample one, and a key that pretended to change the speed and
-  # changed nothing is worse than a key that is not there.
+  # A value the user dragged a slider to - the seek target in seconds, or
+  # the volume as 0..1. Sent just before the action that reads it.
+  def seek_target=(value)
+    @seek_target = value.to_f
+  end
+
   STEP_SECONDS = 5.0
   VOLUME_STEP = 0.05
+  PAN_STEP = 0.02
+  PITCH_STEP = 0.05
+  TEMPO_STEP = 0.05
 
   def volume
-    @volume ||= 1.0
+    (@state['volume'] || @volume || 1.0).to_f
   end
 
   def volume=(value)
-    @volume = [[value.to_f, 0.05].max, 1.0].min
+    @volume = [[value.to_f, 0.05].max, 10.0].min
     _do('volume', 'volume' => @volume)
     @volume
   end
 
   def _volume(by)
     self.volume = volume + by
+  end
+
+  # Elten's `pan`, `pitch` (frequency) and `tempo`, each within the range
+  # Titan's mixer can actually take.
+  def pan
+    (@state['pan'] || 0.0).to_f
+  end
+
+  def pan=(value)
+    _do('pan', 'pan' => [[value.to_f, -1.0].max, 1.0].min)
+    play_sound('listbox_focus') if pan.abs < 0.001
+    pan
+  end
+
+  def pitch
+    (@state['pitch'] || 1.0).to_f
+  end
+
+  def pitch=(value)
+    _do('pitch', 'pitch' => [[value.to_f, 0.5].max, 2.0].min)
+    play_sound('listbox_focus') if (pitch - 1.0).abs < 0.001
+    pitch
+  end
+
+  def tempo
+    (@state['tempo'] || 1.0).to_f
+  end
+
+  def tempo=(value)
+    _do('tempo', 'tempo' => [[value.to_f, 0.5].max, 2.0].min)
+    play_sound('listbox_focus') if (tempo - 1.0).abs < 0.001
+    tempo
+  end
+
+  def reset_playback
+    @volume = 0.8
+    _do('reset')
+    self
+  end
+
+  # The chapters this file carries, as Elten reads them - name and time.
+  def chapters
+    Array(@state['chapters']).map do |chapter|
+      { name: chapter['name'].to_s, time: chapter['time'].to_f }
+    end
+  end
+
+  def previous_chapter
+    _chapter(-1)
+  end
+
+  def next_chapter
+    _chapter(1)
+  end
+
+  def _chapter(direction)
+    answer = EltenBridge.call('stream_do', { 'handle' => @handle,
+                                             'do' => 'chapter',
+                                             'direction' => direction })
+    @state = answer if answer.is_a?(Hash)
+    speak(_('There are no chapters in this track.')) if answer.is_a?(Hash) && answer['no_chapter']
+    _show
+    self
+  rescue EltenBridge::Closed
+    self
+  end
+
+  # The track's own tags - what "Track info" reads.
+  def info
+    data = @state['info'].is_a?(Hash) ? @state['info'] : {}
+    PlayerInfo.new(data)
   end
 
   private
@@ -1620,13 +2190,46 @@ class PlayerSound
   end
   alias duration length
 
-  def volume; 1.0; end
-  def volume=(value); value; end
+  def volume; @player.volume; end
+  def volume=(value); @player.volume = value; end
+  def pan; @player.pan; end
+  def pan=(value); @player.pan = value; end
+  def tempo; (@player.tempo - 1.0) * 100.0; end
+  def tempo=(value); @player.tempo = 1.0 + value.to_f / 100.0; end
   def stop; @player.pause; end
   def play; @player.play; end
   def pause; @player.pause; end
+  def paused?; @player.paused?; end
+  def playing?; @player.instance_variable_get(:@state)['playing'] == true; end
   def close; @player.close; end
-  def frequency; 44_100; end
+  def chapters; @player.chapters.map { |c| PlayerChapter.new(c[:name], c[:time]) }; end
+  def info; @player.info; end
+  def frequency; (@player.instance_variable_get(:@state)['frequency'] || 44_100).to_i; end
+  def frequency=(value); @player.pitch = value.to_f / [frequency, 1].max; end
+  def basefrequency; 44_100; end
+end
+
+# A track's tags, as Elten's `Sound#info` answers them.
+class PlayerInfo
+  def initialize(data = {})
+    @data = data.is_a?(Hash) ? data : {}
+  end
+
+  def title; @data['title'].to_s; end
+  def artist; @data['artist'].to_s; end
+  def album; @data['album'].to_s; end
+  def track_number; @data['track'].to_s; end
+  def copyright; @data['copyright'].to_s; end
+end
+
+# One chapter - a name and where it is.
+class PlayerChapter
+  attr_reader :name, :time
+
+  def initialize(name, time)
+    @name = name.to_s
+    @time = time.to_f
+  end
 end
 
 # `GridBox.new(width, height, header:, x:, y:)` - a board.
@@ -1639,55 +2242,312 @@ end
 # answers MSAA and UI Automation with a row, a column and a cell, so the
 # reader says all three.
 class GridBox < EltenControl
-  attr_reader :width, :height
+  attr_reader :width, :height, :labels
+  attr_accessor :header
+
+  #: What a key may also be called. Elten's own table
+  #: (`ui/controls/grid_box.rb`), because an application binds `:esc` or
+  #: `:return` as readily as `:escape` or `:enter` and both must reach the
+  #: same key.
+  ACTION_KEY_ALIASES = {
+    'esc' => 'escape', 'return' => 'enter',
+    'arrow_left' => 'left', 'arrow_right' => 'right',
+    'arrow_up' => 'up', 'arrow_down' => 'down',
+    'pageup' => 'page_up', 'pagedown' => 'page_down',
+    'del' => 'delete', 'ins' => 'insert',
+    'comma' => ',', 'minus' => '-', 'period' => '.'
+  }.freeze
+
+  ACTION_MODIFIERS = %i[shift control option command main_modifier
+                        word_modifier].freeze
+
+  #: The arrows are the grid's own and cannot be bound to anything else.
+  NAVIGATION_KEYS = %i[left right up down].freeze
 
   def initialize(width, height, header: '', x: 0, y: 0, quiet: true,
-                **_ignored)
-    @width = width.to_i
-    @height = height.to_i
-    @x = x.to_i
-    @y = y.to_i
-    @cells = {}
-    super(:gridbox, { header: header.to_s, width: @width, height: @height,
+                 **_ignored)
+    @width = [width.to_i, 1].max
+    @height = [height.to_i, 1].max
+    @x = [[x.to_i, 0].max, @width - 1].min
+    @y = [[y.to_i, 0].max, @height - 1].min
+    @header = header.to_s
+    @silent = false
+    @border_sound = true
+    @speech = true
+    @labels = Array.new(@height) { Array.new(@width, '') }
+    reset_action_bindings
+    super(:gridbox, { header: @header, width: @width, height: @height,
                       x: @x, y: @y, cells: rendered })
   end
 
-  attr_accessor :x, :y
+  # ------------------------------------------------------------ where it is
+  attr_reader :x, :y
+
+  # **Setting a position has to move the cursor on the screen.** These were
+  # a plain `attr_accessor`, so AudioMemory's `grid.x = 0; grid.y = 0`
+  # between rounds moved nothing: Ruby believed the cursor was at the top
+  # left of the new board and the board still had it wherever the last pick
+  # had been, so the first arrow key jumped somewhere nobody had asked for.
+  def x=(value)
+    @x = clamp(value, @width)
+    push(x: @x)
+    @x
+  end
+
+  def y=(value)
+    @y = clamp(value, @height)
+    push(y: @y)
+    @y
+  end
 
   def position
     [@x, @y]
   end
 
   def set_position(x, y)
-    @x = x.to_i
-    @y = y.to_i
+    @x = clamp(x, @width)
+    @y = clamp(y, @height)
     push(x: @x, y: @y)
     self
   end
 
-  def [](x, y = nil)
-    # `grid[x, y]` is a cell; `grid[y]` on its own is the row, which is how
-    # an application walks a board a line at a time.
-    return (0...[@width, 1].max).map { |column| @cells[[column, x.to_i]] } if y.nil?
+  # Elten's own: a grid's VALUE is where the cursor is, not what is under
+  # it. `cell_label` is what is under it.
+  def value
+    [@x, @y]
+  end
 
-    @cells[[x.to_i, y.to_i]]
+  # Elten's `lpos` is 0..100 across the columns; Titan's own pan is -1..1,
+  # and handing one to the other is how a sound ends up in the wrong
+  # speaker, so both are here and named for what they are.
+  def lpos
+    return 50.0 if @width <= 1
+
+    @x.to_f / (@width - 1).to_f * 100.0
+  end
+
+  def lpos_pan
+    return 0.0 if @width <= 1
+
+    @x.to_f / (@width - 1).to_f * 2.0 - 1.0
+  end
+
+  # ------------------------------------------------------------- the cells
+  def [](x, y = nil)
+    # `grid[x, y]` is one cell; `grid[y]` on its own is a whole row, which
+    # is how an application walks a board a line at a time.
+    return Array(@labels[x.to_i]).dup if y.nil?
+
+    cell_label(x, y)
   end
 
   def []=(x, y, value)
-    @cells[[x.to_i, y.to_i]] = value
+    set_cell(x, y, value)
+  end
+
+  def set_cell(x, y, label)
+    return self if x.nil? || y.nil?
+    return self if x.to_i.negative? || y.to_i.negative?
+    return self if x.to_i >= @width || y.to_i >= @height
+
+    @labels[y.to_i][x.to_i] = text_utf8(label)
     push(cells: rendered)
+    self
   end
 
-  def value
-    @cells[[@x, @y]]
+  def cell_label(x = @x, y = @y)
+    return '' if x.nil? || y.nil?
+    return '' if x.to_i.negative? || y.to_i.negative?
+    return '' if x.to_i >= @width || y.to_i >= @height
+
+    text_utf8(@labels[y.to_i][x.to_i])
   end
 
-  def wait_item_at(_index = nil)
-    value
+  # "B3" - the square, said the way a person says it. Elten builds it from
+  # the column letter and the row counted from one.
+  def coordinate_label(x = @x, y = @y)
+    column = x.to_i
+    letters = ''
+    loop do
+      letters = (65 + (column % 26)).chr + letters
+      column = column / 26 - 1
+      break if column.negative?
+    end
+    "#{letters}#{y.to_i + 1}"
   end
 
-  def wait_item_available?(_index = nil)
-    true
+  def resize(width, height)
+    old = @labels
+    @width = [width.to_i, 1].max
+    @height = [height.to_i, 1].max
+    @x = clamp(@x, @width)
+    @y = clamp(@y, @height)
+    @labels = Array.new(@height) { Array.new(@width, '') }
+    [@height, old.size].min.times do |row|
+      [@width, Array(old[row]).size].min.times do |column|
+        @labels[row][column] = old[row][column]
+      end
+    end
+    push(width: @width, height: @height, cells: rendered, x: @x, y: @y)
+    self
+  end
+
+  def set_cells(rows)
+    replace_cells(rows, resize: false)
+  end
+
+  # The whole board at once, which is how AudioMemory deals a round - and
+  # its board GROWS, so `resize: true` really has to change the shape of
+  # what is on the screen as well as the shape of the model.
+  def replace_cells(rows, resize: false)
+    labels, width, height = normalise_rows(rows)
+    if resize
+      @width = width
+      @height = height
+      @x = clamp(@x, @width)
+      @y = clamp(@y, @height)
+    elsif width != @width || height != @height
+      raise ArgumentError, 'cell rows must match the current grid dimensions'
+    end
+    @labels = labels
+    push(width: @width, height: @height, cells: rendered, x: @x, y: @y)
+    self
+  end
+
+  def update_cells(positions)
+    raise ArgumentError, 'update_cells requires a block' unless block_given?
+    raise ArgumentError, 'cell positions must be enumerable' unless positions.respond_to?(:each)
+
+    seen = {}
+    updates = []
+    positions.each do |position|
+      x, y = position
+      next if x.nil? || y.nil?
+
+      x = x.to_i
+      y = y.to_i
+      next if x.negative? || y.negative? || x >= @width || y >= @height
+      next if seen[[x, y]]
+
+      seen[[x, y]] = true
+      updates.push([x, y, text_utf8(yield(x, y))])
+    end
+    updates.each { |x, y, label| @labels[y][x] = label }
+    push(cells: rendered) unless updates.empty?
+    self
+  end
+
+  def cells
+    @labels
+  end
+
+  # --------------------------------------------------------- bound actions
+  # `bind_action(:flag, key: [:f, :shift])` - a key that is not an arrow,
+  # reported as `:action` with the name, the source and the square. Without
+  # this a game whose whole interaction is "press F to flag this square"
+  # had no way to be played at all.
+  def bind_action(name, key:)
+    raise ArgumentError, 'action name must be convertible to a symbol' unless name.respond_to?(:to_sym)
+
+    @action_bindings[normalise_source(key)] = name.to_sym
+    self
+  end
+
+  def unbind_action(key)
+    @action_bindings.delete(normalise_source(key))
+    self
+  end
+
+  def reset_action_bindings
+    @action_bindings = {}
+    bind_action(:select, key: :enter)
+    bind_action(:select, key: :space)
+    self
+  end
+
+  def action_bindings
+    @action_bindings.each_with_object({}) do |(source, action), bindings|
+      bindings[source.is_a?(Array) ? source.dup : source] = action
+    end
+  end
+
+  # ------------------------------------------------------------- behaviour
+  # Titan draws the grid, so the reader announces the square as the cursor
+  # enters it and nothing here speaks over that. What `focus` still owes an
+  # application is the keyboard and the marker sound.
+  def focus(_index = nil, _count = nil, spk = true, **_options)
+    ensure_shown
+    play_sound('listbox_marker', position: lpos_pan) if spk && !@silent
+    super()
+    self
+  end
+
+  # `update` is where a grid MOVES, because that is where Elten's does.
+  # AudioMemory drives one from a `Runner` (`runner.on_tick { grid.update }`)
+  # and never touches a form, so a grid that only moved when a wx event
+  # arrived was a board the game could not read the cursor off.
+  def update(*_arguments)
+    ensure_shown
+    keys_this_frame(watched_keys).each { |key| act_on(key) }
+    self
+  end
+
+  # The arrows, and whatever an application bound.
+  def watched_keys
+    %w[key_left key_right key_up key_down] +
+      @action_bindings.keys.map { |source| key_event_name(source_key(source)).to_s }
+  end
+
+  def act_on(key)
+    old = [@x, @y]
+    case key[:name]
+    when 'key_left' then move_by(-1, 0)
+    when 'key_right' then move_by(1, 0)
+    when 'key_up' then move_by(0, -1)
+    when 'key_down' then move_by(0, 1)
+    else
+      binding = binding_for(key)
+      if binding
+        source, action = binding
+        trigger(:select, @x, @y) if action == :select
+        trigger(:action, action, source, @x, @y)
+      end
+    end
+    return self if old == [@x, @y]
+
+    push(x: @x, y: @y)
+    play_sound('listbox_focus', position: lpos_pan) unless @silent
+    trigger(:move, @x, @y)
+    self
+  end
+
+  # A grid answers with a place, not a position in a list.
+  def apply_wire_change(message)
+    @x = clamp(message['x'], @width) if message.key?('x')
+    @y = clamp(message['y'], @height) if message.key?('y')
+    self
+  end
+
+  def move_by(dx, dy)
+    nx = clamp(@x + dx.to_i, @width)
+    ny = clamp(@y + dy.to_i, @height)
+    if nx == @x && ny == @y
+      play_sound('border', position: lpos_pan) if @border_sound && !@silent
+      trigger(:border, @x, @y, border_direction(dx, dy), dx.to_i, dy.to_i)
+    else
+      @x = nx
+      @y = ny
+    end
+    self
+  end
+
+  def border_direction(dx, dy)
+    return :left if dx.to_i.negative?
+    return :right if dx.to_i.positive?
+    return :up if dy.to_i.negative?
+    return :down if dy.to_i.positive?
+
+    nil
   end
 
   # A board's cursor moving is a `:move`, not a `:changed`.
@@ -1695,16 +2555,22 @@ class GridBox < EltenControl
     wire_name.to_s == 'changed' ? :move : wire_name.to_sym
   end
 
-  # Every event carries the position - `[x, y]` - and a `:border` carries
-  # which way the player walked into the wall as well, because that is
-  # what Elten's own grid passes and what an application reads: AudioMemory
-  # takes `pos[2]` and plays a sound at the edge that was hit.
+  # Every event carries the position - and a `:border` carries which way
+  # the player walked into the wall as well, because that is what
+  # AudioMemory reads off `pos[2]` to sound the edge that was hit.
   def event_args(name, message = nil)
     return [[@x, @y]] unless name.to_s == 'border' && message.is_a?(Hash)
 
     direction = message['direction'].to_s
     [[@x, @y, direction.empty? ? nil : direction.to_sym,
       message['dx'].to_i, message['dy'].to_i]]
+  end
+
+  def key_processed(key)
+    wanted = normalise_key(key)
+    return true if NAVIGATION_KEYS.include?(wanted)
+
+    @action_bindings.keys.any? { |source| source_key(source) == wanted }
   end
 
   # Titan's grid is two-dimensional, so an index is not what moves - but
@@ -1714,42 +2580,130 @@ class GridBox < EltenControl
   end
 
   def index=(value)
-    width = [@width, 1].max
-    @y, @x = value.to_i.divmod(width)
-    push(x: @x, y: @y)
+    y, x = value.to_i.divmod([@width, 1].max)
+    set_position(x, y)
   end
 
-  # `replace_cells(rows, resize: true)` - the whole board at once, which is
-  # how AudioMemory deals a new round. `rows` is an array of rows of cells.
-  def replace_cells(rows, resize: false)
-    rows = Array(rows)
-    if resize
-      @height = rows.size
-      @width = rows.map { |row| Array(row).size }.max || 0
-    end
-    @cells = {}
-    rows.each_with_index do |row, y|
-      Array(row).each_with_index { |cell, x| @cells[[x, y]] = cell }
-    end
-    @x = 0 if @x >= @width
-    @y = 0 if @y >= @height
-    push(width: @width, height: @height, cells: rendered, x: @x, y: @y)
-    self
+  def frame_driven?; true; end
+
+  def wait_item_at(_index = nil)
+    cell_label
   end
 
-  def cells
-    @cells
+  def wait_item_available?(_index = nil)
+    true
   end
 
   private
 
-  # Rows of strings, which is the shape a grid is filled from.
+  def clamp(value, size)
+    [[value.to_i, 0].max, size - 1].min
+  end
+
   def rendered
     (0...[@height, 1].max).map do |y|
-      (0...[@width, 1].max).map do |x|
-        cell = @cells[[x, y]]
-        cell.nil? ? '' : cell.to_s
+      (0...[@width, 1].max).map { |x| @labels[y].nil? ? '' : @labels[y][x].to_s }
+    end
+  end
+
+  def normalise_rows(rows)
+    raise ArgumentError, 'cell rows must be enumerable' unless rows.respond_to?(:to_a)
+
+    source = rows.to_a
+    raise ArgumentError, 'cell rows cannot be empty' if source.empty?
+
+    source = source.map do |row|
+      raise ArgumentError, 'each cell row must be enumerable' unless row.respond_to?(:to_a)
+
+      row.to_a
+    end
+    width = source[0].size
+    raise ArgumentError, 'cell rows cannot be empty' if width.zero?
+    raise ArgumentError, 'cell rows must be rectangular' if source.any? { |row| row.size != width }
+
+    labels = source.map { |row| row.map { |label| text_utf8(label) } }
+    [labels, width, labels.size]
+  end
+
+  # The binding this key fires, with its modifiers agreeing. A binding
+  # with modifiers wins over a bare one, which is Elten's own order.
+  def binding_for(key)
+    entries = @action_bindings.to_a
+    entries.find { |source, _| source.is_a?(Array) && matches?(source, key) } ||
+      entries.find { |source, _| !source.is_a?(Array) && matches?(source, key) }
+  end
+
+  def matches?(source, key)
+    return false unless key_event_name(source_key(source)).to_s == key[:name]
+    return true unless source.is_a?(Array)
+
+    source[1..].all? do |modifier|
+      case resolve_modifier(modifier)
+      when :shift then key[:shift]
+      when :control then key[:control]
+      when :option then key[:alt]
+      else false
       end
+    end
+  end
+
+  def source_key(source)
+    source.is_a?(Array) ? source[0] : source
+  end
+
+  # Elten spells a key `:space`; the key stream spells it `key_space`, and
+  # both reach the same key.
+  def key_event_name(key)
+    return key if key.is_a?(Integer)
+
+    "key_#{key}"
+  end
+
+  def normalise_source(source)
+    if source.is_a?(Array)
+      raise ArgumentError, 'action input source cannot be empty' if source.empty?
+
+      key = normalise_key(source[0])
+      modifiers = source[1..].map { |modifier| normalise_modifier(modifier) }
+      raise ArgumentError, 'action input source contains duplicate modifiers' if modifiers.uniq.size != modifiers.size
+
+      modifiers = modifiers.sort_by { |modifier| ACTION_MODIFIERS.index(modifier) }
+      normalised = [key, *modifiers].freeze
+    else
+      normalised = normalise_key(source)
+    end
+    if NAVIGATION_KEYS.include?(source_key(normalised))
+      raise ArgumentError, 'arrow keys are reserved for GridBox navigation'
+    end
+
+    normalised
+  end
+
+  def normalise_key(key)
+    return key.to_i & 0xff if key.is_a?(Integer)
+    raise ArgumentError, 'action key must be a key name or numeric key code' unless key.respond_to?(:to_sym)
+
+    name = key.to_sym.to_s.downcase.sub(/\Akey_/, '')
+    ACTION_KEY_ALIASES.fetch(name, name).to_sym
+  end
+
+  def normalise_modifier(modifier)
+    raise ArgumentError, 'action modifier must be a name' unless modifier.respond_to?(:to_sym)
+
+    modifier = modifier.to_s.sub(/\Akey_/, '').to_sym
+    modifier = :control if modifier == :ctrl
+    modifier = :option if modifier == :alt
+    raise ArgumentError, "unsupported action modifier: #{modifier.inspect}" unless ACTION_MODIFIERS.include?(modifier)
+
+    modifier
+  end
+
+  def resolve_modifier(modifier)
+    case modifier.to_s
+    when 'main_modifier' then :control
+    when 'word_modifier' then :control
+    when 'command' then :control
+    else modifier
     end
   end
 end
@@ -1908,9 +2862,55 @@ end
 # keyboard every frame from inside `wait`; this reads one event at a time off
 # the bridge and dispatches it to whichever control it named, which is the
 # same design `Runner` uses for a game loop one file over.
+# `FormTimer.new(seconds, repeat:) { ... }` - Elten's own, from
+# `ui/form.rb`. A form ticks its timers every frame (`add_timer`), which is
+# how the Game Room refreshes its lobby: `form.add_timer(FormTimer.new(t,
+# repeat: true) { ... })`. Missing, the Game Room stopped on an
+# uninitialized constant before its screen was up.
+class FormTimer
+  attr_reader :time, :repeat, :starttime
+
+  def initialize(time, repeat: false, autostart: true, &action)
+    @time = time.to_f
+    @repeat = repeat
+    @action = action
+    @starttime = nil
+    @completed = false
+    start if autostart
+  end
+
+  def start
+    @starttime = EltenBridge.now
+    @completed = false
+    self
+  end
+
+  def stop
+    @starttime = nil
+    self
+  end
+
+  def update
+    return if @starttime.nil? || @completed
+
+    return if EltenBridge.now - @starttime < @time
+
+    @action&.call
+    @completed = true
+    @starttime = nil
+    start if @repeat
+    self
+  end
+end
+
 class Form
   attr_accessor :cancel_button, :accept_button
   attr_reader :fields
+  # Elten's `FormBase` has `attr_accessor :header`, and applications set it
+  # after building the form - the media catalog's Options screen does
+  # `form.header = _("Options")`. Missing, it ended the application on the
+  # screen it was opening.
+  attr_accessor :header
 
   def initialize(fields = [], index: 0, quiet: false, silent: false, header: '')
     @fields = Array(fields)
@@ -2007,8 +3007,16 @@ class Form
 
   def blur; self; end
   def key_processed(_key); false; end
-  def add_timer(_timer, _start = true); self; end
-  def delete_timer(_timer); self; end
+  def add_timer(timer, start = true)
+    (@timers ||= []) << timer if timer.respond_to?(:update)
+    timer.start if start && timer.respond_to?(:start)
+    self
+  end
+
+  def delete_timer(timer)
+    (@timers ||= []).delete(timer)
+    self
+  end
   def add_tip(tip); tips.push(tip.to_s); self; end
   def get_tips; tips; end
   def tips; @tips ||= []; end
@@ -2053,11 +3061,43 @@ class Form
     # hands a control event to whichever form owns it.
     while @waiting
       loop_update(0.05)
+      # Elten's own form updates the field the keyboard is in on every
+      # frame; a grid or a file tree on a form that was never asked
+      # would sit there with keys queued and nothing acting on them.
+      @fields.each { |field| field.update if field.frame_driven? }
+      Array(@timers).each(&:update)
       break if EltenLoop.closed?
     end
     self
   ensure
     close
+  end
+
+  # Elten's own: the same wait, without the form-marker sound at the
+  # start. The Game Room calls it unguarded (`@form.wait_without_
+  # announcement`), so a missing one crashed it; here `wait` already
+  # leaves the marker to Titan's own focus cues, so this is just `wait`.
+  def wait_without_announcement
+    wait
+  end
+
+  # A frame with no key waiting. Elten's `FormBase` has it; here it is
+  # answered off the same question `Kernel#keyboard_input_idle?` answers.
+  def keyboard_idle_frame?
+    keyboard_input_idle?
+  rescue StandardError
+    false
+  end
+
+  # The Game Room marks which keys are its game shortcuts (so they are not
+  # treated as text). Guarded there with `respond_to?`, but stored anyway
+  # so the game knows its own keys.
+  def game_shortcut_keys=(keys)
+    @game_shortcut_keys = Array(keys).map { |key| key.to_s.downcase }.uniq
+  end
+
+  def game_shortcut_keys
+    @game_shortcut_keys ||= []
   end
 
   def resume
@@ -2151,6 +3191,12 @@ class Form
     return if field.nil?
 
     case name
+    when 'ticked'
+      if field.respond_to?(:selected) && field.selected.is_a?(Array)
+        field.selected[message['index'].to_i] = message['checked'] == true
+      end
+      field.trigger(:ticked, message['index'].to_i, message['checked'] == true)
+      field.trigger(:changed, message['index'].to_i)
     when 'changed', 'select'
       if field.is_a?(ChoiceListBox) && message.key?('row')
         field.choose(message['row'], message['choice'])
@@ -2163,6 +3209,8 @@ class Form
     when 'context', 'menu'
       field.open_context_menu(name == 'menu') if field.respond_to?(:open_context_menu)
     when 'player'
+      # A dragged seek carries where to. Set it before the action reads it.
+      field.seek_target = message['value'] if message.key?('value') && field.respond_to?(:seek_target=)
       field.handle_player(message['do']) if field.respond_to?(:handle_player)
       field.trigger(:player, message['do'])
     when 'press'
@@ -2172,24 +3220,28 @@ class Form
       # Right and Space are its own, exactly as in Elten - and the
       # application is told afterwards, so a handler it bound still runs.
       if field.respond_to?(:key_pressed)
-        field.key_pressed(name, shift: message['shift'] == true)
+        # `control` in the message is which CONTROL this is (the routing
+        # index); the Control MODIFIER is `ctrl`, so reading `control`
+        # here made every shortcut think Control was down.
+        field.key_pressed(name, shift: message['shift'] == true,
+                                control: message['ctrl'] == true,
+                                alt: message['alt'] == true)
       end
       field.trigger(name.to_sym, *field.event_args(name.to_sym, message))
     end
   end
 
+  # What the user did to the widget, written back into the control.
+  #
+  # This was a chain of `is_a?` tests, and what it did not test for was
+  # the file tree: it is not a `ListBox`, so a row selected with the
+  # arrows or the mouse never reached it and `@index` stayed at 0. The
+  # file manager therefore renamed, deleted, played and opened whatever
+  # was at the TOP of the folder, whichever row the user was really on.
+  # Every control answers for itself now, so a new one cannot be
+  # forgotten here.
   def apply_change(field, message)
-    if field.is_a?(GridBox)
-      # A grid answers with a place, not a position in a list.
-      field.instance_variable_set(:@x, message['x'].to_i) if message.key?('x')
-      field.instance_variable_set(:@y, message['y'].to_i) if message.key?('y')
-    elsif field.is_a?(ListBox) && message.key?('index')
-      field.instance_variable_set(:@index, message['index'].to_i)
-    elsif field.is_a?(CheckBox) && message.key?('checked')
-      field.instance_variable_set(:@checked, !!message['checked'])
-    elsif field.is_a?(EditBox) && message.key?('text')
-      field.instance_variable_set(:@text, message['text'].to_s)
-    end
+    field.apply_wire_change(message) if field.respond_to?(:apply_wire_change)
   end
 
   def change_args(field)

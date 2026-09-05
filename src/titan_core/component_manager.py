@@ -492,6 +492,19 @@ class ComponentManager:
 
         if self.settings_frame and hasattr(self.settings_frame, 'register_category'):
             try:
+                # A category that is already there is NOT built again. The
+                # builder makes a real wx.Panel parented to content_panel,
+                # and `register_category` only hides the panel it accepts -
+                # so a second one for the same name stayed visible and was
+                # drawn on top of every category the user opened. Anything
+                # that asks for the components' settings more than once
+                # (opening the window again, an interface reading it) used
+                # to show every component's controls in every category.
+                existing = getattr(self.settings_frame, 'categories', None)
+                if isinstance(existing, dict) and category_name in existing:
+                    print(f"[ComponentManager] {category_name} is already "
+                          f"registered; not building it again")
+                    return
                 # Create the panel
                 print(f"[ComponentManager] Creating panel for {category_name}")
                 panel = panel_builder(self.settings_frame.content_panel)

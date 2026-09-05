@@ -99,6 +99,15 @@ module Speech
       nil
     rescue EltenBridge::Closed
       nil
+    rescue StandardError => error
+      # **Speech that fails must not end the application.** `alert` is
+      # called from the middle of a game - AudioMemory says the round
+      # number as the board is dealt - and a `RemoteError` there travels
+      # all the way out of `program_main`: a voice that hiccuped closed
+      # the game. The line is lost, which is bad; the game is not, which
+      # is what matters.
+      Log.warning("speech failed: #{error.class}: #{error.message}")
+      nil
     end
 
     def stop
@@ -387,6 +396,132 @@ class EltenSound
 
   def volume
     @volume
+  end
+
+  # ------------------------------------------------------------- the pitch
+  # **`basefrequency` is what a sound was sampled at**, and it is the
+  # number a game changes the pitch RELATIVE to: Purrposterous reads it
+  # when a cat is born and then sets `frequency = basefrequency * pitch /
+  # 100` as the cat gets hungrier. Missing, it ended the game on the first
+  # cat - inside the game's own `rescue`, so what the user saw was a game
+  # that started and stopped.
+  DEFAULT_FREQUENCY = 44_100
+
+  def basefrequency
+    @basefrequency ||= (EltenBridge.call('sound_frequency',
+                                         { 'handle' => @handle }) ||
+                        DEFAULT_FREQUENCY).to_i
+  rescue EltenBridge::Closed
+    DEFAULT_FREQUENCY
+  end
+
+  def frequency
+    @frequency || basefrequency
+  end
+
+  # Elten resamples; Titan's mixer changes the playback rate, which is the
+  # same thing heard - a sound played faster is a sound played higher.
+  def frequency=(value)
+    @frequency = value.to_f
+    EltenBridge.call('sound_pitch',
+                     { 'handle' => @handle,
+                       'pitch' => basefrequency.to_f.zero? ? 1.0 : @frequency / basefrequency.to_f })
+    @frequency
+  rescue EltenBridge::Closed
+    @frequency
+  end
+
+  # Elten's `pitch` is a percentage of the sound's own rate, which is what
+  # `frequency` is underneath.
+  def pitch
+    return 100.0 if basefrequency.to_f.zero?
+
+    frequency.to_f / basefrequency.to_f * 100.0
+  end
+
+  def pitch=(value)
+    self.frequency = basefrequency.to_f * value.to_f / 100.0
+    value
+  end
+
+  # Tempo is speed without pitch, which Titan's mixer does not do. Answered
+  # rather than raised, and answered HONESTLY - it reports back what it was
+  # set to and changes nothing, so an application reading it is not lied
+  # to about the sound it can hear.
+  def tempo
+    @tempo || 0.0
+  end
+
+  def tempo=(value)
+    @tempo = value.to_f
+  end
+
+  # ------------------------------------------------------- where it is up to
+  def length
+    (EltenBridge.call('sound_length', { 'handle' => @handle }) || 0).to_f
+  rescue EltenBridge::Closed
+    0.0
+  end
+
+  def position
+    (EltenBridge.call('sound_at', { 'handle' => @handle }) || 0).to_f
+  rescue EltenBridge::Closed
+    0.0
+  end
+
+  def pause
+    return false if @closed
+
+    @paused = true
+    !!EltenBridge.call('sound_pause', { 'handle' => @handle, 'paused' => true })
+  rescue EltenBridge::Closed
+    false
+  end
+
+  def resume
+    return false if @closed
+
+    @paused = false
+    !!EltenBridge.call('sound_pause', { 'handle' => @handle, 'paused' => false })
+  rescue EltenBridge::Closed
+    false
+  end
+
+  def paused?
+    @paused == true
+  end
+
+  def stopped?
+    !playing? && !paused?
+  end
+
+  def opened?
+    !@closed
+  end
+
+  def status
+    return :closed if @closed
+    return :paused if paused?
+
+    playing? ? :playing : :stopped
+  end
+
+  # What a player shows about the file. Titan reads no tags, so these
+  # answer the name rather than inventing anything.
+  def title; @name.to_s; end
+  def artist; ''; end
+  def album; ''; end
+  def channels; 2; end
+  def output_frequency; basefrequency; end
+  def id; @handle; end
+  def to_s; @name.to_s; end
+
+  # Sit here until it has finished. Elten's own, used by a game that plays
+  # a sting and then goes on.
+  def wait(timeout = nil)
+    deadline = timeout.nil? ? nil : EltenBridge.now + timeout.to_f
+    loop_update(0.02) while playing? && (deadline.nil? || EltenBridge.now < deadline)
+    self
   end
 
   def fade_in(_duration, to: 1.0, logarithmic: false, play: true)
@@ -744,13 +879,25 @@ module Kernel
   # can never lose one.
   #
   # `volume` is Elten's 0..100.
-  def play_sound(name, volume: nil, position: 0.0, **_ignored)
+  # A sound that will not play is not a reason to stop either.
+  def play_sound(name, volume: nil, position: nil, pan: nil, **_ignored)
     level = volume.nil? ? 1.0 : (volume.to_f / 100.0)
     level = 1.0 if level > 1.0
+    # **Elten says where a sound is as 0 to 100; Titan says -1 to 1.**
+    # Every line of Elten's own control code writes `pan: @sel.lpos`, and
+    # handing one straight to the other puts everything from the centre
+    # leftwards into the left speaker - the same mistake the shell's own
+    # sounds once made. `position:` is Titan's spelling and wins when both
+    # are given.
+    position = (pan.to_f / 50.0) - 1.0 if position.nil? && !pan.nil?
+    position = 0.0 if position.nil?
     !!EltenBridge.call('play_cue', { 'name' => name.to_s,
                                      'position' => position,
                                      'volume' => level })
   rescue EltenBridge::Closed
+    false
+  rescue StandardError => error
+    Log.warning("#{name} could not be played: #{error.message}")
     false
   end
 
@@ -761,5 +908,135 @@ module Kernel
 
   def play_fallback(name, position: 0.0)
     play_sound(name, position: position)
+  end
+end
+
+# `SoundPool` - Elten's own, from `src/eapi/audio/soundpool.rb`.
+#
+# A pool holds the one-shot sounds a game is playing and closes them when
+# they have finished, with a ceiling on how many may be going at once. The
+# ceiling is the point: a game that plays a click per keypress asks for
+# thirty a second on a held arrow, and a mixer handed all of them runs out
+# of channels and goes silent - which reads as the game having stopped.
+class SoundPool
+  DEFAULT_MAX_VOICES = 16
+
+  attr_reader :max_voices
+
+  def initialize(max_voices: DEFAULT_MAX_VOICES)
+    @max_voices = normalise(max_voices)
+    @sounds = []
+    @lock = Mutex.new
+    @closed = false
+  end
+
+  def max_voices=(value)
+    value = normalise(value)
+    removed = []
+    @lock.synchronize do
+      @max_voices = value
+      removed = trim
+    end
+    close_all(removed)
+    value
+  end
+
+  # `pool.play(sound)` - Elten's own signature. The sound is played, held
+  # while it lasts, and closed when the pool has to make room.
+  def play(sound)
+    raise ArgumentError, 'sound must respond to play, finished? and close' unless managed?(sound)
+    raise RuntimeError, 'sound pool is closed' if closed?
+
+    sound.play
+    removed = []
+    @lock.synchronize do
+      raise RuntimeError, 'sound pool is closed' if @closed
+
+      @sounds << sound
+      removed = trim
+    end
+    close_all(removed)
+    sound
+  rescue Exception
+    begin
+      sound.close
+    rescue StandardError
+      nil
+    end
+    raise
+  end
+
+  # Let go of everything that has finished. Called by the frame, so a game
+  # that never asks still does not accumulate.
+  def update
+    finished = @lock.synchronize do
+      done = @sounds.select do |sound|
+        begin
+          sound.finished?
+        rescue StandardError
+          true
+        end
+      end
+      done.each { |sound| @sounds.delete(sound) }
+      done
+    end
+    close_all(finished)
+    finished.size
+  end
+
+  def remove(sound, close: false)
+    @lock.synchronize { @sounds.delete(sound) }
+    close_all([sound]) if close
+    sound
+  end
+
+  def sounds
+    @lock.synchronize { @sounds.dup }
+  end
+
+  def size
+    @lock.synchronize { @sounds.size }
+  end
+
+  def close
+    held = @lock.synchronize do
+      @closed = true
+      taken = @sounds
+      @sounds = []
+      taken
+    end
+    close_all(held)
+    true
+  end
+
+  def closed?
+    @closed == true
+  end
+
+  private
+
+  def trim
+    return [] if @sounds.size <= @max_voices
+
+    @sounds.shift(@sounds.size - @max_voices)
+  end
+
+  def close_all(sounds)
+    Array(sounds).each do |sound|
+      begin
+        sound.close
+      rescue StandardError
+        nil
+      end
+    end
+  end
+
+  def managed?(sound)
+    sound.respond_to?(:play) && sound.respond_to?(:finished?) &&
+      sound.respond_to?(:close)
+  end
+
+  def normalise(value)
+    [value.to_i, 1].max
   end
 end

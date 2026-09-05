@@ -59,6 +59,29 @@ class ChildProc
     @waiter.alive?
   end
 
+  # **Elten's own spelling.** Its applications ask `process.running?`,
+  # `process.avail`, `process.avail_err` and `process.terminate` - the
+  # YouTube client's whole search loop is built on them - and a method
+  # that is merely absent is a `NoMethodError` inside the application, so
+  # the search ended before yt-dlp had said a word.
+  alias running? alive?
+
+  # How many bytes are waiting, so a loop knows whether there is anything
+  # to read without a read that would block.
+  def avail
+    @lock.synchronize { @out.bytesize }
+  end
+
+  def avail_err
+    @lock.synchronize { @err.bytesize }
+  end
+
+  # A process id, which some applications read.
+  def pid
+    @waiter&.pid
+  end
+  alias process_id pid
+
   # Whatever has arrived so far, and never blocks: an application polls this
   # from inside its own loop, and a read that waited would stop the loop.
   def read(size = nil)
@@ -101,6 +124,7 @@ class ChildProc
     end
     finish
   end
+  alias terminate kill
 
   def close
     kill if alive?

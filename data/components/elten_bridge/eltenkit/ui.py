@@ -53,6 +53,39 @@ BUTTON_ICONS = (
 )
 
 
+def _check_list(parent, options, name):
+    """Titan's own tick list, or the nearest wx has if it cannot be had.
+
+    A component runs inside Titan, so `src.ui.check_list` is normally
+    right there; a bridge that could not be imported is not a reason for
+    an application's settings screen not to open, so a plain
+    `wx.CheckListBox` stands in.
+    """
+    try:
+        from src.ui.check_list import CheckList
+        return CheckList(parent, choices=options, name=name)
+    except Exception:
+        return wx.CheckListBox(parent, choices=options)
+
+
+def _alive(window):
+    """Whether a wx object is still there.
+
+    The shell learned this the expensive way and so did this bridge: a
+    window destroyed while something modal was up is a Python object whose
+    C++ half has gone, and the FIRST attribute touched raises
+    `RuntimeError` - inside wx's own event loop, where nothing catches it.
+    Everything here that remembers a window across a dialog asks this
+    before it uses one.
+    """
+    if window is None:
+        return False
+    try:
+        return bool(window) and not window.IsBeingDeleted()
+    except Exception:
+        return False
+
+
 def _name(window, name):
     """Give a control a name every screen reader can read.
 
@@ -284,6 +317,22 @@ class WxUI(object):
         is what the reader lands on and what the keys are typed into.
         """
         frame = self._ensure_frame()
+        # **Asking for the keyboard again must not throw the surface away.**
+        # An application asks on every frame it has no form; a modal dialog
+        # is what makes it ask again, and rebuilding the window each time
+        # would lose the focus, the title and whatever was on it. So a
+        # surface that is still there is simply put back in front of the
+        # user - which is the whole of what a game between two rounds
+        # needs.
+        surface = getattr(self, '_keyboard', None)
+        if surface is not None and _alive(surface):
+            if title:
+                _name(surface, title)
+                frame.SetTitle(title)
+            frame.Show()
+            frame.Raise()
+            surface.SetFocus()
+            return True
         panel = _clear(frame)
         _dress(panel)
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -365,6 +414,15 @@ class WxUI(object):
         the field it actually asked about.
         """
         frame = self._ensure_frame()
+        # A screen replaces the one before it, so anything still listed
+        # from the last one is a form whose panel has just been
+        # destroyed. Forgetting them here is what stops `_forms` growing
+        # for the life of an application and what keeps
+        # `_give_focus_back` from offering the keyboard to a window that
+        # is not there.
+        for form_id in [key for key, form in self._forms.items()
+                        if not _alive(form.panel)]:
+            self._forms.pop(form_id, None)
         panel = _clear(frame)
         skin = _skin()
         _dress(panel, skin)
@@ -425,8 +483,17 @@ class WxUI(object):
             try:
                 key = event.GetKeyCode()
                 if key == wx.WXK_ESCAPE:
+                    # The form's own back/cancel (a cancel button, or
+                    # closing a `wait`)...
                     application.send_event('control', form=form_id,
                                            control=None, name='escape')
+                    # ...AND the key stream, so a `Runner` that binds
+                    # Escape hears it too. AudioMemory shows its board on a
+                    # form and asks "abort the game?" from
+                    # `runner.on_key(:key_escape)`; without the key on the
+                    # stream, Escape on the board did nothing at all - the
+                    # game could not be left except by closing the window.
+                    self._stream(application, event)
                     return
                 focused = self._focused_index(form_id)
                 # The control's own menu, where everybody looks for it:
@@ -442,6 +509,21 @@ class WxUI(object):
                     application.send_event('control', form=form_id,
                                            control=focused, name='menu')
                     return
+                # **Space presses a focused button, and so does Enter.**
+                # A wx button is activated by Space, but the form's own
+                # char hook was intercepting Space (a navigation key) and
+                # sending it to the application as a keystroke - so the
+                # button never fired, and a screen full of buttons could
+                # be reached and not pressed with the space bar. Enter is
+                # here for the same reason and because it is what a button
+                # answers to everywhere.
+                if focused is not None \
+                        and widgets[focused].kind == 'button' \
+                        and key in (wx.WXK_SPACE, wx.WXK_RETURN,
+                                    wx.WXK_NUMPAD_ENTER):
+                    application.send_event('control', form=form_id,
+                                           control=focused, name='press')
+                    return
                 name = _navigation_key(key)
                 if name and focused is not None:
                     widget = widgets[focused]
@@ -451,15 +533,29 @@ class WxUI(object):
                     if widget.kind == 'editbox':
                         event.Skip()
                         return
-                    # A ListBox owns its own Up and Down; taking those would
-                    # stop it moving at all.
-                    if widget.kind == 'listbox' and name in ('key_up',
-                                                             'key_down'):
+                    # A ListBox owns its own movement, and that is more
+                    # than Up and Down: Home, End and the page keys are
+                    # how somebody gets to the ends of a folder of three
+                    # thousand files. Taking them left a list that could
+                    # only be walked one row at a time.
+                    if widget.kind == 'listbox' and name in (
+                            'key_up', 'key_down', 'key_home', 'key_end',
+                            'key_pageup', 'key_pagedown'):
                         event.Skip()
                         return
                     application.send_event('control', form=form_id,
                                            control=focused, name=name,
                                            shift=event.ShiftDown())
+                    # **and it still goes on the key stream.** A control
+                    # event tells the CONTROL what was pressed; a
+                    # `Runner` asks `key_pressed?`, which is a different
+                    # question with a different answer. The file manager
+                    # is both at once - a `FilesTree` whose Right and
+                    # Left are the control's, driven by a Runner whose
+                    # Escape and Ctrl+O are the application's - so a key
+                    # that reached one and not the other was half the
+                    # program not answering.
+                    self._stream(application, event)
                     return
             except Exception as error:
                 application._note('bridge', 'a key failed: %s' % error)
@@ -476,15 +572,39 @@ class WxUI(object):
             # ListBox still owns its own Up and Down and a field still
             # gets what is typed into it - and a key nothing is listening
             # for costs one line on the wire.
+            self._stream(application, event)
+            event.Skip()
+
+        def on_key_up(event):
+            # **A key that is never released stays held for ever.** A form
+            # fed the key stream on the way down and nothing on the way
+            # up, so `key_held?` answered yes about a key the user let go
+            # of minutes ago - which for a game is walking into a wall
+            # that is not there, and for the file manager is Control held
+            # down over every keystroke that followed.
             try:
                 from . import keys as keys_module
                 for name in keys_module.names_for(event.GetKeyCode()):
-                    application.key_down(name, repeat=False)
+                    application.key_up(name)
+            except Exception:
+                pass
+            event.Skip()
+
+        def on_lost(event):
+            # The window lost the keyboard: nothing may stay held.
+            try:
+                application.keys_released()
             except Exception:
                 pass
             event.Skip()
 
         panel.Bind(wx.EVT_CHAR_HOOK, on_key)
+        panel.Bind(wx.EVT_KEY_UP, on_key_up)
+        # On the PANEL, which goes with the screen it belongs to. Bound to
+        # the frame it would be one more handler per form for the life of
+        # the application, since the frame outlives every screen shown in
+        # it.
+        panel.Bind(wx.EVT_KILL_FOCUS, on_lost)
 
         def on_close(event):
             try:
@@ -504,6 +624,10 @@ class WxUI(object):
         form = self._forms.pop(form_id, None)
         if form is None:
             return False
+        # The next thing that wants the keyboard builds its own surface;
+        # this one goes with the panel it lives on.
+        if not _alive(getattr(self, '_keyboard', None)):
+            self._keyboard = None
         try:
             form.panel.Destroy()
         except Exception:
@@ -563,12 +687,16 @@ class WxUI(object):
             return None
 
     def _give_focus_back(self, remembered):
-        try:
-            if remembered and remembered:
+        # A window destroyed while the dialog was up is not somewhere to
+        # put the keyboard, and asking a dead wx object anything at all
+        # raises - so whether it is still there is the first question.
+        if _alive(remembered):
+            try:
                 remembered.SetFocus()
+                self._raise_frame()
                 return True
-        except Exception:
-            pass
+            except Exception:
+                pass
         for form in reversed(list(self._forms.values())):
             for widget in form.widgets:
                 try:
@@ -577,13 +705,39 @@ class WxUI(object):
                 except Exception:
                     continue
         surface = getattr(self, '_keyboard', None)
-        try:
-            if surface:
+        if _alive(surface):
+            try:
                 surface.SetFocus()
+                self._raise_frame()
                 return True
+            except Exception:
+                pass
+        return False
+
+    def _stream(self, application, event):
+        """Put a key on the application's own key stream.
+
+        `Runner`, `FilesTree#update` and `GridBox#update` all ask
+        `key_pressed?` rather than listening for a control event, because
+        that is what Elten's own frame gives them. Every key a form sees
+        therefore goes here as well as wherever else it went.
+        """
+        try:
+            from . import keys as keys_module
+            for name in keys_module.names_for(event.GetKeyCode()):
+                application.key_down(name, repeat=False)
         except Exception:
             pass
-        return False
+
+    def _raise_frame(self):
+        """The window back in front, without stealing it from a dialog."""
+        try:
+            if self._frame is not None and _alive(self._frame):
+                if not self._frame.IsShown():
+                    self._frame.Show()
+                self._frame.Raise()
+        except Exception:
+            pass
 
     def _modal(self, show):
         """Show something modal and put the keyboard back where it was."""
@@ -1048,6 +1202,19 @@ class _EditBoxWidget(_Widget):
             box.Add(label, flag=wx.BOTTOM, border=2)
         field = wx.TextCtrl(outer, value=str(spec.get('text') or ''),
                             style=style)
+        # `EditBox::Flags::Numbers` is a field that takes digits and
+        # nothing else - Elten's settings form uses it for every number.
+        # Refusing the key is what a person expects; letting the letter be
+        # typed and throwing the value away on Apply is a setting that
+        # silently does not save. (`wx.TextValidator` is a C++ class
+        # wxPython does not wrap, so this is the key itself.)
+        if spec.get('numbers'):
+            def digits_only(event):
+                code = event.GetKeyCode()
+                if code < 32 or code == wx.WXK_DELETE or event.HasModifiers() \
+                        or chr(code) in '0123456789-':
+                    event.Skip()
+            field.Bind(wx.EVT_CHAR, digits_only)
         _name(field, header)
         limit = spec.get('max_length')
         if isinstance(limit, int) and limit > 0:
@@ -1080,8 +1247,24 @@ class _ListBoxWidget(_Widget):
             label = wx.StaticText(outer, label=header)
             box.Add(label, flag=wx.BOTTOM, border=2)
         options = [str(item) for item in (spec.get('options') or [])]
-        listbox = wx.ListBox(outer, choices=options, style=style)
+        # **A list of things to TICK is a tick list.** Elten's
+        # `ListBox::Flags::MultiSelection` is what an application asks for
+        # when a row is on or off rather than chosen, and Titan already
+        # has the control for it - `src/ui/check_list.py`, a native
+        # list-view check box that MSAA reports as a check box with a
+        # state, where `wx.CheckListBox` reports a list item and says
+        # nothing about whether it is ticked.
+        self.multi = bool(spec.get('multi'))
+        if self.multi:
+            listbox = _check_list(outer, options, header)
+        else:
+            listbox = wx.ListBox(outer, choices=options, style=style)
         _name(listbox, header)
+        for position in (spec.get('checked') or []):
+            try:
+                listbox.Check(int(position), True)
+            except Exception:
+                pass
         index = spec.get('index')
         if isinstance(index, int) and 0 <= index < len(options):
             listbox.SetSelection(index)
@@ -1102,8 +1285,19 @@ class _ListBoxWidget(_Widget):
                 _cue_for('listbox_select')
             report('select', index=listbox.GetSelection())
 
+        def ticked(event):
+            index = event.GetSelection() if hasattr(event, 'GetSelection') \
+                else listbox.GetSelection()
+            try:
+                state = bool(listbox.IsChecked(index))
+            except Exception:
+                state = False
+            report('ticked', index=index, checked=state)
+
         listbox.Bind(wx.EVT_LISTBOX, moved)
         listbox.Bind(wx.EVT_LISTBOX_DCLICK, chosen)
+        if self.multi:
+            listbox.Bind(wx.EVT_CHECKLISTBOX, ticked)
 
         def on_char(event):
             code = event.GetKeyCode()
@@ -1143,6 +1337,14 @@ class _ListBoxWidget(_Widget):
             self.listbox.Set([str(item) for item in changes['options'] or []])
             if 0 <= selection < self.listbox.GetCount():
                 self.listbox.SetSelection(selection)
+        if 'checked' in changes and getattr(self, 'multi', False):
+            wanted = set(int(position) for position in (changes['checked'] or [])
+                         if isinstance(position, int))
+            for position in range(self.listbox.GetCount()):
+                try:
+                    self.listbox.Check(position, position in wanted)
+                except Exception:
+                    pass
         if 'index' in changes:
             index = changes['index']
             if isinstance(index, int) and 0 <= index < self.listbox.GetCount():
@@ -1316,10 +1518,22 @@ class _GridBoxWidget(_Widget):
         walls = spec.get('border_sound')
         self.walls = True if walls is None else bool(walls)
 
+        self._echo = False
+
         def moved(event):
+            if self._echo:
+                event.Skip()
+                return
             if not self.quiet:
-                _cue_for('listbox_focus', _spread(event.GetCol(), width))
+                _cue_for('listbox_focus', _spread(event.GetCol(),
+                                                  self._width))
             report('changed', x=event.GetCol(), y=event.GetRow())
+            event.Skip()
+
+        def clicked(event):
+            # The mouse is an equal here: a click puts the cursor on the
+            # square, which fires the move above, and choosing is a
+            # double click - the same pair as every list on this desktop.
             event.Skip()
 
         def chosen(event):
@@ -1329,6 +1543,7 @@ class _GridBoxWidget(_Widget):
 
         grid.Bind(wx.grid.EVT_GRID_SELECT_CELL, moved)
         grid.Bind(wx.grid.EVT_GRID_CELL_LEFT_DCLICK, chosen)
+        grid.Bind(wx.grid.EVT_GRID_CELL_LEFT_CLICK, clicked)
 
         # Enter AND Space, which is what Elten's own grid binds
         # (`reset_action_bindings`: `:enter` and `:space`). A game that
@@ -1345,30 +1560,51 @@ class _GridBoxWidget(_Widget):
                    (0, -1): 'up', (0, 1): 'down'}
 
         def on_char(event):
+            """**The board's keys are the board's, and Ruby moves it.**
+
+            A `wx.grid.Grid` moves its own cursor on an arrow, which for
+            an ordinary table is exactly right and for this is not: an
+            Elten application drives a grid from its own loop
+            (`runner.on_tick { grid.update }`) and expects `update` to be
+            where the cursor moves, where the edge is reported and where
+            a bound action fires. Two things moving one cursor is a board
+            that jumps two squares per key.
+
+            So every key the grid would act on is handed to the control
+            in Ruby instead, by name, and comes back as a position to
+            show. Titan still draws it and still announces it - the
+            reader says the cell when the cursor lands - and everything
+            an application asked for happens where the application asked
+            for it.
+            """
             code = event.GetKeyCode()
+            name = None
             if code in choose_keys:
-                report('select', x=grid.GetGridCursorCol(),
-                       y=grid.GetGridCursorRow())
+                name = 'key_enter' if code != wx.WXK_SPACE else 'key_space'
+            elif code in arrows:
+                step = arrows[code]
+                name = {(-1, 0): 'key_left', (1, 0): 'key_right',
+                        (0, -1): 'key_up', (0, 1): 'key_down'}[step]
+            elif not event.HasModifiers() and code in (wx.WXK_TAB,
+                                                       wx.WXK_ESCAPE):
+                event.Skip()
                 return
-            step = arrows.get(code)
-            if step is not None:
-                # An arrow that cannot move is not nothing happening: a
-                # board tells the player they are against the edge, and
-                # AudioMemory plays a sound at the wall it hit. wx moves
-                # nothing and fires no event, so the edge has to be
-                # noticed here.
-                column = grid.GetGridCursorCol()
-                row = grid.GetGridCursorRow()
-                ahead = (column + step[0], row + step[1])
-                if not (0 <= ahead[0] < self._width
-                        and 0 <= ahead[1] < self._height):
-                    if self.walls and not self.quiet:
-                        _cue_for('border', _spread(column, width))
-                    report('border', x=column, y=row,
-                           direction=towards.get(step, ''),
-                           dx=step[0], dy=step[1])
-                    return
-            event.Skip()
+            else:
+                from . import keys as keys_module
+                named = keys_module.names_for(code)
+                # A key nothing could have bound is the grid's own
+                # business (first-letter jumping, and anything wx does).
+                if named:
+                    name = named[0]
+            if name is None:
+                event.Skip()
+                return
+            # NOT `control=` - that is the reporter's own field for which
+            # control this is, and a second one collided and threw the key
+            # away inside the wx handler: the board could not be moved at
+            # all. `ctrl=` is the modifier.
+            report(name, shift=event.ShiftDown(), ctrl=event.ControlDown(),
+                   alt=event.AltDown())
         grid.Bind(wx.EVT_CHAR_HOOK, on_char)
 
         _Widget.__init__(self, 'gridbox', outer)
@@ -1397,7 +1633,43 @@ class _GridBoxWidget(_Widget):
                 value = values[column] if column < len(values) else ''
                 self.grid.SetCellValue(row, column, str(value or ''))
 
+    def _reshape(self, width, height):
+        """The board really is a different size now.
+
+        AudioMemory's board GROWS between rounds - `replace_cells(rows,
+        resize: true)` - and a `wx.grid.Grid` keeps whatever shape it was
+        created with, so the extra squares existed in Ruby and nowhere on
+        the screen: the game dealt a bigger round onto a board that was
+        still the old one, and every position past the old edge was a
+        square the player could not reach.
+        """
+        width = max(1, int(width))
+        height = max(1, int(height))
+        if width == self._width and height == self._height:
+            return
+        grid = self.grid
+        grid.BeginBatch()
+        try:
+            if height > self._height:
+                grid.AppendRows(height - self._height)
+            elif height < self._height:
+                grid.DeleteRows(height, self._height - height)
+            if width > self._width:
+                grid.AppendCols(width - self._width)
+            elif width < self._width:
+                grid.DeleteCols(width, self._width - width)
+            self._width, self._height = width, height
+            for column in range(width):
+                grid.SetColLabelValue(column, str(column + 1))
+            for row in range(height):
+                grid.SetRowLabelValue(row, str(row + 1))
+        finally:
+            grid.EndBatch()
+
     def apply(self, changes):
+        if 'width' in changes or 'height' in changes:
+            self._reshape(changes.get('width', self._width),
+                          changes.get('height', self._height))
         if 'cells' in changes:
             self._fill(changes['cells'] or [])
         if 'x' in changes or 'y' in changes:
@@ -1405,9 +1677,17 @@ class _GridBoxWidget(_Widget):
             y = changes.get('y', self.grid.GetGridCursorRow())
             try:
                 if 0 <= y < self._height and 0 <= x < self._width:
+                    # Ruby is the authority on where the cursor is - it
+                    # moved it - so putting it back must not be reported
+                    # as the user having moved it, or a game answers its
+                    # own move as though it were a keystroke.
+                    self._echo = True
                     self.grid.SetGridCursor(int(y), int(x))
+                    self.grid.MakeCellVisible(int(y), int(x))
             except Exception:
                 pass
+            finally:
+                self._echo = False
         if 'header' in changes:
             header = str(changes['header'] or '')
             if self.label is not None:
@@ -1418,34 +1698,58 @@ class _GridBoxWidget(_Widget):
 class _PlayerWidget(_Widget):
     """Elten's `Player` - a radio station or a podcast episode on a form.
 
-    In Elten this is a control you arrow through to seek. Here it is a
-    real, named control with real buttons, because that is how everything
-    else on this desktop is built: a reader announces "Playing, <station>"
-    when the keyboard lands on it, Space plays and pauses, Left and Right
-    seek where there is anything to seek through, and the buttons do the
-    same for somebody using the mouse.
+    In Elten this is a control you arrow through: Space plays and pauses,
+    Left and Right seek, Up and Down are the volume, Shift with Left/Right
+    is the pan and with Up/Down the pitch, Ctrl with Up/Down is the tempo,
+    Backspace puts it all back, Home and End are the ends, and Page Up and
+    Page Down step through the chapters. Every one of those is here, and
+    each is a thing Titan's mixer really does (`host.Stream`), so a key
+    that is offered is a key that works.
 
-    The sound itself is Titan's mixer's - see `host.Stream` - so the
-    user's theme volume and their output device apply to a radio station
-    exactly as to everything else.
+    And because this is Titan and not Elten - which is entirely by ear -
+    the same things are on the screen for the mouse: a draggable seek bar,
+    a volume bar, Play/Pause and Stop buttons, and the whole player menu on
+    a right-click. The sound is Titan's mixer's, so the user's theme volume
+    and output device apply to a radio station exactly as to everything
+    else.
     """
 
     def __init__(self, panel, spec, report):
+        self.report = report
         outer = wx.Panel(panel)
         box = wx.BoxSizer(wx.VERTICAL)
         label = str(spec.get('label') or '')
-        self.state = wx.TextCtrl(outer, value=label,
-                                 style=wx.TE_READONLY)
+        self._label = label
+        try:
+            self._duration = float(spec.get('duration') or 0)
+        except Exception:
+            self._duration = 0.0
+        self._seeking = False
+
+        self.state = wx.TextCtrl(outer, value=label, style=wx.TE_READONLY)
         _name(self.state, label)
         box.Add(self.state, flag=wx.EXPAND | wx.BOTTOM, border=4)
+
+        # A real seek bar - the mouse drags it to seek, and it shows where
+        # the sound has got to. Named so a reader says "Position".
+        self.seek = wx.Slider(outer, value=0, minValue=0, maxValue=1000,
+                              style=wx.SL_HORIZONTAL)
+        _name(self.seek, _t('Position'))
+        box.Add(self.seek, flag=wx.EXPAND | wx.BOTTOM, border=4)
+
         row = wx.BoxSizer(wx.HORIZONTAL)
         self.toggle = wx.Button(outer, label=_t('Play'))
         stop = wx.Button(outer, label=_t('Stop'))
         row.Add(self.toggle, flag=wx.RIGHT, border=4)
-        row.Add(stop)
+        row.Add(stop, flag=wx.RIGHT, border=8)
+        row.Add(wx.StaticText(outer, label=_t('Volume')),
+                flag=wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT, border=4)
+        self.vol = wx.Slider(outer, value=100, minValue=5, maxValue=100,
+                             style=wx.SL_HORIZONTAL, size=(120, -1))
+        _name(self.vol, _t('Volume'))
+        row.Add(self.vol, flag=wx.ALIGN_CENTRE_VERTICAL)
         box.Add(row)
         outer.SetSizer(box)
-        self._label = label
 
         def toggled(_event):
             _cue_for('button_press')
@@ -1458,26 +1762,71 @@ class _PlayerWidget(_Widget):
         self.toggle.Bind(wx.EVT_BUTTON, toggled)
         stop.Bind(wx.EVT_BUTTON, stopped)
 
-        # Elten's own keys on a player, and the same amounts.
-        moves = {wx.WXK_SPACE: 'toggle',
+        # Dragging the seek bar seeks; releasing it commits, so the sound
+        # is not re-sought on every pixel of the drag.
+        def grab(_event):
+            self._seeking = True
+            _event.Skip()
+
+        def release(_event):
+            self._seeking = False
+            if self._duration > 0:
+                seconds = self.seek.GetValue() / 1000.0 * self._duration
+                report('player', do='seek_to', value=seconds)
+            _event.Skip()
+
+        self.seek.Bind(wx.EVT_SCROLL_THUMBTRACK, grab)
+        self.seek.Bind(wx.EVT_SCROLL_THUMBRELEASE, release)
+        self.seek.Bind(wx.EVT_SCROLL_CHANGED, release)
+        self.vol.Bind(wx.EVT_SCROLL_CHANGED,
+                      lambda e: report('player', do='volume_to',
+                                       value=self.vol.GetValue() / 100.0))
+
+        # The whole player menu on a right-click, exactly where the
+        # Applications key opens it - both go through the application's
+        # own `context`, so the menu is Elten's.
+        def menu(_event):
+            # The same 'context' event the Applications key sends, so the
+            # right mouse button opens the application's own player menu.
+            report('context')
+        for control in (self.state, self.seek, outer):
+            control.Bind(wx.EVT_CONTEXT_MENU, menu)
+
+        # Elten's own keymap. The modifiers pick the family; the arrow
+        # picks the direction.
+        plain = {wx.WXK_SPACE: 'toggle',
                  wx.WXK_LEFT: 'back', wx.WXK_NUMPAD_LEFT: 'back',
                  wx.WXK_RIGHT: 'forward', wx.WXK_NUMPAD_RIGHT: 'forward',
                  wx.WXK_UP: 'louder', wx.WXK_NUMPAD_UP: 'louder',
                  wx.WXK_DOWN: 'quieter', wx.WXK_NUMPAD_DOWN: 'quieter',
-                 wx.WXK_HOME: 'start', wx.WXK_END: 'end'}
+                 wx.WXK_HOME: 'start', wx.WXK_END: 'end',
+                 wx.WXK_PAGEUP: 'chapter_prev', wx.WXK_PAGEDOWN: 'chapter_next',
+                 wx.WXK_BACK: 'reset'}
+        shifted = {wx.WXK_LEFT: 'pan_left', wx.WXK_NUMPAD_LEFT: 'pan_left',
+                   wx.WXK_RIGHT: 'pan_right', wx.WXK_NUMPAD_RIGHT: 'pan_right',
+                   wx.WXK_UP: 'pitch_up', wx.WXK_NUMPAD_UP: 'pitch_up',
+                   wx.WXK_DOWN: 'pitch_down', wx.WXK_NUMPAD_DOWN: 'pitch_down'}
+        control_keys = {wx.WXK_UP: 'tempo_up', wx.WXK_NUMPAD_UP: 'tempo_up',
+                        wx.WXK_DOWN: 'tempo_down',
+                        wx.WXK_NUMPAD_DOWN: 'tempo_down'}
 
         def on_char(event):
-            what = moves.get(event.GetKeyCode())
-            if what is not None and not event.ControlDown():
-                report('player', do=what)
-                return
+            code = event.GetKeyCode()
+            if event.ShiftDown() and code in shifted:
+                report('player', do=shifted[code]); return
+            if event.ControlDown() and code in control_keys:
+                report('player', do=control_keys[code]); return
+            if not event.ControlDown() and not event.ShiftDown() \
+                    and code in plain:
+                report('player', do=plain[code]); return
             event.Skip()
         self.state.Bind(wx.EVT_CHAR_HOOK, on_char)
 
         _Widget.__init__(self, 'player', outer)
 
     def owns(self, focused):
-        return focused in (self.window, self.state, self.toggle)
+        return focused in (self.window, self.state, self.toggle, self.seek,
+                           self.vol)
 
     def focus(self):
         self.state.SetFocus()
@@ -1486,14 +1835,29 @@ class _PlayerWidget(_Widget):
     def apply(self, changes):
         if 'label' in changes:
             self._label = str(changes['label'] or '')
+        if 'duration' in changes:
+            try:
+                self._duration = float(changes['duration'] or 0)
+            except Exception:
+                self._duration = 0.0
         if 'status' in changes:
             words = '%s. %s' % (self._label, str(changes['status'] or ''))
             self.state.ChangeValue(words)
-            # The accessible name carries it too: this control changes
-            # while the keyboard is sitting on it, and a name that still
-            # said "Playing" while it was paused would be a lie the
-            # reader repeats.
             _name(self.state, words)
+        # Move the bar to where the sound is - but never while the user is
+        # dragging it, or their drag fights the playback clock.
+        if 'position' in changes and not self._seeking and self._duration > 0:
+            try:
+                fraction = float(changes['position']) / self._duration
+                self.seek.SetValue(max(0, min(1000, int(fraction * 1000))))
+            except Exception:
+                pass
+        if 'volume' in changes:
+            try:
+                self.vol.SetValue(max(5, min(100, int(float(changes['volume'])
+                                                      * 100))))
+            except Exception:
+                pass
         if 'playing' in changes:
             self.toggle.SetLabel(_t('Pause') if changes['playing']
                                  else _t('Play'))

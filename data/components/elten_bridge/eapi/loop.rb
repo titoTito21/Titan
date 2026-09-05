@@ -16,6 +16,25 @@
 # swallowed by whichever loop happened to ask first.
 
 module EltenLoop
+  #: Windows virtual key codes -> Elten's own name for the key. This is
+  #: Elten's own table (`ui/form.rb`'s `keyevents`), which is where the
+  #: numbers applications use come from.
+  VIRTUAL_KEYS = {
+    0x08 => 'key_backspace', 0x09 => 'key_tab', 0x0D => 'key_enter',
+    0x10 => 'key_shift', 0x11 => 'key_control', 0x12 => 'key_alt',
+    0x1B => 'key_escape', 0x20 => 'key_space',
+    0x21 => 'key_pageup', 0x22 => 'key_pagedown',
+    0x23 => 'key_end', 0x24 => 'key_home',
+    0x25 => 'key_left', 0x26 => 'key_up',
+    0x27 => 'key_right', 0x28 => 'key_down',
+    0x2D => 'key_insert', 0x2E => 'key_delete',
+    0xBC => 'key_comma', 0xBD => 'key_minus', 0xBE => 'key_period'
+  }.tap do |table|
+    (0x41..0x5A).each { |code| table[code] = "key_#{code.chr.downcase}" }
+    (0x30..0x39).each { |code| table[code] = "key_#{code.chr}" }
+    (1..12).each { |number| table[0x6F + number] = "key_f#{number}" }
+  end.freeze
+
   @pressed = {}
   @released = {}
   @held = {}
@@ -52,7 +71,31 @@ module EltenLoop
 
         deliver(event)
       end
+      run_frame_hooks
       @time
+    end
+
+    # Something to do once a frame, whoever is looping.
+    #
+    # An extension's `tick` is the reason this exists: the file manager
+    # declares one to advance its background playlist, and there is no
+    # other moment that happens in every kind of loop an application can
+    # be in - a `Runner`, a `Form#wait`, a control waiting for a row.
+    def every_frame(&block)
+      (@frame_hooks ||= []) << block
+      block
+    end
+
+    def forget_frame_hook(block)
+      (@frame_hooks ||= []).delete(block)
+    end
+
+    def run_frame_hooks
+      Array(@frame_hooks).each do |hook|
+        hook.call(@time)
+      rescue Exception => error
+        Log.warning("frame hook failed: #{error.class}: #{error.message}") if defined?(Log)
+      end
     end
 
     # **A loop with no window gets no keys.** Purrposterous is a `Runner`
@@ -83,6 +126,20 @@ module EltenLoop
     # A form opening or closing means the answer above may have changed.
     def surface_changed
       @asked_with = nil
+    end
+
+    # Put a key on the stream as though it had been typed.
+    #
+    # This is how the MOUSE becomes equal to the keyboard. The file
+    # manager opens what is under the cursor from
+    # `runner.on_key(:key_enter)`, so a double click that only told the
+    # control something did nothing at all - the mouse could move about
+    # the folder and never open anything in it.
+    def inject(name)
+      key = normalise(name)
+      @pressed[key] = true
+      @released[key] = true
+      key
     end
 
     def key_pressed?(name)
@@ -123,13 +180,33 @@ module EltenLoop
     # A key answers to both its spellings: Elten writes `hold: [:key_left,
     # :a]`, so `a` and `key_a` are the same key and a game that binds one
     # must not lose the other.
+    #
+    # **And it answers to its NUMBER.** Elten's own code asks
+    # `key_pressed?(0x09)` for Tab and `key_held?(0x10)` for Shift, and so
+    # do applications: the file manager's Ctrl+D is `runner.on_key(0x44)`
+    # guarded by `key_held?(0x11)`. Those are Windows virtual key codes,
+    # which is a third spelling of the same key - and comparing them as
+    # strings ("17") against a table of names matched nothing at all, so
+    # every shortcut written that way did nothing. That is most of them:
+    # a control key has no letter to be written as.
     def any?(table, name)
-      wanted = name.to_s.downcase
+      wanted = normalise(name)
       return true if table[wanted]
 
       other = wanted.start_with?('key_') ? wanted[4..] : "key_#{wanted}"
       !!table[other]
     end
+
+    def normalise(name)
+      return VIRTUAL_KEYS[name.to_i] || name.to_s if name.is_a?(Integer)
+
+      text = name.to_s.downcase
+      # `key_pressed?("0x44")` and a numeric string mean the code too.
+      return VIRTUAL_KEYS[text.to_i] || text if text.match?(/\A\d+\z/)
+
+      text
+    end
+    public :normalise
 
     def deliver(event)
       return unless event.is_a?(Hash)

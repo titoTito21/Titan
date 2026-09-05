@@ -16,12 +16,15 @@ require_relative 'eapi'
 require_relative 'program'
 require_relative 'controls'
 require_relative 'server'
+require_relative 'program_api'
+require_relative 'settings'
 require_relative 'audio'
 require_relative 'media'
 require_relative 'paths'
 require_relative 'childproc'
 require_relative 'eltenlink'
 require_relative 'eltenapi'
+require_relative 'network'
 require_relative 'vendor/resources'
 require_relative 'vendor/runner'
 
@@ -106,6 +109,15 @@ rescue Exception => error                            # rubocop:disable Lint/Resc
   detail = "#{error.class}: #{error.message}"
   Log.error(detail)
   Log.debug(Array(error.backtrace).first(12).join("\n"))
+end
+
+# Whatever an application declared as a background extension is told the
+# application is over - which is where the file manager stops its playlist
+# and closes its player.
+begin
+  Program.current&.class&.stop_extensions(:unload)
+rescue StandardError => error
+  Log.warning("stopping extensions failed: #{error.message}")
 end
 
 begin

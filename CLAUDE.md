@@ -3133,6 +3133,405 @@ real mixer and the real speech - and every one of these was found that way.
   vendored Runner's frame did nothing and anything asking for a frame of a
   stated length got `wrong number of arguments (given 1, expected 0)`.
 
+#### The whole API, read out of Elten's own source
+
+The API was written from what the installed applications call, which finds
+everything they use and nothing they do not - and "everything a NEW Elten
+application uses" is a different set. So it is now written against Elten's
+own source: `https://github.com/dawidpieper/elten3` (branch **main**;
+`Elten-Client` is Elten 2 and the wrong repository). The same code is
+embedded in the installed client as one zstd frame inside `elten-x64.exe`,
+which is how to check what the user is actually running against the repo.
+
+`tests/test_elten_bridge.py` carries the method lists read out of
+`src/eapi/program.rb`, and fails if one is missing - because of what a
+missing method DOES in somebody else's program: `NoMethodError`, usually
+inside their own `rescue Exception`, where it becomes a feature quietly not
+working rather than an error anybody sees.
+
+- **A change to a window never reached it.** `control_set` and `form_close`
+  are sent with `notify` - an application changing its own screen is not
+  something it waits for - and a message with no id is looked up in
+  `NOTIFICATIONS` and nowhere else. They were only in `OPERATIONS`, so every
+  one of them was read off the wire and dropped on the floor. That is
+  everything an application does to a window it has already put up: a list
+  whose rows are replaced, a board dealt again, a header that should follow
+  the folder, a button relabelled mid-form. The file manager listed its
+  first folder and then showed that folder for ever whatever the user
+  pressed, and AudioMemory's board stayed the empty one it was built with.
+  A test now reads every `EltenBridge.notify` out of the Ruby and fails if
+  one is answered by nobody.
+- **A block is handed ONE argument: the list.** Elten's `FormBase#trigger`
+  ends in `e[4].call(a)` where `a` is the whole parameter array, and Ruby's
+  own auto-splat is what then makes both shapes an application writes work -
+  `on(:move) { |pos| pos[0] }` gets the pair, `on(:action) { |name, source,
+  x, y| }` gets them apart. Splatting instead gave the first shape the first
+  number on its own, and `pos[0]` on an Integer is a BIT of it: AudioMemory
+  read a column out of a number that was already the column.
+- **A key is also its NUMBER.** Elten's own code asks `key_pressed?(0x09)`
+  for Tab and `key_held?(0x10)` for Shift, and so do applications - the file
+  manager's Ctrl+D is `runner.on_key(0x44)` guarded by `key_held?(0x11)`.
+  Those are Windows virtual key codes, a third spelling of the same key, and
+  comparing them as strings against a table of names matched nothing: every
+  shortcut written that way did nothing at all, which is most of them,
+  because a control key has no letter to be written as.
+- **A change made before the window exists is still a change.** `to_spec`
+  was the hash the constructor made, so anything an application did between
+  building a control and showing it was lost - and AudioMemory does exactly
+  that, dealing the board and only then calling `grid.focus`. Every change
+  is folded into the spec now, so a window is built from what the control IS
+  rather than from what it was.
+- **The two flag sets were wrong, and wrong in the way that hurts.**
+  `ListBox::Flags::AnyDir` was 1 and `MultiSelection` IS 1, so every
+  application asking for a list of things to tick got one that could not be
+  ticked. `EditBox::Flags` had MultiLine and ReadOnly the other way round,
+  so a box to write a message in came up read-only and one line, and a page
+  to READ came up editable - `display_text` worked only because Elten builds
+  it out of both and the two wrongs added to the same number.
+- **A multi-selection list is Titan's own tick list** (`src/ui/check_list.py`),
+  because that is a native list-view check box MSAA reports as a check box
+  with a state, where `wx.CheckListBox` is owner-drawn and reports a list
+  item that says nothing about whether it is ticked.
+- **Speech that fails must not end the application.** `alert` is called from
+  the middle of a game, and a `RemoteError` there travelled all the way out
+  of `program_main`: a voice that hiccuped closed the game. The line is
+  lost, which is bad; the game is not, which is what matters. Same for a
+  sound that will not play.
+
+#### A board and a file tree are driven by the FRAME
+
+Two controls are not like the others: an application creates them and then
+drives them from its own loop - `runner.on_tick { grid.update }`,
+`runner.on_tick { @tree.update }` - and expects `update` to be where the
+cursor moves, where the edge is reported and where a bound key fires. A
+`wx.grid.Grid` moving its own cursor as well is a board that jumps two
+squares per key, so every key those two would act on is handed to the
+control in Ruby by name and comes back as a position to show. Titan still
+draws them and still announces them - the reader says the cell as the cursor
+lands - and everything an application asked for happens where it asked for
+it. `EltenControl#frame_driven?` says which ones need this, and `Form#wait`
+updates them on every frame the way Elten's own form does.
+
+- **`GridBox` is Elten's, method for method** (`ui/controls/grid_box.rb`):
+  `labels`, `set_cell`, `set_cells`, `replace_cells(resize:)`,
+  `update_cells`, `cell_label`, `coordinate_label` ("B3"), `resize`,
+  `move_by`, `border_direction`, `lpos`, `key_processed`, and
+  `bind_action(:flag, key: [:f, :shift])` with `:action` carrying the name,
+  the source and the square - without which a game whose interaction is
+  "press F to flag this square" could not be played at all. `value` is
+  `[x, y]`, which is where the cursor is and not what is under it.
+  - **A board that grows really grows.** AudioMemory deals a bigger board
+    every round and a `wx.grid.Grid` keeps whatever shape it was created
+    with, so the extra squares existed in Ruby and nowhere the player could
+    reach. `_reshape` appends and deletes rows and columns.
+  - **`grid.x = 0` moves the cursor on the screen.** They were a plain
+    `attr_accessor`, so AudioMemory's reset between rounds moved nothing and
+    Ruby and the window disagreed about where the cursor was.
+- **`FilesTree` is Elten's file manager, key for key** (`ui/controls/
+  files_tree.rb`). **An empty path is the top of the MACHINE**, not the home
+  folder: every drive (`EltenSystemHelpers.logical_drives`, asked of
+  Windows through `GetLogicalDriveStringsW`) and then Desktop, Documents and
+  Music. Answering it with the home folder is a file manager that can never
+  reach another drive, because Left from a drive root had nowhere to go.
+  Right goes in, Left comes back out (to the drive list from a root), Space
+  previews an audio file or reads a text one, and Shift with the arrows
+  drives whatever is being previewed. A file-type sound is played once per
+  move, which is how somebody who cannot see the folder knows a folder from
+  a song before the name has been read.
+  - **It carries THREE menus, not one.** `bind_filesmenu`, `bind_editmenu`
+    and `bind_createmenu` are separate bindings and become separate
+    submenus - File, Edit and Create - each with the tree's own commands
+    already in it. Pouring them into one context menu put "New text file"
+    next to "Paste" under a heading that said File.
+  - **A double click is Enter.** Elten has no mouse at all, so there is
+    nothing to copy - but a file manager on this desktop that can be walked
+    with the mouse and not opened with it is half a file manager. The key
+    goes on the application's own stream (`EltenLoop.inject`), so whatever
+    the application bound Enter to is what happens.
+- **The row the user is on comes back.** What the user did to a widget was
+  written into the control by a chain of `is_a?` tests, and what it did not
+  test for was the file tree - it is not a `ListBox`, so a row selected with
+  the arrows or the mouse never reached it and `@index` stayed at 0: the
+  file manager renamed, deleted, played and opened whatever was at the TOP
+  of the folder. Every control answers for itself now
+  (`apply_wire_change`), so a new one cannot be forgotten.
+- **A list owns its own movement, and that is more than Up and Down.** Home,
+  End and the page keys were being taken from every `ListBox` and reported
+  as control events, so a folder of three thousand files could only be
+  walked one row at a time.
+
+#### An application's own settings
+
+`eapi/settings.rb` is Elten's `src/eapi/program_settings.rb` ported onto
+this bridge: the same `Builder` (`boolean` / `integer` / `text` / `choice` /
+`multi_choice` / `action`), the same `Store` (a `settings.json` in the
+application's OWN data folder, so a setting made here is the setting Elten
+reads and the other way round), and the same `Dialog` - a title, the fields,
+then Apply, OK and Cancel with Apply saving without closing. What is
+different is only what it is made of: every field is a real Titan control on
+a real Titan form.
+
+- **A Monitor, not a Mutex.** `transaction` holds the lock and the setters
+  it calls go through `set`, which takes it again; Ruby's Mutex is not
+  reentrant, so with one of those an Apply that saved anything at all
+  deadlocked the application.
+- **A choice's TYPE is its list of options**, which reads like a mistake and
+  is Elten's own shape (`ListBox.new(setting.type, header: setting.label)`).
+- `Program.show_settings` and the instance method both exist, because Elten
+  defines both.
+- **An extension's `tick` really ticks.** `extension(:name) { |service|
+  service.tick(interval: 0.1) { ... } }` is the file manager's background
+  playlist, and with nothing calling it the playlist advanced to its next
+  track and stopped there for good. One frame hook per application
+  (`EltenLoop.every_frame`), started when the first extension is declared
+  and stopped on the way out, where the file manager closes its playlist
+  down. `service.settings` feeds the same collector as `show_settings`.
+- **A name is a name in the application's own data folder.** The instance
+  methods always resolved it that way; the CLASS-level `read_json` /
+  `write_json` did not, so the file manager's `activate` - which reads its
+  playlists before any instance exists - wrote beside Titan and read back
+  from wherever Titan had been started.
+
+#### The scores are on the server
+
+`server_table` and `leaderboard` were a JSON file beside the application, so
+a game's "Best scores" was a scoreboard with one player on it. They are rows
+in a real table on EltenLink now, belonging to the application's own uuid
+and written as whoever is signed in - `Programs::ServerTable`, over
+`/api/v1/apps/<uuid>/tables/<name>/rows`, which is Elten's own `AppTable`.
+
+- **The account comes from wherever the user already signed in.** Titan IM's
+  EltenLink account first, and then **Elten's own installation**:
+  `%APPDATA%/elten/login.dat` is Elten's own format and holds the account
+  name and an auto-login key, and a user who has Elten installed and logged
+  in should not have to sign in a second time to play their own games here.
+  The key is DPAPI-protected, so it can be read back only by this Windows
+  account on this machine - the same property Titan's own secret store
+  relies on. A key protected with a PIN is deliberately NOT used: the PIN is
+  not on the disk, and asking for one because a game wanted a scoreboard is
+  not something to do unprompted. `eltenkit/elten_account.py`.
+- **A session is asked for rather than borrowed.** Titan's own client talks
+  to the legacy endpoint and the app tables are the v1 API; assuming one
+  token serves both is the kind of assumption that works until it does not.
+  `POST /api/v1/session` with the auto-login key, or with the password Titan
+  IM saved, and a 401 is one retry with a fresh token rather than a game
+  told its score could not be shared.
+- **The local copy stays.** A score is written HERE first and
+  unconditionally and shared afterwards, so a server that is not there, or a
+  user who has not signed in, costs a sentence and never a score. Reading
+  falls back the same way, so a scoreboard read offline is the player's own
+  history rather than an error.
+- **A PROTECTED table is refused, and that is correct.** A protected app
+  table is signed with a launcher stamp - an HMAC whose key is compiled into
+  Elten's official launcher binary (`launcher/src/stamp.cpp`, "the launcher
+  was built without a private key"). It exists so that only the genuine
+  Elten client can write those rows: it is an authenticity control on
+  somebody else's server, the key is deliberately not public, and forging a
+  stamp is exactly what it is there to stop. So an application whose tables
+  are protected (AudioMemory, Skeet, Purrposterous, the Game Room) keeps its
+  scores on this machine and says plainly why they are not shared, and the
+  table remembers the refusal so the game stops offering. Everything
+  unprotected - the media catalogue's favourites, read and write - works,
+  and reading is not stamped at all.
+- `EltenLink::Apps.table`, `.register`, `.update` and `.info` all end at the
+  same place, because applications reach for their own data both ways.
+
+- **A protected game gets a REAL, shared scoreboard - Titan's, on
+  Titan-Net.** Titan does not mint the launcher stamp, so it cannot write
+  to Elten's protected leaderboards - but "people can still play" is a fair
+  point, and the honest answer is a scoreboard that is Titan's rather than a
+  forged row on Elten's. When Elten refuses a table as protected, the score
+  goes to a Titan-Net shared table (`eltenkit/titannet_scores.py`, slug
+  `elten_apps`, keyed per game uuid + table), written as the Titan-Net
+  account the user already has and read by every Titan player of that game -
+  exactly the mechanism Cling's games use. The server registers the
+  `elten_apps` extension slug like Cling's (`titan-net server/models.py`
+  `BUILTIN_EXTENSIONS`), which the production server picks up on its next
+  restart. `available?` stays true after a protected refusal because there
+  is still the Titan-Net board to share to, so the game still offers; a
+  local copy is kept underneath either way.
+
+#### A window that a game can be played in twice
+
+Purrposterous's second game could not be controlled at all. A `Runner` with
+no form has no window, so the frame asks for one (`open_keyboard`) - and it
+asked only when it believed the answer had changed. A modal dialog is what
+makes it change: Windows gives the keyboard back to the FRAME when a dialog
+closes, not to whatever was in it, and the menu between two games is a
+modal. So every modal call invalidates that belief (`MODAL_OPS`), and
+`open_keyboard` now reuses a surface that is still there rather than
+rebuilding it - rebuilding would lose the focus and the title, and a game
+between two rounds needs neither lost.
+
+- **A key that is never released stays held for ever.** A form fed the key
+  stream on the way down and nothing on the way up, so `key_held?` answered
+  yes about a key the user let go of minutes ago - for a game, walking into
+  a wall that is not there.
+- **A key a control acted on still goes on the key stream.** A control event
+  tells the CONTROL what was pressed; a `Runner` asks `key_pressed?`, which
+  is a different question. The file manager is both at once - a `FilesTree`
+  whose Right and Left are the control's, driven by a Runner whose Escape
+  and Ctrl+O are the application's - so a key that reached one and not the
+  other was half the program not answering.
+- **A dead window is not somewhere to put the keyboard.** Asking a destroyed
+  wx object anything raises, inside wx's own event loop where nothing
+  catches it, so everything that remembers a window across a dialog asks
+  `_alive` first.
+
+#### The sound an application actually asks for
+
+- **`basefrequency` is what a sound was sampled at**, and it is the number a
+  game changes the pitch RELATIVE to: Purrposterous reads it when a cat is
+  born and then pitches the meow up as the cat gets hungrier. Missing, it
+  ended the game on the first cat - inside the game's own `rescue`, so what
+  the user saw was a game that started and stopped. With it come
+  `frequency`, `pitch`, `tempo`, `length`, `position`, `pause`, `resume`,
+  `paused?`, `stopped?`, `opened?`, `status` and `wait`.
+- **`sound_pool(max_voices:)` is a real pool.** It answered `self` - the
+  Program - so `pool.play(sound)` reached a method of the application's that
+  took no arguments, and every one-shot Purrposterous plays (a step, a jump,
+  a wall) ended in `ArgumentError` inside its own rescue: a game that walked
+  in silence. What a pool is FOR is the ceiling: a game that plays a click
+  per keypress asks for thirty a second on a held arrow, and a mixer given
+  all of them runs out of channels and goes quiet.
+- **`read_url` is what an application calls before it has a screen.** The
+  YouTube client asks for its update manifests from `activate`, and a
+  missing one is `NoMethodError` at class level, before anything is on the
+  screen to say so. `eapi/network.rb` is Elten's own `src/eapi/network.rb` -
+  `read_url` (a Hash body is a multipart form, and the caller's `headers`
+  hash is FILLED IN with the response's), `download_file`, `html_decode`,
+  `html_encode`.
+
+#### More real-window gaps: a button's Space, a process, a form's header
+
+Found by using the applications, each one line and each an application that
+stopped or a control that would not answer:
+
+- **Space presses a focused button.** A wx button is activated by Space,
+  but the form's own char hook was intercepting Space (a navigation key)
+  and sending it to the application as a keystroke, so the button never
+  fired: a screen of buttons could be reached and not pressed with the
+  space bar. Space and Enter on a focused button now press it.
+- **`ChildProc` speaks Elten's own method names.** The YouTube client's
+  whole search loop is `process.running?` / `process.avail` /
+  `process.avail_err` / `process.terminate`, and ours had `alive?` /
+  `read` / `kill` - so every one of those was a `NoMethodError` and the
+  search ended before yt-dlp had said a word. They are there now (verified
+  by driving the real yt-dlp through the app's own read loop), and
+  `avail`/`avail_err` report the bytes waiting so a poll never blocks.
+- **`Form#header=`.** Elten's `FormBase` has `attr_accessor :header` and
+  applications set it after building the form - the media catalogue's
+  Options screen does `form.header = _("Options")`. Missing, it ended the
+  application on the screen it was opening, which is what "I pick Options
+  and the app closes" was.
+
+#### The Game Room: FormTimer and the form's own timers
+
+The Game Room refreshes its lobby with a repeating timer -
+`form.add_timer(FormTimer.new(interval, repeat: true) { ... })` - and
+neither `FormTimer` nor a real `add_timer` was here, so it stopped on an
+uninitialized constant before its screen was up. `FormTimer` is Elten's own
+(`ui/form.rb`): a one-shot or repeating timer a form ticks every frame.
+`Form#add_timer` / `delete_timer` hold them and `Form#wait` ticks them
+alongside the frame-driven controls. Also added the three Form methods the
+Game Room calls that were missing - `wait_without_announcement` (its own
+`wait`, since the marker is Titan's focus cue anyway), `keyboard_idle_frame?`
+and `game_shortcut_keys`.
+
+#### Every application's menu is flat - no menu-bar oddities
+
+Elten's `context` takes a `submenu` flag: true wraps each binding under a
+heading (which is what a menu BAR wants), false pours the options straight
+in (which is what a context menu is). Titan opened the menu as a menu bar
+for Alt and flat for the Applications key - and these applications have no
+menu bar in Titan, so the menu-bar path only ever added an oddity. An
+unnamed bound menu became a literal "Context menu" entry you had to open to
+reach anything; the file tree became "<folder> - File tree". So
+`open_context_menu` now builds FLAT whichever key opened it - Applications
+key, Shift+F10, right mouse button, Alt all give the same clean menu, which
+is what a menu is on this desktop. A control's own named menus stay distinct
+where they are genuinely distinct (the file tree's File / Edit / Create, the
+player's flat list); nothing wears a "Context menu" heading any more. Tests:
+`EveryAppsMenuIsFlat`.
+
+#### The player is Elten's player, keys and all - and a mouse too
+
+Elten's `Player` (a radio station or a podcast episode - the media
+catalogue's whole screen, and what the YouTube app plays through) is a
+control you drive by ear, and every key it answers is here now, each doing
+a thing Titan's mixer really carries out (`host.Stream`):
+
+- **Space** plays and pauses; **Left/Right** seek five seconds; **Up/Down**
+  are the volume; **Home/End** the ends; **Page Up/Down** step through the
+  file's chapters.
+- **Shift+Left/Right** is the pan and **Shift+Up/Down** the pitch;
+  **Ctrl+Up/Down** is the tempo; **Backspace** puts volume, pan, pitch and
+  tempo all back. Pitch and tempo are real: the decoded frames go through a
+  small PyAV filter graph (`asetrate` for the pitch, chained `atempo` for
+  the speed) before they reach the mixer, so "faster and higher" and
+  "faster, same pitch" both actually happen - the earlier note that Titan
+  could not resample is no longer true.
+- The **context menu** is Elten's, flat (not wrapped in a submenu the way
+  the file tree's is): Play/pause, the position, the duration, the track
+  info read from the file's own tags, the chapters, Jump to position, and -
+  for a URL - Save file, which downloads it to a folder the user picks.
+- **The mouse is an equal**, which Elten (entirely by ear) has no
+  equivalent of and this desktop should: a draggable **seek bar** that
+  shows where the sound is and seeks where it is let go (never fighting the
+  playback clock while it is held), a **volume bar**, **Play/Pause** and
+  **Stop** buttons, and the whole player menu on a **right-click**.
+- Tests: `test_the_player_keys_are_eltens`, `test_the_seek_bar_seeks_where_
+  it_is_dragged`, `test_a_right_click_opens_the_player_menu` in the real-wx
+  class fire real wx events at the real control; the Stream's own
+  seek/volume/pan/pitch/tempo/reset are exercised against a real file.
+
+#### Tested in the REAL window, not a double
+
+The headless harness runs an application with a scripted stand-in for the
+UI - no wx at all - which is exactly why it misses a class of bug: anything
+that only happens in the real wx widgets. Two of those shipped and were
+caught only by driving the genuine `WxUI`:
+
+- **The board could not be moved because reporting an arrow key raised.**
+  The grid reported `control=` (the Control modifier) and `send_event`
+  already binds `control` (which control it is), so every arrow key threw
+  `TypeError` inside the wx handler, where nothing catches it - AudioMemory
+  put a board on the screen that answered no key at all. The modifier is
+  `ctrl` now, and the Control MODIFIER is read from `ctrl` on the Ruby side
+  too (it had been reading the routing index and thinking Control was
+  always down).
+- **Escape on a form-hosted control did the form's back and nothing else.**
+  It sent the `escape` control event and returned WITHOUT putting
+  `key_escape` on the key stream, so a `Runner` that binds Escape never
+  heard it. AudioMemory shows its board on a form and asks "abort the
+  game?" from `runner.on_key(:key_escape)`; Escape on the board did
+  nothing, and the game could be left only by closing the window. Escape
+  now goes to both, so the form backs out AND the runner's handler fires -
+  and at a top-level menu Escape cancels the modal, which ends the
+  application and closes the window, the way Elten leaves an app.
+
+So the suite now drives the REAL widgets with REAL wx events - a grid arrow
+and its choose key, a listbox move and its Space, a tick box, a button, and
+Escape - against the REAL `send_event`, and asserts the application heard
+what it should and that nothing raised. `EveryWidgetReallyBuilds` builds one
+of each control for real (which is how `wx.TextValidator`, a class wxPython
+does not wrap, was caught turning a settings form with a number in it into a
+screen that would not open). Audio preview is verified end to end: the
+`Player`'s stream opens a real file with PyAV, resamples to the live mixer's
+format and plays it through Titan's own mixer - Space on a song in the file
+manager really plays it.
+
+#### Played, not just started
+
+What proves the parts is the suite; what proves the whole is a harness that
+opens each application with the UI replaced by a scripted double - no wx at
+all, nothing drawn, nothing spoken - answers its menus and presses its keys,
+and reports what it stopped on. Every fault in the four sections above was
+found that way and by nothing else: they all reached their first screen, and
+every one of them needed playing before it went wrong. All eleven installed
+applications now open, run and stop cleanly, and AudioMemory, Purrposterous,
+Skeet and the file manager have been played end to end.
+
 #### The Ruby is carried
 
 `ruby/` is CRuby 4.0.6 (RubyInstaller, 46 MB pruned of docs and headers,
@@ -3143,8 +3542,10 @@ an application's process: whatever the machine's own Ruby wants loaded into
 every interpreter is not something an Elten application asked for, and a `-r`
 in there is code running inside somebody else's program.
 
-- Tests: `tests/test_elten_bridge.py` (run it directly; 77 tests). Nothing
-  opens a window, plays a sound, speaks or reaches the network. The Ruby half
+- Tests: `tests/test_elten_bridge.py` (run it directly; 143 tests). Nothing
+  opens a window, plays a sound, speaks or reaches the network - the
+  real-widget tests build and drive one of every control for real (real wx
+  events into the real `send_event`) and never show a window. The Ruby half
   is exercised with the interpreter the component carries - a program that
   runs, one that raises, `alert`'s two-argument signature, a `Runner`
   answering keys, the confinement refused from inside Ruby, an application

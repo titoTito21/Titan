@@ -1,0 +1,77 @@
+connected to the real Titan
+add-ons Titan offers: 48
+titan actions: 47
+  present: titan.reader_speak
+  present: titan.set_speech_rate
+  present: titan.stop_speech
+  present: titan.speaking
+  present: titan.views
+  present: titan.status_bar
+  present: titan.menu
+  present: titan.inventory
+  present: titan.addon_actions
+  present: titan.components
+  present: titan.widgets
+  present: titan.buffers
+  present: titan.notifications
+
+--- the main window ---
+titan.views                        ok   {"views": [{"id": "apps", "label": "Lista aplikacji:", "short_name": "Aplikacje"}, {"id": "games", "label": "Lista gier:", "short_name": "Gry"}, {"id"
+titan.status_bar                   ok   {"items": [{"key": "time", "text": "Zegar: 17:26:35"}, {"key": "battery", "text": "Poziom baterii: 36%"}, {"key": "volume", "text": "Głośność: 44%"}, 
+titan.menu                         ok   {"groups": [{"id": "program", "label": "Program", "entries": [{"id": "install_package", "label": "Zainstaluj pakiet danych..."}]}, {"id": "ai", "label
+titan.inventory                    ok   {"kinds": [{"kind": "app", "label": "Applications", "entries": ["Menedżer Plików", "Klient elevenlabs", "Menedżer pobierania", "Edytor Tekstowy", "mul
+titan.inventory                    ok   {"kinds": [{"kind": "game", "label": "Games", "entries": ["Cult of the Lamb", "Battle.net", "Hearthstone"]}]}
+titan.inventory                    ok   {"kinds": [{"kind": "im_module", "label": "Titan IM modules", "entries": ["Example IM"]}]}
+titan.components                   ok   {"components": [{"name": "TArticle", "folder": "TArticle", "enabled": true}, {"name": "Terminal", "folder": "TTerm", "enabled": true}, {"name": "Cling
+titan.widgets                      ok   {"widgets": [{"id": "example_button", "name": "Example Button", "type": "button"}, {"id": "example_grid", "name": "Example Grid", "type": "grid"}]}
+titan.addon_actions                ok   {"addon": "titan", "actions": [{"name": "list_settings", "summary": "List Titan's settings (secret values are hidden). Optional 'section' lists just o
+
+--- the less obvious ones ---
+titan.buffers                      ok   {"categories": [{"id": "tts", "name": "TTS engine", "live": true, "buffers": []}, {"id": "titannet", "name": "Titan-Net", "live": false, "buffers": [{
+titan.notifications                ok   {"notifications": []}
+titan.list_tts_engines             ok   TTS engines: - DECtalk (id: dectalk) - SMP (id: smp) - BeSTspeech (id: bestspeech) - ElevenLabs TTS (id: elevenlabs) (unavailable) - Eloquence (id: el
+titan.list_media_catalogs          ok   Media library catalogs: - Humor mp3 - superfon - Muzyka - Superfon
+
+--- the settings ---
+settings.screen                    ok   {"categories": [{"name": "Ogólne", "items": [{"id": "lang_choice", "category": "Ogólne", "label": "Język", "kind": "choice", "value": "Polski", "optio
+  15 categories, 153 settings
+  first: Ogólne
+  kinds: {"choice" => 31, "list" => 2, "info" => 1, "multi" => 3, "bool" => 91, "command" => 13, "number" => 7, "secret" => 1, "text" => 4}
+
+--- Titan-Net ---
+titannet.whoami                    ok   {"username": "tito", "user_id": 3}
+titannet.rooms                     ok   {"rooms": [{"id": 2, "name": "rozmowy", "description": "tylko dla moich ziomków!", "creator_id": 5, "created_at": "2026-04-14T10:55:05.665615", "room_
+titannet.online                    ok   {"users": [{"id": 3, "username": "tito", "titan_number": 58527, "full_name": "Klaudiusz Wypych", "status": "online"}]}
+titannet.topics                    ok   {"topics": [{"id": 9, "title": "introduce your self", "content": "Hello. There are a lot of titan users now, so I just created this topic. Here we can
+titannet.mailbox                   ok   {"messages": [{"id": 19, "direction": "in", "folder": "inbox", "from_addr": "titan-test@titosofttitan.com", "to_addr": "tito@titosofttitan.com", "subj
+
+--- Titan IM ---
+im.status                          FAIL QUESTION - this action needs 'service' before it can run: 'whatsapp' or 'messenger'. Ask the user, then call the action again with service set to thei
+
+--- the shell and the computer ---
+shell.status                       ok   Powłoka Titana nie jest uruchomiona.
+shell.windows                      ok   {"windows": [{"title": "◐ Elten Titan TTS bridge addon", "active": true, "minimized": false}, {"title": "Pakiet aplikacji Titan", "active": false, "mi
+system.get_volume                  ok   System volume is 44%.
+system.network_status              ok   Wi-Fi: connected to titoNet (89% signal). Interfaces up: vEthernet (WSL (Hyper-V firewall)), OpenVPN TAP-Windows6.
+
+--- macros, Cling, the screen reader and the AI ---
+macros.list_macros                 ok   6 macros: - Gra w zgadywanie liczby [.tcs] - Przykładowy skrypt Titana [.tcs] - Demonstracja formularza (przyciski i opcje) [.tcs] - Demonstracja czyt
+macros.macro_language              ok   Język skryptowy Titana (.TCS) - skrypt złożony z własnych akcji Titana. Zwykły tekst, edytowany w tEdit jak każdy inny skrypt. Jedna instrukcja na lin
+cling.list_applications            ok   Cling applications: - Klango MathTools (kmath, klango): Klango MathTools - scientific calculator and audio function plotter - Prompter Creator (prompt
+cling.status                       ok   Cling: 21 application(s) installed. klango: 17 reader: 3 script: 1 Lua: Cling's own interpreter (no native library needed) Engines available: grid_hun
+titan_access.status                ok   Titan Access is enabled and loaded.
+titan.ai_available                 ok   yes
+zegarynka.get_settings             ok   The clock chime is on, speaking every 30 minutes.
+shell.state                        ok   {"running": false, "windows_shell": true}
+
+--- the voice, which is the bug that was reported ---
+titan.get_speech_rate              ok   10
+titan.speaking                     ok   no
+titan.reader_speak                 ok   Speaking.
+  reader_speak returned in 1 ms (it must not wait for the line)
+  speaking while it talks: yes
+titan.stop_speech                  ok   Stopped speaking.
+  stop took 3 ms
+  speaking after the stop: no
+
+done

@@ -1,0 +1,75 @@
+connected to the stand-in Titan: true
+PASS main window opens, lists applications, launches one
+     alert: Opened tEdit.
+PASS the tab bar cycles through Titan's own views
+     speak: Games (2)
+     speak: Titan IM (6)
+     speak: Cling (1)
+     speak: Applications (3)
+PASS a component's own view falls through to its actions
+PASS the settings screen reads Titan's own categories
+PASS a category opens with a control per setting
+PASS Titan-Net says whose account it is showing
+PASS the rooms are a list, with type and password
+PASS a room's messages are rows, newest readable in full
+PASS the forum lists topics and opens one with its replies
+PASS the mailbox lists mail and opens a message
+     page: A letter
+     menu: A letter ["Reply", "Delete", "Close"]
+PASS the shell view is offered only when Titan is the shell
+PASS the taskbar lists real windows with their state
+PASS the desktop and the notification area are lists
+PASS pressing a desktop icon opens it
+     alert: shell.open_desktop_item did something.
+PASS the areas menu offers the shell as a view, not as actions
+PASS the computer screen reads what the computer is doing
+PASS an add-on's actions are shown with what they do
+PASS Titan's voice is offered to Elten and speaks
+PASS a line is handed over at once, not when it has been spoken
+PASS an interrupt reaches Titan while it is still speaking
+PASS a line the user has already moved past is never said
+PASS Titan IM lists conversations of a service
+PASS a conversation shows its messages and sends one
+PASS Titan IM offers Titan-Net people and the installed modules
+PASS Titan IM lists the services Titan's own view lists
+PASS the main window's Titan IM tab IS that service list
+PASS the main window has Widgets and Components on its tab bar
+     alert: Ran Macro Manager....
+PASS the shell is detected as data, not by reading a translated sentence
+PASS the Macro Manager lists macros and runs one
+     confirm: Run Poranek?
+     alert: Ran Poranek.
+PASS the Titan Script reference is readable from the bridge
+     page: The Titan Script language
+PASS Cling lists Klango applications and starts one in Titan
+     confirm: Start Mole No More in Titan?
+     alert: Started Mole No More.
+PASS the AI screen is offered only when Titan has AI, and answers here
+     ask: What do you want to ask?
+     page: Titan AI
+PASS the shell's Start menu has Titan's own branches
+PASS the Buffer System is browsable, category by buffer
+     page: Titan-Net: Private (3)
+PASS the notification centre is listed and can be emptied
+     confirm: Empty the notification centre?
+     alert: Cleared the notifications.
+PASS the Component Manager lists components with their state and toggles one
+     confirm: Switch Macro Manager off?
+     alert: macros: disabled.
+PASS activate registers the voice and the setting, and leaves Elten's menu alone
+PASS Titan-Net opens its own main screen, not a list of its parts
+PASS the news watcher announces only what is NEW, and never on the first look
+PASS the Feedback Hub is a list of what people asked for
+     page: Wiecej glosow
+     menu: Wiecej glosow ["Vote for it"]
+PASS the app repository lists packages and downloads one
+     menu: tCalc 1.2 - tito ["Download it", "What it is"]
+     confirm: Download tCalc 1.2 - tito?
+     alert: Downloaded.
+PASS the announcements can be read
+     page: 2026-09-01.txt
+PASS a component's view lists what it HAS, not what it can be told to do
+PASS a widget is used, not merely listed: it reads, moves and presses
+     speak: Szybki start: Wylaczony
+PASS every way into Titan-Net lands on Titan-Net's own main screen
+done

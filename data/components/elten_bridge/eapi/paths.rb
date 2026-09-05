@@ -89,6 +89,49 @@ end
 module EltenSystemHelpers
   module_function
 
+  # Every drive on this machine, as Elten's own answers it: "C:", "D:".
+  # The file tree's root is built out of this, so a file manager with no
+  # drives is one that can only ever see the folder it opened on.
+  #
+  # Asked of Windows through the same call Elten uses
+  # (`GetLogicalDriveStrings`), and on anything else the root is the root.
+  def logical_drives
+    return @drives if defined?(@drives) && @drives
+
+    @drives = if Programs.platform_os == 'windows'
+      windows_drives
+    else
+      ['/'] + ['/media', '/mnt'].flat_map do |place|
+        File.directory?(place) ? Dir.children(place).sort.map { |name| File.join(place, name) } : []
+      end.select { |place| File.directory?(place) }
+    end
+  rescue StandardError
+    @drives = []
+  end
+
+  def windows_drives
+    require 'fiddle'
+    require 'fiddle/import'
+    unless defined?(@get_drives)
+      kernel = Fiddle.dlopen('kernel32.dll')
+      @get_drives = Fiddle::Function.new(
+        kernel['GetLogicalDriveStringsW'],
+        [Fiddle::TYPE_LONG, Fiddle::TYPE_VOIDP], Fiddle::TYPE_LONG
+      )
+    end
+    buffer = "\0" * 2048
+    length = @get_drives.call(buffer.bytesize / 2, buffer).to_i
+    return [] if length <= 0
+
+    text = buffer.byteslice(0, length * 2).to_s
+                 .force_encoding(Encoding::UTF_16LE)
+                 .encode(Encoding::UTF_8, invalid: :replace, undef: :replace)
+    text.split("\0").map { |drive| drive.end_with?('\\') ? drive[0...-1] : drive }
+        .reject(&:empty?)
+  rescue StandardError
+    ('A'..'Z').map { |letter| "#{letter}:" }.select { |drive| File.directory?("#{drive}/") }
+  end
+
   def appdata_dir; Dirs.appdata; end
   def user_dir; Dirs.user; end
   def documents_dir; Dirs.documents; end

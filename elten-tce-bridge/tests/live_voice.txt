@@ -1,0 +1,10 @@
+connected: true
+available: true
+speak_text handed over in 0 ms
+Titan says it is speaking: yes
+the output says it is speaking: true
+stop returned in 0 ms
+Titan says it is speaking AFTER the stop: no
+VERDICT: the interrupt works
+still speaking after the replacement: no (should be yes - the second line)
+silent at the end: true

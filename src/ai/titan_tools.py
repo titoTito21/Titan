@@ -2035,6 +2035,71 @@ def titan_speak(text, interrupt=False, position=None, pitch=None, rate=None,
     return f"Said: {message[:200]}" + ('...' if len(message) > 200 else '')
 
 
+def titan_stop_speech(**_):
+    """Stop whatever Titan is saying, without touching the other sounds.
+
+    ``titan_stop_sounds`` silences the whole mixer - every cue, every clip,
+    every notification. An interruption in a screen reader means the VOICE and
+    nothing else, which is why this is its own action rather than an argument
+    on that one.
+    """
+    stopped = False
+    try:
+        from src.titan_core.stereo_speech import get_stereo_speech
+        speech = get_stereo_speech()
+        if speech is not None:
+            speech.stop()
+            stopped = True
+    except Exception as e:
+        return f"Could not stop the speech: {e}"
+    if not stopped:
+        return "Titan's speech is not running, so there was nothing to stop."
+    return "Stopped speaking."
+
+
+def titan_speaking(**_):
+    """Whether Titan is saying something at this moment: 'yes' or 'no'.
+
+    The answer comes from the reserved TTS channel rather than from an
+    engine's own flag: on the fast eSpeak path ``is_speaking`` goes false
+    about 20 ms in while the audio plays for seconds, and that channel carries
+    speech alone - the focus cues play on other channels - so it is the one
+    signal that means what it says. A host that cannot answer at all (a
+    non-pygame backend) says so instead of guessing.
+    """
+    busy = None
+    try:
+        from src.titan_core.sound import get_tts_channel
+        channel = get_tts_channel()
+        if channel is not None and channel.get_busy():
+            return "yes"
+        busy = False
+    except Exception:
+        pass
+    # A quiet channel is not the same as silence: the SAPI subprocess bridge
+    # and every engine that speaks through its own device leave that channel
+    # empty while they talk, so the engine is asked as well before the
+    # answer is "no".
+    try:
+        from src.titan_core.stereo_speech import get_stereo_speech
+        speech = get_stereo_speech()
+        engine = getattr(speech, 'engine', None)
+        for holder in (speech, engine):
+            if holder is None:
+                continue
+            flag = getattr(holder, 'is_speaking', None)
+            if flag is None:
+                continue
+            if callable(flag):
+                flag = flag()
+            if flag:
+                return "yes"
+            busy = False
+    except Exception:
+        pass
+    return "no" if busy is False else "unknown"
+
+
 def titan_play_sound(path, position=0.0, wait=False, to=None, duration=2.0,
                      elevation=0.0, to_elevation=None, **_):
     """Play an audio file through Titan's own sound system.
@@ -2318,6 +2383,13 @@ def get_titan_tools():
                           'wait': dict(B, description="Wait until it has been "
                                        "said (default no).")},
               required=['text']),
+        _tool('titan_stop_speech',
+              "Stop whatever Titan is saying, leaving the other sounds "
+              "playing. This is what an interruption means for a voice.",
+              titan_stop_speech),
+        _tool('titan_speaking',
+              "Whether Titan is speaking at this moment: yes, no, or unknown "
+              "when the host cannot answer.", titan_speaking),
         _tool('titan_play_sound',
               "Play an audio file through Titan's own sound system, with the "
               "user's theme volume and stereo/3D positioning. Use this rather "
