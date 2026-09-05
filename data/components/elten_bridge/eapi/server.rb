@@ -118,7 +118,14 @@ module Programs
 
       begin
         remote = remote_call('insert', 'values' => stringify(values))
-        row = remote if remote.is_a?(Hash)
+        # **Only when it really is a row.** The local one already has an
+        # id; a remote answer that is a Hash with nothing in it - a server
+        # that accepted and said nothing, an older Titan, a refusal shaped
+        # as an empty object - replaced it and took the id with it. The
+        # Game Room reads the id of the table it just created and raises
+        # "a synchronizer requires a positive table id" without one, so
+        # creating a table did nothing at all.
+        row = remote if remote.is_a?(Hash) && remote['id'].to_i.positive?
       rescue StandardError => error
         if error.message.to_s.include?('PROTECTED')
           # Elten will not take a Titan-played score onto its own global
@@ -162,18 +169,49 @@ module Programs
     end
     alias select all
 
+    # **These answer a ROW, and an application reads its id.** They went
+    # straight to the remote and returned whatever it said - so with
+    # EltenLink unreachable, or answering an empty object, they answered
+    # nothing and the row the application had just written was gone. The
+    # Game Room's `touch_table` is an `update` whose answer becomes the
+    # table it then opens: without an id it raises "a synchronizer
+    # requires a positive table id", and creating a table did nothing.
+    #
+    # So they are written locally first, exactly as `insert` is, and a
+    # remote answer is preferred only when it really is a row.
     def upsert(values)
-      remote_call('upsert', 'values' => stringify(values))
+      row = @local.upsert(values)
+      begin
+        remote = remote_call('upsert', 'values' => stringify(values))
+        row = remote if remote.is_a?(Hash) && remote['id'].to_i.positive?
+      rescue StandardError => error
+        Log.warning("#{@name}: the row was kept locally only: #{error.message}")
+      end
+      row
     end
 
     def update(id, values)
-      remote_call('update', 'id' => id.to_i, 'values' => stringify(values))
+      row = @local.update(id, values)
+      begin
+        remote = remote_call('update', 'id' => id.to_i,
+                                       'values' => stringify(values))
+        row = remote if remote.is_a?(Hash) && remote['id'].to_i.positive?
+      rescue StandardError => error
+        Log.warning("#{@name}: the row was kept locally only: #{error.message}")
+      end
+      row
     end
 
     def delete(id = nil, where: nil)
       return @local.delete(where: where) if id.nil?
 
-      remote_call('delete', 'id' => id.to_i)
+      @local.delete(where: { 'id' => id.to_i })
+      begin
+        remote_call('delete', 'id' => id.to_i)
+      rescue StandardError => error
+        Log.warning("#{@name}: deleted locally only: #{error.message}")
+      end
+      true
     end
 
     def count(where: nil)
@@ -236,6 +274,28 @@ module Programs
       row
     end
     alias add insert
+
+    # Merge into the row with that id, and answer the row - which is what
+    # an application reads the id off.
+    def update(id, values)
+      rows = read
+      row = rows.find { |held| held['id'].to_i == id.to_i }
+      return nil if row.nil?
+
+      (values.is_a?(Hash) ? values : {}).each { |key, value| row[key.to_s] = value }
+      row['id'] = id.to_i
+      write(rows)
+      row
+    end
+
+    # By id when it carries one, a new row when it does not.
+    def upsert(values)
+      values = values.is_a?(Hash) ? values : { 'value' => values }
+      id = values['id'] || values[:id]
+      return insert(values) if id.to_i <= 0
+
+      update(id, values) || insert(values)
+    end
 
     def all(where: nil, order: nil, limit: nil, offset: 0)
       rows = read

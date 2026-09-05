@@ -345,6 +345,121 @@ def elten_client_run_program(name='', **_):
     return f"Opened {opened} in Elten." if opened else f"Opened {wanted} in Elten."
 
 
+def elten_client_press(keys='', **_):
+    """Press a key in Elten, as the person sitting there would.
+
+    The one thing here that DRIVES Elten rather than reading it, and the
+    reason it is confirmed twice: Enter in a messenger sends the message.
+    Elten's side is off by default and says so.
+    """
+    wanted = str(keys or '').strip()
+    if not wanted:
+        from src.titan_core.actions.interaction import needs
+        return needs('keys', "Which key should be pressed in Elten? "
+                             "For example 'down', 'enter' or 'ctrl+s'.")
+    answered, live = _ask_with('press_key', {'keys': wanted})
+    if not answered:
+        return _needs_elten()
+    if isinstance(live, str):
+        return live
+    if isinstance(live, dict) and live.get('error'):
+        from src.titan_core.actions.interaction import fails
+        return fails(str(live['error']))
+    pressed = (live or {}).get('pressed') if isinstance(live, dict) else None
+    if not pressed:
+        return f"Pressed {wanted} in Elten."
+    return "Pressed " + ', '.join(str(key) for key in pressed) + " in Elten."
+
+
+def elten_client_api_batch(names):
+    """Many names in one round trip. {name: description} or None.
+
+    A checker comparing a whole port against the real Elten asks about
+    hundreds of names, and one round trip each - through a pipe, through a
+    worker, through Elten's own tick - is a checker nobody runs.
+    """
+    wanted = list(names or [])
+    if not wanted:
+        return {}
+    answered, live = _ask_with('api', {'names': ','.join(wanted)})
+    if not answered or not isinstance(live, dict):
+        return None
+    table = live.get('api')
+    return table if isinstance(table, dict) else None
+
+
+def elten_client_api(name='', **_):
+    """What the REAL Elten's API is for one name.
+
+    The other half of the Elten work in this repository is a PORT - Elten's
+    API re-implemented on top of Titan so an `.eltenapp` runs inside Titan -
+    and everything that has ever gone wrong with it went wrong the same way:
+    a signature guessed from call sites instead of read from Elten. This
+    asks the client that is running, which is the right authority when a
+    checkout and the user's own Elten differ.
+    """
+    wanted = str(name or '').strip()
+    if not wanted:
+        from src.titan_core.actions.interaction import needs
+        return needs('name', "Which name? A function ('player'), a class "
+                             "('ListBox') or a method ('ListBox#set_text').")
+    answered, live = _ask_with('api', {'name': wanted})
+    if not answered:
+        return _needs_elten()
+    if isinstance(live, str):
+        return live
+    if not isinstance(live, dict):
+        return _needs_elten()
+    if live.get('error'):
+        return f"Elten could not answer: {live['error']}"
+    if not live.get('defined'):
+        return f"The Elten running here has no {wanted}."
+    lines = [f"{live.get('name') or wanted} is "
+             f"{'a ' + str(live.get('kind')) if live.get('kind') else 'there'}."]
+    if live.get('parent'):
+        lines.append(f"It inherits {live['parent']}.")
+    if live.get('owner') and live['owner'] != live.get('name'):
+        lines.append(f"Defined on {live['owner']}.")
+    parameters = live.get('parameters')
+    if isinstance(parameters, list):
+        lines.append("It takes: " + (_signature(parameters) or "nothing"))
+    for key, label in (('methods', 'Methods'),
+                       ('class_methods', 'Class methods')):
+        names = live.get(key)
+        if isinstance(names, list) and names:
+            lines.append(f"{label}: " + ', '.join(str(n) for n in names))
+    if live.get('source'):
+        lines.append(f"Written at {live['source']}.")
+    return '\n'.join(lines)
+
+
+def _signature(parameters):
+    """Ruby's own parameter shapes, said the way a signature is written -
+    which is the whole point: positional, optional and keyword are three
+    different things, and getting one wrong is an ArgumentError inside
+    somebody else's program."""
+    written = []
+    for entry in parameters:
+        if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+            continue
+        kind, name = str(entry[0]), str(entry[1])
+        if kind == 'req':
+            written.append(name)
+        elif kind == 'opt':
+            written.append(f"{name} (optional)")
+        elif kind == 'rest':
+            written.append(f"*{name}")
+        elif kind == 'keyreq':
+            written.append(f"{name}: (required)")
+        elif kind == 'key':
+            written.append(f"{name}:")
+        elif kind == 'keyrest':
+            written.append(f"**{name}")
+        elif kind == 'block':
+            written.append(f"&{name}")
+    return ', '.join(written)
+
+
 def elten_client_report(**_):
     """Everything the bridge last said, as JSON - for a caller that wants
     the numbers rather than the sentence."""
@@ -394,4 +509,25 @@ def get_elten_client_actions():
          {'name': {'type': 'string', 'required': True,
                    'description': "The program's name, as Elten lists it."}},
          'confirm', elten_client_run_program),
+        ('api',
+         "What the REAL Elten's API is for one name - whether it exists, "
+         "what arguments it takes and where it is written. 'player', "
+         "'ListBox', 'ListBox#set_text'. This is how the Elten API port in "
+         "data/components/elten_bridge is checked against the client the "
+         "user actually has, instead of against a guess.",
+         {'name': {'type': 'string', 'required': True,
+                   'description': "A function, a class, or Class#method."}},
+         'auto', elten_client_api),
+        ('press_key',
+         "Press a key in Elten, as the person sitting there would - "
+         "'down', 'enter', 'ctrl+s'. Several are separated by commas and "
+         "pressed in order. It is off by default in the bridge's own "
+         "settings, because pressing a key in Elten is not the same as "
+         "reading it: Enter in a messenger sends the message. Read the "
+         "screen first (elten_client screen) and again afterwards.",
+         {'keys': {'type': 'string', 'required': True,
+                   'description': "The key, or a combination like "
+                                  "'ctrl+s', or several separated by "
+                                  "commas."}},
+         'confirm', elten_client_press),
     )

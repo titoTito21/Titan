@@ -728,6 +728,11 @@ class ListBox < EltenControl
     @multi == true
   end
 
+  # Elten's own default: no limit.
+  def limit
+    @limit.nil? ? -1 : @limit
+  end
+
   # Which rows are ticked, which is what a multi-selection list is FOR.
   def multiselections
     checked_indices
@@ -744,6 +749,84 @@ class ListBox < EltenControl
   # often as after it, which is why this is pushed rather than assumed.
   def apply_selection
     push(checked: checked_indices)
+    self
+  end
+
+  # ------------------------------------------------- ticking rows in CODE
+  # **Elten's own multiselection surface, which was missing.** An
+  # application does not tick a row by writing into an array - it calls
+  # these, and they fire the events it may have bound. The Game Room's
+  # options screen calls `select_multiselection_indices` for every
+  # multiple-choice option it has, so a `NoMethodError` there ended the
+  # screen before it was shown: after choosing a game, nothing appeared.
+  #
+  # Each answers Elten's own three symbols - `:unchanged`, `:limit`,
+  # `:changed` - because an application reads them.
+  attr_accessor :limit
+  attr_reader :required_multiselection_indices
+
+  def select_multiselection_indices(indices)
+    indices = Array(indices).to_a.uniq.select do |index|
+      index.to_i >= 0 && index.to_i < @options.size && @selected[index] != true
+    end
+    return :unchanged if indices.empty?
+
+    if limit.to_i.positive? &&
+       @selected.count(true) + indices.size > limit.to_i
+      multiselection_limit_exceeded
+      return :limit
+    end
+    trigger(:multiselection_beforechanged)
+    indices.each do |index|
+      @selected[index] = true
+      trigger(:multiselection_selected, index)
+    end
+    apply_selection
+    trigger(:multiselection_changed)
+    :changed
+  end
+
+  def deselect_multiselection_indices(indices)
+    required = (@required_multiselection_indices || []).to_a
+    indices = Array(indices).to_a.uniq.select do |index|
+      index.to_i >= 0 && index.to_i < @options.size &&
+        @selected[index] == true && !required.include?(index)
+    end
+    return :unchanged if indices.empty?
+
+    trigger(:multiselection_beforechanged)
+    indices.each do |index|
+      @selected[index] = false
+      trigger(:multiselection_unselected, index)
+    end
+    apply_selection
+    trigger(:multiselection_changed)
+    :changed
+  end
+
+  # Rows that may be ticked and never unticked.
+  def require_multiselection_indices(indices)
+    @required_multiselection_indices = Array(indices).to_a.uniq.select do |index|
+      index.to_i >= 0 && index.to_i < @options.size
+    end
+    select_multiselection_indices(@required_multiselection_indices)
+  end
+
+  def select_all_multiselection_items
+    result = select_multiselection_indices((0...@options.size).to_a)
+    alert(_('Checked'), false) if result == :changed
+    result
+  end
+
+  def deselect_all_multiselection_items
+    result = deselect_multiselection_indices((0...@options.size).to_a)
+    alert(_('Unchecked'), false) if result == :changed
+    result
+  end
+
+  def multiselection_limit_exceeded
+    play_sound('border')
+    alert(_('You can check only %d items') % limit.to_i, false)
     self
   end
 
@@ -1641,6 +1724,46 @@ end
 # `ChoiceListBox.new(rows, header:, index:)` - a list where each row is
 # itself a choice: the label, and a value cycled through with Left and Right.
 # MileByMile's setup screen is these - "players: 2", "board: long".
+# `Static` - a line of text on a form. Elten's is a `FormField` that says
+# its label when the keyboard reaches it, which is the whole of what it is
+# for: an instruction at the top of a screen that somebody who cannot see
+# the screen still has to hear.
+#
+# **It was missing entirely**, and that is what "after choosing a game
+# nothing appears" was: the Game Room's options screen begins with
+# `Static.new(_("Choose game options using Tab and the arrow keys..."))`
+# and an uninitialized constant ended the screen before it was built.
+# The port's own settings dialog builds one too.
+class Static < EltenControl
+  attr_reader :label
+
+  def initialize(label = '')
+    @label = label.to_s
+    super(:static, { label: @label })
+  end
+
+  def label=(value)
+    @label = value.to_s
+    push(label: @label)
+    self
+  end
+
+  # Elten's speaks on focus. Here the control is a real, named, read-only
+  # field, so the reader says it by landing on it - and saying it again
+  # would be saying it twice.
+  def focus(_index = nil, _count = nil, *_arguments)
+    ensure_shown
+    super()
+    self
+  end
+
+  def value
+    @label
+  end
+
+  def frame_driven?; false; end
+end
+
 class ChoiceListBox < EltenControl
   def initialize(rows = [], header: '', index: 0, quiet: true, flags: 0,
                 **_ignored)
@@ -1703,19 +1826,38 @@ class ChoiceListBox < EltenControl
     self
   end
 
-  # The chosen value on a row - Elten's own `value(row = index)`.
+  # **`value(row)` is the INDEX of the chosen option, not its text.**
+  # Elten's row is `Row = Struct.new(:label, :options, :value)` and that
+  # `value` is a number, clamped into the options by `normalize_value` -
+  # `selected_option` is the one that answers the words. Answering the text
+  # here read perfectly and was wrong in the one way that matters:
+  # MileByMile's setup screen does `VARIANTS[fields[0].value(0)][0]`, so a
+  # String came back where an index belonged, `Array#[]` raised, and
+  # choosing "play against the bot" never started a game. An application
+  # using this control to CHOOSE something is using it as a number.
   def value(row = @index)
     entry = @rows[row]
     return nil if entry.nil?
 
     options = row_options(entry)
-    return entry if options.empty?
+    return 0 if options.empty?
 
-    options[@choices.fetch(row, 0) % options.size]
+    @choices.fetch(row, 0) % options.size
   end
 
   def values
     (0...@rows.size).map { |row| value(row) }
+  end
+
+  # The words on the row, which is what `value` used to answer.
+  def selected_option(row = @index)
+    entry = @rows[row]
+    return nil if entry.nil?
+
+    options = row_options(entry)
+    return nil if options.empty?
+
+    options[@choices.fetch(row, 0) % options.size]
   end
 
   def header
@@ -1727,27 +1869,50 @@ class ChoiceListBox < EltenControl
     push(header: value.to_s)
   end
 
-  def append(row)
-    @rows << row
+  # `append(label, options, value: 0)` - Elten's three arguments, answering
+  # which row it became. A single array is taken too, because that is the
+  # shape `rows` is written in and an application that has one in its hand
+  # should not have to take it apart.
+  def append(label, options = nil, value: 0)
+    if options.nil? && label.is_a?(Array)
+      label, options, value = label[0], label[1], (label[2] || 0)
+    end
+    options = options.is_a?(Array) ? options.dup : []
+    @rows << [label, options, value.to_i]
+    @choices[@rows.size - 1] = normalise_choice(value, options)
     push(rows: choice_rows)
-    self
+    @rows.size - 1
   end
 
-  def set_options(values)
-    self.rows = values
-    self
-  end
+  # `set_options(row, options, value: 0)` - ONE row's choices, which is
+  # what Elten's replaces. Replacing every row was this method answering a
+  # different question from the one it was asked.
+  def set_options(row, options = nil, value: 0)
+    return false if @rows[row.to_i].nil?
 
-  def set_value(new_value, row = @index)
-    options = row_options(@rows[row])
-    found = options.index(new_value)
-    @choices[row] = found if found
+    options = options.is_a?(Array) ? options.dup : []
+    entry = @rows[row.to_i]
+    label = entry.is_a?(Array) ? entry[0] : entry
+    @rows[row.to_i] = [label, options, value.to_i]
+    @choices[row.to_i] = normalise_choice(value, options)
     push(rows: choice_rows)
-    self
+    true
   end
 
-  def selected_option
-    @rows[@index]
+  # `set_value(row, value)` - the ROW first and the value as an INDEX, and
+  # it answers whether anything changed. Ours took them the other way round
+  # and looked the value up as text, so an application setting a row by
+  # number set nothing.
+  def set_value(row, value)
+    entry = @rows[row.to_i]
+    return false if entry.nil?
+
+    options = row_options(entry)
+    normalised = normalise_choice(value, options)
+    changed = @choices.fetch(row.to_i, 0) != normalised
+    @choices[row.to_i] = normalised
+    push(rows: choice_rows)
+    changed
   end
 
   # `wait_for_choice` - MileByMile's setup screen: show the rows, let the
@@ -1760,14 +1925,24 @@ class ChoiceListBox < EltenControl
     values
   end
 
+  # Not Elten's - the port's own convenience - so it takes what a caller
+  # here would have: either the index or the words.
   def value=(new_value)
     options = row_options(@rows[@index])
-    found = options.index(new_value)
-    @choices[@index] = found if found
+    found = new_value.is_a?(Integer) ? new_value : options.index(new_value)
+    @choices[@index] = normalise_choice(found, options) if found
     push(rows: choice_rows)
   end
 
   private
+
+  # Elten's `normalize_value`: an index, clamped into the options, and 0
+  # when there are none.
+  def normalise_choice(value, options)
+    return 0 if options.nil? || options.empty?
+
+    [[value.to_i, 0].max, options.size - 1].min
+  end
 
   # A row is either a plain label or `[label, [choices...]]`.
   def row_options(entry)
@@ -3145,6 +3320,16 @@ class Form
 
   def open!
     specs = @fields.map(&:to_spec)
+    # **A control hidden BEFORE the window exists is still hidden.**
+    # `hide` pushes a change, and `push_change` returns early while there
+    # is no form - so the Game Room, which hides its Select and Back
+    # buttons the moment it builds the screen and drives them with Enter
+    # and Escape instead, had both of them on the screen. Two buttons
+    # nobody put there, in an API that has no such thing.
+    (@hidden ||= {}).each do |index, value|
+      specs[index]['hidden'] = true if value && specs[index].is_a?(Hash)
+      specs[index][:hidden] = true if value && specs[index].is_a?(Hash)
+    end
     @form_id = EltenBridge.call('form_open',
                                 { 'controls' => specs, 'header' => @header,
                                   'cancel' => index_of(@cancel_button),
@@ -3162,6 +3347,20 @@ class Form
     @form_id = nil
   end
 
+  # **Enter on a field that is not a button presses the accept button.**
+  # Elten's own `Form#update`: `if @fields[@index] != nil &&
+  # @accept_button != nil && !@fields[@index].is_a?(Button)` - unless the
+  # field processes Enter itself. It is how a screen made of a list and
+  # two hidden buttons works at all: the Game Room chooses a game with
+  # Enter on the list, and without this nothing happened when you did.
+  def press_accept(field)
+    return if @accept_button.nil? || field.equal?(@accept_button)
+    return if field.is_a?(Button)
+    return if field.respond_to?(:key_processed) && field.key_processed(:enter)
+
+    @accept_button.trigger(:press)
+  end
+
   def index_of(field)
     return nil if field.nil?
 
@@ -3176,13 +3375,16 @@ class Form
     name = message['name'].to_s
 
     if index.nil?
-      # Not about one control - Escape, or the window's own close box.
+      # Not about one control - Escape, the window's own close box, or
+      # Enter somewhere that is not a button.
       if name == 'escape'
         if @cancel_button
           @cancel_button.trigger(:press)
         else
           resume
         end
+      elsif name == 'accept'
+        @accept_button&.trigger(:press)
       end
       return
     end
@@ -3206,6 +3408,7 @@ class Form
       arguments = field.event_args(event)
       arguments = change_args(field) if arguments.empty?
       field.trigger(event, *arguments)
+      press_accept(field) if name == 'select'
     when 'context', 'menu'
       field.open_context_menu(name == 'menu') if field.respond_to?(:open_context_menu)
     when 'player'
@@ -3271,6 +3474,6 @@ module EltenAPI
     Menu = ::Menu
     Form = ::Form
     FormTimer = ::FormTimer
-    Static = ::Static if defined?(::Static)
+    Static = ::Static if defined?(::Static)   # rubocop:disable Lint/ConstantDefinitionInBlock
   end
 end

@@ -261,3 +261,69 @@ class MemoryRecorderOutput < RecorderOutput
 end
 
 class AudioEncoder < MediaEncoder; end
+
+# --------------------------------------------------------------- the player
+module Kernel
+  # `player(file, label:, wait:, control:, try_download:, is_stream:)` -
+  # Elten's own way of PLAYING something, and the one an application calls.
+  #
+  # **This is what "YouTube playback does not work" was.** The bridge had
+  # the `Player` control - all of Elten's keys, the real stream, the real
+  # mixer - and not the one-line helper that opens one, so `play_video`'s
+  # `player(url, label: video.title)` was `NoMethodError: undefined method
+  # 'player'`, raised straight out of an application that only rescues
+  # `Youtube::Error`. The file manager's own preview reached the same wall.
+  #
+  # It is Elten's `EltenAPI::Common#player` line for line: a Player is made,
+  # the loop pumps it, Enter (without Shift) or Escape leaves, and it is
+  # closed however the loop ends. `wait` means "leave when it has finished
+  # playing" rather than "block", which is the opposite of what the word
+  # suggests and is why it is written out here.
+  def player(file, label: '', wait: false, control: true,
+             try_download: false, is_stream: false)
+    return nil if file.nil? || file.to_s.strip == ''
+
+    sound = nil
+    dialog_opened = false
+    begin
+      if label.to_s != ''
+        if wait == false
+          dialog_open
+          dialog_opened = true
+        end
+        dialog_mute
+      end
+      sound = Player.new(file, :label => label.to_s, :autoplay => true,
+                         :quiet => false)
+      # A stream that could not be opened is not a player to sit in: Elten
+      # leaves when `snd.sound` is nil, and so does this - but it says so
+      # first, because a window that opens and closes reads as nothing
+      # having happened.
+      if sound.sound.nil?
+        alert(_('That could not be played.'))
+        return nil
+      end
+      delay(0.1)
+      loop do
+        loop_update
+        sound.update if control
+        if wait == true && !sound.paused?
+          length = sound.sound.length.to_f
+          position = sound.sound.position.to_f
+          return nil if length > 0 && position >= length - 0.05
+        end
+        # Shift+Enter is the player's own (it is how Elten's player opens
+        # its menu), so only a bare Enter leaves.
+        if (key_pressed?(:key_enter) && !key_held?(:shift)) ||
+           key_pressed?(:key_escape) || sound.sound.nil?
+          sound.fade
+          break
+        end
+      end
+      nil
+    ensure
+      sound.close unless sound.nil?
+      dialog_close if dialog_opened
+    end
+  end
+end

@@ -939,6 +939,36 @@ def _op_dirs(app, args):
     }
 
 
+def _op_open_url(app, args):
+    """`platform_open_url(url)` - a link, in the browser the user has.
+
+    Elten opens one through its own system helpers; here it goes through
+    Titan's `web` provider, which opens it in the browser that is already
+    open rather than starting a second one, and falls back to the shell
+    when that is not reachable. Only http and https: `javascript:`, `file:`
+    and `data:` are ways of running something on this machine, and an
+    application opening a link is not a reason to allow one.
+    """
+    url = str(args.get('url') or '').strip()
+    if not url:
+        return False
+    if not url.lower().startswith(('http://', 'https://')):
+        app._note('bridge', 'refused a link that is not http: %s' % url[:60])
+        return False
+    try:
+        from src.titan_core import actions
+        result = actions.run('web', 'open', url=url)
+        if getattr(result, 'ok', False):
+            return True
+    except Exception:
+        pass
+    try:
+        import webbrowser
+        return bool(webbrowser.open(url))
+    except Exception:
+        return False
+
+
 def _op_display_text(app, args):
     """A page of text to read. With no window, it is spoken instead - which
     is what Elten itself would do with it."""
@@ -982,6 +1012,11 @@ def _clean_control_spec(spec):
         clean['readonly'] = bool(spec.get('readonly'))
     if 'enabled' in spec:
         clean['enabled'] = bool(spec.get('enabled'))
+    # A control hidden before the window existed - the Game Room hides its
+    # Select and Back buttons the moment it builds the screen and drives
+    # them with Enter and Escape instead.
+    if 'hidden' in spec:
+        clean['hidden'] = bool(spec.get('hidden'))
     if 'max_length' in spec:
         try:
             clean['max_length'] = int(spec.get('max_length'))
@@ -1109,6 +1144,77 @@ def _op_elten(app, args):
 _APP_TABLE_OPS = ('select', 'insert', 'upsert', 'update', 'delete',
                   'register', 'update_app', 'info', 'signed_in', 'notify',
                   'shared_select', 'shared_insert', 'shared_available')
+
+
+#: The live-session calls, by the name Ruby asks for them under. A table
+#: for the same reason `CALLS` is: an application names one of these or it
+#: reaches nothing.
+_LIVE_OPS = ('create', 'invite', 'accept', 'reject', 'send', 'leave',
+             'close', 'control', 'poll', 'stop', 'signal')
+
+
+def _op_live(app, args):
+    """EltenLink's realtime sessions, which is what a two-player game IS.
+
+    `EltenAPI::LiveSessions` over there: a session with a capacity,
+    participants invited into it, and JSON packets between them. Without it
+    the ELTEN Game Room raises "ELTEN Game Room requires the LiveSessions
+    API" before its first screen, and MileByMile can only be played against
+    its bot.
+
+    Signed with the session the user already has, exactly as the app tables
+    are - an application never sees a credential and cannot name an
+    account. `poll` is the one that is not an HTTP call: the envelopes
+    arrive on a long poll of Elten's own realtime endpoint, running on a
+    thread here, and this drains what has landed.
+    """
+    from . import eltenlink as eltenlink_module
+    what = str(args.get('do') or '')
+    if what not in _LIVE_OPS:
+        raise _Refused('Titan does not implement the live call %r' % what)
+    try:
+        if what == 'poll':
+            return eltenlink_module.live_poll(int(args.get('limit') or 200))
+        if what == 'stop':
+            return eltenlink_module.live_stop()
+        if what == 'signal':
+            return eltenlink_module.signal_send(
+                args.get('appid'), args.get('user'), args.get('packet'))
+        if what == 'create':
+            return eltenlink_module.live_create(
+                args.get('appid'), args.get('instance_id'),
+                metadata=args.get('metadata'),
+                participant_metadata=args.get('participant_metadata'),
+                capacity=args.get('capacity') or 2)
+        if what == 'invite':
+            return eltenlink_module.live_invite(
+                args.get('session_id'), args.get('participant_id'),
+                args.get('user'), metadata=args.get('metadata'))
+        if what == 'accept':
+            return eltenlink_module.live_accept(
+                args.get('session_id'), args.get('appid'),
+                args.get('instance_id'),
+                participant_metadata=args.get('participant_metadata'))
+        if what == 'reject':
+            return eltenlink_module.live_reject(args.get('session_id'),
+                                                args.get('appid'))
+        if what == 'send':
+            return eltenlink_module.live_send(
+                args.get('session_id'), args.get('participant_id'),
+                args.get('packet'), args.get('message_id'))
+        if what == 'leave':
+            return eltenlink_module.live_leave(args.get('session_id'),
+                                               args.get('participant_id'))
+        if what == 'close':
+            return eltenlink_module.live_close(args.get('session_id'),
+                                               args.get('participant_id'))
+        if what == 'control':
+            return eltenlink_module.live_control(
+                args.get('appid'), args.get('instance_id'),
+                args.get('sessions') or [])
+    except eltenlink_module.EltenUnavailable as error:
+        raise _Refused(str(error))
+    return None
 
 
 def _op_elten_app(app, args):
@@ -1263,12 +1369,14 @@ OPERATIONS = {
     'choose_path': _op_choose_path,
     'open_keyboard': _op_open_keyboard,
     'dirs': _op_dirs,
+    'open_url': _op_open_url,
     'display_text': _op_display_text,
     'input_text': _op_input_text,
     'form_open': _op_form_open,
     'form_close': _op_form_close,
     'control_set': _op_control_set,
     'elten': _op_elten,
+    'live': _op_live,
     'task_begin': _op_task_begin,
     'task_progress': _op_task_progress,
     'task_cancelled': _op_task_cancelled,

@@ -21,6 +21,23 @@ class Program
     (manifest['id'] || manifest['uuid']).to_s
   end
 
+  # `program.live_sessions` - the endpoint an application plays over.
+  # Elten's own is `manage(...)` so it is closed with the program; ours is
+  # closed by `finalize` for the same reason. One per program, remade when
+  # the last one was closed.
+  def live_sessions
+    @live_sessions = nil if @live_sessions && @live_sessions.closed?
+    @live_sessions ||= EltenAPI::LiveSessions::Endpoint.new(app_id: app_uuid)
+  end
+
+  def close_live_sessions
+    @live_sessions&.close
+  rescue Exception
+    nil
+  ensure
+    @live_sessions = nil
+  end
+
   def elten_api_version
     (manifest['EltenAPIVersion'] || manifest['elten_api_version']).to_s
   end
@@ -220,11 +237,26 @@ class Program
                                  expires_in: expires_in)
   end
 
-  # `signal` is how two copies of one application talk to each other
-  # through EltenLink. There is no relay here, so it answers honestly -
-  # false, and `signaled` is never called - rather than pretending to
-  # have delivered something.
-  def signal(_user, _packet)
+  # `signal` is how two copies of one application tell each other
+  # something through EltenLink - the Game Room announces a new table with
+  # one, so everybody else's lobby learns about it at once rather than at
+  # their next poll. It really goes out now: through the Elten that is
+  # open when there is one, and on Titan's own session when there is not.
+  #
+  # Elten's own argument checks, because an application relies on them.
+  def signal(user, packet)
+    raise ArgumentError, 'user must be a string' unless user.is_a?(String)
+    unless packet.nil? || packet == true || packet == false ||
+           packet.is_a?(String) || packet.is_a?(Array) ||
+           packet.is_a?(Hash) || packet.is_a?(Integer)
+      raise ArgumentError, 'Not JSON-convertable value'
+    end
+    appid = app_uuid.to_s
+    raise 'AppID not set' if appid.empty? || appid == '0'
+
+    !!EltenBridge.call('live', { 'do' => 'signal', 'appid' => appid,
+                                 'user' => user, 'packet' => packet })
+  rescue EltenBridge::Closed
     false
   end
 
@@ -232,9 +264,11 @@ class Program
     nil
   end
 
-  def live_sessions
-    nil
-  end
+  # `live_sessions` is REAL now and lives above, next to the manifest it
+  # needs - this stub is gone. It answered nil for as long as the port had
+  # no realtime layer, and nil is what `LiveSessionBackend.supported?`
+  # reads as "not supported": the ELTEN Game Room raised "requires the
+  # LiveSessions API" before its first screen.
 
   def communication
     nil

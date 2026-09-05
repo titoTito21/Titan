@@ -60,6 +60,9 @@ require_relative "titan_watch"
 require_relative "elten_main"
 require_relative "elten_news"
 require_relative "elten_screen"
+require_relative "elten_keys"
+require_relative "elten_api"
+require_relative "elten_link"
 require_relative "titan_components"
 require_relative "titan_macros"
 require_relative "titan_cling"
@@ -81,7 +84,10 @@ class ProgramTCEBridge < Program
       # **What Titan may ask of US, declared before the connection is
       # made** - the names travel in the hello, so a bus started first
       # would join saying it serves nothing.
-      bus.serve(EltenNews.handlers.merge(EltenScreen.handlers))
+      bus.serve(EltenNews.handlers.merge(EltenScreen.handlers)
+                                   .merge(EltenKeys.handlers)
+                                   .merge(EltenApi.handlers)
+                                   .merge(EltenLinkRelay.handlers))
       bus.start
       TitanSpeechOutput.start(bus)
       # Elten applies the configured voice while it is loading, which is
@@ -181,6 +187,17 @@ class ProgramTCEBridge < Program
             :set => proc { |value|
               update_json("settings.json", :default => {}) do |state|
                 state[TitanConsent::KEY] = (value == true)
+              end
+            }
+          )
+
+          settings.boolean(
+            "allow_keys",
+            :label => _("Let TCE press keys in Elten"),
+            :get => proc { TitanPrefs.allow_keys? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["allow_keys"] = (value == true)
               end
             }
           )

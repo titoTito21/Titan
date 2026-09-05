@@ -6,7 +6,7 @@
 require "json"
 require_relative "elten_stub"
 BASE = File.expand_path("..", __dir__)
-%w[titan_bus titan_ui titan_api titan_prefs titan_consent titan_sounds elten_main elten_news elten_screen titan_speech_output titan_watch titan_actions titan_settings
+%w[titan_bus titan_ui titan_api titan_prefs titan_consent titan_sounds elten_main elten_news elten_screen elten_keys elten_api titan_speech_output titan_watch titan_actions titan_settings
    titan_net titan_im titan_system titan_tools_ui titan_widgets titan_components titan_macros titan_cling titan_ai titan_shell
    titan_areas titan_console].each { |f| require_relative "#{BASE}/#{f}" }
 
@@ -681,6 +681,102 @@ check("with permission, Titan gets Elten's screen through the bus") do
     pumping = false
     pump.join(1.0)
   end
+end
+
+# --- pressing a key in Elten --------------------------------------------
+check("a key is the code Windows calls it, and a combination is all of them") do
+  raise "down" if EltenKeys.codes_for("down") != [0x28]
+  raise "enter" if EltenKeys.codes_for("enter") != [0x0D]
+  # A letter is itself: Windows' code for "a" IS the capital letter's.
+  raise "a letter" if EltenKeys.codes_for("a") != [0x41]
+  raise "a digit" if EltenKeys.codes_for("7") != [0x37]
+  # Every key of a combination in ONE frame, which is what a shortcut asks.
+  raise "ctrl+s" if EltenKeys.codes_for("ctrl+s") != [0x11, 0x53]
+  raise "shift+tab" if EltenKeys.codes_for("Shift+Tab") != [0x10, 0x09]
+  raise "a key that is not one" if EltenKeys.codes_for("wibble") != nil
+end
+
+check("pressing keys is a SECOND question, and starts as no") do
+  # Consent given, and it is still refused: agreeing to share Elten's data
+  # is not agreeing to have Elten driven.
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  raise "it is on by default" if EltenKeys.allowed?
+  answer = EltenKeys.press("down")
+  raise "it pressed anyway: #{answer.inspect}" if !answer.is_a?(String)
+  raise "it does not say where the switch is: #{answer}" if
+    !answer.include?("settings")
+  # And with no consent at all it is the consent that is named.
+  TitanPrefs.source = FakePrefsSource.new("allow_keys" => true)
+  raise "it pressed without consent" if !EltenKeys.press("down").is_a?(String)
+end
+
+check("with both switches, the key really reaches Elten's own frame") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true,
+                                          "allow_keys" => true)
+  raise "not allowed" if !EltenKeys.allowed?
+  $setkeys = nil
+  pumping = true
+  pump = Thread.new { while pumping; EltenMain.pump; sleep 0.01; end }
+  begin
+    answer = EltenKeys.press("ctrl+s")
+    raise "it refused: #{answer.inspect}" if !answer.is_a?(Hash) || answer["error"]
+    raise "it did not say what: #{answer.inspect}" if answer["pressed"] != ["ctrl+s"]
+    # `$setkeys` is what `key_update` drains into that frame's synthetic
+    # keys - Elten's own way in, the one its NVDA bridge uses.
+    raise "nothing reached the frame: #{$setkeys.inspect}" if
+      $setkeys != [0x11, 0x53]
+    # A second press APPENDS: the frame is drained by Elten, not by us, and
+    # two keys asked for in the same moment must not lose each other.
+    EltenKeys.press("down")
+    raise "the first was lost: #{$setkeys.inspect}" if
+      $setkeys != [0x11, 0x53, 0x28]
+  ensure
+    pumping = false
+    pump.join(1.0)
+    $setkeys = nil
+  end
+end
+
+check("a hundred keys at once is refused, because that is typing") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true,
+                                          "allow_keys" => true)
+  answer = EltenKeys.press((["down"] * 20).join(","))
+  raise "it took them all: #{answer.inspect}" if !answer.is_a?(Hash) ||
+    answer["error"].to_s == ""
+  raise "no key at all is a refusal too" if
+    EltenKeys.press("")["error"].to_s == ""
+end
+
+# --- asking the real Elten what its API is -------------------------------
+check("the real Elten answers what a name IS, so a port need not guess") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  # A bare function: this is the question that would have caught `player`.
+  answer = EltenApi.describe("puts")
+  raise "not answered: #{answer.inspect}" if !answer.is_a?(Hash)
+  raise "a function Ruby has was called missing" if answer["defined"] != true
+  raise "a name nothing has was called present" if
+    EltenApi.describe("no_such_helper_anywhere")["defined"] != false
+end
+
+check("a class answers what it is and what it takes") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  answer = EltenApi.describe("ListBox")
+  raise "the class was not found: #{answer.inspect}" if answer["defined"] != true
+  raise "not reported as a class: #{answer.inspect}" if answer["kind"] != "class"
+  raise "it lists no methods" if !answer["methods"].is_a?(Array) ||
+    answer["methods"].empty?
+  # And ONE method, with its parameters - which is the shape a signature
+  # actually is: positional, optional and keyword are three different
+  # things, and getting one wrong is an ArgumentError in somebody's program.
+  one = EltenApi.describe("ListBox#focus")
+  raise "the method was not found: #{one.inspect}" if one["defined"] != true
+  raise "no parameters: #{one.inspect}" if !one["parameters"].is_a?(Array)
+  raise "no source: #{one.inspect}" if one["source"].to_s == ""
+end
+
+check("the API is Elten's data too, and is refused unasked") do
+  TitanPrefs.source = FakePrefsSource.new
+  raise "it answered unasked" if !EltenApi.describe("player").is_a?(String)
 end
 
 check("the Titan Script reference is readable from the bridge") do

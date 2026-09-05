@@ -287,6 +287,34 @@ a hang.
 All three check the consent for themselves, and a screen is as much Elten's
 data as a notification is.
 
+## Pressing a key in Elten
+
+The one thing here that DRIVES Elten rather than reading it, and the reason
+it is behind a switch of its own: Enter in a messenger sends the message.
+Agreeing to SHARE Elten's data is not agreeing to have Elten driven, so they
+are two questions and this one **starts as no** - Settings -> TCE bridge ->
+"Let TCE press keys in Elten". A refusal names the switch rather than reading
+as "it did not work".
+
+**Elten has its own way in and this uses it.** `key_update` builds each
+frame's keyboard from the hardware, from NVDA's gestures, and from
+`$setkeys` - virtual key codes that count as pressed for exactly one frame
+(`KeyboardState.update(synthetic_keys:)`). That is how Elten's own NVDA
+bridge presses a key, so a key put there is indistinguishable from one the
+user pressed: `key_pressed?` answers true for that frame and `key_held?`
+with it, which is what a shortcut asks. It follows that it has to happen on
+Elten's thread - `key_update` drains the global and clears it in the same
+breath - so it goes through `EltenMain` like everything else that touches
+the screen, and it APPENDS, because the frame is drained by Elten and two
+keys asked for in the same moment must not lose each other.
+
+`"down"`, `"enter"`, `"ctrl+s"`, `"shift+tab"`, a letter or a digit; several
+separated by commas are pressed in order, at most eight - a caller with a
+hundred keys is typing, and a hundred keys in one frame is a hundred keys
+held down at once. Titan marks it `confirm` and the assistant's tool always
+confirms; its description says what Enter does in a messenger, because a
+model that does not know will press Enter.
+
 ## Asked before Elten's data leaves Elten
 
 Everything else here carries TITAN into Elten and needs nobody's permission

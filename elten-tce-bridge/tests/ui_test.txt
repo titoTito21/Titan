@@ -64,6 +64,13 @@ PASS nobody waits for ever for a tick that is not coming
 PASS Elten's screen is read as its controls, with the focused one marked
 PASS the screen is Elten's data, and is refused unasked
 PASS with permission, Titan gets Elten's screen through the bus
+PASS a key is the code Windows calls it, and a combination is all of them
+PASS pressing keys is a SECOND question, and starts as no
+PASS with both switches, the key really reaches Elten's own frame
+PASS a hundred keys at once is refused, because that is typing
+PASS the real Elten answers what a name IS, so a port need not guess
+PASS a class answers what it is and what it takes
+PASS the API is Elten's data too, and is refused unasked
 PASS the Titan Script reference is readable from the bridge
      page: The Titan Script language
 PASS Cling lists Klango applications and starts THE ONE THAT WAS CHOSEN

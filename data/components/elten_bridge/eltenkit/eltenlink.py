@@ -36,6 +36,7 @@ dying on `NoMethodError`.
 """
 
 import io
+import json
 import os
 import threading
 
@@ -550,3 +551,336 @@ def call(namespace, method, arguments):
         raise EltenUnavailable(
             'this Titan\'s EltenLink client has no %s' % name)
     return handler(*arguments)
+
+
+# --------------------------------------------------------------------------- #
+# Live sessions
+#
+# EltenLink's own realtime layer for applications: a session with a capacity,
+# participants who are invited into it, and JSON packets between them. It is
+# what the ELTEN Game Room is - without it that application raises "ELTEN Game
+# Room requires the LiveSessions API" before its first screen.
+#
+# Every call below is one of `EltenLink::Apps`' own, signed with the session
+# the user already has, so an application still never sees a credential and
+# still cannot choose the account. What it CAN now do is play against
+# somebody.
+#
+# The envelopes come back a different way from everywhere else here. Elten
+# does not poll a session: `GET /api/v1/system/realtime-state` is one long
+# poll carrying everything that has happened - notifications, signals, and
+# `live_sessions` rows - and Elten's notification service hands the last of
+# those to `LiveSessions.receive`. So this keeps that poll on a thread of its
+# own and the application drains what has arrived, which is what makes a turn
+# arrive in the tens of milliseconds rather than at the next tick of a
+# request the game had to make itself.
+# --------------------------------------------------------------------------- #
+def _live_path(session_id):
+    return '/api/v1/apps/live-sessions/%s' % _escape(session_id)
+
+
+def live_create(appid, instance_id, metadata=None, participant_metadata=None,
+                capacity=2):
+    answered, value = via_elten('live_create', appid=appid,
+                                instance_id=instance_id,
+                                metadata=metadata or {},
+                                participant_metadata=participant_metadata or {},
+                                capacity=int(capacity or 2))
+    if answered:
+        return value
+    return _api('POST', '/api/v1/apps/live-sessions', body={
+        'appid': appid, 'instance_id': instance_id,
+        'metadata': metadata or {},
+        'participant_metadata': participant_metadata or {},
+        'capacity': int(capacity or 2)})
+
+
+def live_invite(session_id, participant_id, user, metadata=None):
+    answered, value = via_elten('live_invite', session_id=session_id,
+                                participant_id=participant_id, user=user,
+                                metadata=metadata or {})
+    if answered:
+        return value
+    return _api('POST', '%s/invitations' % _live_path(session_id), body={
+        'participant_id': participant_id, 'user': str(user or ''),
+        'metadata': metadata or {}})
+
+
+def live_accept(session_id, appid, instance_id, participant_metadata=None):
+    answered, value = via_elten(
+        'live_accept', session_id=session_id, appid=appid,
+        instance_id=instance_id,
+        participant_metadata=participant_metadata or {})
+    if answered:
+        return value
+    return _api('POST', '%s/accept' % _live_path(session_id), body={
+        'appid': appid, 'instance_id': instance_id,
+        'participant_metadata': participant_metadata or {}})
+
+
+def live_reject(session_id, appid):
+    answered, _value = via_elten('live_reject', session_id=session_id,
+                                 appid=appid)
+    if answered:
+        return True
+    _api('POST', '%s/reject' % _live_path(session_id), body={'appid': appid})
+    return True
+
+
+def live_send(session_id, participant_id, packet, message_id):
+    answered, value = via_elten('live_send', session_id=session_id,
+                                participant_id=participant_id, packet=packet,
+                                message_id=message_id)
+    if answered:
+        return value
+    return _api('POST', '%s/messages' % _live_path(session_id), body={
+        'participant_id': participant_id, 'message_id': message_id,
+        'packet': packet})
+
+
+def live_leave(session_id, participant_id):
+    answered, _value = via_elten('live_leave', session_id=session_id,
+                                 participant_id=participant_id)
+    if answered:
+        return True
+    _api('POST', '%s/leave' % _live_path(session_id),
+         body={'participant_id': participant_id})
+    return True
+
+
+def live_close(session_id, participant_id):
+    answered, _value = via_elten('live_close', session_id=session_id,
+                                 participant_id=participant_id)
+    if answered:
+        return True
+    _api('POST', '%s/close' % _live_path(session_id),
+         body={'participant_id': participant_id})
+    return True
+
+
+def signal_send(appid, user, packet):
+    """`Program#signal` - how two copies of one application tell each other
+    something through EltenLink. The Game Room announces a new table with
+    one, so everybody else's lobby learns about it at once instead of at
+    their next poll."""
+    answered, _value = via_elten('signal', appid=appid, user=user,
+                                 packet=packet)
+    if answered:
+        return True
+    _api('POST', '/api/v1/apps/signals',
+         body={'appid': appid, 'user': str(user or ''), 'packet': packet})
+    return True
+
+
+def live_control(appid, instance_id, sessions):
+    """The lease. A session the client stops claiming is closed by the
+    server, which is what stops a game left open by a crash from sitting
+    there for ever - so this is sent every few seconds while one is open."""
+    answered, value = via_elten('live_control', appid=appid,
+                                instance_id=instance_id,
+                                sessions=list(sessions or []))
+    if answered:
+        return value
+    return _api('POST', '/api/v1/apps/live-sessions/control', body={
+        'appid': appid, 'instance_id': instance_id,
+        'sessions': list(sessions or [])})
+
+
+class _LivePoller(object):
+    """The one long poll every live session is fed from.
+
+    `GET /api/v1/system/realtime-state` is Elten's own: one request that
+    waits for something to happen and answers with everything that has -
+    notifications, signals, and the `live_sessions` envelopes. Elten's
+    notification service runs it and hands the last of those to
+    `LiveSessions.receive`; this runs it on a thread of its own and the
+    application drains what has arrived.
+
+    A thread rather than a call per tick, because the point of a long poll
+    is to be waiting when the packet arrives: asked once a second instead,
+    a turn in a two-player game would take up to a second to show up, and
+    asked once a frame it would be sixty requests a second.
+    """
+
+    #: How long the server may hold the request. Elten uses five seconds.
+    WAIT_MS = 5000
+
+    #: A poll that fails is retried, but not in a tight loop: EltenLink
+    #: being down must not become a request storm.
+    RETRY_SECONDS = 3.0
+
+    def __init__(self):
+        import threading
+        self._rows = []
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = None
+        self._cursor = ''
+        self._lasttime = ''
+        self.error = ''
+
+    def start(self):
+        import threading
+        if self._thread is not None and self._thread.is_alive():
+            return True
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name='EltenLivePoll')
+        self._thread.start()
+        return True
+
+    def stop(self):
+        self._stop.set()
+
+    def drain(self, limit=200):
+        """Everything that has arrived since the last ask."""
+        with self._lock:
+            rows, self._rows = self._rows[:limit], self._rows[limit:]
+        return rows
+
+    def _run(self):
+        import time
+        while not self._stop.is_set():
+            try:
+                self._once()
+            except Exception as error:                 # noqa: BLE001
+                self.error = '%s: %s' % (type(error).__name__, error)
+                if self._stop.wait(self.RETRY_SECONDS):
+                    return
+
+    def _once(self):
+        import requests
+        name, token = session()
+        params = {'name': name, 'token': token, 'shown': 1,
+                  'stream_capability': 1, 'wait_ms': self.WAIT_MS}
+        if self._cursor:
+            params['realtime_cursor'] = self._cursor
+        if self._lasttime:
+            params['lasttime'] = self._lasttime
+        answer = requests.get('%s/api/v1/system/realtime-state' % API_BASE_URL,
+                              params=params,
+                              timeout=(API_TIMEOUT, self.WAIT_MS / 1000.0 + 10))
+        if answer.status_code in (401, 403):
+            forget_session()
+            return
+        payload = answer.json()
+        data = payload.get('data') if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            return
+        self.error = ''
+        cursor = str(data.get('realtime_cursor') or '')
+        if cursor:
+            self._cursor = cursor
+        stamp = str(data.get('time') or '')
+        if stamp:
+            self._lasttime = stamp
+        rows = data.get('live_sessions')
+        if isinstance(rows, list) and rows:
+            with self._lock:
+                self._rows.extend(row for row in rows if isinstance(row, dict))
+                # A game nobody is draining must not grow without bound.
+                del self._rows[:-500]
+
+
+_poller = None
+
+
+def live_poll(limit=200):
+    """The envelopes that have arrived, and start listening if nothing is.
+
+    **Elten first, and then nothing else.** Its own notification service is
+    already receiving them for this account; running a second poll beside it
+    is two clients dividing one conversation between them, which is exactly
+    how a table created here would never be heard of over there.
+    """
+    global _poller
+    answered, value = via_elten('envelopes', limit=limit)
+    if answered:
+        # Elten is doing the listening, so ours must not.
+        if _poller is not None:
+            _poller.stop()
+        rows = (value or {}).get('envelopes')
+        return {'envelopes': rows if isinstance(rows, list) else [],
+                'error': '', 'via': 'elten'}
+    if _poller is None:
+        _poller = _LivePoller()
+    _poller.start()
+    return {'envelopes': _poller.drain(limit), 'error': _poller.error}
+
+
+def live_stop():
+    if _poller is not None:
+        _poller.stop()
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# Elten's own connection, when Elten is open
+#
+# Everything above signs its own requests with the EltenLink session Titan
+# holds. That is right for anything private to one machine - a game's rows, a
+# scoreboard - and wrong for playing WITH somebody.
+#
+# A live session is a conversation between two clients on one server, and the
+# envelopes for it arrive on ONE long poll per account: the one Elten's own
+# notification service is already running. A second client on the same account
+# is a second poll, and each packet goes to whichever asked - so an
+# application in Titan could create a table that the Elten it is meant to be
+# played against would never hear about.
+#
+# So when Elten is open with the TCE bridge in it, that connection is
+# borrowed: Elten makes the call, with its own client and its own realtime
+# stream, and hands over the envelopes it has already received. One client on
+# the account, the authoritative one - which is what makes an Elten
+# application running inside Titan playable against people using Elten.
+#
+# It falls back to Titan's own session the moment Elten is not there, so an
+# application still works on a machine that has never had Elten open.
+# --------------------------------------------------------------------------- #
+#: The add-on id the TCE bridge joins Titan's Action Bus with.
+ELTEN_CLIENT = 'elten_tce_bridge'
+
+#: Asking Elten is a round trip to another process and then to its own
+#: thread. Long enough for a network call it makes on our behalf.
+VIA_TIMEOUT = 25.0
+
+
+def via_elten_available():
+    """Whether the running Elten can be asked. Never raises."""
+    try:
+        from src.titan_core.actions import bus
+        return bus.get_peer(ELTEN_CLIENT) is not None
+    except Exception:
+        return False
+
+
+def via_elten(what, **args):
+    """One call on Elten's own connection. (answered, value).
+
+    `answered` False means Elten is not there or would not do it, and every
+    caller then falls back to Titan's own session rather than failing - the
+    port has to work on a machine that has never had Elten open.
+    """
+    try:
+        from src.titan_core.actions import bus
+    except Exception:
+        return False, None
+    if bus.get_peer(ELTEN_CLIENT) is None:
+        return False, None
+    payload = dict(args)
+    payload['do'] = what
+    ok, result = bus.invoke(ELTEN_CLIENT, 'eltenlink', payload,
+                            timeout=VIA_TIMEOUT)
+    if not ok:
+        return False, None
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except ValueError:
+            # A sentence rather than a shape is the bridge refusing -
+            # permission not given, most likely - and that is an answer.
+            return True, {'error': result}
+    if isinstance(result, dict) and result.get('error'):
+        _note("Elten refused %s: %s" % (what, result['error']))
+        return False, None
+    return True, result

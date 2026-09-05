@@ -40,6 +40,21 @@ class TitanBus
                   "them.",
     "run_program" => "Open one of Elten's own programs, by name. It appears "\
                      "in Elten, in front of whoever is sitting there.",
+    "press_key" => "Press a key in Elten, as if the person sitting there "\
+                   "had pressed it - 'down', 'enter', 'ctrl+s'. Off by "\
+                   "default in the bridge's own settings.",
+    "keys_allowed" => "Whether Elten is letting TCE press keys in it.",
+    "eltenlink" => "Elten's OWN connection to EltenLink, lent to the "\
+                   "Elten API port in Titan: live sessions, signals, and "\
+                   "the envelopes Elten's own service has already "\
+                   "received. One client on the account, the "\
+                   "authoritative one - which is what makes an Elten "\
+                   "application running in Titan playable against people "\
+                   "using Elten.",
+    "api" => "What the REAL Elten's API is for one name: whether it "\
+             "exists, what arguments it takes and where it is written. "\
+             "'player', 'ListBox', 'ListBox#set_text'. This is what the "\
+             "Elten API port in Titan is checked against.",
   }.freeze
   RECONNECT_SECONDS = 3.0
   # An idle probe, so "is Titan still running?" is answered by having asked.

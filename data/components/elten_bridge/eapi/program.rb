@@ -68,7 +68,17 @@ class Program
     # its own and takes its own arguments - see `boot.rb`.
     attr_writer :manifest
 
+    # **A subclass has to see it.** `@manifest` here is a class-level
+    # instance variable, so `Program.manifest = ...` - which is what
+    # `boot.rb` does before it constructs anything - set it on `Program`
+    # and `ProgramYoutube.manifest` answered an empty hash. Everything an
+    # application asks about ITSELF goes through this: `app_uuid`,
+    # `app_name`, `app_version`, and now the live-session endpoint, which
+    # needs the uuid and refuses without it.
     def manifest
+      return @manifest if @manifest
+      return Program.manifest if self != Program
+
       @manifest ||= {}
     end
   end
@@ -121,6 +131,7 @@ class Program
       Log.error("#{self.class}#close raised: #{error.class}: #{error.message}")
     end
     close_sound_pool
+    close_live_sessions if respond_to?(:close_live_sessions)
     registry.close_all
   end
 

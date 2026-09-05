@@ -1040,3 +1040,132 @@ class SoundPool
     [value.to_i, 1].max
   end
 end
+
+
+# --------------------------------------------------------------------------
+# The rest of Elten's top-level helpers
+#
+# Elten defines a handful of bare functions every application may call -
+# `src/eapi/core/base.rb` and `src/eapi/common/*.rb` - and a name that is
+# there and not here is a `NoMethodError` inside somebody else's program,
+# usually inside their own `rescue`, where it becomes a feature quietly not
+# working. `tests/check_elten_helpers.py` reads Elten's own sources and the
+# installed applications and fails when one of these goes missing again.
+# --------------------------------------------------------------------------
+module Kernel
+  # `delay(seconds)` - wait, WITHOUT stopping the interface. Elten pumps its
+  # own loop while the time passes, which is why an application uses this
+  # rather than `sleep`: a sleeping Elten answers no keys. `break_on_escape`
+  # and the block are Elten's own two ways of cutting it short.
+  def delay(time = 0, break_on_escape = false, &break_proc)
+    deadline = Time.now.to_f + time.to_f
+    while Time.now.to_f < deadline
+      loop_update
+      if (break_on_escape && key_pressed?(:key_escape)) ||
+         (break_proc != nil && break_proc.call == true)
+        loop_update
+        return true
+      end
+    end
+    false
+  end
+
+  # `delay_precise(seconds)` - the same, but the last stretch is really
+  # slept rather than pumped, so a caller timing something gets the length
+  # it asked for instead of the length of a whole frame.
+  def delay_precise(time)
+    finish = Time.now.to_f + time.to_f
+    tick = 0.01
+    loop_update while finish - Time.now.to_f > tick * 2
+    sleep((finish - Time.now.to_f) * 0.8) while finish - Time.now.to_f > 0
+    time
+  end
+
+  # `format_date(time, justdate=false, secs=true)` - Elten's own spelling of
+  # a date, character for character: 2026-09-05 17:40:12.
+  def format_date(date, justdate = false, secs = true)
+    return '' if !date.is_a?(Time)
+
+    text = format('%04d-%02d-%02d', date.year, date.month, date.day)
+    if !justdate
+      text += format(' %02d:%02d', date.hour, date.min)
+      text += format(':%02d', date.sec) if secs
+    end
+    text
+  end
+
+  # `developer_mode?` - whether Elten is running with its developer tools
+  # on. Elten's own reads a global; here it is off unless somebody sets
+  # that global, because the tools it gates (the console, the debugger,
+  # loading a translation by hand) are Elten's own and not this port's.
+  # An application asking is `mcp`, which calls it through `super`.
+  def developer_mode?
+    $developer_mode == true
+  end
+
+  # `getsize(path)` - how big a file is, in bytes. A folder answers what
+  # Elten's own answers for one, which is not a walk of it.
+  def getsize(location, _update = true)
+    return 0 if location.to_s == ''
+    return [File.size(location), 0].max if File.file?(location)
+    return Dir.children(location).size if File.directory?(location)
+
+    0
+  rescue Exception
+    0
+  end
+
+  # `p_(context, text)` and `np_` - gettext with a CONTEXT, which is how
+  # Elten tells apart a word translated differently in two places. A `.mo`
+  # keys one as the context, U+0004 and the text; a catalogue with no
+  # contexts in it therefore answers nothing, and the text itself is the
+  # right fallback - which is exactly what Elten's own does.
+  def p_(context, src)
+    joined = context.to_s + "\u0004" + src.to_s
+    translated = _(joined)
+    translated == joined ? src.to_s : translated
+  end
+
+  def np_(context, src, *params)
+    joined = context.to_s + "\u0004" + src.to_s
+    translated = n_(joined, *params)
+    translated == joined ? n_(src, *params) : translated
+  end
+
+  # `platform_open_url(url)` - a link, in the browser the user has open.
+  def platform_open_url(url)
+    !!EltenBridge.call('open_url', { 'url' => url.to_s })
+  rescue EltenBridge::Closed
+    false
+  rescue Exception
+    false
+  end
+
+  # `insert_scene(scene)` - in Elten a scene is a screen and this is how one
+  # opens another. There are no scenes here: an application's screens are
+  # Titan windows and its own object is what it opened them from, so the
+  # nearest true thing is to RUN it - `main` is what Elten's own loop would
+  # have called - and to come back when it is finished, which is what the
+  # caller does anyway.
+  #
+  # An object with no `main` is not a screen, and saying so beats opening
+  # nothing in silence.
+  def insert_scene(scene, _must = false, return_to_main: false)
+    return false if scene.nil?
+
+    if scene.respond_to?(:main)
+      scene.main
+      return true
+    end
+    if scene.respond_to?(:program_main)
+      scene.program_main
+      return true
+    end
+
+    Log.warning("insert_scene was given #{scene.class}, which is not a screen")
+    false
+  rescue Exception => e
+    Log.warning("insert_scene: #{e.class}: #{e.message}")
+    false
+  end
+end

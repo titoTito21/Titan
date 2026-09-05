@@ -19,6 +19,7 @@ module TitanPrefs
     "confirm_launch" => false,
     "tce_sounds" => true,
     "elten_notifications" => true,
+    "allow_keys" => false,
   }.freeze
 
   class << self
@@ -59,6 +60,14 @@ module TitanPrefs
 
     def elten_notifications?
       get("elten_notifications") == true
+    end
+
+    # **Off by default, and deliberately not part of the consent.** Letting
+    # TCE READ Elten and letting it PRESS KEYS in Elten are different
+    # questions - Enter in a messenger sends the message - so they are asked
+    # separately and this one starts as no.
+    def allow_keys?
+      get("allow_keys") == true
     end
   end
 end

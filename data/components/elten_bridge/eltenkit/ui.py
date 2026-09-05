@@ -449,10 +449,24 @@ class WxUI(object):
             widgets.append(widget)
             sizer.Add(widget.window, flag=wx.EXPAND | wx.LEFT | wx.RIGHT
                       | wx.BOTTOM, border=8)
+            # **A control hidden BEFORE the window existed is still
+            # hidden.** `Form#hide` pushes a change and a change cannot be
+            # pushed at a window that is not there yet, so the Game Room -
+            # which hides its Select and Back buttons the moment it builds
+            # the screen and drives them with Enter and Escape instead -
+            # had both of them on the screen: two buttons nobody put
+            # there, in an API that has no such thing.
+            if spec.get('hidden'):
+                widget.window.Show(False)
 
         panel.SetSizer(sizer)
         panel.Layout()
-        self._forms[form_id] = _Form(frame, panel, widgets)
+        form = _Form(frame, panel, widgets)
+        # Which control Enter and Escape belong to when the keyboard is
+        # not on a button. Escape already travels as its own event; this
+        # is the other half.
+        form.accept = accept_index if isinstance(accept_index, int) else None
+        self._forms[form_id] = form
 
         # **The keyboard has to land ON something.** A wx dialog focuses
         # its first control by itself; a frame does not, so a form opened
@@ -534,6 +548,23 @@ class WxUI(object):
                     application.send_event('control', form=form_id,
                                            control=focused, name='press')
                     return
+                # **Enter on anything that is not a button presses the
+                # form's accept button**, which is Elten's own rule
+                # (`Form#update`: `!@fields[@index].is_a?(Button)`). It is
+                # how a screen made of a list and two HIDDEN buttons works
+                # at all - the Game Room chooses a game with Enter on the
+                # list - and without it nothing happened when you did.
+                # A list reports its own `select` as well and the Ruby
+                # side presses the button from that, so this is for the
+                # controls that report nothing: a field, a tick box, a
+                # line of text.
+                if key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) \
+                        and self._forms[form_id].accept is not None \
+                        and focused is not None \
+                        and widgets[focused].accepts_enter(event):
+                    application.send_event('control', form=form_id,
+                                           control=None, name='accept')
+                    return
                 name = _navigation_key(key)
                 if name and focused is not None:
                     widget = widgets[focused]
@@ -543,19 +574,22 @@ class WxUI(object):
                     if widget.kind == 'editbox':
                         event.Skip()
                         return
-                    # A ListBox owns its own movement, and that is more
-                    # than Up and Down: Home, End and the page keys are
-                    # how somebody gets to the ends of a folder of three
-                    # thousand files. Taking them left a list that could
-                    # only be walked one row at a time.
-                    if widget.kind == 'listbox' and name in (
-                            'key_up', 'key_down', 'key_home', 'key_end',
-                            'key_pageup', 'key_pagedown'):
-                        event.Skip()
-                        return
+                    # **The application is told, AND the control still gets
+                    # it.** Both are true in Elten - its controls see every
+                    # key - and here only one of them was: a key reported
+                    # to the application was consumed, so Home, End, the
+                    # page keys and every LETTER never reached the native
+                    # control. A list of three thousand files could be
+                    # walked one row at a time and not jumped into by its
+                    # first letter, which is the way somebody who cannot
+                    # see the list finds anything in it.
                     application.send_event('control', form=form_id,
                                            control=focused, name=name,
                                            shift=event.ShiftDown())
+                    if widget.owns_key(name):
+                        self._stream(application, event)
+                        event.Skip()
+                        return
                     # **and it still goes on the key stream.** A control
                     # event tells the CONTROL what was pressed; a
                     # `Runner` asks `key_pressed?`, which is a different
@@ -901,9 +935,19 @@ class WxUI(object):
                             | wx.TE_DONTWRAP * 0)
         field.SetName(header or self.title)
         sizer.Add(field, proportion=1, flag=wx.EXPAND | wx.ALL, border=8)
-        buttons = dialog.CreateStdDialogButtonSizer(wx.OK)
-        if buttons is not None:
-            sizer.Add(buttons, flag=wx.EXPAND | wx.ALL, border=8)
+        # **No Ok button.** Elten's `display_text` is a page to READ and
+        # has none - it is `input_text` read-only and multiline, left with
+        # Escape - so a button under it is a control that is not in the
+        # API, one more thing to tab past on the way out of a page of
+        # rules. Enter leaves it as well, because a reader who has finished
+        # reading presses one or the other.
+        def on_char(event):
+            if event.GetKeyCode() in (wx.WXK_ESCAPE, wx.WXK_RETURN,
+                                      wx.WXK_NUMPAD_ENTER):
+                dialog.EndModal(wx.ID_OK)
+                return
+            event.Skip()
+        field.Bind(wx.EVT_CHAR_HOOK, on_char)
         dialog.SetSizer(sizer)
         _dress(dialog)
         field.SetFocus()
@@ -964,12 +1008,15 @@ class WxUI(object):
 
 
 class _Form(object):
-    __slots__ = ('frame', 'panel', 'widgets')
+    __slots__ = ('frame', 'panel', 'widgets', 'accept')
 
     def __init__(self, frame, panel, widgets):
         self.frame = frame
         self.panel = panel
         self.widgets = widgets
+        #: Which control Enter presses when the keyboard is on something
+        #: that is not a button. Elten's `Form#update` does exactly this.
+        self.accept = None
 
 
 def _clear(frame):
@@ -1082,6 +1129,56 @@ class _ChoiceDialog(wx.Dialog):
 
 class _Widget(object):
     """One control on a form: the wx object, and how to change it later."""
+
+    #: The keys a control NAVIGATES with, and which must therefore reach
+    #: it however loudly the application is also told about them. A native
+    #: list does its own moving, its own paging and its own first-letter
+    #: jumping, and a wx control that never sees the key does none of it.
+    #: The three that hold rows all navigate the same way, because they are
+    #: all a `SysListView32` or a list box underneath.
+    LIST_KEYS = ('key_up', 'key_down', 'key_home', 'key_end',
+                 'key_pageup', 'key_pagedown', 'key_space')
+    NAVIGATES = {
+        'listbox': LIST_KEYS + ('letters',),
+        'tablebox': LIST_KEYS + ('letters',),
+        'choicelist': ('key_up', 'key_down', 'key_left', 'key_right'),
+        'filestree': LIST_KEYS + ('letters',),
+        # A grid moves its cursor in Ruby and echoes the position back, so
+        # letting wx move it as well is two squares per key. Its own
+        # `_echo` note says so.
+        'gridbox': (),
+        # A wx.CheckBox toggles on Space, so a Space consumed on the way
+        # to the application is a box that cannot be ticked.
+        'checkbox': ('key_space',),
+    }
+
+    #: The kinds that report their own `select` on Enter, from which the
+    #: Ruby side presses the accept button. Sending an `accept` for them
+    #: too would press it twice.
+    REPORTS_SELECT = ('listbox', 'tablebox', 'filestree', 'gridbox',
+                      'choicelist')
+
+    def accepts_enter(self, event):
+        """Whether Enter here should press the form's accept button.
+
+        Elten's rule is `!@fields[@index].is_a?(Button)` unless the field
+        processes Enter itself - and its `EditBox#key_processed` says a
+        ONE-LINE field does not. A multi-line one keeps Enter, where it is
+        a new line, unless Control is held.
+        """
+        if self.kind in ('button',) or self.kind in self.REPORTS_SELECT:
+            return False
+        if self.kind == 'editbox' and getattr(self, 'multiline', False):
+            return bool(event.ControlDown())
+        return True
+
+    def owns_key(self, name):
+        """Whether this control navigates with that key, and so must see
+        it. A letter is first-letter jumping, which every list has."""
+        keys = self.NAVIGATES.get(self.kind, ())
+        if name in keys:
+            return True
+        return 'letters' in keys and len(name) == 5 and name.startswith('key_')
 
     def __init__(self, kind, window):
         self.kind = kind
@@ -1235,6 +1332,15 @@ class _EditBoxWidget(_Widget):
                   lambda event: report('changed', text=event.GetString()))
         _Widget.__init__(self, 'editbox', outer)
         self.field = field
+        #: **A ONE-LINE field does not own Enter.** Elten's own
+        #: `EditBox#key_processed`: `return false if k == :enter &&
+        #: (main modifier held || (flags & MultiLine) == 0)` - false means
+        #: "I did not deal with it", so the form's accept button is
+        #: pressed. Typing 99 into the Game Room's Rounds field and
+        #: pressing Enter did nothing at all, because the field kept the
+        #: key and had nothing to do with it. A multi-line field keeps it
+        #: - there Enter is a new line - unless Control is held.
+        self.multiline = bool(spec.get('multiline'))
 
     def owns(self, focused):
         return focused is self.field
@@ -1954,7 +2060,36 @@ class _ChoiceListWidget(_Widget):
                 choice.SetSelection(max(0, min(index, len(options) - 1)))
 
 
+class _StaticWidget(_Widget):
+    """`Static` - a line of text on a form, and the keyboard can land on it.
+
+    Elten's `Static` is a `FormField` that SAYS its label when the keyboard
+    reaches it: an instruction at the top of a screen is not decoration for
+    somebody who cannot see the screen, it is the only way they are told
+    how the screen works. A `wx.StaticText` cannot be focused and a reader
+    cannot land on one, so this is Titan's own answer for exactly this -
+    the same one AI OCR's rebuilt forms use - a read-only text control,
+    focusable, named, with the reader's own cursor and Ctrl+C on it.
+    """
+
+    def __init__(self, panel, spec, report):
+        label = str(spec.get('label') or spec.get('text') or '')
+        field = wx.TextCtrl(panel, value=label,
+                            style=wx.TE_READONLY | wx.TE_MULTILINE
+                            | wx.BORDER_NONE)
+        field.SetMinSize((-1, 48))
+        _name(field, label)
+        _Widget.__init__(self, 'static', field)
+
+    def apply(self, changes):
+        if 'label' in changes or 'text' in changes:
+            label = str(changes.get('label', changes.get('text')) or '')
+            self.window.SetValue(label)
+            _name(self.window, label)
+
+
 _BUILDERS = {
+    'static': _StaticWidget,
     'choicelist': _ChoiceListWidget,
     'player': _PlayerWidget,
     'button': _ButtonWidget,

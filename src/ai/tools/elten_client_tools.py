@@ -51,6 +51,16 @@ def elten_client_run_program(name="", **_):
     return client.elten_client_run_program(name=name)
 
 
+def elten_client_press(keys="", **_):
+    """Press a key in Elten."""
+    return client.elten_client_press(keys=keys)
+
+
+def elten_client_api(name="", **_):
+    """What the real Elten's API is for one name."""
+    return client.elten_client_api(name=name)
+
+
 def get_elten_client_tools():
     from src.ai.agent_tools import _tool
     return [
@@ -87,4 +97,32 @@ def get_elten_client_tools():
                                    'description': "The program's name, as "
                                                   "Elten lists it."}},
               required=['name']),
+        _tool('elten_client_api',
+              "What the REAL Elten's API is for one name: whether it "
+              "exists, what arguments it takes and where it is written. "
+              "'player', 'ListBox', 'ListBox#set_text'. Use it when working "
+              "on the Elten API port in data/components/elten_bridge - it "
+              "asks the client the user actually has, rather than guessing "
+              "a signature from how an application calls it, which is how "
+              "every bug in that port has been made.",
+              elten_client_api,
+              properties={'name': {'type': 'string',
+                                   'description': "A function, a class, or "
+                                                  "Class#method."}},
+              required=['name']),
+        _tool('elten_client_press',
+              "Press a key in Elten, as the person sitting there would - "
+              "'down', 'enter', 'ctrl+s'; several separated by commas are "
+              "pressed in order. Use elten_client_screen first to see what "
+              "is there, and again afterwards to see what happened. It is "
+              "off by default in the bridge's settings, because pressing a "
+              "key in Elten is not the same as reading it: Enter in a "
+              "messenger sends the message.",
+              elten_client_press, risk='confirm', always_confirm=True,
+              properties={'keys': {'type': 'string',
+                                   'description': "The key, a combination "
+                                                  "like 'ctrl+s', or "
+                                                  "several separated by "
+                                                  "commas."}},
+              required=['keys']),
     ]

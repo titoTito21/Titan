@@ -1052,7 +1052,56 @@ require 'controls'
         source = ('c = ChoiceListBox.new([["", %s, 2]])\n'
                   'puts [c.value(0), c.choice_rows.first[:index]].inspect\n'
                   % '["a", "b", "c"]')
-        self.assertEqual(self.ask(source), '["c", 2]')
+        self.assertEqual(self.ask(source), '[2, 2]')
+
+    def test_a_choice_answers_the_INDEX_and_the_words_separately(self):
+        """`Row = Struct.new(:label, :options, :value)` and that `value`
+        is a NUMBER - `selected_option` is the one that answers the words.
+
+        Answering the text from `value` read perfectly and was wrong in
+        the one way that matters: MileByMile's setup does
+        `VARIANTS[fields[0].value(0)][0]`, so a String arrived where an
+        index belonged, `Array#[]` raised, and choosing "play against the
+        bot" never started a game.
+        """
+        source = ('c = ChoiceListBox.new([["", ["a", "b", "c"], 2]])\n'
+                  'puts [c.value(0), c.selected_option(0), c.values].inspect\n')
+        self.assertEqual(self.ask(source), '[2, "c", [2]]')
+
+    def test_set_value_takes_the_row_first_and_says_what_changed(self):
+        """Elten's is `set_value(row, value)` answering whether anything
+        moved. Ours took them the other way round and looked the value up
+        as TEXT, so setting a row by number set nothing at all."""
+        source = ('c = ChoiceListBox.new([["", ["a", "b", "c"], 0]])\n'
+                  'first = c.set_value(0, 2)\n'
+                  'again = c.set_value(0, 2)\n'
+                  'puts [first, again, c.value(0), c.selected_option(0)]'
+                  '.inspect\n')
+        self.assertEqual(self.ask(source), '[true, false, 2, "c"]')
+
+    def test_a_value_out_of_range_is_clamped_into_the_options(self):
+        """Elten's `normalize_value`. A row with no options at all answers
+        0, which is what an empty Row's value is over there."""
+        source = ('c = ChoiceListBox.new([["", ["a", "b"], 9], ["plain"]])\n'
+                  'puts [c.value(0), c.value(1)].inspect\n')
+        self.assertEqual(self.ask(source), '[1, 0]')
+
+    def test_set_options_replaces_ONE_row(self):
+        """Elten's is `set_options(row, options, value: 0)`. Ours replaced
+        every row, which is a different question from the one asked."""
+        source = ('c = ChoiceListBox.new([["one", ["a"]], ["two", ["b"]]])\n'
+                  'ok = c.set_options(1, ["x", "y"], value: 1)\n'
+                  'puts [ok, c.rows.size, c.selected_option(1), '
+                  'c.selected_option(0)].inspect\n')
+        self.assertEqual(self.ask(source), '[true, 2, "y", "a"]')
+
+    def test_append_takes_a_label_its_options_and_where_it_starts(self):
+        """`append(label, options, value: 0)`, answering which row it
+        became - Elten's three arguments, not one array."""
+        source = ('c = ChoiceListBox.new([["one", ["a"]]])\n'
+                  'at = c.append("two", ["x", "y"], value: 1)\n'
+                  'puts [at, c.value(at), c.selected_option(at)].inspect\n')
+        self.assertEqual(self.ask(source), '[1, 1, "y"]')
 
     def test_hide_means_hide_a_control_not_the_window(self):
         """Elten's `Form#show(index)` unhides a control. Titan's own "put
@@ -1146,6 +1195,7 @@ require 'audio'
 require 'media'
 require 'childproc'
 require 'eltenlink'
+require 'live_sessions'
 require 'eltenapi'
 require 'network'
 """
@@ -1166,6 +1216,543 @@ require 'network'
         self.assertEqual(answer.returncode, 0,
                          answer.stderr.decode('utf-8', 'replace'))
         return answer.stdout.decode('utf-8', 'replace').strip()
+
+
+class LiveSessionsAreEltensOwn(_RubyAsk):
+    """`EltenAPI::LiveSessions` - EltenLink's realtime sessions, which is
+    what a two-player game IS.
+
+    Without it the ELTEN Game Room raises "ELTEN Game Room requires the
+    LiveSessions API" before its first screen: `LiveSessionBackend.supported?`
+    asks `defined?(EltenAPI::LiveSessions::Endpoint)` and stops there.
+
+    The shapes here are Elten's exactly - an application is written against
+    them, and a difference is a bug in somebody else's program. What is
+    Titan's is only where the HTTP happens (one bridge op, signed with the
+    session Titan already holds) and how the envelopes arrive (drained from
+    a long poll on Titan's side rather than pushed by Elten's notification
+    service).
+    """
+
+    #: A `EltenBridge.call('live', ...)` that answers whatever the test put
+    #: in `$live`, and records what was asked.
+    LIVE = (
+        '$live = {}\n'
+        'module EltenBridge\n'
+        '  class << self\n'
+        '    alias_method :__call_before_live, :call\n'
+        '    def call(op, args = {})\n'
+        '      if op == "live"\n'
+        '        ($asked ||= []) << args\n'
+        '        answer = $live[args["do"]]\n'
+        '        return answer.is_a?(Proc) ? answer.call(args) : answer\n'
+        '      end\n'
+        '      __call_before_live(op, args)\n'
+        '    end\n'
+        '  end\n'
+        'end\n'
+        'APP = "ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"\n'
+        '$whoami = "tito"\n'
+        'module EltenAPI::LiveSessions\n'
+        '  def self.whoami; $whoami.to_s; end\n'
+        'end\n')
+
+    def test_a_signal_really_goes_out_now(self):
+        """`signal` answered false for as long as the port had no relay -
+        so the Game Room announced a new table to nobody, and every other
+        lobby learned about it at its next poll instead of at once. Elten's
+        own argument checks are kept, because an application relies on
+        them."""
+        source = ('$live = {}\n'
+                  'module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_signal, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      if op == "live"\n'
+                  '        ($asked ||= []) << args\n'
+                  '        return true\n'
+                  '      end\n'
+                  '      __before_signal(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => '
+                  '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"}\n'
+                  'p1 = Probe.new\n'
+                  'sent = p1.signal("dawid", {"table" => 7})\n'
+                  'bad = begin; p1.signal(7, {}); rescue ArgumentError; :refused; end\n'
+                  'worse = begin; p1.signal("a", Object.new); rescue ArgumentError; :refused; end\n'
+                  'puts [sent, $asked.first["do"], $asked.first["user"],\n'
+                  '      bad, worse].inspect\n')
+        self.assertEqual(self.ask(source),
+                         '[true, "signal", "dawid", :refused, :refused]')
+
+    def test_a_written_row_keeps_its_id_when_the_server_says_nothing(self):
+        """**They answer a ROW, and an application reads its id off it.**
+
+        `insert` took the remote answer whenever it was a Hash, so a server
+        that accepted and said nothing - an empty object, an older Titan, a
+        refusal shaped as one - replaced the local row and took its id with
+        it. `upsert`/`update`/`delete` did not write locally at all and
+        answered whatever the wire said, which with EltenLink unreachable
+        is nothing.
+
+        The Game Room reads the id of the table it just created and raises
+        "a synchronizer requires a positive table id" without one, so
+        creating a table did nothing whatever.
+        """
+        source = ('$live = {}\n'
+                  'module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_table, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      return {} if op == "elten_app"\n'
+                  '      __before_table(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => '
+                  '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"}\n'
+                  'p1 = Probe.new\n'
+                  't = p1.server_table("tables")\n'
+                  't.delete\n'
+                  'row = t.insert("name" => "mine")\n'
+                  'puts [row["id"].to_i.positive?, row["name"]].inspect\n')
+        self.assertEqual(self.ask(source), '[true, "mine"]')
+
+    def test_update_and_upsert_answer_a_row_with_the_server_unreachable(self):
+        source = ('module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_table, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      raise "EltenLink is not reachable" if op == "elten_app"\n'
+                  '      __before_table(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => '
+                  '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"}\n'
+                  'p1 = Probe.new\n'
+                  't = p1.server_table("tables2")\n'
+                  't.delete\n'
+                  'first = t.insert("name" => "mine", "players" => 1)\n'
+                  'touched = t.update(first["id"], "players" => 2)\n'
+                  'again = t.upsert("id" => first["id"], "players" => 3)\n'
+                  'puts [touched["id"] == first["id"], touched["players"],\n'
+                  '      again["players"], t.all.size].inspect\n')
+        self.assertEqual(self.ask(source), '[true, 2, 3, 1]')
+
+    def test_a_row_deleted_by_id_is_really_gone_from_this_machine(self):
+        source = ('module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_table, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      raise "nope" if op == "elten_app"\n'
+                  '      __before_table(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => '
+                  '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"}\n'
+                  'p1 = Probe.new\n'
+                  't = p1.server_table("tables3")\n'
+                  't.delete\n'
+                  'a = t.insert("name" => "a")\n'
+                  't.insert("name" => "b")\n'
+                  't.delete(a["id"])\n'
+                  'puts t.all.map { |r| r["name"] }.inspect\n')
+        self.assertEqual(self.ask(source), '["b"]')
+
+    def test_static_is_a_control_and_carries_its_words(self):
+        """**It was missing entirely**, and that is what "after choosing a
+        game nothing appears" was: the Game Room's options screen begins
+        with `Static.new(_("Choose game options using Tab and the arrow
+        keys..."))` and an uninitialized constant ended the screen before
+        it was built. The port's own settings dialog builds one too."""
+        source = ('s = Static.new("Choose game options")\n'
+                  's2 = Static.new("x")\n'
+                  's2.label = "y"\n'
+                  'puts [s.label, s.value, s2.label, s.to_spec[:kind]].inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            '["Choose game options", "Choose game options", "y", "static"]')
+
+    def test_rows_are_ticked_in_code_the_way_elten_ticks_them(self):
+        """An application does not tick a row by writing into an array - it
+        calls these, and they fire the events it may have bound. The Game
+        Room calls `select_multiselection_indices` for every
+        multiple-choice option, so a NoMethodError there ended the screen
+        before it was shown."""
+        source = ('l = ListBox.new(%w[a b c d], '
+                  'flags: ListBox::Flags::MultiSelection)\n'
+                  'seen = []\n'
+                  'l.on(:multiselection_selected) { |i| seen << [:on, i] }\n'
+                  'l.on(:multiselection_unselected) { |i| seen << [:off, i] }\n'
+                  'l.on(:multiselection_changed) { seen << :changed }\n'
+                  'first = l.select_multiselection_indices([0, 2])\n'
+                  'again = l.select_multiselection_indices([0])\n'
+                  'off = l.deselect_multiselection_indices([0])\n'
+                  'puts [first, again, off, l.multiselections, seen].inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            '[:changed, :unchanged, :changed, [2], '
+            '[[:on, [0]], [:on, [2]], :changed, [:off, [0]], :changed]]')
+
+    def test_a_limit_is_refused_rather_than_silently_obeyed(self):
+        """Elten answers `:limit` and says so out loud; a list that quietly
+        ticked the first two would be a form the user cannot correct."""
+        source = ('l = ListBox.new(%w[a b c], '
+                  'flags: ListBox::Flags::MultiSelection)\n'
+                  'l.limit = 2\n'
+                  'puts [l.select_multiselection_indices([0, 1, 2]), '
+                  'l.multiselections].inspect\n')
+        self.assertEqual(self.ask(source), '[:limit, []]')
+
+    def test_a_required_row_cannot_be_unticked(self):
+        source = ('l = ListBox.new(%w[a b c], '
+                  'flags: ListBox::Flags::MultiSelection)\n'
+                  'l.require_multiselection_indices([1])\n'
+                  'puts [l.multiselections, '
+                  'l.deselect_multiselection_indices([1]), '
+                  'l.multiselections].inspect\n')
+        self.assertEqual(self.ask(source), '[[1], :unchanged, [1]]')
+
+    def test_the_game_rooms_options_screen_builds(self):
+        """Every control that screen is made of, in the order it makes
+        them - a Static, a tick box, a single-choice list, a
+        multiple-choice list ticked from a bitmask, and a numeric field
+        with its text selected."""
+        source = ('controls = [Static.new("Choose game options")]\n'
+                  'controls << CheckBox.new("Ranked", checked: true)\n'
+                  'controls << ListBox.new(%w[short long], header: "Length", '
+                  'index: 1, quiet: true)\n'
+                  'multi = ListBox.new(%w[a b c], header: "Extras", index: 0,\n'
+                  '  flags: ListBox::Flags::MultiSelection, quiet: true)\n'
+                  'mask = 5\n'
+                  'multi.select_multiselection_indices('
+                  '(0...3).select { |i| (mask & (1 << i)) != 0 })\n'
+                  'controls << multi\n'
+                  'number = EditBox.new("Rounds", '
+                  'type: EditBox::Flags::Numbers, text: "3", quiet: true)\n'
+                  'number.select_all\n'
+                  'controls << number\n'
+                  'save = Button.new("Create table")\n'
+                  'cancel = Button.new("Cancel")\n'
+                  'form = Form.new(controls + [save, cancel], quiet: true)\n'
+                  'form.accept_button = save\n'
+                  'form.cancel_button = cancel\n'
+                  'puts [form.fields.size, multi.multiselections, '
+                  'controls[2].index].inspect\n')
+        self.assertEqual(self.ask(source), '[7, [0, 2], 1]')
+
+    def test_enter_on_a_list_presses_the_forms_accept_button(self):
+        """The Game Room's whole game-chooser is a list and two HIDDEN
+        buttons: `form.accept_button = select_button`, both hidden, and
+        Enter on the list is what picks a game. Without Elten's rule -
+        Enter on a field that is not a Button presses the accept button -
+        choosing a game did nothing at all."""
+        source = ('list = ListBox.new(["chess", "draughts"])\n'
+                  'select = Button.new("Select")\n'
+                  'back = Button.new("Back")\n'
+                  'form = Form.new([list, select, back])\n'
+                  'form.accept_button = select\n'
+                  'form.cancel_button = back\n'
+                  'pressed = []\n'
+                  'select.on(:press) { pressed << :select }\n'
+                  'back.on(:press) { pressed << :back }\n'
+                  'form.instance_variable_set(:@form_id, 1)\n'
+                  '[list, select, back].each_with_index '
+                  '{ |f, i| f.control_id = i }\n'
+                  'form.dispatch_event({"event" => "control", "form" => 1,\n'
+                  '                     "control" => 0, "name" => "select",\n'
+                  '                     "index" => 1})\n'
+                  'form.dispatch_event({"event" => "control", "form" => 1,\n'
+                  '                     "control" => nil, "name" => "escape"})\n'
+                  'puts pressed.inspect\n')
+        self.assertEqual(self.ask(source), '[:select, :back]')
+
+    def test_a_hidden_control_travels_in_the_spec(self):
+        """`hide` before the window exists has nowhere to push a change to,
+        so what it set has to go with the form when it is opened."""
+        source = ('b = Button.new("Select")\n'
+                  'f = Form.new([ListBox.new(["a"]), b])\n'
+                  'f.hide(b)\n'
+                  'sent = nil\n'
+                  'module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_open, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      $opened = args if op == "form_open"\n'
+                  '      __before_open(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'f.present\n'
+                  'controls = $opened["controls"]\n'
+                  'puts [controls[0][:hidden] || controls[0]["hidden"],\n'
+                  '      controls[1][:hidden] || controls[1]["hidden"],\n'
+                  '      $opened["accept"]].inspect\n')
+        self.assertEqual(self.ask(source), '[nil, true, nil]')
+
+    def test_a_subclass_sees_the_manifest_the_bridge_set(self):
+        """`@manifest` is a class-level instance variable, so
+        `Program.manifest = ...` - which is what `boot.rb` does before it
+        constructs anything - set it on `Program` and
+        `ProgramYoutube.manifest` answered an empty hash. Everything an
+        application asks about ITSELF goes through it, the live-session
+        endpoint included, and that one refuses without a uuid."""
+        source = (self.LIVE +
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => APP, "name" => "Probe"}\n'
+                  'p1 = Probe.new\n'
+                  'puts [Probe.manifest["id"], p1.app_uuid, '
+                  'p1.manifest["name"]].inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            '["ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae", '
+            '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae", "Probe"]')
+
+    def test_the_endpoint_is_there_for_the_check_that_gates_the_game(self):
+        """`LiveSessionBackend.supported?` is exactly this."""
+        source = ('puts [defined?(EltenAPI::LiveSessions::Endpoint) != nil, '
+                  'EltenAPI::LiveSessions::Endpoint != nil].inspect\n')
+        self.assertEqual(self.ask(source), '[true, true]')
+
+    def test_an_app_id_that_is_not_a_uuid_is_refused(self):
+        source = (self.LIVE +
+                  'begin\n'
+                  '  EltenAPI::LiveSessions::Endpoint.new(app_id: "nope")\n'
+                  '  puts "made"\n'
+                  'rescue ArgumentError\n'
+                  '  puts "refused"\n'
+                  'end\n')
+        self.assertEqual(self.ask(source), 'refused')
+
+    def test_nobody_signed_in_is_refused_in_a_sentence(self):
+        source = (self.LIVE +
+                  '$whoami = ""\n'
+                  'begin\n'
+                  '  EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  '  puts "made"\n'
+                  'rescue EltenAPI::LiveSessions::Error => e\n'
+                  '  puts e.message\n'
+                  'end\n')
+        self.assertIn('not logged in', self.ask(source))
+
+    def test_creating_a_session_asks_for_one_and_keeps_it(self):
+        source = (self.LIVE +
+                  '$live["create"] = {"id" => "S1", "participant_id" => "p1",\n'
+                  '  "owner_id" => "p1", "capacity" => 2,\n'
+                  '  "participants" => [{"id" => "p1", "user" => "tito"}]}\n'
+                  'e = EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  's = e.create(capacity: 2)\n'
+                  'puts [s.id, s.participant_id, s.owner?, s.participants.size,\n'
+                  '      e.sessions.size, $asked.first["do"]].inspect\n')
+        self.assertEqual(self.ask(source),
+                         '["S1", "p1", true, 1, 1, "create"]')
+
+    def test_an_envelope_reaches_the_session_and_fires_on_message(self):
+        """The whole point: a packet the other player sent arrives as a
+        callback, on the frame, in the application's own block."""
+        source = (self.LIVE +
+                  '$live["create"] = {"id" => "S1", "participant_id" => "p1",\n'
+                  '  "owner_id" => "p1",\n'
+                  '  "participants" => [{"id" => "p1", "user" => "me"}]}\n'
+                  'e = EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  's = e.create\n'
+                  'heard = []\n'
+                  's.on_message { |sender, packet| heard << [sender.user, packet] }\n'
+                  'EltenAPI::LiveSessions.receive([{\n'
+                  '  "appid" => APP, "kind" => "events",\n'
+                  '  "instance_id" => e.instance_id, "session_id" => "S1",\n'
+                  '  "cursor" => 2,\n'
+                  '  "events" => [{"seq" => 1, "type" => "participant_joined",\n'
+                  '                "participant" => {"id" => "p2", "user" => "them"}},\n'
+                  '               {"seq" => 2, "type" => "message", "sender_id" => "p2",\n'
+                  '                "message_id" => "m1", "packet" => {"move" => 3}}]}])\n'
+                  'e.tick\n'
+                  'message = s.receive(timeout: 0)\n'
+                  'puts [heard, s.participants.size, message.packet,\n'
+                  '      s.control_entry["ack"]].inspect\n')
+        answer = self.ask(source)
+        self.assertIn('"them"', answer)
+        self.assertIn('"move"', answer)
+        self.assertTrue(answer.endswith('2]'), answer)
+
+    def test_an_envelope_for_another_instance_is_not_ours(self):
+        """Two copies of the same application on one machine each have
+        their own instance id, and an envelope carries the one it is for."""
+        source = (self.LIVE +
+                  '$live["create"] = {"id" => "S1", "participant_id" => "p1",\n'
+                  '  "owner_id" => "p1"}\n'
+                  'e = EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  's = e.create\n'
+                  'EltenAPI::LiveSessions.receive([{\n'
+                  '  "appid" => APP, "kind" => "events",\n'
+                  '  "instance_id" => "somebody-else", "session_id" => "S1",\n'
+                  '  "cursor" => 9,\n'
+                  '  "events" => [{"seq" => 1, "type" => "message",\n'
+                  '                "packet" => {"x" => 1}}]}])\n'
+                  'e.tick\n'
+                  'puts [s.receive(timeout: 0), s.control_entry["ack"]].inspect\n')
+        self.assertEqual(self.ask(source), '[nil, 0]')
+
+    def test_an_invitation_arrives_and_can_be_accepted(self):
+        source = (self.LIVE +
+                  '$live["accept"] = {"id" => "S9", "participant_id" => "p2",\n'
+                  '  "owner_id" => "p1"}\n'
+                  'e = EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  'EltenAPI::LiveSessions.receive([{\n'
+                  '  "appid" => APP, "kind" => "invitation",\n'
+                  '  "session_id" => "S9", "capacity" => 2,\n'
+                  '  "invited_by" => {"id" => "p1", "user" => "them"}}])\n'
+                  'invitation = e.next_invitation(timeout: 0)\n'
+                  'session = invitation.accept\n'
+                  'puts [invitation.id, invitation.inviter.user,\n'
+                  '      invitation.pending?, session.id, session.owner?].inspect\n')
+        self.assertEqual(self.ask(source),
+                         '["S9", "them", false, "S9", false]')
+
+    def test_only_the_owner_may_close_it(self):
+        source = (self.LIVE +
+                  '$live["create"] = {"id" => "S1", "participant_id" => "p2",\n'
+                  '  "owner_id" => "p1"}\n'
+                  'e = EltenAPI::LiveSessions::Endpoint.new(app_id: APP)\n'
+                  's = e.create\n'
+                  'begin\n'
+                  '  s.close\n'
+                  '  puts "closed"\n'
+                  'rescue EltenAPI::LiveSessions::NotOwner\n'
+                  '  puts "refused"\n'
+                  'end\n')
+        self.assertEqual(self.ask(source), 'refused')
+
+    def test_a_program_has_one_endpoint_and_closes_it(self):
+        source = (self.LIVE +
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => APP}\n'
+                  'p1 = Probe.new\n'
+                  'first = p1.live_sessions\n'
+                  'same = first.equal?(p1.live_sessions)\n'
+                  'before = first.closed?\n'
+                  'p1.close_live_sessions\n'
+                  'puts [same, before, first.closed?].inspect\n')
+        self.assertEqual(self.ask(source), '[true, false, true]')
+
+
+class TheTopLevelHelpersEltensApplicationsCall(_RubyAsk):
+    """Elten's bare functions, which an application calls with no receiver.
+
+    They live in `src/eapi/core/base.rb` and `src/eapi/common/*.rb` over
+    there and in `eapi/eapi.rb` / `eapi/media.rb` here, and a name that is
+    in the first and not the second is a `NoMethodError` inside somebody
+    else's program - usually inside their own `rescue`, where it becomes a
+    feature quietly not working.
+
+    `player` is the one that was: the bridge had the whole Player control -
+    Elten's keys, the real stream, the real mixer - and not the one-line
+    helper that opens one, so the YouTube client's `player(url, label:)`
+    raised, its `rescue Youtube::Error` did not catch it, and playing a
+    video did nothing at all.
+    """
+
+    #: The name, and how it is called by an installed application.
+    REQUIRED = (
+        'player', 'delay', 'delay_precise', 'format_date', 'getsize',
+        'p_', 'np_', 'platform_open_url', 'insert_scene',
+    )
+
+    def test_every_one_of_them_is_defined(self):
+        names = ', '.join(f'"{name}"' for name in self.REQUIRED)
+        source = (f'missing = [{names}].reject '
+                  '{ |n| Kernel.method_defined?(n.to_sym) || '
+                  'Kernel.private_method_defined?(n.to_sym) }\n'
+                  'puts missing.inspect\n')
+        self.assertEqual(self.ask(source), '[]')
+
+    def test_player_takes_the_arguments_elten_gives_it(self):
+        """`player(url, label: ..., wait:, control:, try_download:,
+        is_stream:)` - the YouTube client passes the first two, the file
+        manager passes more, and a signature missing one is an
+        ArgumentError at the moment somebody presses play."""
+        source = ('m = Kernel.instance_method(:player)\n'
+                  'keys = m.parameters.select { |kind, _| '
+                  '[:key, :keyreq].include?(kind) }.map { |_, name| name }\n'
+                  'puts keys.sort.inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            "[:control, :is_stream, :label, :try_download, :wait]")
+
+    def test_delay_waits_and_pumps_rather_than_sleeping(self):
+        source = ('started = Time.now.to_f\n'
+                  'delay(0.2)\n'
+                  'puts((Time.now.to_f - started) >= 0.19)\n')
+        self.assertEqual(self.ask(source), 'true')
+
+    def test_delay_can_be_cut_short_by_its_own_block(self):
+        source = ('started = Time.now.to_f\n'
+                  'answer = delay(5.0) { true }\n'
+                  'puts [answer, (Time.now.to_f - started) < 1.0].inspect\n')
+        self.assertEqual(self.ask(source), '[true, true]')
+
+    def test_format_date_is_eltens_own_spelling(self):
+        source = ('t = Time.new(2026, 9, 5, 17, 40, 12)\n'
+                  'puts [format_date(t), format_date(t, true), '
+                  'format_date(t, false, false)].inspect\n')
+        self.assertEqual(
+            self.ask(source),
+            '["2026-09-05 17:40:12", "2026-09-05", "2026-09-05 17:40"]')
+
+    def test_format_date_answers_nothing_for_what_is_not_a_time(self):
+        self.assertEqual(self.ask('puts format_date(nil).inspect\n'), '""')
+
+    def test_getsize_is_the_bytes_of_a_file(self):
+        source = ('require "tmpdir"\n'
+                  'path = File.join(Dir.tmpdir, "elten-getsize.txt")\n'
+                  'File.write(path, "0123456789")\n'
+                  'puts [getsize(path), getsize(File.join(Dir.tmpdir, "nope"))]'
+                  '.inspect\n')
+        self.assertEqual(self.ask(source), '[10, 0]')
+
+    def test_a_context_that_is_not_in_the_catalogue_answers_the_text(self):
+        """`p_` keys a `.mo` on the context, U+0004 and the text. An
+        application's own catalogue has no contexts in it, so what it must
+        answer is the text - not the joined key, which is what a reader
+        would then say out loud."""
+        source = 'puts p_("Youtube", "Play")\n'
+        self.assertEqual(self.ask(source), 'Play')
+
+    def test_opening_a_url_goes_through_the_bridge(self):
+        source = ('platform_open_url("https://example.com")\n'
+                  'puts $calls.map { |c| c[0] }.include?("open_url")\n')
+        self.assertEqual(self.ask(source), 'true')
+
+    def test_insert_scene_runs_the_screen_it_was_given(self):
+        source = ('class Screen\n'
+                  '  def main; $ran = true; end\n'
+                  'end\n'
+                  'answer = insert_scene(Screen.new)\n'
+                  'puts [answer, $ran].inspect\n')
+        self.assertEqual(self.ask(source), '[true, true]')
+
+    def test_insert_scene_says_no_to_what_is_not_a_screen(self):
+        self.assertEqual(self.ask('puts insert_scene(42).inspect\n'), 'false')
 
 
 class AnEventReachesTheBlockTheWayEltenSendsIt(_RubyAsk):
@@ -2066,6 +2653,7 @@ require 'program_api'
 require 'settings'
 require 'audio'
 require 'eltenlink'
+require 'live_sessions'
 require 'eltenapi'
 require 'network'
 ''' % repr(os.path.join(COMPONENT, 'eapi')).replace("'", '"')
@@ -2142,6 +2730,185 @@ class TheRealWidgetsReportThroughTheRealSendEvent(unittest.TestCase):
 
     def widget_of(self, gui, form_id, index):
         return gui._forms[form_id].widgets[index]
+
+    def test_a_list_keeps_the_keys_it_navigates_with(self):
+        """**The application is told AND the control still gets it.**
+
+        Both are true in Elten - its controls see every key - and here only
+        one of them was: a key reported to the application was consumed, so
+        Home, End, the page keys and every LETTER never reached the native
+        control. A list of three thousand files could be walked one row at
+        a time and not jumped into by its first letter, which is how
+        somebody who cannot see the list finds anything in it.
+        """
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'L',
+             'options': ['alpha', 'beta', 'gamma']}])
+        widget = self.widget_of(gui, form_id, 0)
+        for name, key in (('key_home', wx.WXK_HOME), ('key_end', wx.WXK_END),
+                          ('key_pageup', wx.WXK_PAGEUP),
+                          ('key_pagedown', wx.WXK_PAGEDOWN),
+                          ('key_up', wx.WXK_UP), ('key_down', wx.WXK_DOWN),
+                          ('key_g', ord('G')), ('key_space', wx.WXK_SPACE)):
+            self.assertTrue(widget.owns_key(name),
+                            f"a list must keep {name}")
+        # And the application still hears them.
+        self.fire_char(widget.listbox, wx.WXK_END)
+        self.assertTrue(self.messages(recorder, 'key_end'),
+                        "the application was not told about End")
+
+    def test_a_letter_reaches_the_list_and_a_button_does_not(self):
+        """First-letter jumping is the list's own; a button navigates with
+        nothing, so its keys belong to the application."""
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'L', 'options': ['a']},
+            {'kind': 'button', 'label': 'Ok'},
+            {'kind': 'checkbox', 'label': 'Tick'},
+            {'kind': 'gridbox', 'header': 'B', 'width': 2, 'height': 2,
+             'cells': [['a', 'b'], ['c', 'd']]}])
+        listbox = self.widget_of(gui, form_id, 0)
+        button = self.widget_of(gui, form_id, 1)
+        checkbox = self.widget_of(gui, form_id, 2)
+        grid = self.widget_of(gui, form_id, 3)
+        self.assertTrue(listbox.owns_key('key_k'))
+        self.assertFalse(button.owns_key('key_k'))
+        self.assertFalse(button.owns_key('key_home'))
+        # A wx.CheckBox toggles on Space, so a Space consumed on the way to
+        # the application is a box that cannot be ticked.
+        self.assertTrue(checkbox.owns_key('key_space'))
+        # A grid moves its cursor in Ruby and echoes the position back, so
+        # letting wx move it as well is two squares per key.
+        self.assertFalse(grid.owns_key('key_down'))
+
+    def test_a_button_hidden_before_the_window_exists_stays_hidden(self):
+        """`Form#hide` pushes a change and a change cannot be pushed at a
+        window that is not there yet.
+
+        The ELTEN Game Room hides its Select and Back buttons the moment it
+        builds the screen and drives them with Enter and Escape instead, so
+        both of them were on the screen: two buttons nobody put there, in
+        an API that has no such thing.
+        """
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'Games', 'options': ['chess']},
+            {'kind': 'button', 'label': 'Select', 'hidden': True},
+            {'kind': 'button', 'label': 'Back', 'hidden': True}],
+            None, 1)
+        listbox = self.widget_of(gui, form_id, 0)
+        select = self.widget_of(gui, form_id, 1)
+        back = self.widget_of(gui, form_id, 2)
+        self.assertTrue(listbox.window.IsShown())
+        self.assertFalse(select.window.IsShown(), 'Select is on the screen')
+        self.assertFalse(back.window.IsShown(), 'Back is on the screen')
+
+    def test_enter_on_something_that_is_not_a_button_accepts(self):
+        """Elten's own rule (`Form#update`): Enter on a field that is not a
+        Button presses the form's accept button. It is how a screen made of
+        a list and two hidden buttons works at all - and without it,
+        choosing a game in the Game Room did nothing whatever."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'checkbox', 'label': 'Ready'},
+            {'kind': 'button', 'label': 'Select', 'hidden': True}],
+            None, 1)
+        box = self.widget_of(gui, form_id, 0)
+        box.focus()
+        self.fire_char(box.window, wx.WXK_RETURN)
+        accepted = self.messages(recorder, 'accept')
+        self.assertTrue(accepted, 'Enter did nothing')
+        self.assertIsNone(accepted[0].get('control'),
+                          'the accept is the form\'s, not a control\'s')
+
+    def test_a_form_with_no_accept_button_is_left_alone(self):
+        """Enter is the application's own key when there is nothing for it
+        to accept - reporting one would be inventing a press."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'checkbox', 'label': 'Ready'}])
+        box = self.widget_of(gui, form_id, 0)
+        box.focus()
+        self.fire_char(box.window, wx.WXK_RETURN)
+        self.assertFalse(self.messages(recorder, 'accept'))
+
+    def test_enter_in_a_one_line_field_presses_the_accept_button(self):
+        """Elten's `EditBox#key_processed`: `false if k == :enter && (main
+        modifier held || (flags & MultiLine) == 0)` - false means "I did
+        not deal with it", so the form's accept button is pressed.
+
+        Typing 99 into the Game Room's Rounds field and pressing Enter did
+        nothing at all, because the field kept the key and had nothing to
+        do with it.
+        """
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'editbox', 'header': 'Rounds', 'text': '3'},
+            {'kind': 'button', 'label': 'Create table'}], None, 1)
+        field = self.widget_of(gui, form_id, 0)
+        field.focus()
+        self.fire_char(field.field, wx.WXK_RETURN)
+        self.assertTrue(self.messages(recorder, 'accept'),
+                        'Enter in a one-line field did nothing')
+
+    def test_a_multiline_field_keeps_enter_for_its_own_new_line(self):
+        """There Enter is a new line, and taking it would make a message
+        box that cannot be written in. Control+Enter still accepts, which
+        is Elten's own exception."""
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'editbox', 'header': 'Message', 'text': '',
+             'multiline': True},
+            {'kind': 'button', 'label': 'Send'}], None, 1)
+        field = self.widget_of(gui, form_id, 0)
+        field.focus()
+        self.fire_char(field.field, wx.WXK_RETURN)
+        self.assertFalse(self.messages(recorder, 'accept'),
+                         'a multi-line field lost its new line')
+        self.assertTrue(field.accepts_enter(self.control_enter()))
+
+    def control_enter(self):
+        wx = self.wx
+        event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+        event.SetKeyCode(wx.WXK_RETURN)
+        event.SetControlDown(True)
+        return event
+
+    def test_a_list_is_left_to_report_its_own_select(self):
+        """It reports `select` and the Ruby side presses the button from
+        that - sending an `accept` too would press it twice."""
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'Games', 'options': ['chess']},
+            {'kind': 'button', 'label': 'Select'}], None, 1)
+        listbox = self.widget_of(gui, form_id, 0)
+        button = self.widget_of(gui, form_id, 1)
+        self.assertFalse(listbox.accepts_enter(self.control_enter()))
+        self.assertFalse(button.accepts_enter(self.control_enter()))
+
+    def test_a_line_of_text_can_be_landed_on_and_read(self):
+        """A `wx.StaticText` cannot be focused and a reader cannot land on
+        one, so an instruction at the top of a screen would be invisible to
+        the person it is written for. It is a read-only text control - the
+        same answer AI OCR's rebuilt forms use - focusable and named."""
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'static', 'label': 'Choose game options'},
+            {'kind': 'button', 'label': 'Ok'}])
+        static = self.widget_of(gui, form_id, 0)
+        self.assertEqual(static.kind, 'static')
+        self.assertEqual(static.window.GetValue(), 'Choose game options')
+        self.assertEqual(static.window.GetName(), 'Choose game options')
+        self.assertTrue(static.window.AcceptsFocus() or static.focus())
+        # And what it says can be changed while the screen is up.
+        gui.set_control(form_id, 0, {"label": "Now this"})
+        self.assertEqual(static.window.GetValue(), 'Now this')
 
     def test_a_grid_arrow_reports_without_raising(self):
         wx = self.wx

@@ -3532,6 +3532,197 @@ every one of them needed playing before it went wrong. All eleven installed
 applications now open, run and stop cleanly, and AudioMemory, Purrposterous,
 Skeet and the file manager have been played end to end.
 
+#### Elten's own top-level helpers, and the one that was missing
+
+Elten defines a handful of BARE functions an application calls with no
+receiver - `src/eapi/core/base.rb` and `src/eapi/common/*.rb` - and a name
+that is there and not in `eapi/eapi.rb` is a `NoMethodError` inside somebody
+else's program.
+
+**`player` was the whole of "YouTube playback does not work".** The bridge
+had the entire `Player` control - Elten's keymap, the real stream through
+PyAV, the real mixer - and not the one-line helper that OPENS one, so the
+YouTube client's `player(url, label: video.title)` raised, its
+`rescue Youtube::Error` did not catch it, and pressing Play did nothing at
+all. The file manager's own preview hit the same wall. It is Elten's
+`EltenAPI::Common#player` line for line: a Player, a loop that pumps it,
+Enter (bare - Shift+Enter is the player's own menu) or Escape to leave, and
+closed however the loop ends. Verified end to end: `yt-dlp -g` gives a
+googlevideo URL, PyAV opens it (webm/opus, 48 kHz) and decodes.
+
+With it: `delay` (Elten's wait that PUMPS rather than sleeps - a sleeping
+Elten answers no keys), `delay_precise`, `format_date`, `getsize`, `p_` /
+`np_` (gettext with a context, keyed as context + U+0004 + text, falling
+back to the text - which is what a catalogue with no contexts must answer),
+`platform_open_url` (through Titan's `web` provider, http and https only)
+and `insert_scene` (there are no scenes here, so the nearest true thing is
+to RUN the object - `main` is what Elten's own loop would have called).
+Tests: `TheTopLevelHelpersEltensApplicationsCall` in
+`tests/test_elten_bridge.py`, on the real interpreter with the real platform.
+
+**`ChoiceListBox` answered the wrong half of itself.** Elten's row is
+`Row = Struct.new(:label, :options, :value)` where `value` is the chosen
+option's INDEX and `selected_option` is the one that answers the words. The
+port had them the other way round, and `set_value` took its arguments
+reversed with the value as text. It read perfectly and was wrong in the one
+way that matters: MileByMile's setup screen does
+`VARIANTS[fields[0].value(0)][0]`, so a String arrived where an index
+belonged, `Array#[]` raised, and choosing "play against the bot" never
+started a game. `append(label, options, value:)` and
+`set_options(row, options, value:)` are Elten's shapes too - ours replaced
+every row.
+
+**A control keeps the keys it navigates with, and the application is told
+as well.** Both are true in Elten; here only one was. A key reported to the
+application was CONSUMED, so Home, End, the page keys and every letter
+never reached the native control: a list of three thousand files could be
+walked one row at a time and not jumped into by its first letter, which is
+how somebody who cannot see the list finds anything in it.
+`_Widget.owns_key` says which keys belong to which kind - the three
+row-holding controls navigate alike, a grid moves its cursor in Ruby and
+must NOT be moved by wx as well, and a tick box keeps its Space.
+
+**The running Elten is the authority, and can be asked.**
+`elten_client.api` (served by `elten-tce-bridge/elten_api.rb`) answers what
+one name IS in the Elten the user actually has - whether it exists, its
+parameters in Ruby's own shape, and where it is written - one name or a
+batch. `tests/check_elten_live.py` is that as a sweep: every bare function
+an installed application calls that the application does not define itself
+and the port does not either, put to the running Elten, and anything Elten
+really has printed with its signature. It is the check that would have
+found `player` before a user did.
+
+#### Live sessions: what a two-player game IS
+
+`EltenAPI::LiveSessions` (`eapi/live_sessions.rb`) is EltenLink's realtime
+layer - a session with a capacity, participants invited into it, and JSON
+packets between them. Without it the ELTEN Game Room raises "ELTEN Game Room
+requires the LiveSessions API" before its first screen, because
+`LiveSessionBackend.supported?` asks `defined?(EltenAPI::LiveSessions::
+Endpoint)` and stops there.
+
+The shapes are Elten's exactly - `Endpoint`, `Session`, `Participant`,
+`Invitation`, `Message`, the five callbacks, the four errors - because an
+application is written against them. Two things are Titan's:
+
+- **The HTTP is Titan's.** Elten's `EltenLink::Apps.*_live_session` become
+  one bridge op (`live`, a written-down set of calls), signed with the
+  session Titan already holds for the user's EltenLink account. An
+  application never sees a credential and cannot name an account, which is
+  the rule the app tables already follow.
+- **The envelopes are DRAINED, not pushed.** Over there Elten's notification
+  service runs one long poll (`/api/v1/system/realtime-state`) and hands its
+  `live_sessions` rows to `LiveSessions.receive`. Here that poll runs on a
+  thread on Titan's side and `LiveSessions.tick` - called from
+  `loop_update`, as Elten calls it from its own frame - drains what has
+  landed. A thread rather than a call per tick because the point of a long
+  poll is to be WAITING when the packet arrives: asked once a second
+  instead, a turn would take up to a second to show up, and once a frame it
+  would be sixty requests a second.
+
+`wait_for_participant` is the one that had to change shape: Elten's waits on
+a condition variable because its network runs on other threads, and here the
+envelopes are collected by the frame - so it pumps.
+
+**When Elten is open, the port borrows ITS connection.** A live session is
+a conversation between two clients on one server, and the envelopes arrive
+on ONE long poll per account - the one Elten's own notification service is
+already running. A second client on the same account is a second poll and
+each packet goes to whichever asked, so a table created in Titan could be
+one the Elten it is meant to be played against never hears about.
+
+So `eltenlink.via_elten` asks the TCE bridge over the Action Bus and Elten
+makes the call, with its own client and its own realtime stream:
+`live_create` / `invite` / `accept` / `reject` / `send` / `leave` / `close`
+/ `control`, and `signal`. The envelopes come from Elten too - the bridge
+tees `EltenAPI::LiveSessions.receive`, so Elten still gets everything it
+always got and what is not its own is kept for whoever asks - and when they
+do, Titan's own poll is stopped, because two polls on one account divide
+the conversation between them. One client, the authoritative one, and an
+Elten application running inside Titan is then playable against people
+using Elten.
+
+It falls back to Titan's own session the moment Elten is not there, so an
+application still works on a machine that has never had Elten open - which
+is what the port is for. `elten-tce-bridge/elten_link.rb` is Elten's half;
+tests in `tests/test_elten_via.py`.
+
+**`Program#signal` really goes out now**, through whichever of the two is
+available. It answered false for as long as there was no relay, so the Game
+Room announced a new table to nobody and every other lobby learned about it
+at its next poll instead of at once.
+
+**`Program.manifest` was invisible to every application.** `@manifest` on
+`class << self` is a class-level instance variable, so `boot.rb`'s
+`Program.manifest = manifest` set it on `Program` and
+`ProgramYoutube.manifest` answered `{}`. Everything an application asks
+about ITSELF goes through it - `app_uuid`, `app_name`, `app_version` - and
+the live-session endpoint, which refuses without a uuid, is what finally
+made it visible.
+
+**A screen made of a list and two HIDDEN buttons.** The Game Room's game
+chooser is exactly that: `form.accept_button = select_button`,
+`form.cancel_button = back_button`, and both buttons hidden the moment the
+screen is built. Two things were wrong and both were visible from the
+outside as "buttons out of nowhere, and choosing a game does nothing":
+
+- **`Form#hide` before the window exists had nowhere to push to.** It pushes
+  a change, and `push_change` returns early while `@form_id` is nil - so the
+  hidden set now travels in the spec `form_open` is given, the same fix as
+  "a change made before the window exists is still a change" one level up.
+- **`accept_button` was carried and never acted on.** Elten's rule is in
+  `Form#update`: Enter on a field that is not a Button presses the accept
+  button, unless the field processes Enter itself. Enter on the list is how
+  a game is chosen there, so without it nothing happened at all. A list
+  reports its own `select` and the Ruby side presses the button from that;
+  everything else (a field, a tick box, a line of text) reports an `accept`
+  with no control, which is what wx's char hook now sends.
+
+**`Static` did not exist, and that was the next wall.** Elten's is a
+`FormField` that SAYS its label when the keyboard reaches it - an
+instruction at the top of a screen is not decoration for somebody who
+cannot see the screen, it is the only way they are told how it works. The
+Game Room's options screen begins with one, so an uninitialized constant
+ended the screen before it was built: after choosing a game, nothing
+appeared. A `wx.StaticText` cannot be focused and a reader cannot land on
+one, so it is a read-only text control - the same answer AI OCR's rebuilt
+forms use - focusable, named, with the reader's own cursor on it.
+
+**Ticking a row is a CALL, not a write.** Elten's
+`select_multiselection_indices` / `deselect_` / `require_` /
+`select_all_multiselection_items` fire the events an application binds and
+answer its own three symbols (`:unchanged`, `:limit`, `:changed`); a limit
+is refused out loud rather than quietly obeyed, and a required row cannot
+be unticked. The whole surface was missing, and the Game Room calls it for
+every multiple-choice option it has.
+
+**A written row has to keep its ID.** `insert` took the remote answer
+whenever it was a Hash, so a server that accepted and said nothing - an
+empty object, an older Titan, a refusal shaped as one - replaced the local
+row and took its id with it; `upsert`/`update`/`delete` did not write
+locally at all and answered whatever the wire said, which with EltenLink
+unreachable is nothing. The Game Room reads the id of the table it has just
+created, and `GameRoomSync::Controller` raises "a synchronizer requires a
+positive table id" without one - so creating a table did nothing whatever.
+All four now write locally first and prefer a remote row only when it
+really carries an id, which is what makes the Game Room work with EltenLink
+unreachable at all: the table is created, the table screen opens and it
+says it needs a second player.
+
+**A ONE-LINE field does not own Enter.** Elten's `EditBox#key_processed`:
+`false if k == :enter && (main modifier held || (flags & MultiLine) == 0)` -
+and false means "I did not deal with it", so the form's accept button is
+pressed. Typing a number into the Game Room's Rounds field and pressing
+Enter did nothing at all, because the field kept the key and had nothing to
+do with it. A multi-line field keeps Enter, where it is a new line, unless
+Control is held; a list is left to report its own `select`, from which the
+Ruby side presses the button, or it would be pressed twice.
+
+**`display_text` has no Ok button**, because Elten's has none: it is
+`input_text` read-only and multiline, left with Escape. A button under it is
+a control that is not in the API and one more thing to tab past on the way
+out of a page of rules.
+
 #### The Ruby is carried
 
 `ruby/` is CRuby 4.0.6 (RubyInstaller, 46 MB pruned of docs and headers,
@@ -4083,6 +4274,15 @@ thing there is to what is showing, and beside it are the current scene's
 controls read off the scene by SHAPE rather than by variable name. `programs`
 and `run_program` are the acting pair, `confirm`-marked because a program
 opens in front of whoever is sitting at Elten.
+
+**Pressing a key in Elten is a SECOND question, and starts as no.**
+`elten_client.press_key` puts virtual key codes into Elten's own `$setkeys`,
+the global `key_update` drains into that frame's `synthetic_keys` - the way
+Elten's own NVDA bridge presses a key, so it is indistinguishable from the
+user's - on Elten's thread, appending rather than assigning. Reading Elten
+and driving Elten are different permissions because Enter in a messenger
+sends the message, so the consent does not cover it and the switch in the
+bridge's settings is off by default.
 
 **Elten's data is shared only after Elten's user has said so.** The bridge
 asks once, in Elten, in plain words - "The AI assistant will use data stored

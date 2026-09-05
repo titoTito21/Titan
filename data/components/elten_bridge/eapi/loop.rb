@@ -72,6 +72,19 @@ module EltenLoop
         deliver(event)
       end
       run_frame_hooks
+      # **Elten ticks its live sessions from its own frame**
+      # (`src/ui/loop.rb`: `EltenAPI::LiveSessions.tick`), and so does
+      # this: it is what drains the envelopes that have arrived, fires an
+      # application's `on_message` blocks and renews the lease. A game
+      # whose frame did not tick them would be a game that never hears
+      # the other player.
+      if defined?(EltenAPI::LiveSessions)
+        begin
+          EltenAPI::LiveSessions.tick
+        rescue Exception
+          nil
+        end
+      end
       @time
     end
 

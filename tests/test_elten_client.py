@@ -178,6 +178,38 @@ class TheScreen(Base):
         self.assertIn('Which', str(answer))
 
 
+class PressingAKey(TheScreen):
+    """The one thing here that DRIVES Elten. Enter in a messenger sends the
+    message, so it is confirmed twice and Elten's own side starts as no."""
+
+    def test_it_says_what_it_pressed(self):
+        self.answers_with({'press_key': {'pressed': ['ctrl+s']}})
+        self.assertIn('ctrl+s', client.elten_client_press(keys='ctrl+s'))
+
+    def test_no_key_is_a_question_rather_than_a_guess(self):
+        self.answers_with({'press_key': {'pressed': ['x']}})
+        self.assertIn('Which', str(client.elten_client_press(keys='')))
+
+    def test_elten_refusing_comes_through_as_the_sentence_it_is(self):
+        """Off by default over there, and the answer has to say where the
+        switch is - not read as "it did not work"."""
+        self.answers_with({'press_key': "Elten is not letting TCE press "
+                                        "keys in it. ... 'Let TCE press "
+                                        "keys in Elten'."})
+        answer = client.elten_client_press(keys='enter')
+        self.assertIn('not letting', answer)
+        self.assertIn('Let TCE press keys', answer)
+
+    def test_a_key_that_is_not_one_is_a_stated_failure(self):
+        self.answers_with({'press_key': {'error': "there is no key called "
+                                                  "'wibble'"}})
+        self.assertIn('wibble', str(client.elten_client_press(keys='wibble')))
+
+    def test_no_elten_is_said_plainly(self):
+        self.answers_with({})
+        self.assertIn('not running', client.elten_client_press(keys='down'))
+
+
 class TheActionsAreOffered(unittest.TestCase):
     def test_every_one_of_them_is_registered_and_runs(self):
         from src.titan_core import actions
@@ -186,6 +218,8 @@ class TheActionsAreOffered(unittest.TestCase):
         self.assertIsNotNone(addon, "the elten_client provider is missing")
         for name in ('status', 'notifications', 'news', 'report',
                      'screen', 'programs'):
+            # `run_program` and `press_key` are left out on purpose: they
+            # ACT, and running them here would open something in Elten.
             self.assertIn(name, addon['actions'])
             result = actions.run('elten_client', name)
             self.assertTrue(result.ok, f"{name}: {result.text}")
@@ -197,6 +231,22 @@ class TheActionsAreOffered(unittest.TestCase):
                        'elten_client_news', 'elten_client_screen',
                        'elten_client_programs', 'elten_client_run_program'):
             self.assertIn(wanted, names)
+
+    def test_the_two_that_act_are_registered_too(self):
+        from src.titan_core import actions
+        addon = next(a for a in actions.list_addons()
+                     if a['id'] == 'elten_client')
+        self.assertIn('run_program', addon['actions'])
+        self.assertIn('press_key', addon['actions'])
+
+    def test_pressing_a_key_in_elten_is_confirmed_first(self):
+        from src.ai.tools import get_subsystem_tools
+        tool = next(t for t in get_subsystem_tools()
+                    if t['name'] == 'elten_client_press')
+        self.assertTrue(tool['always_confirm'])
+        # And the description has to say what it is: a model that does not
+        # know Enter sends the message will press Enter.
+        self.assertIn('messenger', tool['description'])
 
     def test_opening_a_program_in_elten_is_confirmed_first(self):
         """It happens in front of whoever is sitting at Elten, which is not
