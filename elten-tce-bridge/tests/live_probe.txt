@@ -17,7 +17,7 @@ titan actions: 47
 
 --- the main window ---
 titan.views                        ok   {"views": [{"id": "apps", "label": "Lista aplikacji:", "short_name": "Aplikacje"}, {"id": "games", "label": "Lista gier:", "short_name": "Gry"}, {"id"
-titan.status_bar                   ok   {"items": [{"key": "time", "text": "Zegar: 17:26:35"}, {"key": "battery", "text": "Poziom baterii: 36%"}, {"key": "volume", "text": "Głośność: 44%"}, 
+titan.status_bar                   ok   {"items": [{"key": "time", "text": "Zegar: 14:18:22"}, {"key": "battery", "text": "Poziom baterii: 89%"}, {"key": "volume", "text": "Głośność: 54%"}, 
 titan.menu                         ok   {"groups": [{"id": "program", "label": "Program", "entries": [{"id": "install_package", "label": "Zainstaluj pakiet danych..."}]}, {"id": "ai", "label
 titan.inventory                    ok   {"kinds": [{"kind": "app", "label": "Applications", "entries": ["Menedżer Plików", "Klient elevenlabs", "Menedżer pobierania", "Edytor Tekstowy", "mul
 titan.inventory                    ok   {"kinds": [{"kind": "game", "label": "Games", "entries": ["Cult of the Lamb", "Battle.net", "Hearthstone"]}]}
@@ -34,9 +34,9 @@ titan.list_media_catalogs          ok   Media library catalogs: - Humor mp3 - su
 
 --- the settings ---
 settings.screen                    ok   {"categories": [{"name": "Ogólne", "items": [{"id": "lang_choice", "category": "Ogólne", "label": "Język", "kind": "choice", "value": "Polski", "optio
-  15 categories, 153 settings
+  15 categories, 159 settings
   first: Ogólne
-  kinds: {"choice" => 31, "list" => 2, "info" => 1, "multi" => 3, "bool" => 91, "command" => 13, "number" => 7, "secret" => 1, "text" => 4}
+  kinds: {"choice" => 32, "list" => 2, "info" => 1, "multi" => 3, "bool" => 92, "command" => 13, "number" => 11, "secret" => 1, "text" => 4}
 
 --- Titan-Net ---
 titannet.whoami                    ok   {"username": "tito", "user_id": 3}
@@ -50,9 +50,9 @@ im.status                          FAIL QUESTION - this action needs 'service' b
 
 --- the shell and the computer ---
 shell.status                       ok   Powłoka Titana nie jest uruchomiona.
-shell.windows                      ok   {"windows": [{"title": "◐ Elten Titan TTS bridge addon", "active": true, "minimized": false}, {"title": "Pakiet aplikacji Titan", "active": false, "mi
-system.get_volume                  ok   System volume is 44%.
-system.network_status              ok   Wi-Fi: connected to titoNet (89% signal). Interfaces up: vEthernet (WSL (Hyper-V firewall)), OpenVPN TAP-Windows6.
+shell.windows                      ok   {"windows": [{"title": "◑ Elten Titan TTS bridge addon", "active": true, "minimized": false}, {"title": "ELTEN 3.0.2", "active": false, "minimized": f
+system.get_volume                  ok   System volume is 54%.
+system.network_status              ok   Wi-Fi: connected to NETIASPOT-23CD (80% signal). Interfaces up: vEthernet (WSL (Hyper-V firewall)).
 
 --- macros, Cling, the screen reader and the AI ---
 macros.list_macros                 ok   6 macros: - Gra w zgadywanie liczby [.tcs] - Przykładowy skrypt Titana [.tcs] - Demonstracja formularza (przyciski i opcje) [.tcs] - Demonstracja czyt
@@ -71,7 +71,7 @@ titan.reader_speak                 ok   Speaking.
   reader_speak returned in 1 ms (it must not wait for the line)
   speaking while it talks: yes
 titan.stop_speech                  ok   Stopped speaking.
-  stop took 3 ms
+  stop took 1 ms
   speaking after the stop: no
 
 done

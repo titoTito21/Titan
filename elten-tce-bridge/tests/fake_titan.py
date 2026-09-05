@@ -16,6 +16,8 @@ create.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.DW
 
 SPOKEN = []
 WIDGET = ["Szybki start: Wylaczony", 0]
+HISTORY = [{"role": "user", "text": "Co potrafisz?", "source": "elten", "at": 1},
+           {"role": "assistant", "text": "Duzo rzeczy.", "source": "elten", "at": 2}]
 
 ADDONS = [
     {"id": "titan", "label": "Titan", "kind": "builtin", "kind_label": "Titan",
@@ -32,10 +34,80 @@ ADDONS = [
      "description": "", "actions": ["status", "windows", "list_desktop"]},
     {"id": "titannet", "label": "Titan-Net", "kind": "builtin", "kind_label": "Titan",
      "description": "", "actions": ["rooms", "whoami"]},
+    {"id": "gamepad", "label": "Gamepad", "kind": "builtin", "kind_label": "Titan",
+     "description": "", "actions": ["list_modes", "get_mode", "set_mode", "cycle_mode"]},
+    {"id": "desktop", "label": "The desktop", "kind": "builtin", "kind_label": "Titan",
+     "description": "", "actions": ["list_files", "read_file", "launch_program"]},
+    {"id": "web", "label": "The browser", "kind": "builtin", "kind_label": "Titan",
+     "description": "", "actions": ["open", "read", "click", "back", "close"]},
+    {"id": "im", "label": "Titan IM", "kind": "builtin", "kind_label": "Titan",
+     "description": "", "actions": ["status", "list_chats", "read_chat", "send"]},
+    {"id": "zegarynka", "label": "Zegarynka", "kind": "component",
+     "kind_label": "Component", "description": "",
+     "actions": ["say_time", "get_settings", "set_enabled", "set_interval"]},
+    {"id": "tterm", "label": "Terminal", "kind": "component",
+     "kind_label": "Component", "description": "", "actions": ["run_command", "open_terminal"]},
+    {"id": "tarticle", "label": "TArticle", "kind": "component",
+     "kind_label": "Component", "description": "", "actions": ["read_article", "open_article"]},
+    {"id": "cling", "label": "Cling", "kind": "component", "kind_label": "Component",
+     "description": "", "actions": ["list_applications", "run", "details", "scores"]},
+    {"id": "titan_access", "label": "Titan Access", "kind": "component",
+     "kind_label": "Component", "description": "", "actions": ["read_screen", "status"]},
 ]
+
+BRIDGE = {"on": True}
+
+
+def bridge(request):
+    """The typed surface, as Titan's own bridge_api answers it."""
+    try:
+        payload = json.loads(request or "{}")
+    except ValueError:
+        return json.dumps({"ok": False, "api": 1, "error": "not JSON"})
+    call = payload.get("call")
+    args = payload.get("args") or {}
+    data = None
+    if call == "hello":
+        data = {"api": 1, "language": "pl", "has_window": True}
+    elif call == "apps.list":
+        data = {"applications": [
+            {"name": "Edytor Tekstowy", "shortname": "tedit", "description": "", "path": "x"},
+            {"name": "Notatki", "shortname": "tnotes", "description": "", "path": "y"}]}
+    elif call == "games.list":
+        data = {"games": [{"name": "Cult of the Lamb", "platform": "Steam", "path": ""}]}
+    elif call == "im.modules":
+        data = {"modules": [{"id": "exampleim", "name": "Example IM"}]}
+    elif call in ("apps.open", "games.open", "im.open"):
+        name = args.get("name") or args.get("id")
+        known = {"apps.open": ["Edytor Tekstowy", "Notatki"],
+                 "games.open": ["Cult of the Lamb"],
+                 "im.open": ["Example IM", "exampleim"]}[call]
+        if name not in known:
+            return json.dumps({"ok": False, "api": 1,
+                               "error": f"there is nothing called {name}"})
+        SPOKEN.append((call, name, None))
+        data = {"opened": name}
+    else:
+        return json.dumps({"ok": False, "api": 1,
+                           "error": f"this Titan has no bridge call {call!r}"})
+    return json.dumps({"ok": True, "api": 1, "data": data}, ensure_ascii=False)
+
 
 def answer(addon, action, args):
     key = f"{addon}.{action}"
+    if key == "titan.bridge":
+        if not BRIDGE["on"]:
+            # Exactly what Titan answers for an action it does not have -
+            # and it answers it as a FAILURE, which is what the client
+            # recognises.
+            return "ERROR:'Titan' has no action 'bridge'. It offers: launch, inventory, speak"
+        return bridge(args.get("request"))
+    if key == "probe.bridge_off":
+        BRIDGE["on"] = False
+        return "off"
+    if key == "probe.bridge_on":
+        BRIDGE["on"] = True
+        return "on"
     if key == "probe.spoken":
         return json.dumps(SPOKEN)
     if key == "probe.forget":
@@ -178,6 +250,26 @@ def answer(addon, action, args):
     if key == "titan.components":
         return json.dumps({"components": [{"name": "Macro Manager", "folder": "macros", "enabled": True}],
                            "menu_actions": ["Macro Manager...", "Tips"]})
+    if key == "gamepad.list_modes":
+        return "1. System mode (active)\n2. Screen reader mode\n3. Titan talk"
+    if key == "gamepad.set_mode":
+        SPOKEN.append(("set_mode", args.get("mode"), None))
+        return f"The gamepad is in {args.get('mode')}."
+    if key == "zegarynka.get_settings":
+        return "The clock chime is on, speaking every 30 minutes."
+    if key == "zegarynka.say_time":
+        return "It is 17:20."
+    if key == "tterm.run_command":
+        SPOKEN.append(("command", args.get("command"), None))
+        return "total 4\ndrwxr-xr-x 2 tito tito 4096 wrz  5 17:00 data"
+    if key == "tarticle.read_article":
+        return "Tytul artykulu\n\nTresc artykulu."
+    if key == "desktop.list_files":
+        return "data  <folder>\nreadme.txt  2 KB"
+    if key in ("web.open", "web.back", "web.close"):
+        return "Done."
+    if key == "web.read":
+        return "The page says hello."
     if key == "titan.widget_read":
         return WIDGET[0]
     if key == "titan.widget_move":
@@ -233,8 +325,15 @@ def answer(addon, action, args):
         return f"cling {action}: something readable."
     if key == "titan.ai_available":
         return "yes"
+    if key == "titan.ai_history":
+        return json.dumps({"enabled": True, "exchanges": HISTORY})
+    if key == "titan.ai_forget_conversation":
+        HISTORY.clear()
+        return "The conversation was cleared."
     if key == "titan.ask_ai":
         SPOKEN.append(("ask_ai", args.get("question"), args.get("act")))
+        HISTORY.append({"role": "user", "text": args.get("question"), "source": "elten", "at": 3})
+        HISTORY.append({"role": "assistant", "text": "The AI says: hello.", "source": "elten", "at": 4})
         return "The AI says: hello."
     if key == "memory.list_notes":
         return "1. Tito likes short answers"
@@ -280,10 +379,26 @@ def answer(addon, action, args):
     if key == "shell.list_settings":
         return "taskbar_position = bottom\nshow_clock = yes"
     if key.startswith("system."):
-        return {"system.get_volume": "Volume: 45%", "system.get_power_plan": "Power plan: Balanced",
-                "system.network_status": "Connected to HomeWiFi",
-                "system.get_autostart": "Titan does not start with Windows",
-                "system.list_audio_devices": "1. Speakers\n2. Headphones"}.get(key, "Done.")
+        if action.startswith("set_"):
+            # The real actions take percent, muted, name, mode, enabled -
+            # recording the value under the action's own name is what makes
+            # a wrong parameter name a failing check rather than a question
+            # nobody sees.
+            value = (args.get("percent") or args.get("name") or args.get("mode")
+                     or args.get("muted") or args.get("enabled"))
+            if value is None:
+                return f"QUESTION - {action} was called with {list(args)}"
+            SPOKEN.append((action, str(value), None))
+            return f"{action}: {value}."
+        return {"system.get_volume": "System volume is 45%.",
+                "system.get_brightness": "Screen brightness is 70%.",
+                "system.get_power_plan": "Power Scheme GUID: 381b (Balanced)",
+                "system.list_power_plans": "Power plans:\n- Balanced [in use]\n- Power saver",
+                "system.network_status": "Wi-Fi: connected to HomeWiFi (79% signal).",
+                "system.get_autostart": "Titan does not start with Windows.",
+                "system.list_wifi": "Wi-Fi networks in range:\n- HomeWiFi\n- Neighbour",
+                "system.list_audio_devices": "Playback devices:\n- Speakers [in use]\n- Headphones",
+                }.get(key, "Done.")
     if action in ("enable", "disable"):
         SPOKEN.append((action, addon, None))
         return f"{addon}: {action}d."
@@ -322,7 +437,12 @@ while True:
         elif msg.get("type") == "call":
             try:
                 result = answer(msg.get("addon"), msg.get("action"), msg.get("args") or {})
-                io.write_line({"type": "call_result", "id": msg.get("id"), "ok": True, "result": result})
+                if isinstance(result, str) and result.startswith("ERROR:"):
+                    io.write_line({"type": "call_result", "id": msg.get("id"),
+                                   "ok": False, "error": result[6:]})
+                else:
+                    io.write_line({"type": "call_result", "id": msg.get("id"),
+                                   "ok": True, "result": result})
             except Exception as e:
                 io.write_line({"type": "call_result", "id": msg.get("id"), "ok": False,
                                "error": f"{type(e).__name__}: {e}"})

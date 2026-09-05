@@ -6,8 +6,8 @@
 require "json"
 require_relative "elten_stub"
 BASE = File.expand_path("..", __dir__)
-%w[titan_bus titan_ui titan_speech_output titan_watch titan_actions titan_settings
-   titan_net titan_im titan_widgets titan_components titan_macros titan_cling titan_ai titan_shell
+%w[titan_bus titan_ui titan_api titan_speech_output titan_watch titan_actions titan_settings
+   titan_net titan_im titan_system titan_tools_ui titan_widgets titan_components titan_macros titan_cling titan_ai titan_shell
    titan_areas titan_console].each { |f| require_relative "#{BASE}/#{f}" }
 
 REPORT = File.open(File.join(__dir__, "ui_test.txt"), "w")
@@ -38,12 +38,13 @@ check("main window opens, lists applications, launches one") do
   console.fill_status
   rows = console.instance_variable_get(:@rows)
   raise "no applications" if rows.empty?
-  raise "wrong first app: #{rows[0][0]}" if rows[0][0] != "tEdit"
+  # Titan's own name for it, from its own manager - not the folder.
+  raise "wrong first app: #{rows[0][0]}" if rows[0][0] != "Edytor Tekstowy"
   status = console.instance_variable_get(:@status).options
   raise "no status bar" if status.size != 3
   console.instance_variable_get(:@list).index = 0
   console.open_row
-  raise "did not launch" if !$said.any? { |l| l.include?("Opened tEdit") }
+  raise "did not launch" if !$said.any? { |l| l.include?("Edytor Tekstowy") }
 end
 
 check("the tab bar cycles through Titan's own views") do
@@ -168,11 +169,27 @@ check("the areas menu offers the shell as a view, not as actions") do
   raise "voices missing" if !ids.include?("voices")
 end
 
-check("the computer screen reads what the computer is doing") do
-  areas = TitanAreas.new(bus)
-  rows = areas.system_rows
-  raise "volume not read" if !rows[0][0].include?("45%")
-  raise "network not read" if !rows[6][0].include?("HomeWiFi")
+check("the computer is panels: a value is moved, a choice is a list") do
+  bus.call_sync("probe", "forget", {})
+  system = TitanSystem.new(bus)
+  # It reads what IS before it offers to change anything.
+  raise "the volume was not read" if system.number_in(system.read("get_volume"), 0) != 45
+  raise "the brightness was not read" if system.number_in(system.read("get_brightness"), 0) != 70
+
+  # A choice is offered from what the computer answered, and the name sent
+  # is the name without the "[in use]" marker.
+  $script = [1]                                   # pick the second device
+  system.choose_device
+  chosen = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  entry = chosen.find { |e| e[0] == "set_audio_device" }
+  raise "no device was chosen: #{chosen.inspect}" if entry.nil?
+  raise "the marker was sent as part of the name: #{entry[1]}" if entry[1].include?("[")
+
+  # And the parameter names are the ones Titan really takes.
+  bus.call_sync("probe", "forget", {})
+  system.run("set_volume", {"percent" => "30"})
+  sent = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "set_volume did not reach Titan" if !sent.any? { |e| e[0] == "set_volume" && e[1] == "30" }
 end
 
 check("an add-on's actions are shown with what they do") do
@@ -257,7 +274,7 @@ check("a conversation shows its messages and sends one") do
   # write a line and press Send, as a user would
   entry = $last_form.fields.find { |f| f.is_a?(EditBox) }
   send_button = $last_form.fields.find { |f| f.is_a?(Button) && f.label == _("Send") }
-  entry.text = "a reply"
+  entry.set_text("a reply")
   send_button.press
   sent = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
   raise "nothing was sent: #{sent.inspect}" if !sent.any? { |e| e[0] == "im_send" && e[2] == "a reply" }
@@ -534,14 +551,130 @@ check("every way into Titan-Net lands on Titan-Net's own main screen") do
   end
 
   from_service = opened.call(proc { TitanIM.new(bus).open_service("titan_net", "titannet", "Titan-Net") })
-  raise "Titan IM opened a corner of it: #{from_service}" if !from_service.include?(_("Rooms"))
+  raise "Titan IM opened a corner of it: #{from_service}" if !from_service.include?(_("Main menu"))
 
   from_entry = opened.call(proc { TitanNetClient.new(bus).open("main") })
-  raise "the entry opened a corner of it: #{from_entry}" if !from_entry.include?(_("Rooms"))
+  raise "the entry opened a corner of it: #{from_entry}" if !from_entry.include?(_("Main menu"))
 
   # And the account it is speaking as is in the title, so it is never vague
   # about whose Titan-Net this is.
   raise "the account is not named: #{from_entry}" if !from_entry.include?("tito")
+end
+
+
+# --- the last of the action lists, turned into screens ------------------
+check("the gamepad screen lists MODES, not functions") do
+  bus.call_sync("probe", "forget", {})
+  tools = TitanTools.new(bus)
+  rows = tools.gamepad_rows
+  raise "no modes: #{rows.inspect}" if rows.size != 3
+  raise "it listed functions" if rows.any? { |r| r[0].include?("set_mode") }
+  raise "the active one is not marked" if !rows[0][0].include?("active")
+  raise "the mode is not addressable" if rows[1][1]["mode"] != "Screen reader mode"
+end
+
+check("the areas menu offers screens, not add-ons to be told what to do") do
+  areas = TitanAreas.new(bus)
+  areas.instance_variable_set(:@shell_running, false)
+  areas.instance_variable_set(:@ai_available, true)
+  ids = areas.areas.map { |entry| entry[0] }
+  %w[gamepad_view clock_view terminal_view files_view browser_view
+     macros_view cling_view widgets components_view].each do |wanted|
+    raise "#{wanted} is missing: #{ids.inspect}" if !ids.include?(wanted)
+  end
+  # The bare add-on ids are gone from the menu; the generic screen is
+  # reached from a row or from "Everything installed".
+  raise "a bare add-on is still offered" if ids.include?("gamepad") || ids.include?("web")
+end
+
+
+check("the assistant is a conversation, and it opens with what was said before") do
+  bus.call_sync("probe", "forget", {})
+  ai = TitanAI.new(bus)
+  rows = ai.history
+  raise "the history is empty" if rows.size < 2
+  raise "the speaker is not named: #{rows[0][0]}" if !rows[0][0].start_with?(_("You"))
+  raise "the whole message is not kept" if !rows[1][1].include?("Duzo rzeczy")
+
+  # Sending adds to the same conversation.
+  $events = []
+  ai.chat
+  list = $last_form.fields.find { |f| f.is_a?(ListBox) }
+  entry = $last_form.fields.find { |f| f.is_a?(EditBox) }
+  send_button = $last_form.fields.find { |f| f.is_a?(Button) && f.label == _("Send") }
+  raise "the chat has no list" if list.nil?
+  raise "the chat has no field" if entry.nil?
+  before = list.options.size
+  entry.set_text("Jak sie masz?")
+  send_button.press
+  raise "the question never reached Titan" if !$said.any? { |l| l.include?("hello") }
+  raise "the conversation did not grow" if list.options.size <= before
+  raise "the field was not cleared" if entry.text.to_s != ""
+end
+
+check("the main window has a button for the assistant") do
+  console = TitanConsole.new(bus)
+  console.instance_variable_set(:@views, console.read_views)
+  # open() builds the form and then pumps; with no scripted events the stub
+  # presses Close at once, so this is the window as it was built.
+  $events = []
+  console.open
+  labels = $last_form.fields.select { |f| f.is_a?(Button) }.map { |f| f.label }
+  raise "no assistant button: #{labels.inspect}" if !labels.include?(_("AI Assistant"))
+end
+
+
+check("Titan-Net's menu is Titan's own menu, in Titan's own order") do
+  # src/network/titan_net_gui.py, TitanNetMainWindow: What's New, Chat
+  # Rooms, Online Users, Private Messages, Blocked Users, Mail, Forum, App
+  # Repository, Feedback Hub, Interactive Games.
+  wanted = ["What's New", "Chat Rooms", "Online Users", "Private Messages",
+            "Blocked Users", "Mail", "Forum", "App Repository",
+            "Feedback Hub", "Interactive Games"]
+  got = TitanNetClient::MENU.map { |entry| entry[1] }
+  raise "the menu does not match Titan's: #{got.inspect}" if got != wanted
+
+  $events = []
+  TitanNetClient.new(bus).main
+  list = $last_form.fields.find { |f| f.is_a?(ListBox) }
+  raise "no menu on the screen" if list.nil?
+  raise "the first entry is not What's New: #{list.options.first}" if list.options.first != _("What's New")
+  raise "the account is not offered" if !list.options.include?(_("My account"))
+end
+
+
+# --- the point of the rewrite -------------------------------------------
+check("the lists come from Titan's own managers, through one typed call") do
+  bus.call_sync("probe", "bridge_on", {})
+  bus.call_sync("probe", "forget", {})
+  api = TitanAPI.new(bus)
+  raise "the typed surface is not there" if !api.available?
+  raise "wrong version: #{api.api}" if api.api != TitanAPI::WANTED
+
+  console = TitanConsole.new(bus)
+  apps = console.inventory("app")
+  raise "the applications are not Titan's own: #{apps.inspect}" if apps.first != "Edytor Tekstowy"
+  games = console.inventory("game")
+  raise "the games are not Titan's own: #{games.inspect}" if games.first != "Cult of the Lamb"
+
+  # Opened through the manager that owns it, by the name the list gave.
+  console.launch("Cult of the Lamb", "game")
+  opened = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "it did not go through games.open: #{opened.inspect}" if !opened.any? { |e| e[0] == "games.open" }
+end
+
+check("a Titan that is a version behind is told about, and still works") do
+  bus.call_sync("probe", "bridge_off", {})
+  api = TitanAPI.new(bus)
+  raise "it should not be available" if api.available?
+  message = api.unavailable_message
+  raise "the reason is not named: #{message}" if !message.include?(_("Restart Titan") .split(" ").first)
+
+  # And the screens fall back to the action path rather than breaking.
+  console = TitanConsole.new(bus)
+  apps = console.inventory("app")
+  raise "the fallback list is empty" if apps.empty?
+  bus.call_sync("probe", "bridge_on", {})
 end
 
 bus.stop

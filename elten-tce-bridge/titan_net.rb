@@ -19,22 +19,29 @@
 require "json"
 
 class TitanNetClient
+  # Titan-Net's own main menu, in Titan's own order.
+  # `src/network/titan_net_gui.py`, TitanNetMainWindow: What's New, Chat
+  # Rooms, Online Users, Private Messages, Blocked Users, Mail, Forum, App
+  # Repository, Feedback Hub, Interactive Games, Moderation (moderators
+  # only), Disconnect. Somebody who knows Titan-Net in Titan finds the same
+  # list here, in the same order, and everything under it opens the same
+  # thing.
+  MENU = [
+    ["whats_new", "What's New"],
+    ["rooms", "Chat Rooms"],
+    ["online", "Online Users"],
+    ["private", "Private Messages"],
+    ["blocked", "Blocked Users"],
+    ["mail", "Mail"],
+    ["forum", "Forum"],
+    ["repository", "App Repository"],
+    ["feedback", "Feedback Hub"],
+    ["games", "Interactive Games"],
+  ].freeze
+
   def self.entries
-    [
-      # First, and it is the whole client: everything under it is a
-      # shortcut into one of its tabs.
-      [_("Titan-Net"), {"do" => "titannet", "screen" => "main"}],
-      [_("Chat rooms"), {"do" => "titannet", "screen" => "rooms"}],
-      [_("Who is online"), {"do" => "titannet", "screen" => "online"}],
-      [_("Private messages"), {"do" => "titannet", "screen" => "private"}],
-      [_("Forum"), {"do" => "titannet", "screen" => "forum"}],
-      [_("Mail"), {"do" => "titannet", "screen" => "mail"}],
-      [_("Groups"), {"do" => "titannet", "screen" => "groups"}],
-      [_("Feedback Hub"), {"do" => "titannet", "screen" => "feedback"}],
-      [_("App repository"), {"do" => "titannet", "screen" => "repository"}],
-      [_("Announcements"), {"do" => "titannet", "screen" => "announcements"}],
-      [_("What's new"), {"do" => "titannet", "screen" => "whats_new"}],
-    ]
+    [[_("Titan-Net"), {"do" => "titannet", "screen" => "main"}]] +
+      MENU.map { |id, label| [_(label), {"do" => "titannet", "screen" => id}] }
   end
 
   def initialize(bus)
@@ -46,6 +53,9 @@ class TitanNetClient
     return if !TitanUI.require_tce(@bus)
     case screen
     when "main", ""  then main
+    when "account"   then account
+    when "blocked"   then page("blocked", {}, _("Blocked Users"))
+    when "games"     then games
     when "rooms"     then rooms
     when "online"    then online
     when "private"   then private_messages
@@ -60,87 +70,18 @@ class TitanNetClient
     end
   end
 
-  # One window with Titan-Net's own areas on the tab bar, which is how
-  # Titan-Net looks in Titan.
+  # Titan-Net's main screen: the menu its own window shows, as a list.
+  # Titan calls that window "a simple TCE-style interface" and it is a menu
+  # rather than a tab bar, so this is a menu too - the point of a bridge is
+  # that somebody who knows the program finds what they know.
   def main
-    tabs = [
-      [_("Rooms"), proc { rows("rooms", "rooms") { |r| room_row(r) } }],
-      [_("Online"), proc { rows("online", "users") { |u| user_row(u) } }],
-      [_("Forum"), proc { rows("topics", "topics") { |t| topic_row(t) } }],
-      [_("Mail"), proc { rows("mailbox", "mail", {"folder" => "inbox"}) { |m| mail_row(m) } }],
-      [_("Feedback Hub"), proc { rows("feedback", "items") { |i| feedback_row(i) } }],
-      [_("App repository"), proc { rows("repository", "apps") { |a| app_row(a) } }],
-      [_("Announcements"), proc { rows("announcements", "files") { |f| announcement_row(f) } }],
-      [_("Groups"), proc { rows("groups", "groups") { |g| group_row(g) } }],
-      [_("My account"), proc { account_rows }],
-    ]
-    screen = TitanUI::Screen.new(@bus, title, tabs, :on_open => method(:open_entry),
-                                 :on_menu => method(:entry_menu))
-    screen.open
-  end
-
-  # What Titan-Net's own window does to the PLACE rather than in it: making
-  # a room, joining or leaving one, blocking somebody, the account's own
-  # address. Each is on the context-menu key of the row it belongs to.
-  def account_rows
-    [[_("My address"), {"open" => "email"}],
-     [_("Who I have blocked"), {"open" => "blocked"}],
-     [_("Make a room..."), {"open" => "new_room"}],
-     [_("Make a group..."), {"open" => "new_group"}],
-     [_("Send a message to everybody..."), {"open" => "broadcast"}],
-     [_("Is Titan-Net connected"), {"open" => "status"}]]
-  end
-
-  def entry_menu(value, label)
-    return if !value.is_a?(Hash)
-    case value["open"]
-    when "room"         then room_menu(value["name"].to_s, label)
-    when "conversation" then person_menu(value["name"].to_s, label)
-    when "group"        then group_menu(value["id"].to_s, label)
+    return if !TitanUI.require_tce(@bus)
+    rows = proc do
+      MENU.map { |id, label| [_(label), {"open" => "menu", "screen" => id}] } +
+        [[_("My account"), {"open" => "menu", "screen" => "account"}]]
     end
-  end
-
-  def room_menu(name, label)
-    chosen = select_action([["join_room", _("Join it")],
-                            ["leave_room", _("Leave it")],
-                            ["delete_room", _("Delete it")]],
-                           :header => label)
-    return if chosen == nil
-    if chosen == "delete_room"
-      return if !confirm(_("Delete the room %s?") % name)
-    end
-    args = {"room" => name}
-    if chosen == "join_room"
-      password = input_text(_("Password (empty if it has none):"), :escapable => true)
-      args["password"] = password.to_s if password != nil
-    end
-    answer = TitanUI.perform(@bus, "titannet", chosen, args, :title => label)
-    alert(answer.text.to_s) if answer != nil
-  end
-
-  def person_menu(name, label)
-    chosen = select_action([["write", _("Write to them")],
-                            ["block", _("Block them")],
-                            ["unblock", _("Unblock them")]],
-                           :header => label)
-    return if chosen == nil
-    if chosen == "write"
-      return conversation(name)
-    end
-    return if chosen == "block" && !confirm(_("Block %s?") % name)
-    answer = TitanUI.perform(@bus, "titannet", chosen, {"username" => name},
-                             :title => label)
-    alert(answer.text.to_s) if answer != nil
-  end
-
-  def group_menu(id, label)
-    chosen = select_action([["join_group_by_id", _("Join it")],
-                            ["group_forums", _("Its forums")]],
-                           :header => label)
-    return if chosen == nil
-    key = chosen == "group_forums" ? "group" : "group"
-    answer = TitanUI.perform(@bus, "titannet", chosen, {key => id}, :title => label)
-    TitanUI.tell(answer, label) if answer != nil
+    TitanUI::Screen.new(@bus, title, [[_("Main menu"), rows]],
+                        :on_open => method(:open_entry)).open
   end
 
   def title
@@ -297,6 +238,8 @@ class TitanNetClient
     when "feedback_item" then feedback_item(value["id"].to_s, value["title"].to_s)
     when "repository_item" then page("repository_item", {"app" => value["id"].to_s}, label)
     when "announcement" then page("announcement", {"name" => value["name"].to_s}, label)
+    when "menu"
+      open(value["screen"].to_s)
     when "email"
       answer = TitanUI.ask(@bus, "titannet", "account_email", {}, :title => label)
       display_text(answer.text.to_s, :header => label)
@@ -398,7 +341,7 @@ class TitanNetClient
       if text.strip != ""
         answer = sender.call(text)
         if answer != nil && answer.ok?
-          entry.text = ""
+          entry.set_text("")
           refresh.call
         elsif answer != nil
           alert(answer.text.to_s)
@@ -559,6 +502,21 @@ class TitanNetClient
     voted = TitanUI.perform(@bus, "titannet", "feedback_upvote", {"item" => id},
                             :title => title_text)
     alert(voted.text.to_s) if voted != nil
+  end
+
+  # Titan-Net's own account screen - what its window keeps under the
+  # account: the address, who is blocked, making a room or a group, and a
+  # message to everybody.
+  def account
+    TitanUI::Screen.new(@bus, title, [[_("My account"), proc { account_rows }]],
+                        :on_open => method(:open_entry)).open
+  end
+
+  # The interactive games are a narrated, turn-taking session with voice in
+  # Titan's own window; there is nothing to drive from here yet, and an
+  # empty screen would be a worse answer than this sentence.
+  def games
+    alert(_("The interactive games are played in Titan's own Titan-Net window."))
   end
 
   # ------------------------------------------------------------------ other

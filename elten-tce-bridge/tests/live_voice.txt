@@ -6,5 +6,5 @@ the output says it is speaking: true
 stop returned in 0 ms
 Titan says it is speaking AFTER the stop: no
 VERDICT: the interrupt works
-still speaking after the replacement: no (should be yes - the second line)
+still speaking after the replacement: TCE is not running. (should be yes - the second line)
 silent at the end: true

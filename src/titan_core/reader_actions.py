@@ -215,3 +215,57 @@ def get_ai_actions():
                          "have a key: yes or no.", {}, 'auto',
          lambda **_: "yes" if _ai_enabled() else "no"),
     )
+
+
+def _ai_history(limit=20, **_):
+    """The conversation Titan's AI has been having, oldest first.
+
+    The assistant and the agent share one memory - one person, one
+    conversation - so a chat opened somewhere else is not a stranger: it
+    carries on. A client that shows a chat has to be able to show what was
+    already said, which is what this is for.
+    """
+    import json
+
+    try:
+        from src.ai import memory
+        if not memory.enabled():
+            return json.dumps({'exchanges': [], 'enabled': False},
+                              ensure_ascii=False)
+        count = max(1, min(int(limit or 20), 200))
+        entries = memory.recent(count)
+    except Exception as e:
+        return f"Could not read the conversation: {type(e).__name__}: {e}"
+    return json.dumps({'enabled': True,
+                       'exchanges': [{'role': entry.get('role', ''),
+                                      'text': entry.get('text', ''),
+                                      'source': entry.get('source', ''),
+                                      'at': entry.get('t', 0)}
+                                     for entry in entries]},
+                      ensure_ascii=False, default=str)
+
+
+def _ai_forget_conversation(**_):
+    """Start the conversation again from nothing."""
+    try:
+        from src.ai import memory
+        memory.clear_conversation()
+    except Exception as e:
+        return f"Could not clear it: {type(e).__name__}: {e}"
+    return "The conversation was cleared."
+
+
+def get_ai_history_actions():
+    """(name, summary, params, risk, run) for each, as the shell's are."""
+    number = {'type': 'number'}
+    return (
+        ('ai_history',
+         "The conversation Titan's AI has been having, as JSON - what a "
+         "chat window shows when it opens.",
+         {'limit': dict(number, description="How many exchanges "
+                        "(default 20).")},
+         'auto', _ai_history),
+        ('ai_forget_conversation',
+         "Clear the AI conversation and start again from nothing.", {},
+         'always_confirm', _ai_forget_conversation),
+    )

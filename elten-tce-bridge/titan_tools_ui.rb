@@ -87,7 +87,7 @@ class TitanTools
       if text.strip != ""
         answer = TitanUI.ask(@bus, "tterm", "run_command", {"command" => text},
                              :title => _("Terminal"))
-        output.text = answer.text.to_s
+        output.set_text(answer.text.to_s)
         speak(_("Finished."))
       end
     end

@@ -361,8 +361,24 @@ def _add_titan_face(addons):
 
 def _add_ai_questions(addons):
     """Asking Titan's AI from somewhere that has no window of its own."""
-    from src.titan_core.reader_actions import get_ai_actions
+    from src.titan_core.reader_actions import (get_ai_actions,
+                                               get_ai_history_actions)
     _extend(addons, 'titan', get_ai_actions())
+    _extend(addons, 'titan', get_ai_history_actions())
+
+
+
+def _add_bridge(addons):
+    """The bridge's own doorway: one action for a whole typed surface.
+
+    Everything else here is an action per thing, which is right for a model
+    and for macros. A program that is rebuilding Titan's interface needs the
+    opposite - one call, one shape, and a version it can compare with its
+    own - so `src/titan_core/bridge_api.py` is offered as a single action
+    rather than as forty.
+    """
+    from src.titan_core.bridge_api import get_bridge_actions
+    _extend(addons, 'titan', get_bridge_actions())
 
 
 def _add_reader(addons):
@@ -580,4 +596,8 @@ def build():
         _add_ai_questions(addons)
     except Exception as e:
         print(f"[actions] Asking the AI is unavailable: {e}")
+    try:
+        _add_bridge(addons)
+    except Exception as e:
+        print(f"[actions] The bridge doorway is unavailable: {e}")
     return addons

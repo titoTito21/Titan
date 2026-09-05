@@ -3251,3 +3251,26 @@ class Form
     []
   end
 end
+
+# Some applications name a control by its full Elten path -
+# `EltenAPI::Controls::EditBox.new(...)` rather than `EditBox.new(...)`.
+# Both are the same class here, so the fully-qualified names are aliases of
+# the top-level ones: an application written either way runs unchanged.
+module EltenAPI
+  module Controls
+    Button = ::Button
+    CheckBox = ::CheckBox
+    EditBox = ::EditBox
+    ListBox = ::ListBox
+    TableBox = ::TableBox
+    FilesTree = ::FilesTree
+    Tree = ::Tree
+    ChoiceListBox = ::ChoiceListBox
+    Player = ::Player
+    GridBox = ::GridBox
+    Menu = ::Menu
+    Form = ::Form
+    FormTimer = ::FormTimer
+    Static = ::Static if defined?(::Static)
+  end
+end

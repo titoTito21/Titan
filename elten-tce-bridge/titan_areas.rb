@@ -237,67 +237,13 @@ class TitanAreas
   end
 
   # ------------------------------------------------------------- the computer
-  # Each row says what the computer is doing now; Enter changes that one
-  # thing. The readings are Titan's own sentences, which is what a user
-  # wants read to them.
+  # Volume, brightness, the playback device, the power plan, Wi-Fi: panels
+  # of their own, in `titan_system.rb`. A value one changes is moved with
+  # the arrows and said at once; a choice is a list with the current one
+  # marked. Asking "volume, 0 to 100?" made somebody guess where they were
+  # and then type a number.
   def system_screen
-    tabs = [[_("The computer"), proc { system_rows }]]
-    TitanUI::Screen.new(@bus, _("The computer"), tabs,
-                        :on_open => method(:system_open)).open
-  end
-
-  def system_rows
-    [
-      [read("system", "get_volume", {}, _("Volume")), {"do" => "volume"}],
-      [_("Mute or unmute"), {"do" => "mute"}],
-      [_("Playback device"), {"do" => "device"}],
-      [_("Screen brightness"), {"do" => "brightness"}],
-      [read("system", "get_power_plan", {}, _("Power plan")), {"do" => "power_plan"}],
-      [_("Light or dark theme"), {"do" => "theme"}],
-      [read("system", "network_status", {}, _("Network")), {"do" => "wifi"}],
-      [read("system", "get_autostart", {}, _("Titan at startup")), {"do" => "autostart"}],
-    ]
-  end
-
-  def read(addon_id, action, args, fallback)
-    answer = TitanUI.ask(@bus, addon_id, action, args)
-    text = answer.ok? ? answer.text.to_s : ""
-    text.strip == "" ? fallback : text.split("\n").first.to_s
-  end
-
-  def system_open(value, label)
-    case value["do"]
-    when "volume"
-      level = ask_number(_("Volume, 0 to 100:"))
-      run("system", "set_volume", {"level" => level}) if level != nil
-    when "mute"
-      choice = pick(_("Sound"), [["true", _("Mute")], ["false", _("Unmute")]])
-      run("system", "set_mute", {"mute" => choice}) if choice != nil
-    when "device"    then choose_from("system", "list_audio_devices", "set_audio_device",
-                                      "device", _("Playback device"))
-    when "brightness"
-      level = ask_number(_("Brightness, 0 to 100:"))
-      run("system", "set_brightness", {"level" => level}) if level != nil
-    when "power_plan" then choose_from("system", "list_power_plans", "set_power_plan",
-                                       "plan", _("Power plan"))
-    when "theme"
-      choice = pick(_("Theme"), [["light", _("Light")], ["dark", _("Dark")]])
-      run("system", "set_theme", {"theme" => choice}) if choice != nil
-    when "wifi"      then wifi
-    when "autostart"
-      choice = pick(_("Titan at startup"), [["true", _("Start with Windows")],
-                                            ["false", _("Do not start with Windows")]])
-      run("system", "set_autostart", {"enabled" => choice}) if choice != nil
-    end
-  end
-
-  def wifi
-    answer = TitanUI.ask(@bus, "system", "list_wifi", {}, :title => _("Wi-Fi"))
-    display_text(answer.text.to_s, :header => _("Wi-Fi"))
-    name = ask_text(_("Which network? (leave empty to stay)"))
-    return if name == nil
-    password = ask_text(_("Password (empty if it has none):"))
-    run("system", "connect_wifi", {"name" => name, "password" => password.to_s})
+    TitanSystem.new(@bus).open
   end
 
   # --------------------------------------------------------------- the windows

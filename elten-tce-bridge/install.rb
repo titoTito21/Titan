@@ -18,9 +18,9 @@ require "fileutils"
 
 APP_ID = "e6a514cc-bffc-4bf4-9a8d-adc8b8471558".freeze
 FOLDER = "tce_bridge".freeze
-SOURCES = %w[__app.rb titan_bus.rb titan_ui.rb titan_speech_output.rb
+SOURCES = %w[__app.rb titan_bus.rb titan_ui.rb titan_api.rb titan_speech_output.rb
              titan_actions.rb titan_settings.rb titan_net.rb titan_im.rb
-             titan_tools_ui.rb titan_widgets.rb titan_watch.rb titan_components.rb titan_macros.rb titan_cling.rb titan_ai.rb
+             titan_system.rb titan_tools_ui.rb titan_widgets.rb titan_watch.rb titan_components.rb titan_macros.rb titan_cling.rb titan_ai.rb
              titan_shell.rb
              titan_areas.rb titan_console.rb].freeze
 # Elten reads an unpacked application's catalogue straight off its folder

@@ -27,6 +27,7 @@ class TitanConsole
 
   def initialize(bus)
     @bus = bus
+    @api = TitanAPI.new(bus)
     @inventory = {}
     @addons = nil
     @views = nil
@@ -47,9 +48,10 @@ class TitanConsole
     @list = ListBox.new([], :header => _("Titan"))
     @status = ListBox.new([], :header => _("Status bar"))
     @menu = Button.new(_("Menu"))
+    @assistant = Button.new(_("AI Assistant"))
     @more = Button.new(_("Everything else"))
     @back = Button.new(_("Close"))
-    @form = Form.new([@list, @status, @menu, @more, @back])
+    @form = Form.new([@list, @status, @menu, @assistant, @more, @back])
     @form.cancel_button = @back
 
     @list.on(:expand) { cycle(1) }
@@ -57,6 +59,9 @@ class TitanConsole
     @list.on(:select) { open_row }
     @status.on(:select) { activate_status_row }
     @menu.on(:press) { program_menu }
+    # Titan's own AI assistant, opened as a conversation here rather than
+    # as a window over there - and it is the SAME conversation.
+    @assistant.on(:press) { TitanAI.new(@bus).chat }
     @more.on(:press) { TitanAreas.new(@bus).open }
     @back.on(:press) { @running = false }
 
@@ -102,11 +107,12 @@ class TitanConsole
   def open_view(kind, label)
     return if !TitanUI.require_tce(@bus)
     rows = proc do
-      inventory(kind).map { |name| [name, {"do" => "launch", "name" => name}] }
+      inventory(kind).map { |name| [name, {"do" => "launch", "name" => name,
+                                          "kind" => kind}] }
     end
     TitanUI::Screen.new(@bus, label, [[label, rows]],
                         :on_open => proc { |value, row_label|
-                          launch(value["name"].to_s) if value.is_a?(Hash)
+                          launch(value["name"].to_s, value["kind"]) if value.is_a?(Hash)
                         },
                         :on_menu => proc { |value, row_label|
                           actions_for([row_label, value]) if value.is_a?(Hash)
@@ -118,7 +124,8 @@ class TitanConsole
     id = view["id"].to_s
     kind = VIEW_CONTENTS[id]
     @rows = if kind != nil
-              inventory(kind).map { |name| [name, {"do" => "launch", "name" => name}] }
+              inventory(kind).map { |name| [name, {"do" => "launch", "name" => name,
+                                                 "kind" => kind}] }
             elsif id == "network"
               # Titan IM is the SERVICES, as Titan's own view lists them -
               # Telegram, Messenger, WhatsApp, Titan-Net, EltenLink - and
@@ -200,8 +207,26 @@ class TitanConsole
     end
   end
 
+  # Titan's own lists, from Titan's own managers. The action path below is
+  # kept for a Titan that has not been restarted since this add-on was
+  # installed - it answers with folder names, which is why the typed one
+  # exists.
   def inventory(kind)
     return @inventory[kind] if @inventory.key?(kind)
+    if @api.available?
+      call, key = case kind
+                  when "app"       then ["apps.list", "applications"]
+                  when "game"      then ["games.list", "games"]
+                  when "im_module" then ["im.modules", "modules"]
+                  end
+      if call
+        data = @api.data(call, {}, :title => _("Reading Titan..."))
+        entries = data.is_a?(Hash) ? data[key] : nil
+        if entries.is_a?(Array)
+          return @inventory[kind] = entries.map { |entry| entry["name"].to_s }
+        end
+      end
+    end
     answer = TitanUI.ask(@bus, "titan", "inventory", {"kind" => kind},
                          :title => _("Reading Titan..."))
     names = []
@@ -228,7 +253,7 @@ class TitanConsole
     # nothing when it is pressed.
     return if !value.is_a?(Hash)
     case value["do"]
-    when "launch"    then launch(value["name"].to_s)
+    when "launch"    then launch(value["name"].to_s, value["kind"])
     when "titan_im"  then TitanIM.new(@bus).open
     when "screen"
       case value["screen"]
@@ -245,7 +270,7 @@ class TitanConsole
     when "shell_start" then @shell.open_row(value, row[0].to_s)
     when "im_service"
       TitanIM.new(@bus).open_service(value["service"].to_s, value["kind"].to_s, row[0].to_s)
-    when "module"    then launch(value["name"].to_s)
+    when "module"    then launch(value["name"].to_s, "im_module")
     when "widget"    then TitanWidgets.new(@bus).use(value, row[0].to_s)
     when "component_action"
       answer = TitanUI.perform(@bus, "titan", "run_component_action",
@@ -259,7 +284,27 @@ class TitanConsole
     fill
   end
 
-  def launch(name)
+  # Opened by the name the list gave, through the manager that owns it -
+  # not by matching a name against a page of text.
+  def launch(name, kind = nil)
+    if @api.available?
+      call = {"app" => "apps.open", "game" => "games.open",
+              "im_module" => "im.open"}[kind.to_s]
+      call ||= "apps.open"
+      answer = @api.call(call, {"name" => name},
+                         :title => _("Starting %s...") % name)
+      return alert(_("Started %s.") % answer["opened"].to_s) if answer.ok?
+      # A name this manager does not have is worth trying elsewhere before
+      # giving up: the tab knows what kind it is, but a row may come from a
+      # menu that does not.
+      if kind == nil
+        ["games.open", "im.open"].each do |other|
+          second = @api.call(other, {"name" => name})
+          return alert(_("Started %s.") % second["opened"].to_s) if second.ok?
+        end
+      end
+      return alert(answer.error.to_s)
+    end
     answer = TitanUI.perform(@bus, "titan", "launch", {"name" => name},
                              :title => _("Starting %s...") % name)
     return if answer == nil
@@ -293,6 +338,13 @@ class TitanConsole
     item = (@status_rows || [])[index]
     return if item == nil
     key = item["key"].to_s
+    # Titan's status bar is not only a reading: pressing the volume opens
+    # the volume, pressing the network opens the network. The rows that are
+    # readings and nothing else - the clock, the battery - say themselves.
+    case key
+    when "volume"  then return TitanSystem.new(@bus).sound
+    when "network" then return TitanSystem.new(@bus).network
+    end
     return alert(item["text"].to_s) if !key.start_with?("applet:")
     name = key.sub("applet:", "")
     addon = addons.find do |candidate|

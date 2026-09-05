@@ -71,10 +71,16 @@ class EditBox < Control
   class Flags
     MultiLine = 1; ReadOnly = 2; Password = 4; Numbers = 8
   end
-  attr_accessor :text
+  # Elten's EditBox has a `text` READER and `set_text(text, reset=true)`.
+  # It has no `text=`, and a stub that offers one lets a crash through:
+  # this is exactly how `entry.text = ""` reached a real user.
+  attr_reader :text
   def initialize(header = "", type: 0, text: "", **_o)
     super()
     @header = header; @type = type; @text = text
+  end
+  def set_text(text, reset = true, reset_speak_callbacks: true)
+    @text = text.to_s
   end
 end
 

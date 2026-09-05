@@ -216,7 +216,7 @@ class TitanIM
                                  {"service" => service, "chat" => chat,
                                   "text" => text}, :title => _("Sending..."))
         if answer != nil && answer.ok?
-          entry.text = ""
+          entry.set_text("")
           refresh.call
         elsif answer != nil
           alert(answer.text.to_s)

@@ -1,11 +1,11 @@
 connected to the stand-in Titan: true
 PASS main window opens, lists applications, launches one
-     alert: Opened tEdit.
+     alert: Started Edytor Tekstowy.
 PASS the tab bar cycles through Titan's own views
-     speak: Games (2)
+     speak: Games (1)
      speak: Titan IM (6)
      speak: Cling (1)
-     speak: Applications (3)
+     speak: Applications (2)
 PASS a component's own view falls through to its actions
 PASS the settings screen reads Titan's own categories
 PASS a category opens with a control per setting
@@ -22,7 +22,8 @@ PASS the desktop and the notification area are lists
 PASS pressing a desktop icon opens it
      alert: shell.open_desktop_item did something.
 PASS the areas menu offers the shell as a view, not as actions
-PASS the computer screen reads what the computer is doing
+PASS the computer is panels: a value is moved, a choice is a list
+     selector: Playback device ["Speakers [in use]", "Headphones"]
 PASS an add-on's actions are shown with what they do
 PASS Titan's voice is offered to Elten and speaks
 PASS a line is handed over at once, not when it has been spoken
@@ -72,4 +73,13 @@ PASS a component's view lists what it HAS, not what it can be told to do
 PASS a widget is used, not merely listed: it reads, moves and presses
      speak: Szybki start: Wylaczony
 PASS every way into Titan-Net lands on Titan-Net's own main screen
+PASS the gamepad screen lists MODES, not functions
+PASS the areas menu offers screens, not add-ons to be told what to do
+PASS the assistant is a conversation, and it opens with what was said before
+     speak: The AI says: hello.
+PASS the main window has a button for the assistant
+PASS Titan-Net's menu is Titan's own menu, in Titan's own order
+PASS the lists come from Titan's own managers, through one typed call
+     alert: Started Cult of the Lamb.
+PASS a Titan that is a version behind is told about, and still works
 done

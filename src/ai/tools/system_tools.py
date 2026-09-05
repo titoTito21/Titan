@@ -440,6 +440,61 @@ _SETTINGS_PAGES = {
 }
 
 
+
+def system_get_brightness(**_):
+    """How bright the screen is now.
+
+    Setting it was already here; reading it was not, and a panel that lets
+    somebody change a value has to be able to say what the value IS.
+    """
+    try:
+        import wmi
+        monitors = wmi.WMI(namespace='wmi').WmiMonitorBrightness()
+    except Exception as e:
+        return f"Could not read the brightness: {e}"
+    for monitor in monitors or []:
+        try:
+            return f"Screen brightness is {int(monitor.CurrentBrightness)}%."
+        except Exception:
+            continue
+    return "This screen does not report its brightness."
+
+
+def system_list_power_plans(**_):
+    """The power plans this computer has, with the active one marked.
+
+    `set_power_plan` already reads `powercfg /list` to find a plan's GUID;
+    this is the same listing, answered rather than used and thrown away, so
+    a caller can OFFER the plans instead of asking somebody to name one.
+    """
+    code, output = _run(['powercfg', '/list'])
+    if code:
+        return f"Could not list the power plans: {output.strip()}"
+    active_code, active = _run(['powercfg', '/getactivescheme'])
+    active_guid = ''
+    if not active_code:
+        for part in active.replace(':', ' ').split():
+            if part.count('-') == 4:
+                active_guid = part.strip()
+                break
+    plans = []
+    for line in output.splitlines():
+        if 'GUID' not in line:
+            continue
+        guid = ''
+        for part in line.replace(':', ' ').split():
+            if part.count('-') == 4:
+                guid = part.strip()
+                break
+        name = line.split('(')[-1].rsplit(')', 1)[0].strip() if '(' in line else line.strip()
+        if not name:
+            continue
+        plans.append(f"- {name}" + (" [in use]" if guid and guid == active_guid else ""))
+    if not plans:
+        return "Windows did not report any power plans."
+    return "Power plans:\n" + "\n".join(plans)
+
+
 def system_open_settings_page(page, **_):
     """Open a page of Windows Settings.
 
@@ -515,6 +570,11 @@ def get_system_tools():
               "Make Titan start with Windows, or stop it doing so.",
               system_set_autostart, risk='confirm',
               properties={'enabled': dict(B, description="True to start with Windows.")}),
+        _tool('system_get_brightness',
+              "How bright the screen is now.", system_get_brightness),
+        _tool('system_list_power_plans',
+              "The power plans this computer has, with the active one "
+              "marked.", system_list_power_plans),
         _tool('system_open_settings_page',
               "Open a page of Windows Settings and let the user finish there. "
               "Use this for anything Titan cannot change itself.",

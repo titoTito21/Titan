@@ -31,7 +31,8 @@ class TitanAI
   end
 
   def ask_rows
-    [[_("Ask a question"), {"do" => "ask"}],
+    [[_("Open the assistant"), {"do" => "chat"}],
+     [_("Ask one question"), {"do" => "ask"}],
      [_("Ask, and let it do what is needed"), {"do" => "act"}]]
   end
 
@@ -72,6 +73,7 @@ class TitanAI
   def open_row(value, label)
     return if !value.is_a?(Hash)
     case value["do"]
+    when "chat"   then chat
     when "ask"    then ask_ai(false)
     when "act"    then ask_ai(true)
     when "read_window" then page("ocr", "read_window", {}, _("The window in front"))
@@ -97,6 +99,99 @@ class TitanAI
                                :title => label)
       alert(answer.text.to_s) if answer != nil
     end
+  end
+
+  # The assistant, as a conversation rather than as a question and an
+  # answer that is then gone. Titan keeps ONE conversation - the assistant
+  # and the agent share it, and it survives a restart - so the chat opens
+  # with what was already said and adds to it. A row read in full is one
+  # message; the whole thing is a list, which is what a screen reader can
+  # move through.
+  def chat
+    return if !TitanUI.require_tce(@bus)
+    list = ListBox.new([], :header => _("Titan AI"))
+    entry = EditBox.new(_("Say something"))
+    send_button = Button.new(_("Send"))
+    act_button = Button.new(_("Send, and let it act"))
+    back = Button.new(_("Back"))
+    form = Form.new([list, entry, send_button, act_button, back])
+    form.cancel_button = back
+    form.accept_button = send_button
+    running = true
+    messages = []
+
+    refresh = proc do
+      messages = history
+      list.options = messages.map { |entry_| entry_[0] }
+      list.header = _("Titan AI")
+      list.index = [messages.size - 1, 0].max
+    end
+
+    say_it = proc do |act|
+      text = entry.text.to_s
+      next if text.strip == ""
+      answer = TitanUI.ask(@bus, "titan", "ask_ai",
+                           {"question" => text, "act" => act ? "true" : "false"},
+                           :title => _("Asking the AI..."))
+      entry.set_text("") if answer.ok?
+      refresh.call
+      # The answer is spoken as well as listed: a reader should not have to
+      # go looking for what it just asked for.
+      speak(answer.text.to_s)
+    end
+
+    list.on(:select) do
+      index = list.index.to_i
+      display_text(messages[index][1].to_s, :header => _("Titan AI")) if messages[index]
+    end
+    send_button.on(:press) { say_it.call(false) }
+    act_button.on(:press) do
+      say_it.call(true) if confirm(_("Let the AI use Titan's own functions to do this?"))
+    end
+    back.on(:press) { running = false }
+
+    refresh.call
+    form.focus
+    while running
+      loop_update
+      form.update
+      if key_pressed?(TitanUI::KEY_REFRESH)
+        refresh.call
+        speak(_("Refreshed."))
+      end
+      if key_pressed?(:key_context_menu)
+        chosen = select_action([["clear", _("Start the conversation again")],
+                                ["window", _("Open the assistant in Titan")]],
+                               :header => _("Titan AI"))
+        if chosen == "clear" && confirm(_("Clear everything the AI remembers of this conversation?"))
+          TitanUI.perform(@bus, "titan", "ai_forget_conversation", {},
+                          :title => _("Titan AI"))
+          refresh.call
+        elsif chosen == "window"
+          TitanUI.perform(@bus, "titan", "menu_run", {"entry" => "ai_assistant"},
+                          :title => _("Titan AI"))
+        end
+      end
+    end
+  end
+
+  # [what the row says, the whole message] for each turn, oldest first.
+  def history
+    answer = TitanUI.ask(@bus, "titan", "ai_history", {"limit" => "30"},
+                         :title => _("Reading the conversation..."))
+    return [[answer.text.to_s, answer.text.to_s]] if !answer.ok?
+    data = JSON.parse(answer.text) rescue nil
+    return [[_("The AI remembers nothing yet."), ""]] if !data.is_a?(Hash)
+    if data["enabled"] == false
+      return [[_("Titan is not keeping the conversation."), ""]]
+    end
+    rows = (data["exchanges"] || []).map do |turn|
+      who = turn["role"].to_s == "user" ? _("You") : _("Titan")
+      body = turn["text"].to_s.gsub("\n", " ")
+      short = body.length > 120 ? body[0, 120] + "..." : body
+      ["#{who}: #{short}", "#{who}\n\n#{turn['text']}"]
+    end
+    rows.empty? ? [[_("The AI remembers nothing yet."), ""]] : rows
   end
 
   # A model takes seconds, so the question goes through Tasks.run like every

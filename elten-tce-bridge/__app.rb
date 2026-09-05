@@ -44,11 +44,13 @@
 
 require_relative "titan_bus"
 require_relative "titan_ui"
+require_relative "titan_api"
 require_relative "titan_speech_output"
 require_relative "titan_actions"
 require_relative "titan_settings"
 require_relative "titan_net"
 require_relative "titan_im"
+require_relative "titan_system"
 require_relative "titan_tools_ui"
 require_relative "titan_widgets"
 require_relative "titan_watch"
