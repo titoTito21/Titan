@@ -1174,3 +1174,8 @@ msgstr "Niedostępne"
 #~ msgid "Open the Titan Menu"
 #~ msgstr "Otwórz Titan Menu"
 
+msgid "External client initialized"
+msgstr "Zewnętrzny klient uruchomiony"
+
+msgid "External client closed"
+msgstr "Zewnętrzny klient zamknięty"

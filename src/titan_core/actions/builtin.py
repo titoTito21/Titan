@@ -77,7 +77,8 @@ _TOOL_PROVIDERS = (
      'src.ai.browser_tools', 'get_browser_tools', 'browser_'),
 )
 
-BUILTIN_IDS = tuple(entry[0] for entry in _TOOL_PROVIDERS) + ('gamepad', 'shell')
+BUILTIN_IDS = (tuple(entry[0] for entry in _TOOL_PROVIDERS)
+               + ('gamepad', 'shell', 'elten_client'))
 
 # The actions that are actually DONE BY A MODEL - the ones that send something
 # to an AI provider. Only these need Titan's AI features switched on, and
@@ -255,6 +256,40 @@ def _gamepad_addon():
          'confirm', gamepad_cycle_mode),
     )
     for name, summary, params, risk, run in specs:
+        prepared = {}
+        for pname, pspec in params.items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+        action = ActionSpec(name=name, summary=summary, params=prepared,
+                            risk=risk, mode='any', addon=addon)
+        action.run = run
+        addon.actions.append(action)
+    return addon
+
+
+def _elten_client_addon():
+    """The Elten client running on this machine, as it sees itself.
+
+    Not the same thing as the `elten` provider, which signs in to EltenLink
+    over the network and asks the SERVER. This one is answered from INSIDE
+    the Elten process by the TCE bridge add-on, so it can say what Elten is
+    actually showing - the notifications its own service is holding, who is
+    signed in to it, and that it is running at all.
+    """
+    from src.titan_core.elten_client_actions import get_elten_client_actions
+    addon = AddonActions(kind='builtin', addon_id='elten_client',
+                         name='elten_client', path='',
+                         label="The Elten client",
+                         description="The Elten client running on this "
+                                     "machine, answered from inside it by "
+                                     "the TCE bridge: whether it is running, "
+                                     "who is signed in, and the "
+                                     "notifications Elten itself is holding.",
+                         transport='inproc')
+    addon.source = 'builtin'
+    addon.builtin = True
+    for name, summary, params, risk, run in get_elten_client_actions():
         prepared = {}
         for pname, pspec in params.items():
             prepared[pname] = {'type': pspec.get('type', 'string'),
@@ -564,6 +599,10 @@ def build():
         addons.append(_shell_addon())
     except Exception as e:
         print(f"[actions] Built-in 'shell' unavailable: {e}")
+    try:
+        addons.append(_elten_client_addon())
+    except Exception as e:
+        print(f"[actions] Built-in 'elten_client' unavailable: {e}")
     try:
         _add_settings_ui(addons)
     except Exception as e:

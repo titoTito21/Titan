@@ -431,6 +431,215 @@ def _addon_run(args):
     return answer
 
 
+# --------------------------------------------------------------------------- #
+# The two components with a list of THINGS in them
+#
+# The macros and the Cling applications are lists whose rows are acted on by
+# NAME, and both were being read out of the prose their actions answer with:
+# "3 macros:\n- Voice demo (ctrl+alt+v) [tcs]", "Cling applications:\n- Mole
+# No More (mole, grid_hunt): ...". A client that splits those lines up hands
+# the name back with the count, the shortcut, the identifier, the engine and
+# the summary still attached to it - and Titan answers "There is no macro
+# called '- Voice demo (ctrl+alt+v) [tcs]'". Both of the bugs reported
+# against the Elten bridge were exactly that, in two different components,
+# which is what a shape rather than a sentence is for.
+#
+# So the rows come from the components' own objects, with the name a caller
+# must hand back kept apart from everything that is only there to be read.
+# --------------------------------------------------------------------------- #
+def _component_module(folder):
+    """One loaded component's module, or None.
+
+    `ComponentManager` registers a component as `sys.modules['<folder>']`
+    before it executes it, which is the same handle `actions.inproc` resolves
+    a component's own handlers against - so this reaches the LIVE component,
+    with the user's own macros in it, rather than importing a second copy.
+    """
+    import sys
+    module = sys.modules.get(folder)
+    return module if module is not None and hasattr(module, '__file__') else None
+
+
+def _macros(_args):
+    """The user's macros: the name to act on, and what to show beside it."""
+    def read():
+        module = _component_module('macros')
+        if module is None:
+            return None
+        manager = getattr(module, '_action_manager', None)
+        manager = manager() if callable(manager) else None
+        rows = []
+        for macro in (getattr(manager, 'macros', None) or []):
+            rows.append({'name': str(macro.get('name') or ''),
+                         'hotkey': str(macro.get('hotkey') or ''),
+                         'type': str(macro.get('type') or '')})
+        return rows
+    rows, error = run_on_gui(read)
+    if error:
+        raise RuntimeError(error)
+    if rows is None:
+        raise RuntimeError('the Macro Manager component is not loaded')
+    return {'macros': rows}
+
+
+def _cling(_args):
+    """The Klango applications Cling has found.
+
+    `id` is what every one of Cling's own actions matches first, so it is
+    what a caller hands back - a display name is translated and a summary is
+    a sentence, and neither is an identifier.
+    """
+    def read():
+        module = _component_module('cling')
+        if module is None:
+            return None
+        language = getattr(module, '_language', None)
+        language = language() if callable(language) else 'en'
+        rows = []
+        for app in (module.applications() or []):
+            try:
+                rows.append({'id': str(app.id),
+                             'name': str(app.name(language)),
+                             'engine': str(getattr(app, 'engine', '') or ''),
+                             'category': str(getattr(app, 'category', '') or ''),
+                             'summary': str(app.summary(language) or ''),
+                             'locked': bool(getattr(app, 'locked', False)),
+                             'why': (app.locked_reason()
+                                     if getattr(app, 'locked', False) else '')})
+            except Exception as error:                 # noqa: BLE001
+                rows.append({'id': str(getattr(app, 'id', '?')),
+                             'name': str(getattr(app, 'id', '?')),
+                             'engine': '', 'category': '', 'summary': '',
+                             'locked': True, 'why': str(error)})
+        return rows
+    rows, error = run_on_gui(read)
+    if error:
+        raise RuntimeError(error)
+    if rows is None:
+        raise RuntimeError('the Cling component is not loaded')
+    return {'applications': rows}
+
+
+# --------------------------------------------------------------------------- #
+# Which face of Titan is up
+#
+# "Minimise" and "Bring Titan back" are not two entries a menu always has:
+# they are one entry that depends on where Titan is. Titan's own window
+# offers whichever applies, and a client that offers both offers one that
+# does nothing - press "Bring Titan back" on a Titan that is already in
+# front and nothing happens, which reads as the bridge being broken.
+#
+# Away means the window is hidden with a tray icon and the Invisible UI
+# answering the keyboard - `TitanApp.minimize_to_tray` is those three things
+# together, and `restore_from_tray` is the one way back from it.
+# --------------------------------------------------------------------------- #
+def _window_state(_args):
+    def read():
+        frame = _main_frame()
+        if frame is None:
+            return {'has_window': False, 'away': False, 'shown': False,
+                    'in_tray': False, 'iconized': False,
+                    'invisible_ui': False}
+        try:
+            shown = bool(frame.IsShown())
+        except Exception:
+            shown = False
+        try:
+            iconized = bool(frame.IsIconized())
+        except Exception:
+            iconized = False
+        in_tray = getattr(frame, 'task_bar_icon', None) is not None
+        invisible = bool(getattr(getattr(frame, 'invisible_ui', None),
+                                 'active', False))
+        return {'has_window': True, 'shown': shown, 'iconized': iconized,
+                'in_tray': in_tray, 'invisible_ui': invisible,
+                # The one a menu actually asks: is the window out of the way?
+                'away': bool(in_tray or iconized or not shown)}
+    state, error = run_on_gui(read)
+    if error:
+        raise RuntimeError(error)
+    return state
+
+
+def _main_frame():
+    """Titan's own main window, or None. The same one the action layer
+    reaches for, so the two cannot disagree about which window Titan is."""
+    try:
+        from src.ui.main_window_actions import _frame
+        return _frame()
+    except Exception:
+        return None
+
+# --------------------------------------------------------------------------- #
+# News from the other side
+#
+# The bridge runs INSIDE another program - Elten - and that program has news
+# of its own: a private message, a forum reply, somebody coming online.
+# Titan has a notification centre, a buffer system and an AI that can be
+# asked "what have I missed", and none of the three knew anything about it,
+# because nothing had ever put an outside program's news into them.
+#
+# So a client can. It is the same doorway everything else uses, and it lands
+# exactly where Titan's own notifications land - the notification centre, the
+# Titan category of the buffer system, and the notification sound - so the
+# user reads them where they already read the rest, and the AI finds them
+# with the tools it already has.
+# --------------------------------------------------------------------------- #
+def _notification_add(args):
+    """Put one piece of news from a client into Titan's own notification
+    centre. `app` is who it is from, and it is said as such."""
+    import datetime
+
+    app = str(args.get('app') or 'Titan').strip() or 'Titan'
+    title = str(args.get('title') or '').strip()
+    text = str(args.get('text') or '').strip()
+    if not text and not title:
+        raise ValueError('text is required')
+    if not text:
+        text, title = title, ''
+    content = f'{title}: {text}' if title else text
+    announce = args.get('announce')
+    announce = True if announce is None else bool(announce)
+
+    def add():
+        from src.ui.notificationcenter import add_notification
+        now = datetime.datetime.now()
+        add_notification(now.strftime('%Y-%m-%d'), now.strftime('%H:%M'),
+                         app, content)
+        if announce:
+            # `show_notification` is the whole of "the user is told": the
+            # sound, the reader, and the Titan category of the buffer
+            # system. Reusing it is what makes a client's news behave like
+            # Titan's own rather than like a line in a file.
+            from src.ui.notificationcenter import show_notification
+            show_notification(app, content)
+        return True
+    ok, error = run_on_gui(add)
+    if error:
+        raise RuntimeError(error)
+    return {'added': bool(ok), 'app': app, 'content': content}
+
+
+def _notification_clear(_args):
+    from src.ui.main_window_actions import _clear_notifications as clear
+    return {'said': clear()}
+
+def _client_report(args):
+    """What a client knows about the program it is inside.
+
+    The Elten bridge reports Elten - who is signed in, what Elten's own
+    notification service is holding, what has arrived - and Titan keeps the
+    last report so its AI and its add-ons can ask about a program Titan is
+    not in. Nothing is pushed at the user from here: this is a snapshot to
+    be READ. `notifications.add` is the other call, and that one is for
+    something the user should be told about now.
+    """
+    from src.titan_core import elten_client_actions
+    state = args.get('state')
+    if not isinstance(state, dict):
+        raise ValueError('state must be an object')
+    return elten_client_actions.report(state, args.get('source') or None)
+
 
 # --------------------------------------------------------------------------- #
 # Titan's own sounds
@@ -449,6 +658,15 @@ def _play_sound(args):
 
     def play():
         from src.titan_core import sound
+        # The AI's own set belongs to the FEATURE rather than to a theme, so
+        # Titan plays it through `play_ai_sound` - the user's theme first,
+        # the default set filling in. A client naming one of those sounds
+        # means the AI event it is named after, and should hear it on every
+        # theme exactly as Titan's own AI does.
+        if name.lower().startswith('ai/'):
+            player = getattr(sound, 'play_ai_sound', None)
+            if player is not None:
+                return bool(player(name))
         sound.play_sound(name, pan=None if pan in (None, '') else float(pan))
         return True
     played, error = run_on_gui(play)
@@ -505,6 +723,12 @@ CALLS = {
     'addons.list': _addons,
     'addons.actions': _addon_actions,
     'addons.run': _addon_run,
+    'macros.list': _macros,
+    'cling.list': _cling,
+    'window.state': _window_state,
+    'notifications.add': _notification_add,
+    'notifications.clear': _notification_clear,
+    'client.report': _client_report,
 }
 
 

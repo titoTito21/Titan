@@ -38,6 +38,10 @@ class TitanConsole
 
   def open
     return if !TitanUI.require_tce(@bus)
+    # The screen opening, not the keyboard arriving on the list - that one
+    # is `applist`, and the list itself plays it the moment it is given the
+    # keyboard. Playing it here as well was the same arrival twice.
+    TitanSounds.event(:open)
     @views = read_views + [{"id" => "widgets", "short_name" => _("Widgets")},
                            {"id" => "components", "short_name" => _("Components")}]
     # With Titan replacing the desktop, taskbar and Start menu, that desktop
@@ -45,8 +49,12 @@ class TitanConsole
     # view of its own here too.
     @shell ||= TitanShell.new(@bus)
     @views.push({"id" => "shell", "short_name" => _("System desktop")}) if @shell.running?
-    @list = ListBox.new([], :header => _("Titan"))
-    @status = ListBox.new([], :header => _("Status bar"))
+    # **`applist` for the list and `statusbar` for the status bar.** Those
+    # are the two sounds TCE plays for exactly these two arrivals in its own
+    # main window, and this IS that window.
+    @list = TitanSounds.cued(ListBox.new([], :header => _("Titan")))
+    @status = TitanSounds.cued(ListBox.new([], :header => _("Status bar")),
+                               TitanSounds::STATUS)
     @menu = Button.new(_("Menu"))
     @assistant = Button.new(_("AI Assistant"))
     @more = Button.new(_("Everything else"))
@@ -68,6 +76,7 @@ class TitanConsole
     fill
     fill_status
     pump
+    TitanSounds.event(:close)
   end
 
   # ------------------------------------------------------------- the tab bar
@@ -112,6 +121,8 @@ class TitanConsole
     return if @views.size < 2
     @tab = (@tab + direction) % @views.size
     fill
+    # The same sound TCE plays when its own tab bar moves.
+    TitanSounds.event(:switch)
     speak(header)
   end
 
@@ -376,48 +387,92 @@ class TitanConsole
   end
 
   # ----------------------------------------------------------- the menu bar
+  # **The same menu as every other face of Titan.**
+  # `src/ui/program_menu.py` is the module Titan's graphical window, its
+  # Invisible UI and Klango mode all build their menu from, and all three
+  # present it as GROUPS you enter - Program, AI, Programmer - because
+  # sixteen entries in one list is a longer menu rather than the same one.
+  # This flattened them into "Program: Settings", "AI: AI Agent",
+  # "Programmer: ..." in a single list, which is neither Titan's menu nor a
+  # menu: it was the group name repeated down the screen with the entries
+  # interleaved. So the group is chosen first and its entries second, and
+  # Escape at the second level comes back to the first, exactly as leaving
+  # a subcategory does in the Invisible UI.
   def program_menu
     answer = TitanUI.ask(@bus, "titan", "menu", {}, :title => _("Menu"))
     return alert(answer.text.to_s) if !answer.ok?
     data = JSON.parse(answer.text) rescue nil
-    groups = data.is_a?(Hash) ? (data["groups"] || []) : []
+    groups = menu_groups(data.is_a?(Hash) ? (data["groups"] || []) : [])
     return alert(_("Titan's menu is empty.")) if groups.empty?
-    # Titan translated these into its own language; the ids are stable, so
-    # the entries this add-on knows are said in Elten's.
-    known = {"install_package" => "Install data package",
-             "ai_agent" => "AI Agent", "ai_assistant" => "AI Assistant",
-             "ai_assistant_live" => "AI Assistant (live)",
-             "ai_ocr" => "AI OCR", "ai_projects" => "Projects"}
-    group_names = {"program" => "Program", "ai" => "AI",
-                   "programmer" => "Programmer"}
-    entries = []
-    groups.each do |group|
-      group_label = group_names[group["id"].to_s]
-      group_label = group_label ? _(group_label) : group["label"].to_s
-      (group["entries"] || []).each do |entry|
-        label = known[entry["id"].to_s]
-        label = label ? _(label) : entry["label"].to_s
-        entries.push([entry["id"].to_s, "#{group_label}: #{label}"])
-      end
+    loop do
+      chosen_group = select_action(groups.map { |group| [group[0], group[1]] },
+                                   :header => _("Titan menu"))
+      return if chosen_group == nil
+      group = groups.find { |entry| entry[0] == chosen_group }
+      next if group == nil
+      TitanSounds.event(:menu)
+      chosen = select_action(group[2].map { |entry| [entry[0], entry[1]] },
+                             :header => group[1])
+      # Escape inside a group is one level back, not out of the menu - the
+      # same as Escape anywhere else in this add-on.
+      next if chosen == nil
+      return run_menu_entry(chosen)
     end
-    # The entries every face of Titan has of its own - Titan's menu module
-    # returns the ones that are shared, and these are the rest of the
-    # Program menu: the settings, the help, and putting Titan away or
-    # bringing it back.
-    entries.push(["__settings__", _("Program: Settings")])
-    entries.push(["__components__", _("Program: Component Manager")])
-    entries.push(["__help__", _("Program: Help")])
-    entries.push(["__minimize__", _("Program: Minimize")])
-    entries.push(["__restore__", _("Program: Bring Titan back")])
-    chosen = select_action(entries, :header => _("Titan menu"))
-    return if chosen == nil
+  end
+
+  # Titan's own ids for its menu groups and the entries this add-on knows,
+  # so they are said in ELTEN's language. Titan translated them into its
+  # own, and the ids are what is stable.
+  GROUP_NAMES = {"program" => "Program", "ai" => "AI",
+                 "programmer" => "Programmer"}.freeze
+  ENTRY_NAMES = {"install_package" => "Install data package",
+                 "ai_agent" => "AI Agent", "ai_assistant" => "AI Assistant",
+                 "ai_assistant_live" => "AI Assistant (live)",
+                 "ai_ocr" => "AI OCR", "ai_projects" => "Projects"}.freeze
+
+  # [[id, label, [[entry id, entry label], ...]], ...]
+  def menu_groups(groups)
+    out = []
+    groups.each do |group|
+      id = group["id"].to_s
+      label = GROUP_NAMES[id]
+      label = label ? _(label) : group["label"].to_s
+      entries = (group["entries"] || []).map do |entry|
+        name = ENTRY_NAMES[entry["id"].to_s]
+        [entry["id"].to_s, name ? _(name) : entry["label"].to_s]
+      end
+      out.push([id, label, entries])
+    end
+    program = out.find { |group| group[0] == "program" }
+    if program == nil
+      program = ["program", _("Program"), []]
+      out.unshift(program)
+    end
+    # The rest of the Program menu: what Titan's menu module hands over is
+    # only what every face SHARES, and each face adds its own settings,
+    # component manager and help. So does this one.
+    program[2].push(["__settings__", _("Settings")])
+    program[2].push(["__components__", _("Component Manager")])
+    program[2].push(["__help__", _("Help")])
+    # **One entry, not two.** Which of them applies is a question about
+    # where Titan is right now - hidden with a tray icon and the Invisible
+    # UI answering the keyboard, or in front of the user - and offering
+    # both means offering one that does nothing.
+    state = @api.data("window.state", {}) || {}
+    if state["has_window"] == true
+      program[2].push(state["away"] == true ?
+                        ["__restore__", _("Bring Titan back")] :
+                        ["__minimize__", _("Minimize")])
+    end
+    out
+  end
+
+  def run_menu_entry(chosen)
     case chosen
     when "__settings__"
-      TitanSettings.new(@bus).open
-      return
+      return TitanSettings.new(@bus).open
     when "__components__"
-      TitanComponents.new(@bus).open
-      return
+      return TitanComponents.new(@bus).open
     when "__help__"
       answer = TitanUI.perform(@bus, "titan", "open_help", {}, :title => _("Help"))
       alert(answer.text.to_s) if answer != nil

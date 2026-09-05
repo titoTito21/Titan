@@ -4042,6 +4042,69 @@ add-on's action (`titan_actions.call(...)` / `list_addons()`), which is how an
 add-on in its own process reaches components and other applications. Both ends
 dispatch on worker threads so a handler that calls back cannot deadlock.
 
+**A CLIENT is not an add-on, and Titan says when one arrives.** An add-on
+SERVES actions - tEdit says "here is open_file and save" and Titan calls into
+it - and the user just opened it, so they know. A client serves nothing and
+only calls: it is another program taking hold of Titan, and nothing else on
+this desktop would tell them. So a hello carrying `"client": true` (or one
+declaring no actions at all) is announced - "External client initialized" /
+"External client closed", in Titan's own voice, with
+`system/sysprocess_open.ogg` / `sysprocess_close.ogg` under it, debounced so a
+dropped and re-made connection is not two arrivals. `src/titan_core/actions/
+bus.py`; tests in `tests/test_action_bus_client.py` (10).
+
+**`titan.bridge` is the typed doorway a CLIENT should use**
+(`src/titan_core/bridge_api.py`). Actions answer in prose, in the user's own
+language, because they are written for a model and for macros - and a program
+rebuilding Titan's interface that reads a list out of one gets it wrong in a
+way no test catches. Every live bug the Elten bridge hit was that: the whole
+line "- Voice demo (ctrl+alt+v) [tcs]" handed back as a macro's NAME, "logoff:"
+sent where `logoff` was wanted, a drive opened by its label. So the surface is
+one action carrying JSON, one shape for every answer (`{"ok":…, "data":…}`),
+and a version - `macros.list`, `cling.list`, `apps.list`, `settings.*`,
+`widgets.*`, `window.state`, `notifications.add`, `client.report`,
+`sounds.play`, and `addons.*` for anything nobody has written a call for.
+
+**A client may SERVE as well as call, and the Elten bridge does.** It
+declares `status` / `notifications` / `news` in its hello, so Titan lists
+them and its AI is told what they are for, and `elten_client.*` asks the
+running Elten first and falls back to the last report - saying how old that
+is - only when Elten has gone. The invoke is answered by the client INSIDE
+the read it is already doing while waiting for its own answer: Titan may be
+asking because of the very call being waited on, and a reader that deferred
+the invoke would be two sides waiting for each other.
+
+**Reading Elten's SCREEN needs Elten's own thread**, so the bridge carries a
+marshaller of its own (`elten_main.rb`) drained on the extension tick - the
+same shape as `run_on_gui`, with a per-tick budget and a deadline, because a
+job there is time Elten is not answering the keyboard in. `elten_client.screen`
+is what it buys: Elten is self-voicing, so what it last said is the closest
+thing there is to what is showing, and beside it are the current scene's
+controls read off the scene by SHAPE rather than by variable name. `programs`
+and `run_program` are the acting pair, `confirm`-marked because a program
+opens in front of whoever is sitting at Elten.
+
+**Elten's data is shared only after Elten's user has said so.** The bridge
+asks once, in Elten, in plain words - "The AI assistant will use data stored
+on the Elten portal. Do you agree to share the necessary data with TCE?" -
+at the top of its own window rather than on its tick, and shares nothing at
+all until it is answered. No leaves everything Titan-shaped working, because
+none of that is Elten's data; the answer is a switch in the add-on's own
+settings afterwards. `elten-tce-bridge/titan_consent.rb`.
+
+**A client can put its own program's news into Titan.** `notifications.add`
+lands where Titan's own notifications land - the notification centre, the Titan
+category of the buffer system, the notification sound - and `client.report`
+parks a snapshot of the program the client is inside.
+`src/titan_core/elten_client_actions.py` keeps the last one and is the
+`elten_client` provider (`status`, `notifications`, `news`, `report`), with
+`src/ai/tools/elten_client_tools.py` putting the first three in front of the
+assistant. That is what makes "is Elten open?" and "have I anything waiting in
+Elten?" answerable: Titan's own `elten_*` tools ask the EltenLink SERVER, and
+these are answered from INSIDE the running client by
+`elten-tce-bridge/` - the Elten application that is Titan inside Elten, the
+opposite direction from `data/components/elten_bridge/`.
+
 **Titan's own subsystems are providers too** (`builtin.py`), so an add-on never
 reimplements Titan: `titan` (settings, components, add-ons, TTS engines),
 `settings` (find a setting by what it does), `system` (volume, playback device,

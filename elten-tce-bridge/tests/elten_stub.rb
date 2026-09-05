@@ -59,6 +59,7 @@ end
 
 class ListBox < Control
   attr_accessor :index
+  attr_accessor :silent
   attr_reader :options
   def initialize(options = [], header: "", index: 0, **_o)
     super()
@@ -194,6 +195,17 @@ class Program
     def integers; @integers ||= []; end
     def text(key, label:, get:, set:) end
     def choice(key, label:, choices:, get:, set:) end
+    def multi_choice(key, label:, choices:, get:, set:) end
+    # Elten's settings builder has this and it becomes a real Button whose
+    # press runs the block - which is what the shortcut to TCE's own
+    # settings is. A stub without it is a stub that lets an add-on ship
+    # calling a method Elten's dialog does not have.
+    def action(key, label:, &block)
+      @actions ||= []
+      @actions.push([key, label, block])
+      self
+    end
+    def actions; @actions ||= []; end
   end
 
   class ExtensionStub

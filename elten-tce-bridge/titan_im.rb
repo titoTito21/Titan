@@ -84,9 +84,9 @@ class TitanIM
       if !answer.ok?
         [[answer.text.to_s, nil]]
       else
-        lines = answer.text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
-        lines = lines.reject(&:empty?)
-        lines.map { |name| [name, {"open" => "write", "service" => service, "name" => name}] }
+        contact_names(answer.text).map do |name|
+          [name, {"open" => "write", "service" => service, "name" => name}]
+        end
       end
     end
     TitanUI::Screen.new(@bus, label, [[label, rows]],
@@ -97,8 +97,7 @@ class TitanIM
     rows = proc do
       answer = TitanUI.ask(@bus, "elten", "list_conversations", {}, :title => label)
       return [[answer.text.to_s, nil]] if !answer.ok?
-      answer.text.to_s.split("\n").map { |line| line.strip }.reject(&:empty?).map do |line|
-        name = line.sub(/\A\d+\.\s*/, "").split(" - ").first.to_s
+      list_rows(answer.text).map do |line, name|
         [line, {"open" => "elten_chat", "name" => name}]
       end
     end
@@ -114,12 +113,46 @@ class TitanIM
     answer = TitanUI.ask(@bus, "im", "list_chats", {"service" => service},
                          :title => _("Reading..."))
     return [[answer.text.to_s, nil]] if !answer.ok?
-    lines = answer.text.to_s.split("\n").map { |line| line.strip }.reject(&:empty?)
-    return [[_("No conversations."), nil]] if lines.empty?
-    lines.map do |line|
-      name = line.sub(/\A\d+\.\s*/, "").split(" - ").first.to_s
+    rows = list_rows(answer.text)
+    return [[answer.text.to_s, nil]] if rows.empty?
+    rows.map do |line, name|
       [line, {"open" => "chat", "service" => service, "chat" => name}]
     end
+  end
+
+  # **A row is a sentence about somebody; what goes back is their NAME.**
+  # Titan writes a conversation as `- <name> [3 unread] - <last message>`
+  # and puts a heading above the list. Splitting on " - " and keeping the
+  # first piece handed back "- Dawid [3 unread]" - the dash, the name and
+  # the count - and no conversation could be opened with it.
+  #
+  # Answers [[what to show, what to send], ...].
+  def list_rows(text)
+    text.to_s.split("\n").map { |line| line.strip }.reject do |line|
+      # The heading a listing puts above itself is not one of the things
+      # in it.
+      line.empty? || line.end_with?(":")
+    end.map { |line| [line, entry_name(line)] }
+  end
+
+  def entry_name(line)
+    text = line.to_s.strip.sub(/\A\d+\.\s*/, "").sub(/\A[-\u2022]\s*/, "")
+    # A marker in brackets and a preview after a dash are both about the
+    # row, not part of the name. Whichever comes first ends it.
+    ends = [text.index(" ["), text.index(" - ")].compact
+    ends.empty? ? text : text[0...ends.min].strip
+  end
+
+  # `titan.list_im_contacts` answers ONE line - "Online Titan-Net users: a,
+  # b, c" - so read as lines it is a single row that is not a person.
+  def contact_names(text)
+    body = text.to_s.strip
+    if body.include?(":") && !body.include?("\n")
+      body = body.split(":", 2).last.to_s
+      return [] if body.strip.start_with?("(")
+      return body.split(",").map(&:strip).reject(&:empty?)
+    end
+    list_rows(text).map { |_line, name| name }.reject(&:empty?)
   end
 
   def titan_net_people
@@ -183,7 +216,7 @@ class TitanIM
   # Enter on a message reads the whole of it, because a row is one line and
   # a message is not.
   def conversation(service, chat, header)
-    list = ListBox.new([], :header => header)
+    list = TitanSounds.cued(ListBox.new([], :header => header))
     entry = EditBox.new(_("Write a message"))
     send_button = Button.new(_("Send"))
     back = Button.new(_("Back"))
@@ -216,6 +249,7 @@ class TitanIM
                                  {"service" => service, "chat" => chat,
                                   "text" => text}, :title => _("Sending..."))
         if answer != nil && answer.ok?
+          TitanSounds.play(TitanSounds::SENT)
           entry.set_text("")
           refresh.call
         elsif answer != nil

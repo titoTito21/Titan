@@ -153,6 +153,232 @@ own engine - changing the whole desktop because somebody picked a voice in
 Elten. Which engine speaks is Titan's setting, and this bridge has a screen
 for it.
 
+## A shape, not a sentence
+
+Titan's ACTIONS answer in prose, in the user's own language, because they
+are written for a model and for macros. Reading a list out of one is what
+this add-on kept getting wrong, and every instance of it was a live bug the
+user hit:
+
+| what was read | what went back to Titan | what the user saw |
+| --- | --- | --- |
+| `macros.list_macros` | `- Voice demo (ctrl+alt+v) [tcs]` | *There is no macro called...* |
+| `cling.list_applications` | `- Mole No More (mole, grid_hunt): ...` | *There is no Cling application called...* |
+| `shell.power_options` | `logoff:` | *This computer can do: logoff, shutdown...* |
+| `shell.list_drives` | `Windows` | a folder that does not exist |
+| `shell.list_folder` | `1. appcompat - File folder` | a folder that does not exist |
+| `im.list_chats` | `- Ala [3 unread]` | no conversation opened |
+| `titan.list_im_contacts` | the whole sentence, as one contact | one row, nobody in it |
+
+So the two lists whose rows are ACTED on by name come from the typed surface
+instead - `macros.list` and `cling.list` in
+`src/titan_core/bridge_api.py`, which give the name to hand back apart from
+everything that is only there to be read - and the rest name what they are
+parsing and are checked against Titan's own wording in
+`tests/fake_titan.py`. A stand-in that invents an easier shape is how every
+one of these passed the tests and failed in front of the user.
+
+`tests/check_titan_actions.py` is the other half: it reads every action this
+add-on names out of the Ruby and checks it against Titan's OWN registry, so
+"'Cling' has no action 'list_apps'" is a failed test rather than a message
+to the user.
+
+## Titan's menu, and Titan's news
+
+**The menu is the one every face of Titan has.** `src/ui/program_menu.py`
+is the module Titan's window, its Invisible UI and Klango mode all build
+their menu from, and all three present it as GROUPS you enter - Program,
+AI, Programmer. This flattened them into one list of "Program: Settings",
+"AI: AI Agent", which is neither Titan's menu nor a menu. The group is
+chosen first and its entries second, and Escape at the second level is one
+level back.
+
+**Minimize and Bring Titan back are one entry, not two.** Which one applies
+is a question about where Titan is - hidden with a tray icon and the
+Invisible UI answering the keyboard, or in front of the user - and
+`window.state` on the typed surface answers it. Offering both means
+offering one that does nothing.
+
+**Elten's own notifications go into Titan** (`elten_news.rb`). This is the
+one thing that goes the other way through the wall: the bridge is the only
+thing on the machine that is inside both, so a notification Elten raises -
+a private message, a forum reply - is put into Titan's notification centre
+as Titan's own are, with Titan's sound and Titan's reader, and is then in
+the buffer system and in front of Titan's AI. It reads the list Elten's own
+background service already keeps in memory, so it costs nothing and reaches
+no network; the first look is what there IS and is never announced.
+
+It also reports a snapshot of Elten - who is signed in, what is waiting -
+which Titan keeps (`src/titan_core/elten_client_actions.py`). That is what
+gives Titan's assistant `elten_client_status`,
+`elten_client_notifications` and `elten_client_news`: "is Elten open?" and
+"have I anything waiting in Elten?" are now questions it can answer, which
+Titan's own `elten_*` tools cannot - those ask the EltenLink SERVER, and
+this is asked from inside the running client. Switched off in Settings ->
+"Show Elten's notifications in Titan too".
+
+## Titan can ask Elten, not only be told
+
+The bridge calls Titan constantly; the wire goes the other way too, and now
+it is used. `TitanBus#serve` registers what TITAN may ask of US - `status`,
+`notifications`, `news` - and the names travel in the hello, so Titan lists
+them like any add-on's and its AI is told what they are for. That is what
+makes "have I anything waiting in Elten?" a question answered by the running
+Elten rather than by whatever was last pushed at Titan.
+
+**The invoke is answered inside `read_answer`**, while this side is waiting
+for an answer of its own, and that is not an optimisation: Titan may be
+asking us something *because of* the very call we are waiting on, and a
+reader that stepped over an invoke until its own answer arrived would be two
+sides each waiting for the other. `tests/ui_test.rb` drives exactly that
+interleaving - the stand-in Titan sends an invoke while answering a call -
+because it is the one shape that would deadlock.
+
+**One thread still owns the pipe.** A handler runs on the bus worker, so
+every one of them is a cheap READ of state Elten's own service already holds
+- no network, no waiting, and nothing that touches Elten's screen, which
+belongs to Elten's own thread. A question that arrives while the worker is
+idle waits out the idle tick (5 s at worst) before it is seen; Titan allows
+eight.
+
+**Consent is checked in every handler, not once at the door.** It can be
+taken back at any moment, and an answer that was allowed a minute ago is not
+an answer that is allowed now. A refused handler answers a SENTENCE rather
+than a shape, and Titan passes that sentence through unchanged - so "no" is
+read as no, not as an empty Elten. An action nobody wrote is refused by name
+and the connection stays up.
+
+On Titan's side `src/titan_core/elten_client_actions.py` asks when Elten is
+there and falls back to the last report when it is not - and then says how
+old it is, so a stale answer is visibly stale.
+
+## Elten's own thread, and what only it can answer
+
+The two directions above are answered wherever they land: the bus worker
+reads a notification list Elten's background service keeps, or pushes a line
+into Titan. Reading what is ON Elten's screen, and putting something on it,
+cannot be - `insert_scene` runs Elten's own pump, and a scene's controls are
+being changed by the thread that draws them.
+
+So `elten_main.rb` is the marshaller, the same shape as Titan's own
+`run_on_gui`: a job is posted, **the extension tick runs it**, and the caller
+waits with a deadline. Three rules stop it becoming the thing that makes
+Elten stutter - a job is short (a read of what is already in memory, or
+`insert_scene`), a tick spends a BUDGET rather than the queue, and nobody
+waits for ever: a tick that is not coming is a refusal after six seconds, not
+a hang.
+
+`elten_screen.rb` is what that buys:
+
+* **`screen`** - what is on Elten at this moment. Elten is self-voicing, so
+  the sentence it last said (`$speech_lasttext`, the same global its own "say
+  that again" shortcut reads) is the closest thing there is to what is
+  showing; beside it are the scene's name and the controls it is holding,
+  read off the scene by SHAPE - anything answering like one of Elten's
+  controls - rather than by a list of variable names that would go stale at
+  the next Elten. A Form is opened out into its own fields with the focused
+  one marked, because a form reported as one thing called "form" says nothing
+  about what the user is on.
+* **`programs`** and **`run_program`** - Elten's own programs as its main
+  menu lists them (`Programs.list`), and opening one the way that menu opens
+  it. This one ACTS, in front of whoever is sitting at Elten, so Titan marks
+  it `confirm` and the assistant's tool always confirms.
+
+All three check the consent for themselves, and a screen is as much Elten's
+data as a notification is.
+
+## Asked before Elten's data leaves Elten
+
+Everything else here carries TITAN into Elten and needs nobody's permission
+for it: it is the user's own desktop, reached from the program they are
+sitting in. One thing goes the other way - what ELTEN knows about them, which
+is data held in the Elten portal, and Titan's AI assistant is one of the
+things that would then read it.
+
+So it is asked for, once, in plain words, the first time the add-on is
+opened:
+
+> The AI assistant will use data stored on the Elten portal. Do you agree to
+> share the necessary data with TCE?
+
+* **Nothing is shared until it is answered.** Not the notifications, not the
+  account name, not the fact that Elten is running. Somebody who never opens
+  this add-on is never asked and nothing ever leaves.
+* **No is a real answer.** Titan's window, its settings, Titan-Net, the
+  shell and the AI itself all go on working, because none of that is Elten's
+  data; only the Elten -> Titan direction stops.
+* **It is asked where the user is**, at the top of the add-on's own window -
+  never on the extension tick. A consent question that appears while
+  somebody is reading their messages is one they answer to get rid of.
+* **It can be taken back**, in this add-on's settings ("Share Elten's data
+  with TCE"), and revoking it stops the sharing at the next tick.
+
+`titan_consent.rb`. The wording is in the catalogue in both languages, and
+`tests/check_translations.py` fails if it is not - a consent question that
+arrives in English on a Polish Elten is not one the user can be said to have
+agreed to.
+
+**TCE's own settings are in this add-on's settings**, as an action button
+next to the switches, because that is where somebody looks for "the settings
+of the thing I am configuring" - and TCE's settings are this add-on's other
+half. It opens Titan's settings window rebuilt in Elten's controls, so it is
+Titan's own save with everything that hangs off it.
+
+## It sounds like TCE, because it is TCE
+
+Every screen here is one of Titan's, so it makes Titan's noises: the theme
+the user chose, played through Titan's own mixer (`sounds.play` on the
+bus), and switched off in one place - Settings -> "Use TCE sounds" - for
+somebody who would rather hear Elten's own.
+
+**Three of those sounds mean one thing each and are spent on nothing else.**
+They are the only ones every TCE theme carries, which is what makes them the
+vocabulary rather than decoration:
+
+| | |
+| --- | --- |
+| `core/FOCUS.ogg` | the cursor moved from one row to the next |
+| `ui/applist.ogg` | the keyboard ARRIVED on the list |
+| `ui/statusbar.ogg` | the keyboard ARRIVED on the status bar |
+
+So arriving on the main list of Titan's window plays `applist` and arriving
+on the status bar under it plays `statusbar` - which is exactly what TCE's
+own main window plays for those two movements (`play_applist_sound` from
+`_focus_current_view_control`, `play_statusbar_sound` from the status bar).
+
+**One sound per key, not one from each side.** Elten's controls are
+self-voicing and play their own cue as the cursor moves, so a screen that
+added Titan's on top made two noises for one arrow key - one from Elten's
+theme and one from Titan's. `TitanSounds.cued` is the pair that belongs
+together: it sets `silent` on the control (every one of Elten's own
+`play_sound` calls for `:move`, `:border`, `:select` and the focus
+marker is behind `@silent == false`, and its SPEECH is not, so the
+announcement is untouched) and then binds the four cues itself. Quieting a
+control without the second half is a silent list, which is how three screens
+here ended up making no sound at all.
+
+`:focus` is debounced by 0.3 s, because Elten focuses field 0 when a form is
+BUILT and the screen then asks for the keyboard itself - one arrival,
+announced twice.
+
+**Titan's own events are here by name** (`TitanSounds::EVENTS`,
+`TitanSounds.event(:error)`): the AI's set for the AI asking, answering and
+failing; `macro/` around a macro run from here; `system/volume.ogg` when
+the volume moves; the error, the tab bar, a window opening and closing, a
+message sent. An action of Titan's that happens in Elten sounds the way it
+sounds in Titan. Every name is checked against `sfx/default/` by
+`tests/sounds_test.rb` - a mapping to a file that is not there is silence,
+which is the one failure a user cannot tell from "this add-on makes no
+sound".
+
+**Titan says when this connects and when it goes.** The hello carries
+`"client": true` - this side drives Titan and serves no actions of its own -
+and Titan answers a client joining with "External client initialized" and a
+client leaving with "External client closed", spoken in Titan's own voice
+with `system/sysprocess_open.ogg` / `sysprocess_close.ogg` under it. An
+ADD-ON joining says nothing: opening tEdit is something the user just did,
+and a program somewhere else on the machine taking hold of Titan is not.
+
 ## How it reaches Titan
 
 One named pipe - `\\.\pipe\TitanActions`, Titan's action bus - speaking JSON

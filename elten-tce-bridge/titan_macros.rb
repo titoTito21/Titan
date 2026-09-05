@@ -15,6 +15,7 @@
 class TitanMacros
   def initialize(bus)
     @bus = bus
+    @api = TitanAPI.new(bus)
   end
 
   def open
@@ -26,13 +27,25 @@ class TitanMacros
                         :on_menu => method(:row_menu)).open
   end
 
+  # **The rows come as a shape, not as a sentence.** `macros.list_macros`
+  # answers the prose a model reads - "3 macros:" and then
+  # "- Voice demo (ctrl+alt+v) [tcs]" - and splitting that up handed the
+  # count, the shortcut and the type back to Titan as part of the name, so
+  # every macro opened as "There is no macro called '- Voice demo
+  # (ctrl+alt+v) [tcs]'". `macros.list` gives the name to act on apart from
+  # everything that is only there to be read.
   def rows
-    answer = TitanUI.ask(@bus, "macros", "list_macros", {}, :title => _("Reading..."))
-    return [[answer.text.to_s, nil]] if !answer.ok?
-    lines = answer.text.to_s.split("\n").map { |line| line.strip }.reject(&:empty?)
-    out = lines.map do |line|
-      name = line.sub(/\A\d+\.\s*/, "").split(/\s+[-\u2013]\s+|\s{2,}/).first.to_s
-      [line, {"do" => "run", "name" => name}]
+    answer = @api.call("macros.list", {}, :title => _("Reading..."))
+    if !answer.ok?
+      return [[answer.error.to_s == "" ? @api.unavailable_message : answer.error.to_s,
+               nil]]
+    end
+    out = (answer["macros"] || []).map do |macro|
+      name = macro["name"].to_s
+      label = name
+      label += " (%s)" % macro["hotkey"].to_s if macro["hotkey"].to_s != ""
+      label += " [%s]" % macro["type"].to_s if macro["type"].to_s != ""
+      [label, {"do" => "run", "name" => name}]
     end
     out.push([_("Write a new macro..."), {"do" => "new"}])
     out
@@ -55,8 +68,12 @@ class TitanMacros
 
   def run(name, label)
     return if !confirm(_("Run %s?") % name)
+    # The two sounds TCE plays around a macro of its own, so a macro run
+    # from Elten is heard beginning and ending the way it would over there.
+    TitanSounds.event(:macro_start)
     answer = TitanUI.perform(@bus, "macros", "run_macro", {"name" => name},
                              :title => label)
+    TitanSounds.event(:macro_end)
     TitanUI.tell(answer, label) if answer != nil
   end
 

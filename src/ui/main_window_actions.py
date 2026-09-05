@@ -255,6 +255,25 @@ def _widget_instance(wanted):
     used from another program, and its words belong to that program's voice.
     """
     said = []
+
+    def capture(text, interrupt=True, position=0.0, pitch_offset=0,
+                elevation=0.0, *_more, **_options):
+        """What the widget says, kept instead of spoken.
+
+        **It has to take everything a widget passes.** A widget is a thing
+        with a cursor in it and it places what it says - `self.speak(text,
+        position=position, pitch_offset=pitch_offset)` is the quick
+        settings' own line, and the grid widgets do the same - because
+        Titan's non-visual interface hands them `InvisibleUI.speak`, whose
+        signature that is. A one-argument stand-in therefore raised
+        `TypeError: got an unexpected keyword argument 'position'` the
+        moment the cursor moved in a grid, which reached the user as
+        "Could not activate it" on every widget but the two flat ones.
+        The extras are accepted and dropped: this is being read to somebody
+        in another program, in that program's own voice.
+        """
+        said.append(str(text))
+
     for name, module, info in _widget_modules():
         label = str(info.get('name') or name)
         if label.lower() != wanted and name.lower() != wanted:
@@ -263,13 +282,13 @@ def _widget_instance(wanted):
             return None, said, label
         instance = _widget_instances.get(name)
         if instance is None:
-            instance = module.get_widget_instance(lambda text: said.append(str(text)))
+            instance = module.get_widget_instance(capture)
             _widget_instances[name] = instance
         else:
             # The instance keeps the speak function it was made with, so the
             # list it appends to is swapped rather than the instance rebuilt.
             try:
-                instance.speak = lambda text: said.append(str(text))
+                instance.speak = capture
             except Exception:
                 pass
         return instance, said, label

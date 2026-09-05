@@ -56,6 +56,12 @@ module TitanUI
     6.times do
       answer = ask(bus, addon, action, args, :title => title)
       if answer.pending?
+        # Titan asking for something it needs before it can act. TCE plays a
+        # sound of its own the moment one of these appears, because the
+        # question usually arrives while the user is listening to something
+        # else and a dialog they were not told about is a dialog they do not
+        # know is there.
+        TitanSounds.event(:dialog)
         reply = answer_question(answer.question)
         return nil if reply == nil                 # the user cancelled
         args[answer.question["name"].to_s] = reply
@@ -87,6 +93,12 @@ module TitanUI
   # say-all and copy working on it.
   def tell(answer, title = "")
     text = answer.respond_to?(:text) ? answer.text.to_s : answer.to_s
+    # An action of Titan's that failed sounds the way one failing in Titan
+    # sounds. It is said as well - the sound is what is heard first, the
+    # sentence is what says which thing went wrong. Nothing is played for
+    # success: an answer that worked is the ordinary case, and a noise per
+    # action is a noise the user stops hearing.
+    TitanSounds.event(:error) if answer.respond_to?(:ok?) && !answer.ok?
     return alert(_("Done.")) if text.strip == ""
     if text.length > 200 || text.include?("\n")
       display_text(text, :header => title.to_s)
@@ -99,6 +111,7 @@ module TitanUI
   # can do nothing on its own.
   def require_tce(bus)
     return true if bus != nil && bus.connected?
+    TitanSounds.event(:error)
     alert(_("This add-on needs TCE. Start Titan, then open this again."))
     false
   end
@@ -124,7 +137,8 @@ module TitanUI
     end
 
     def open
-      @list = ListBox.new([], :header => @title)
+      TitanSounds.event(:open)
+      @list = TitanSounds.cued(ListBox.new([], :header => @title))
       @back = Button.new(_("Back"))
       @form = Form.new([@list, @back])
       @form.cancel_button = @back
@@ -132,11 +146,16 @@ module TitanUI
       # Left and Right on a vertical list arrive as Elten's :collapse and
       # :expand, which is what makes the tab bar possible without inventing
       # a control: the categories cycle and the list under them follows.
+      # The cues themselves are `TitanSounds.cued` above - arriving on the
+      # list, moving down it, its ends and choosing a row, each exactly the
+      # sound TCE plays for that movement, and Elten quieted so there is one
+      # sound per key rather than one from each.
       @list.on(:expand) { cycle(1) }
       @list.on(:collapse) { cycle(-1) }
       @list.on(:select) { open_row }
       fill
       pump
+      TitanSounds.event(:close)
     end
 
     private
@@ -149,6 +168,8 @@ module TitanUI
       return if @tabs.size < 2
       @tab = (@tab + direction) % @tabs.size
       fill
+      # The same sound TCE plays when its own tab bar moves.
+      TitanSounds.event(:switch)
       speak(header)
     end
 
@@ -162,6 +183,7 @@ module TitanUI
       @rows = []
       @list.options = []
       @list.header = header
+      TitanSounds.event(:error)
       alert(_("That could not be read: %s") % "#{e.class}: #{e.message}")
     end
 
@@ -196,6 +218,7 @@ module TitanUI
         end
         if @on_menu != nil && key_pressed?(:key_context_menu)
           row = current
+          TitanSounds.event(:menu) if row != nil
           if row != nil
             @on_menu.call(row[1], row[0])
             fill

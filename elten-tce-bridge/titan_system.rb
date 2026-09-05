@@ -75,6 +75,9 @@ class TitanSystem
       next if moved == 0 || form.index != 0
       level = [[level + moved, 0].max, 100].min
       run("set_volume", {"percent" => level.to_s})
+      # TCE plays this whenever the volume moves, and the volume moving
+      # here is the same event on the same machine.
+      TitanSounds.event(:volume)
       surface.label = volume_label(level)
       speak(surface.label)
     end

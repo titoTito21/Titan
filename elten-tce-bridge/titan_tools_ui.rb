@@ -141,9 +141,11 @@ class TitanTools
         TitanUI.tell(started, name) if started != nil
         next
       end
-      entry = entries[index - 2].to_s
-      # A listing is "name  size  type"; what can be walked into is the name.
-      name = entry.split(/\s{2,}/).first.to_s
+      # `desktop.list_files` writes one NAME per line with a folder marked
+      # by a trailing slash - no columns at all - so splitting on two
+      # spaces was reading a shape nothing produces, and the slash went
+      # into the path with it.
+      name = entries[index - 2].to_s.sub(/\/\z/, "")
       here = here.to_s == "" ? name : "#{here}\\#{name}"
     end
   end
@@ -180,8 +182,13 @@ class TitanTools
   end
 
   # ------------------------------------------------------------------ shared
+  # One thing per line, with the numbering an action puts in front of it
+  # taken off - and without the heading. `desktop.list_files` names the
+  # folder it is listing on the first line, and that line is not a file:
+  # offered as a row it walked into a folder called "C:\\Windows:".
   def lines(text)
-    text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }.reject(&:empty?)
+    text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
+        .reject { |line| line.empty? || line.end_with?(":") }
   end
 
   def ask(prompt)

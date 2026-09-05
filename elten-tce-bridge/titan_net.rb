@@ -382,7 +382,7 @@ class TitanNetClient
   # The shape both a room and a private conversation have: the messages, a
   # field to write in, and Enter on a row to read one in full.
   def conversation_screen(header, reader, sender)
-    list = ListBox.new([], :header => header)
+    list = TitanSounds.cued(ListBox.new([], :header => header))
     entry = EditBox.new(_("Write a message"))
     send_button = Button.new(_("Send"))
     back = Button.new(_("Back"))
@@ -410,6 +410,7 @@ class TitanNetClient
       if text.strip != ""
         answer = sender.call(text)
         if answer != nil && answer.ok?
+          TitanSounds.play(TitanSounds::SENT)
           entry.set_text("")
           refresh.call
         elsif answer != nil

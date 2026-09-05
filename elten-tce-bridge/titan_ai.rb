@@ -109,7 +109,13 @@ class TitanAI
   # move through.
   def chat
     return if !TitanUI.require_tce(@bus)
-    list = ListBox.new([], :header => _("Titan AI"))
+    # Asked once, and this is the screen the question is ABOUT - somebody
+    # who reached the assistant through a quick action rather than through
+    # the add-on's own window has not been asked yet. It is idempotent: an
+    # answer already given is not asked for again, and No does not stop the
+    # assistant, which is Titan's and works without Elten's data.
+    TitanConsent.ensure_answered if defined?(TitanConsent)
+    list = TitanSounds.cued(ListBox.new([], :header => _("Titan AI")))
     entry = EditBox.new(_("Say something"))
     send_button = Button.new(_("Send"))
     act_button = Button.new(_("Send, and let it act"))
@@ -130,10 +136,20 @@ class TitanAI
     say_it = proc do |act|
       text = entry.text.to_s
       next if text.strip == ""
+      # TCE keeps the AI its own set of sounds and plays them for exactly
+      # these three moments - the question going out, the answer arriving,
+      # and the AI failing to act. This is Titan's AI, so it makes Titan's
+      # noises here too.
+      TitanSounds.event(:ai_sent)
       answer = TitanUI.ask(@bus, "titan", "ask_ai",
                            {"question" => text, "act" => act ? "true" : "false"},
                            :title => _("Asking the AI..."))
-      entry.set_text("") if answer.ok?
+      if answer.ok?
+        entry.set_text("")
+        TitanSounds.event(:ai_answer)
+      else
+        TitanSounds.event(:ai_error)
+      end
       refresh.call
       # Spoken as well as listed, unless the user turned that off: a reader
       # should not have to go looking for what it just asked for, but
@@ -151,6 +167,7 @@ class TitanAI
     end
     back.on(:press) { running = false }
 
+    TitanSounds.event(:ai_ready)
     refresh.call
     form.focus
     while running

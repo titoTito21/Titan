@@ -9,6 +9,7 @@
 class TitanCling
   def initialize(bus)
     @bus = bus
+    @api = TitanAPI.new(bus)
   end
 
   def open
@@ -20,13 +21,30 @@ class TitanCling
                         :on_menu => method(:row_menu)).open
   end
 
+  # **The identifier is what goes back, not the line.**
+  # `cling.list_applications` answers the prose a model reads - a heading
+  # and then "- Mole No More (mole, grid_hunt): a game of moles" - and
+  # splitting that up handed the whole line back as the name, so every
+  # application opened as "There is no Cling application called '- Mole No
+  # More (mole, grid_hunt): ...'". `cling.list` gives each application's own
+  # `id`, which is the first thing Cling matches on.
   def rows
-    answer = TitanUI.ask(@bus, "cling", "list_applications", {},
-                         :title => _("Reading..."))
-    return [[answer.text.to_s, nil]] if !answer.ok?
-    answer.text.to_s.split("\n").map { |line| line.strip }.reject(&:empty?).map do |line|
-      name = line.sub(/\A\d+\.\s*/, "").split(/\s+[-\u2013]\s+/).first.to_s
-      [line, {"do" => "run", "name" => name}]
+    answer = @api.call("cling.list", {}, :title => _("Reading..."))
+    if !answer.ok?
+      return [[answer.error.to_s == "" ? @api.unavailable_message : answer.error.to_s,
+               nil]]
+    end
+    found = answer["applications"] || []
+    return [[_("No Klango applications are installed."), nil]] if found.empty?
+    found.map do |app|
+      label = app["name"].to_s
+      label += " - %s" % app["summary"].to_s if app["summary"].to_s != ""
+      # An application Cling has found but cannot start says so on its own
+      # row rather than failing when it is pressed.
+      label = "%s (%s)" % [label, app["why"].to_s] if app["locked"] == true
+      [label, app["locked"] == true ? nil : {"do" => "run",
+                                             "name" => app["id"].to_s,
+                                             "label" => app["name"].to_s}]
     end
   end
 
@@ -40,7 +58,7 @@ class TitanCling
     return if !value.is_a?(Hash)
     case value["do"]
     when "run"
-      return if !confirm(_("Start %s in Titan?") % value["name"])
+      return if !confirm(_("Start %s in Titan?") % (value["label"] || value["name"]))
       answer = TitanUI.perform(@bus, "cling", "run", {"name" => value["name"]},
                                :title => label)
       TitanUI.tell(answer, label) if answer != nil

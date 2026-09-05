@@ -6,7 +6,7 @@
 require "json"
 require_relative "elten_stub"
 BASE = File.expand_path("..", __dir__)
-%w[titan_bus titan_ui titan_api titan_prefs titan_sounds titan_speech_output titan_watch titan_actions titan_settings
+%w[titan_bus titan_ui titan_api titan_prefs titan_consent titan_sounds elten_main elten_news elten_screen titan_speech_output titan_watch titan_actions titan_settings
    titan_net titan_im titan_system titan_tools_ui titan_widgets titan_components titan_macros titan_cling titan_ai titan_shell
    titan_areas titan_console].each { |f| require_relative "#{BASE}/#{f}" }
 
@@ -23,6 +23,9 @@ rescue Exception => e
 end
 
 bus = TitanBus.new(:pipe => "\\\\.\\pipe\\TitanBusProbe")
+# Before `start`, as the add-on does it: what this side SERVES travels
+# in the hello, so a bus started first joins saying it serves nothing.
+bus.serve(EltenNews.handlers)
 bus.start
 40.times { break if bus.connected?; sleep 0.1 }
 say "connected to the stand-in Titan: #{bus.connected?}"
@@ -335,16 +338,349 @@ end
 
 
 # --- macros, Cling and the AI, each as its own screen -------------------
-check("the Macro Manager lists macros and runs one") do
+check("the Macro Manager lists macros and runs THE ONE THAT WAS CHOSEN") do
   bus.call_sync("probe", "forget", {})
   macros = TitanMacros.new(bus)
   rows = macros.rows
   raise "no macros: #{rows.inspect}" if rows.size < 3          # two plus "write a new one"
-  raise "the shortcut is not shown" if !rows[0][0].include?("ctrl+alt+p")
+  raise "the shortcut is not shown" if !rows[0][0].include?("ctrl+alt+v")
+  # **The name handed back is the NAME.** This row used to be built by
+  # splitting the prose `list_macros` answers with, so what went back to
+  # Titan was "- Voice demo (ctrl+alt+v) [tcs]" and every macro opened as
+  # "There is no macro called ...". That is the whole of this assertion.
+  raise "the name carries the label with it: #{rows[0][1].inspect}" if
+    rows[0][1]["name"] != "Voice demo"
   $script = [true]                                             # confirm "Run?"
   macros.open_row(rows[0][1], rows[0][0])
   ran = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
-  raise "the macro did not run" if !ran.any? { |e| e[0] == "run_macro" && e[1] == "Poranek" }
+  raise "the macro did not run: #{ran.inspect}" if
+    !ran.any? { |e| e[0] == "run_macro" && e[1] == "Voice demo" }
+end
+
+# --- the menu, as every other face of Titan builds it -------------------
+check("the menu is Titan's GROUPS, not one flat list of Group: Entry") do
+  console = TitanConsole.new(bus)
+  console.instance_variable_set(:@api, TitanAPI.new(bus))
+  groups = console.menu_groups(JSON.parse(
+    bus.call_sync("titan", "menu", {}).text)["groups"])
+  ids = groups.map { |group| group[0] }
+  raise "the groups are not Titan's: #{ids.inspect}" if
+    !ids.include?("program") || !ids.include?("ai")
+  # Every entry is inside its group, and no label carries the group name
+  # with it - "Program: Settings" in one long list was the bug.
+  groups.each do |group|
+    group[2].each do |entry|
+      raise "an entry still carries its group: #{entry[1].inspect}" if
+        entry[1].include?(": ")
+    end
+  end
+  program = groups.find { |group| group[0] == "program" }
+  labels = program[2].map { |entry| entry[0] }
+  raise "the face's own entries are missing: #{labels.inspect}" if
+    !labels.include?("__settings__") || !labels.include?("__help__")
+end
+
+check("Minimize and Bring Titan back are one entry, whichever applies") do
+  console = TitanConsole.new(bus)
+  console.instance_variable_set(:@api, TitanAPI.new(bus))
+  groups = console.menu_groups(JSON.parse(
+    bus.call_sync("titan", "menu", {}).text)["groups"])
+  program = groups.find { |group| group[0] == "program" }
+  ids = program[2].map { |entry| entry[0] }
+  # The stand-in Titan says its window is up, so the entry is Minimize and
+  # "Bring Titan back" - which would do nothing - is not offered at all.
+  raise "both were offered: #{ids.inspect}" if
+    ids.include?("__minimize__") && ids.include?("__restore__")
+  raise "neither was offered: #{ids.inspect}" if
+    !ids.include?("__minimize__") && !ids.include?("__restore__")
+  raise "the wrong one for a window that is up: #{ids.inspect}" if
+    !ids.include?("__minimize__")
+end
+
+# --- Elten's own notifications, the other way through the wall ----------
+# A store the consent can really be written to and read back from, which
+# is what `TitanPrefs.source` is in the running add-on.
+class FakePrefsSource
+  attr_reader :state
+  def initialize(state = {}) @state = state; end
+  def bridge_setting(key, fallback) @state.fetch(key, fallback) end
+  def update_json(_name, _options = {})
+    yield(@state)
+    @state
+  end
+end
+
+check("nothing about Elten leaves Elten before the question is answered") do
+  bus.call_sync("probe", "forget", {})
+  TitanPrefs.source = FakePrefsSource.new
+  raise "it should not be answered yet" if TitanConsent.answered?
+  EltenNews.start(bus)
+  EltenNews.enabled = true
+  def EltenNews.read_notifications
+    [{:id => "1", :text => "Nowa wiadomosc", :cat => "message"}]
+  end
+  EltenNews.tick
+  EltenNews.instance_variable_set(:@last_looked, 0.0)
+  def EltenNews.read_notifications
+    [{:id => "2", :text => "Odpowiedz", :cat => "forum"},
+     {:id => "1", :text => "Nowa wiadomosc", :cat => "message"}]
+  end
+  EltenNews.tick
+  sent = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "something was shared unasked: #{sent.inspect}" if
+    sent.any? { |e| e[0] == "notification" || e[0] == "report" }
+end
+
+check("the question is the one that was asked for, and No really means no") do
+  source = FakePrefsSource.new
+  TitanPrefs.source = source
+  $said = []
+  $script = [false]
+  raise "No was read as yes" if TitanConsent.ensure_answered != false
+  raise "the wording is not the one agreed: #{$said.inspect}" if
+    !$said.first.to_s.include?("data stored on the Elten portal") ||
+    !$said.first.to_s.include?("share the necessary data with TCE")
+  raise "the answer was not remembered" if source.state["share_data"] != false
+  raise "a refusal must not read as unanswered" if !TitanConsent.answered?
+  raise "refused must not be granted" if TitanConsent.granted?
+  # And it is asked ONCE: a second call must not put the question up again.
+  $said = []
+  TitanConsent.ensure_answered
+  raise "it asked twice" if !$said.empty?
+end
+
+check("Elten's notifications reach Titan's notification centre") do
+  bus.call_sync("probe", "forget", {})
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  EltenNews.start(bus)
+  EltenNews.enabled = true
+  # The first look is what there IS - announcing it would be announcing the
+  # past - so nothing is sent for it.
+  def EltenNews.read_notifications
+    [{:id => "1", :text => "Nowa wiadomosc od Dawida", :cat => "message"}]
+  end
+  EltenNews.tick
+  sent = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "the backlog was announced" if sent.any? { |e| e[0] == "notification" }
+  # And then one really arrives.
+  def EltenNews.read_notifications
+    [{:id => "2", :text => "Odpowiedz na forum", :cat => "forum"},
+     {:id => "1", :text => "Nowa wiadomosc od Dawida", :cat => "message"}]
+  end
+  EltenNews.instance_variable_set(:@last_looked, 0.0)
+  EltenNews.tick
+  sent = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  new_ones = sent.select { |e| e[0] == "notification" }
+  raise "nothing reached Titan: #{sent.inspect}" if new_ones.size != 1
+  raise "the wrong one: #{new_ones.inspect}" if
+    new_ones[0][2] != "Odpowiedz na forum"
+  raise "it did not say it is Elten's" if new_ones[0][1] != "Elten"
+  raise "Titan was never told what Elten is" if !sent.any? { |e| e[0] == "report" }
+end
+
+# --- the shell: an identifier is not the first word of a sentence -------
+check("Power sends the identifier, not the first word with its colon") do
+  bus.call_sync("probe", "forget", {})
+  shell = TitanShell.new(bus)
+  $script = [0, true]              # choose the first entry, then confirm
+  shell.power
+  did = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "nothing happened: #{$said.inspect}" if !did.any? { |e| e[0] == "power" }
+  raise "the wrong thing: #{did.inspect}" if
+    !did.any? { |e| e[0] == "power" && e[1] == "logoff" }
+end
+
+check("a drive opens by its letter, not by its label") do
+  shell = TitanShell.new(bus)
+  rows = shell.drive_rows
+  raise "no drives: #{rows.inspect}" if rows.size != 2
+  raise "the label became the path: #{shell.drive_letter(rows[0][1]["name"]).inspect}" if
+    shell.drive_letter(rows[0][1]["name"]) != "C:"
+  raise "a drive with no label was not read" if
+    shell.drive_letter(rows[1][1]["name"]) != "D:"
+end
+
+check("a folder row is a NAME, not the whole line Titan wrote") do
+  shell = TitanShell.new(bus)
+  raise "the type came with it" if
+    shell.entry_name("1. Documents - File folder") != "Documents"
+  raise "the size came with it" if
+    shell.entry_name("2. readme.txt - Text Document, 2 KB") != "readme.txt"
+  # A name with a dash in it is kept whole: the type is after the LAST one.
+  raise "a name with a dash was cut" if
+    shell.entry_name("3. a - b.txt - Text Document, 1 KB") != "a - b.txt"
+end
+
+check("the file list drops the folder's own heading and the folder marks") do
+  tools = TitanTools.new(bus)
+  rows = tools.lines("C:\\Windows:\ndata/\nProgram Files/\nreadme.txt")
+  raise "the heading is a row: #{rows.inspect}" if rows.include?("C:\\Windows:")
+  raise "wrong rows: #{rows.inspect}" if rows != ["data/", "Program Files/", "readme.txt"]
+end
+
+check("a conversation opens as the PERSON, not as the line about them") do
+  im = TitanIM.new(bus)
+  rows = im.chats("telegram")
+  raise "the heading is a row: #{rows.inspect}" if
+    rows.any? { |row| row[0].to_s.end_with?(":") }
+  raise "the count came with the name: #{rows[0][1].inspect}" if
+    rows[0][1]["chat"] != "Ala"
+  raise "the last message came with the name: #{rows[1][1].inspect}" if
+    rows[1][1]["chat"] != "Family group"
+  # The row still SHOWS everything Titan wrote - the unread count and the
+  # last message are what makes a list of conversations readable.
+  raise "the row lost what it says" if !rows[0][0].include?("3 unread")
+end
+
+check("contacts on one line are people, not one row saying all of them") do
+  im = TitanIM.new(bus)
+  names = im.contact_names("Online Titan-Net users: Ala, Borys")
+  raise "wrong: #{names.inspect}" if names != ["Ala", "Borys"]
+  raise "nobody online should be nobody" if
+    !im.contact_names("Online Titan-Net users: (none online)").empty?
+end
+
+# --- the other direction: Titan asking Elten -----------------------------
+check("Titan may ASK Elten, and the names travel in the hello") do
+  declared = JSON.parse(bus.call_sync("probe", "served", {}).text) rescue []
+  names = declared.map { |entry| entry["name"] }
+  raise "the hello declared nothing: #{declared.inspect}" if names.empty?
+  %w[status notifications news].each do |wanted|
+    raise "#{wanted} is not offered to Titan: #{names.inspect}" if
+      !names.include?(wanted)
+  end
+  raise "an action with no summary is one nothing can be told about" if
+    declared.any? { |entry| entry["summary"].to_s.strip == "" }
+end
+
+check("an unasked-for Elten refuses to answer, in a sentence") do
+  TitanPrefs.source = FakePrefsSource.new
+  bus.serve(EltenNews.handlers)
+  answered = JSON.parse(bus.call_sync(
+    "probe", "invoke", {"action" => "notifications"}).text) rescue nil
+  raise "no answer came back" if answered == nil
+  raise "it answered anyway: #{answered.inspect}" if answered["ok"] != true
+  raise "it shared: #{answered.inspect}" if !answered["result"].is_a?(String)
+  raise "the refusal does not say why: #{answered["result"].inspect}" if
+    !answered["result"].to_s.include?("permission")
+end
+
+check("with permission, Titan gets what Elten has RIGHT NOW") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  def EltenNews.read_notifications
+    [{:id => "7", :text => "Wiadomosc na teraz", :cat => "message"}]
+  end
+  bus.serve(EltenNews.handlers)
+  answered = JSON.parse(bus.call_sync(
+    "probe", "invoke", {"action" => "notifications"}).text) rescue nil
+  raise "no answer came back" if answered == nil
+  rows = answered["result"].is_a?(Hash) ? answered["result"]["notifications"] : nil
+  raise "not a shape: #{answered.inspect}" if !rows.is_a?(Array)
+  raise "wrong rows: #{rows.inspect}" if rows.size != 1 ||
+    rows[0]["text"] != "Wiadomosc na teraz"
+  news = JSON.parse(bus.call_sync(
+    "probe", "invoke", {"action" => "news"}).text) rescue nil
+  raise "news came back wrong: #{news.inspect}" if
+    news["result"]["news"]["message"] != 1
+end
+
+check("an action nobody wrote is refused, not a dropped connection") do
+  answered = JSON.parse(bus.call_sync(
+    "probe", "invoke", {"action" => "no_such_thing"}).text) rescue nil
+  raise "no answer came back" if answered == nil
+  raise "it did not refuse: #{answered.inspect}" if answered["ok"] != false
+  raise "it did not say which: #{answered.inspect}" if
+    !answered["error"].to_s.include?("no_such_thing")
+  # And the connection is still there afterwards, which is the whole point.
+  raise "the connection went with it" if !bus.connected?
+end
+
+# --- Elten's own thread, and what only it can answer ---------------------
+check("a job posted from another thread runs on Elten's and comes back") do
+  EltenMain.drop_all
+  answered = nil
+  worker = Thread.new { answered = EltenMain.call(3.0) { 6 * 7 } }
+  # Nothing runs until Elten's own pump does, which is the whole point.
+  sleep 0.2
+  raise "it ran without the pump" if answered != nil
+  EltenMain.pump
+  worker.join(3.0)
+  raise "no answer: #{answered.inspect}" if answered == nil
+  raise "wrong answer: #{answered.inspect}" if answered != [true, 42]
+end
+
+check("a job that raises is an error, not a lost caller") do
+  EltenMain.drop_all
+  answered = nil
+  worker = Thread.new { answered = EltenMain.call(3.0) { raise "no" } }
+  sleep 0.1
+  EltenMain.pump
+  worker.join(3.0)
+  raise "the caller was left waiting" if answered == nil
+  raise "it was reported as success: #{answered.inspect}" if answered[0] != false
+  raise "it does not say what: #{answered.inspect}" if !answered[1].include?("no")
+end
+
+check("nobody waits for ever for a tick that is not coming") do
+  EltenMain.drop_all
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  answered = EltenMain.call(0.4) { 1 }
+  waited = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  raise "it did not give up: #{answered.inspect}" if answered[0] != false
+  raise "it waited #{waited}s" if waited > 2.0
+  raise "it does not say why: #{answered.inspect}" if
+    !answered[1].to_s.include?("did not answer")
+end
+
+check("Elten's screen is read as its controls, with the focused one marked") do
+  list = ListBox.new(%w[Ala Borys], :header => "Wiadomosci")
+  field = EditBox.new("Tresc", :text => "czesc")
+  button = Button.new("Wyslij")
+  form = Form.new([list, field, button])
+  described = EltenScreen.describe(form)
+  raise "a form must be opened out: #{described.inspect}" if
+    described["kind"] != "form"
+  kinds = described["controls"].map { |entry| entry["kind"] }
+  raise "wrong controls: #{kinds.inspect}" if kinds != %w[list field button]
+  first = described["controls"][0]
+  raise "the list did not say what it is on: #{first.inspect}" if
+    first["current"] != "Ala" || first["count"] != 2
+  raise "the keyboard was not placed" if first["focused"] != true
+  raise "the field lost its text" if described["controls"][1]["text"] != "czesc"
+  raise "the button lost its label" if described["controls"][2]["label"] != "Wyslij"
+end
+
+check("the screen is Elten's data, and is refused unasked") do
+  TitanPrefs.source = FakePrefsSource.new
+  raise "it read the screen unasked" if !EltenScreen.read_screen.is_a?(String)
+  raise "it does not say why" if !EltenScreen.read_screen.include?("permission")
+  raise "the programs were listed unasked" if
+    !EltenScreen.list_programs.is_a?(String)
+  raise "a program was opened unasked" if
+    !EltenScreen.run_program("anything").is_a?(String)
+end
+
+check("with permission, Titan gets Elten's screen through the bus") do
+  TitanPrefs.source = FakePrefsSource.new("share_data" => true)
+  bus.serve(EltenNews.handlers.merge(EltenScreen.handlers))
+  # Elten's pump, for as long as this takes: in the real add-on it is the
+  # extension tick, and here it is a thread standing in for one.
+  pumping = true
+  pump = Thread.new { while pumping; EltenMain.pump; sleep 0.02; end }
+  begin
+    $speech_lasttext = "Wiadomosci, lista, 2 elementy"
+    answered = JSON.parse(bus.call_sync(
+      "probe", "invoke", {"action" => "screen"}).text) rescue nil
+    raise "no answer: #{answered.inspect}" if answered == nil
+    raise "it refused: #{answered.inspect}" if answered["ok"] != true
+    screen = answered["result"]
+    raise "not a shape: #{screen.inspect}" if !screen.is_a?(Hash)
+    raise "what Elten said was not read: #{screen.inspect}" if
+      screen["said"] != "Wiadomosci, lista, 2 elementy"
+  ensure
+    pumping = false
+    pump.join(1.0)
+  end
 end
 
 check("the Titan Script reference is readable from the bridge") do
@@ -353,15 +689,22 @@ check("the Titan Script reference is readable from the bridge") do
   raise "no reference shown" if $pages.empty? || !$pages.last[1].include?("Titan Script")
 end
 
-check("Cling lists Klango applications and starts one in Titan") do
+check("Cling lists Klango applications and starts THE ONE THAT WAS CHOSEN") do
   bus.call_sync("probe", "forget", {})
   cling = TitanCling.new(bus)
   rows = cling.rows
   raise "no applications: #{rows.inspect}" if rows.size != 2
+  raise "the name is not shown" if !rows[0][0].include?("Mole No More")
+  # The identifier goes back, not the line. Cling matches `id` first, and
+  # handing it the whole line was "There is no Cling application called
+  # '- Mole No More (mole, grid_hunt): ...'".
+  raise "the id is not what goes back: #{rows[0][1].inspect}" if
+    rows[0][1]["name"] != "mole"
   $script = [true]
   cling.open_row(rows[0][1], rows[0][0])
   started = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
-  raise "Cling did not start it" if !started.any? { |e| e[0] == "cling_run" }
+  raise "Cling did not start it" if
+    !started.any? { |e| e[0] == "cling_run" && e[1] == "mole" }
 end
 
 check("the AI screen is offered only when Titan has AI, and answers here") do
@@ -447,6 +790,15 @@ check("activate registers the voice and the setting, and leaves Elten's menu alo
   minutes = builder.integers.find { |entry| entry[0] == "news_minutes" }
   raise "the interval has no range" if minutes.nil? || minutes[2].nil?
   raise "the range is wrong: #{minutes[2]}" if minutes[2].first < 1 || minutes[2].last > 60
+  # **TCE's settings are reachable from the add-on's own settings**, which
+  # is where somebody looks for "the settings of the thing I am
+  # configuring". It is a real action button, so it really opens something.
+  shortcut = builder.actions.find { |entry| entry[0] == "tce_settings" }
+  raise "no shortcut to TCE's settings: #{builder.actions.inspect}" if shortcut.nil?
+  raise "the shortcut does nothing" if !shortcut[2].respond_to?(:call)
+  # And the sharing is a switch of its own, so a Yes can be taken back.
+  raise "the consent cannot be changed: #{labels.inspect}" if
+    !labels.include?(_("Share Elten's data with TCE"))
 
   # And what the settings say is what the watcher does.
   TitanWatch.interval = 7 * 60
@@ -743,6 +1095,79 @@ check("the bridge can sound like TCE, and is silent when told to be") do
   after = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
   raise "it played with the setting off" if after.any? { |e| e[0] == "sound" }
   TitanPrefs.source = nil
+end
+
+
+check("the bridge's own screens sound like TCE, from TCE's own theme") do
+  bus.call_sync("probe", "bridge_on", {})
+  bus.call_sync("probe", "forget", {})
+  TitanSounds.bus = bus
+  TitanPrefs.source = nil
+
+  # Opening a screen, moving along the tab bar and leaving it are TCE's own
+  # cues - the same files TCE plays for the same things, out of whichever
+  # theme the user chose there.
+  screen = TitanUI::Screen.new(bus, "T", [["one", proc { [["a", {}]] }],
+                                          ["two", proc { [["b", {}]] }]])
+  $events = []
+  screen.open
+  sleep 0.4
+  played = (JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue [])
+             .select { |e| e[0] == "sound" }.map { |e| e[1] }
+  raise "the screen did not open with TCE's sound: #{played.inspect}" if !played.include?("ui/tui_open.ogg")
+  raise "it did not close with TCE's sound: #{played.inspect}" if !played.include?("ui/tui_close.ogg")
+
+  bus.call_sync("probe", "forget", {})
+  screen.instance_variable_set(:@tab, 0)
+  screen.send(:cycle, 1)
+  sleep 0.3
+  switched = (JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue [])
+               .select { |e| e[0] == "sound" }.map { |e| e[1] }
+  raise "the tab bar is silent: #{switched.inspect}" if !switched.include?("ui/switch_category.ogg")
+end
+
+check("with TCE's sounds on, Elten's own cues step aside") do
+  bus.call_sync("probe", "bridge_on", {})
+  TitanSounds.bus = bus
+  TitanPrefs.source = nil                       # TCE sounds on by default
+
+  # Elten's ListBox guards only its `play_sound` calls with `silent`, never
+  # its speech - so quieting it removes the doubled focus sound and leaves
+  # the item announced exactly as before.
+  quiet = TitanSounds.quiet(ListBox.new([], :header => "x"))
+  raise "Elten's list would still make its own noises" if quiet.silent != true
+
+  off = Object.new
+  def off.bridge_setting(key, fallback) key == "tce_sounds" ? false : fallback end
+  TitanPrefs.source = off
+  loud = TitanSounds.quiet(ListBox.new([], :header => "x"))
+  raise "it was quieted with the setting off" if loud.silent == true
+  TitanPrefs.source = nil
+end
+
+check("the status bar and the list are entered with TCE's own two cues") do
+  bus.call_sync("probe", "bridge_on", {})
+  bus.call_sync("probe", "forget", {})
+  TitanSounds.bus = bus
+  TitanPrefs.source = nil
+
+  # TCE plays `statusbar` when the keyboard moves TO the status bar and
+  # `applist` when it moves back to the list (gui.py's Tab handling), and
+  # Elten's Form triggers :focus on the field Tab lands on - the same moment.
+  console = TitanConsole.new(bus)
+  status = ListBox.new([], :header => "s")
+  list = ListBox.new([], :header => "l")
+  console.instance_variable_set(:@status, status)
+  console.instance_variable_set(:@list, list)
+  status.on(:focus) { TitanSounds.play(TitanSounds::STATUS) }
+  list.on(:focus) { TitanSounds.play(TitanSounds::LIST) }
+  status.trigger(:focus)
+  list.trigger(:focus)
+  sleep 0.3
+  heard = (JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue [])
+            .select { |e| e[0] == "sound" }.map { |e| e[1] }
+  raise "moving to the status bar was silent: #{heard.inspect}" if !heard.include?("ui/statusbar.ogg")
+  raise "moving back to the list was silent: #{heard.inspect}" if !heard.include?("ui/applist.ogg")
 end
 
 bus.stop

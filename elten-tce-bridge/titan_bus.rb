@@ -22,6 +22,25 @@ require "thread"
 
 class TitanBus
   PIPE = "\\\\.\\pipe\\TitanActions".freeze
+  # What each served action is FOR, in Titan's own words - this is what
+  # Titan lists and what its AI is told about them. Deliberately in
+  # English and not translated: it is read by Titan and by a model, not by
+  # somebody sitting in Elten.
+  SUMMARIES = {
+    "status" => "Whether the Elten client is running, who is signed in to "\
+                "it and which version it is. Asked of Elten itself.",
+    "notifications" => "The notifications Elten is holding right now - a "\
+                       "private message, a forum reply, somebody coming "\
+                       "online. Read live from Elten's own service.",
+    "news" => "How much of each kind is waiting in Elten right now.",
+    "screen" => "What is on Elten's screen at this moment: what it last "\
+                "said, which screen it is on, and the controls that screen "\
+                "is holding.",
+    "programs" => "The programs installed in Elten, as its own menu lists "\
+                  "them.",
+    "run_program" => "Open one of Elten's own programs, by name. It appears "\
+                     "in Elten, in front of whoever is sitting there.",
+  }.freeze
   RECONNECT_SECONDS = 3.0
   # An idle probe, so "is Titan still running?" is answered by having asked.
   # Nothing else would notice a Titan that has exited: the worker is parked
@@ -59,6 +78,29 @@ class TitanBus
     @thread = nil
     @stopping = false
     @last_error = ""
+    @handlers = {}
+  end
+
+  # **What TITAN may ask of US.** Everything else here is this side calling
+  # Titan; this is the other direction, which is what lets Titan's AI ask
+  # Elten a question in flight rather than reading the last thing that was
+  # pushed at it.
+  #
+  # `handlers` is {name => proc(args)}, and every one of them must be a
+  # cheap READ that returns promptly: it runs on the bus worker, which is
+  # also the thread that carries this side's own calls, so a handler that
+  # waits is a bridge that has stopped answering. Nothing that touches
+  # Elten's screen belongs here either - that is Elten's own thread's.
+  #
+  # Call it before `start`: the names travel in the hello, which is where
+  # Titan learns what this add-on can be asked.
+  def serve(handlers)
+    @lock.synchronize { @handlers = (handlers || {}).dup }
+    true
+  end
+
+  def served
+    @lock.synchronize { @handlers.keys.map(&:to_s) }
   end
 
   def start
@@ -201,8 +243,19 @@ class TitanBus
     io.sync = true
     io.write(JSON.generate({"type" => "hello", "token" => token, "id" => @id,
                             "label" => @label, "kind" => "app",
+                            # **This side DRIVES Titan; it serves nothing.**
+                            # Titan says so out loud when a client joins and
+                            # when it leaves - an add-on opening is something
+                            # the user just did, and a program somewhere else
+                            # on the machine taking hold of Titan is not.
+                            "client" => true,
                             "pid" => Process.pid, "path" => __dir__.to_s,
-                            "actions" => []}) + "\n")
+                            # What Titan may ask of us. A client that serves
+                            # nothing declares nothing, which is what this
+                            # did until Titan's AI needed to ask Elten a
+                            # question rather than read the last answer it
+                            # was handed.
+                            "actions" => action_manifest}) + "\n")
     line = io.gets
     welcome = line == nil ? nil : (JSON.parse(line) rescue nil)
     if welcome == nil || welcome["type"] != "welcome" || welcome["ok"] != true
@@ -273,6 +326,13 @@ class TitanBus
       case message["type"]
       when "ping"
         io.write(JSON.generate({"type" => "pong"}) + "\n")
+      when "invoke"
+        # **Answered HERE, while we are waiting for our own answer**, and
+        # that is not an optimisation: Titan may well be asking us
+        # something because of the very call we are waiting on, and a
+        # reader that stepped over an invoke until its own answer arrived
+        # would be two sides each waiting for the other.
+        answer_invoke(io, message)
       when "call_result", "list_result"
         next if message["id"] != id
         return message
@@ -282,6 +342,43 @@ class TitanBus
     note("read: #{e.class}: #{e.message}")
     disconnect
     nil
+  end
+
+  # One thing Titan asked of us. Never raises: a handler that fails is an
+  # error sent back, because an exception here would take the connection
+  # with it and Titan would see the add-on leave.
+  def answer_invoke(io, message)
+    name = message["action"].to_s
+    handler = @lock.synchronize { @handlers[name] || @handlers[name.to_sym] }
+    if handler == nil
+      write_result(io, message["id"], false,
+                   "the TCE bridge has no action '#{name}'")
+      return
+    end
+    result = handler.call(message["args"] || {})
+    write_result(io, message["id"], true, result)
+  rescue Exception => e
+    write_result(io, message["id"], false, "#{e.class}: #{e.message}")
+  end
+
+  def write_result(io, id, ok, value)
+    payload = {"type" => "result", "id" => id, "ok" => ok == true}
+    if ok == true
+      payload["result"] = value
+    else
+      payload["error"] = value.to_s
+    end
+    io.write(JSON.generate(payload) + "\n")
+  rescue Exception
+    nil
+  end
+
+  # [{name:, summary:}] for the hello. Titan reads the names; the summaries
+  # are what its own `list_addons` shows and what its AI is told.
+  def action_manifest
+    served.map do |name|
+      {"name" => name, "summary" => SUMMARIES[name].to_s}
+    end
   end
 
   def probe

@@ -107,6 +107,12 @@ class _Peer:
         self.kind = hello.get('kind') or 'app'
         self.pid = hello.get('pid') or 0
         self.actions = hello.get('actions') or []
+        # A program that DRIVES Titan rather than being driven by it says so
+        # here. It is a field of its own rather than a 'kind', because
+        # 'kind' is an ADD-ON kind (app, game, component, ...) and is read
+        # back as one by the registry - a client is not a twelfth kind of
+        # add-on, it is the other side of the conversation.
+        self.client = bool(hello.get('client'))
         self.path = hello.get('path') or ''
         self.joined_at = time.time()
         self.alive = True
@@ -236,6 +242,84 @@ def _serve_request(peer, message):
                             'ok': False, 'error': f'{type(e).__name__}: {e}'})
 
 
+# --------------------------------------------------------------------------- #
+# An external client joining, and leaving
+#
+# Two different things join this bus. An ADD-ON serves actions: tEdit says
+# "here is open_file and save", and Titan calls into it. A CLIENT serves
+# nothing and only calls - it is another program driving Titan from outside,
+# and the Elten TCE bridge is one: it declares no actions at all, because
+# everything it does is ask Titan to do something.
+#
+# The difference matters to the user rather than to the code. An add-on
+# joining is Titan opening one of its own applications, which the user just
+# did and already knows about; a client joining is a program somewhere else
+# on the machine taking hold of Titan, which nothing else on this desktop
+# would tell them about. So that one is said out loud.
+# --------------------------------------------------------------------------- #
+
+#: A peer that says it is one of these, or that serves no actions at all, is
+#: driving Titan rather than being driven by it.
+_CLIENT_KINDS = ('client', 'bridge', 'external')
+
+#: Two announcements about the same client closer together than this are the
+#: same event - a client that loses the pipe and comes straight back has not
+#: arrived twice, and saying so is worse than saying nothing.
+_ANNOUNCE_DEBOUNCE = 5.0
+
+_announced = {}                  # (addon_id, joined) -> when it was last said
+
+
+def _is_external_client(peer):
+    """Whether this peer is another program driving Titan, not an add-on."""
+    if getattr(peer, 'client', False):
+        return True
+    if str(getattr(peer, 'kind', '') or '').strip().lower() in _CLIENT_KINDS:
+        return True
+    return not getattr(peer, 'actions', None)
+
+
+def _announce_client(peer, joined):
+    """Say that an external client has taken hold of Titan, or let go.
+
+    Never raises and never blocks the peer's own thread: this runs while a
+    connection is being set up or torn down, and a speech engine that is busy
+    (or a mixer that is being re-opened because the headphones moved) must not
+    hold the bus.
+    """
+    if not _is_external_client(peer):
+        return
+    key = (peer.addon_id, bool(joined))
+    now = time.time()
+    if now - _announced.get(key, 0.0) < _ANNOUNCE_DEBOUNCE:
+        return
+    _announced[key] = now
+    _announced.pop((peer.addon_id, not bool(joined)), None)
+
+    def say():
+        try:
+            from src.titan_core.translation import get_translation_function
+            translate = get_translation_function()
+        except Exception:
+            translate = lambda text: text
+        text = translate("External client initialized") if joined \
+            else translate("External client closed")
+        try:
+            from src.titan_core import sound
+            sound.play_sound('system/sysprocess_open.ogg' if joined
+                             else 'system/sysprocess_close.ogg')
+        except Exception:
+            pass
+        try:
+            from src.titan_core.stereo_speech import speak_stereo
+            speak_stereo(text, async_mode=True)
+        except Exception:
+            _log(f"could not say: {text}")
+
+    threading.Thread(target=say, name='TitanActionBusSay', daemon=True).start()
+
+
+
 def _serve_connection(handle):
     """Own one connected application until it disconnects."""
     io = PipeChannel(handle)
@@ -271,6 +355,7 @@ def _serve_connection(handle):
                        'version': PROTOCOL_VERSION})
         _log(f"'{peer.addon_id}' joined (pid {peer.pid}, "
              f"{len(peer.actions)} actions)")
+        _announce_client(peer, True)
 
         while True:
             line = io.read_line()
@@ -304,6 +389,7 @@ def _serve_connection(handle):
     finally:
         if peer is not None:
             _log(f"'{peer.addon_id}' left")
+            _announce_client(peer, False)
             peer.close()
         else:
             io.close()

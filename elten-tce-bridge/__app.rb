@@ -46,6 +46,7 @@ require_relative "titan_bus"
 require_relative "titan_ui"
 require_relative "titan_api"
 require_relative "titan_prefs"
+require_relative "titan_consent"
 require_relative "titan_sounds"
 require_relative "titan_speech_output"
 require_relative "titan_actions"
@@ -56,6 +57,9 @@ require_relative "titan_system"
 require_relative "titan_tools_ui"
 require_relative "titan_widgets"
 require_relative "titan_watch"
+require_relative "elten_main"
+require_relative "elten_news"
+require_relative "elten_screen"
 require_relative "titan_components"
 require_relative "titan_macros"
 require_relative "titan_cling"
@@ -74,6 +78,10 @@ class ProgramTCEBridge < Program
     end
 
     def activate
+      # **What Titan may ask of US, declared before the connection is
+      # made** - the names travel in the hello, so a bus started first
+      # would join saying it serves nothing.
+      bus.serve(EltenNews.handlers.merge(EltenScreen.handlers))
       bus.start
       TitanSpeechOutput.start(bus)
       # Elten applies the configured voice while it is loading, which is
@@ -85,6 +93,7 @@ class ProgramTCEBridge < Program
       TitanPrefs.source = self
       TitanSounds.bus = bus
       TitanWatch.start(bus)
+      EltenNews.start(bus)
       register_quick_actions
       extension("tce_bridge") do |extension|
         # An extension stays loaded while Elten runs, with or without a
@@ -96,6 +105,16 @@ class ProgramTCEBridge < Program
           TitanWatch.enabled = TitanPrefs.announce_news?
           TitanWatch.interval = TitanPrefs.news_minutes * 60
           TitanWatch.tick
+          # And the other way: Elten's own notifications into Titan's
+          # notification centre. This one reads a list Elten's background
+          # service already keeps in memory, so it costs nothing here and
+          # reaches no network.
+          EltenNews.enabled = TitanPrefs.elten_notifications?
+          EltenNews.tick
+          # **And this is Elten's own thread.** Anything Titan asked that
+          # needs the screen - reading it, opening one of Elten's programs
+          # - is waiting here, and this is the only place it can run.
+          EltenMain.pump
         end
 
         # Deliberately NO extra entries in Elten's main menu. The manifest
@@ -143,6 +162,40 @@ class ProgramTCEBridge < Program
             }
           )
 
+          # **The shortcut to TCE's settings belongs here**, in the
+          # add-on's own settings, because that is where somebody looks
+          # for "the settings of the thing I am configuring" - and TCE's
+          # settings ARE this add-on's other half. It opens Titan's own
+          # settings window rebuilt in Elten's controls
+          # (`titan_settings.rb`), so it is Titan's own save with
+          # everything that hangs off it.
+          settings.action(
+            "tce_settings",
+            :label => _("TCE settings...")
+          ) { TitanSettings.new(bus).open }
+
+          settings.boolean(
+            "share_data",
+            :label => _("Share Elten's data with TCE"),
+            :get => proc { TitanConsent.granted? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state[TitanConsent::KEY] = (value == true)
+              end
+            }
+          )
+
+          settings.boolean(
+            "elten_notifications",
+            :label => _("Show Elten's notifications in Titan too"),
+            :get => proc { TitanPrefs.elten_notifications? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["elten_notifications"] = (value == true)
+              end
+            }
+          )
+
           settings.boolean(
             "tce_sounds",
             :label => _("Use TCE's own sounds"),
@@ -168,6 +221,10 @@ class ProgramTCEBridge < Program
 
         extension.stop do |_reason|
           TitanWatch.stop
+          # Anything still waiting for Elten's thread is never going to get
+          # it: better a refusal now than a caller waiting out its whole
+          # deadline for a tick that will not come again.
+          EltenMain.drop_all
           # A runtime that has been unloaded must not leave a speech output
           # behind pointing into a namespace that is gone: Elten would go
           # on offering the voice and speaking into nothing.
@@ -244,6 +301,16 @@ class ProgramTCEBridge < Program
   end
 
   def program_main
+    # **Asked once, before anything about Elten leaves Elten**, and asked
+    # here because this is the moment the user opened the add-on - the
+    # extension tick, which is where the sharing actually happens, is the
+    # wrong place for a question: one that appears while somebody is
+    # reading their messages is one they answer to get rid of.
+    #
+    # The answer is not a gate on the rest: "no" leaves Titan's window, its
+    # settings, Titan-Net, the shell and the AI exactly as they were,
+    # because none of that is Elten's data.
+    TitanConsent.ensure_answered
     TitanConsole.new(self.class.bus).open
   end
 end

@@ -56,6 +56,8 @@ ADDONS = [
 ]
 
 BRIDGE = {"on": True}
+#: The client's own hello, kept so a test can ask what it declared.
+HELLO = {}
 
 
 def bridge(request):
@@ -82,6 +84,34 @@ def bridge(request):
         data = {"played": True, "name": args.get("name")}
     elif call == "sounds.theme":
         data = {"theme": "default"}
+    elif call == "macros.list":
+        # The SHAPE Titan really answers with, not the prose its action
+        # answers with. A stand-in that invents an easier shape is how a
+        # screen that parses the wrong thing passes every test here and
+        # then tells the user "There is no macro called '- Voice demo
+        # (ctrl+alt+v) [tcs]'".
+        data = {"macros": [
+            {"name": "Voice demo", "hotkey": "ctrl+alt+v", "type": "tcs"},
+            {"name": "Form demo", "hotkey": "", "type": "tcs"}]}
+    elif call == "cling.list":
+        data = {"applications": [
+            {"id": "mole", "name": "Mole No More", "engine": "grid_hunt",
+             "category": "game", "summary": "A game of moles",
+             "locked": False, "why": ""},
+            {"id": "piano", "name": "Klango Piano", "engine": "instrument",
+             "category": "music", "summary": "", "locked": False, "why": ""}]}
+    elif call == "window.state":
+        data = {"has_window": True, "shown": True, "iconized": False,
+                "in_tray": False, "invisible_ui": False, "away": False}
+    elif call == "notifications.add":
+        SPOKEN.append(("notification", args.get("app"), args.get("text")))
+        data = {"added": True, "app": args.get("app"),
+                "content": args.get("text")}
+    elif call == "notifications.clear":
+        data = {"said": "Cleared the notifications."}
+    elif call == "client.report":
+        SPOKEN.append(("report", (args.get("state") or {}).get("user"), None))
+        data = {"kept": True}
     elif call in ("apps.open", "games.open", "im.open"):
         name = args.get("name") or args.get("id")
         known = {"apps.open": ["Edytor Tekstowy", "Notatki"],
@@ -270,7 +300,10 @@ def answer(addon, action, args):
     if key == "tarticle.read_article":
         return "Tytul artykulu\n\nTresc artykulu."
     if key == "desktop.list_files":
-        return "data  <folder>\nreadme.txt  2 KB"
+        # `list_files`'s own wording: the folder on the first line, then one
+        # NAME per line with a folder marked by a trailing slash.
+        where = args.get("path") or "C:\\"
+        return f"{where}:\ndata/\nProgram Files/\nreadme.txt"
     if key in ("web.open", "web.back", "web.close"):
         return "Done."
     if key == "web.read":
@@ -306,7 +339,13 @@ def answer(addon, action, args):
     if key == "shell.state":
         return json.dumps({"running": True, "windows_shell": True})
     if key == "macros.list_macros":
-        return "1. Poranek - ctrl+alt+p\n2. Notatka - (no shortcut)"
+        # The Macro Manager's own wording, verbatim from `action_list_macros`.
+        # Nothing in the bridge parses it any more - `macros.list` on the
+        # typed surface is what the screen reads - but a stand-in that
+        # invents a shape is how the bug it replaced got in.
+        return ("2 macros:\n"
+                "- Voice demo (ctrl+alt+v) [tcs]\n"
+                "- Form demo [tcs]")
     if key == "macros.read_macro":
         return 'say "Dzien dobry"\nwait 1s\n'
     if key == "macros.run_macro":
@@ -322,7 +361,11 @@ def answer(addon, action, args):
     if key == "macros.check_macro":
         return "The macro is fine."
     if key == "cling.list_applications":
-        return "1. Mole No More - grid_hunt\n2. Klango Piano - instrument"
+        # Cling's own wording, verbatim from `action_list` - a heading and
+        # then "- <name> (<id>, <engine>): <summary>".
+        return ("Cling applications:\n"
+                "- Mole No More (mole, grid_hunt): A game of moles\n"
+                "- Klango Piano (piano, instrument)")
     if key == "cling.run":
         SPOKEN.append(("cling_run", args.get("name"), None))
         return f"Started {args.get('name')}."
@@ -347,18 +390,23 @@ def answer(addon, action, args):
     if key in ("ocr.read_window", "ocr.ask", "ocr.last_reading"):
         return "The window says: OK, Cancel."
     if key == "titan.list_im_contacts":
-        return "1. Ala\n2. Borys"
+        # ONE line, which is what `titan_list_im_contacts` really answers.
+        return "Online Titan-Net users: Ala, Borys"
     if key == "titan.send_message":
         SPOKEN.append(("send_message", args.get("recipient"), args.get("message")))
         return "Sent."
     if key == "elten.list_conversations":
-        return "1. Ala - hi\n2. Borys - hello"
+        # `elten_list_conversations`'s own wording, heading and all.
+        return ("Elten conversations:\n- Ala [unread] - hi\n- Borys - hello")
     if key == "elten.read_conversation":
         return "Ala: hi\nyou: hello"
     if key == "im.status":
         return f"{args.get('service')} is signed in."
     if key == "im.list_chats":
-        return "1. Ala - hello there\n2. Family group - see you"
+        # `im_list_chats`'s own wording: a heading, then
+        # "- <name> [N unread] - <last message>".
+        return ("Conversations:\n- Ala [3 unread] - hello there\n"
+                "- Family group - see you")
     if key == "im.read_chat":
         return "Ala: hello there\nyou: hi"
     if key == "im.send":
@@ -374,13 +422,32 @@ def answer(addon, action, args):
     if key == "shell.list_tray":
         return "1. Volume\n2. Network"
     if key == "shell.list_drives":
-        return "C: 500 GB, 120 GB free\nD: 1 TB, 800 GB free"
+        # `shell_list_drives`'s own wording: a LABEL, then the letter in
+        # brackets, then what it is. Taking the first word of it asked the
+        # browser for a folder called "Windows".
+        return ("Windows (C:): Local Disk, 952.81 GB in total, 739.14 GB free\n"
+                "(D:): Removable Disk, unknown in total, unknown free")
     if key == "shell.list_folder":
-        return "Documents  <folder>  today\nreadme.txt  2 KB  yesterday"
+        # `shell_list_folder`'s own wording: "N. <name> - <type>[, <size>]".
+        return ("1. Documents - File folder\n"
+                "2. readme.txt - Text Document, 2 KB\n"
+                "3. a - b.txt - Text Document, 1 KB")
     if key == "shell.search_programs":
         return "1. Notepad\n2. Notepad++"
     if key == "shell.power_options":
-        return "1. Log off\n2. Shut down\n3. Turn off TCE"
+        # `shell_power_options`'s own wording: the identifier, a colon, and
+        # the label. `shell.power` takes the identifier and nothing else.
+        return ('logoff: Log off "Tito"\nshutdown: Shut down\n'
+                'restart: Restart\nexit_titan: Turn off TCE')
+    if key == "shell.power":
+        # Refused exactly as Titan refuses it, so a client sending
+        # "logoff:" fails here rather than in front of the user.
+        choices = ("logoff", "shutdown", "restart", "exit_titan")
+        wanted = str(args.get("action") or "").strip().lower()
+        if wanted not in choices:
+            return "ERROR:This computer can do: " + ", ".join(choices) + "."
+        SPOKEN.append(("power", wanted, None))
+        return f"Done: {wanted}."
     if key == "shell.list_settings":
         return "taskbar_position = bottom\nshow_clock = yes"
     if key.startswith("system."):
@@ -433,9 +500,42 @@ while True:
         except Exception:
             continue
         if msg.get("type") == "hello":
+            # What the client says it SERVES. A client that only calls
+            # declares nothing; this one declares what Titan may ask of it,
+            # and a test asserts the names really travel in the hello.
+            HELLO.clear()
+            HELLO.update(msg)
             io.write_line({"type": "welcome", "ok": True, "protocol": 1})
         elif msg.get("type") == "list":
             io.write_line({"type": "list_result", "id": msg.get("id"), "ok": True, "addons": ADDONS})
+        elif msg.get("type") == "call" and msg.get("addon") == "probe" \
+                and msg.get("action") == "served":
+            io.write_line({"type": "call_result", "id": msg.get("id"), "ok": True,
+                           "result": json.dumps(HELLO.get("actions") or [])})
+        elif msg.get("type") == "call" and msg.get("addon") == "probe" \
+                and msg.get("action") == "invoke":
+            # **Titan asking the client something, in the middle of the
+            # client asking Titan something.** That is the interleaving the
+            # reverse path is built for: the client is parked waiting for
+            # THIS answer, sees the invoke first, answers it, and goes on
+            # waiting. If it did not, both sides would wait for each other.
+            wanted = (msg.get("args") or {}).get("action") or "status"
+            io.write_line({"type": "invoke", "id": 9999, "action": wanted,
+                           "args": {}})
+            answer_back = None
+            for _ in range(20):
+                reply = io.read_line()
+                if reply is None:
+                    break
+                try:
+                    parsed = json.loads(reply.decode("utf-8"))
+                except Exception:
+                    continue
+                if parsed.get("type") == "result" and parsed.get("id") == 9999:
+                    answer_back = parsed
+                    break
+            io.write_line({"type": "call_result", "id": msg.get("id"), "ok": True,
+                           "result": json.dumps(answer_back)})
         elif msg.get("type") == "spoken":
             io.write_line({"type": "call_result", "id": msg.get("id"), "ok": True,
                            "result": json.dumps(SPOKEN)})

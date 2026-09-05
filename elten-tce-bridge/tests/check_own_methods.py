@@ -28,6 +28,27 @@ ELSEWHERE = {
 }
 
 
+def modules_in(text):
+    """{module name -> its body}, the same way as classes."""
+    lines = text.split('\n')
+    out = {}
+    current = None
+    body = []
+    for line in lines:
+        match = re.match(r'(\s*)module\s+([A-Z][\w:]*)', line)
+        if match and len(match.group(1)) == 0:
+            if current:
+                out[current] = '\n'.join(body)
+            current = match.group(2)
+            body = []
+            continue
+        if current:
+            body.append(line)
+    if current:
+        out[current] = '\n'.join(body)
+    return out
+
+
 def classes_in(text):
     """{class name -> its body}, by indentation."""
     lines = text.split('\n')
@@ -66,6 +87,31 @@ def main():
             for handed in re.findall(r'method\(:([a-zA-Z_][\w]*[?!]?)\)', body):
                 if handed not in defined and handed not in ELSEWHERE:
                     problems.append((name, klass, f'method(:{handed})'))
+
+    # And constants: `TitanSounds::STATUS` names nothing until it runs, and
+    # replacing a block has already dropped a member of one twice.
+    constants = {}
+    for name in sorted(os.listdir(BRIDGE)):
+        if not name.endswith('.rb') or name == 'install.rb':
+            continue
+        text = open(os.path.join(BRIDGE, name), encoding='utf-8',
+                    errors='replace').read()
+        for holder, body in classes_in(text).items():
+            constants.setdefault(holder, set()).update(
+                re.findall(r'^\s*([A-Z][A-Z_0-9]*)\s*=', body, re.M))
+        for holder, body in modules_in(text).items():
+            constants.setdefault(holder, set()).update(
+                re.findall(r'^\s*([A-Z][A-Z_0-9]*)\s*=', body, re.M))
+    for name in sorted(os.listdir(BRIDGE)):
+        if not name.endswith('.rb') or name == 'install.rb':
+            continue
+        text = open(os.path.join(BRIDGE, name), encoding='utf-8',
+                    errors='replace').read()
+        for holder, const in re.findall(r'\b([A-Z][\w]*)::([A-Z][A-Z_0-9]*)\b', text):
+            if holder not in constants:
+                continue            # not one of ours
+            if const not in constants[holder]:
+                problems.append((name, holder, f'{holder}::{const}'))
     if not problems:
         print('every method the bridge hands over is defined')
         return 0

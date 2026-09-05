@@ -41,7 +41,10 @@ DOMAIN_FILES = {
     ],
     'system': ['src/titan_core/tce_system.py', 'src/titan_core/tce_system_net.py', 'src/system/system_monitor.py', 'src/system/updater.py', 'src/system/lockscreen_monitor_improved.py', 'src/ui/shutdown_question.py', 'src/system/mic_permission.py',
                # The notification area: the reader and the list over it
-               'src/system/tray_icons.py', 'src/system/system_tray_list.py'],
+               'src/system/tray_icons.py', 'src/system/system_tray_list.py',
+               # The Action Bus, which says when an external Titan client
+               # joins and when it leaves
+               'src/titan_core/actions/bus.py'],
     'controller': ['src/controller/controller_ui.py', 'src/controller/controller_modes.py', 'src/controller/controller_vibrations.py'],
     'help': ['src/ui/help.py'],
     'sound': ['src/titan_core/sound.py', 'src/titan_core/tsounds.py', 'src/titan_core/stereo_speech.py'],

@@ -113,6 +113,21 @@ class TitanShell
     lines("list_drives", {}) { |line| [line, {"where" => "drive", "name" => line}] }
   end
 
+  # **The drive is in the brackets, not at the front.** `shell.list_drives`
+  # writes `Windows (C:): Local Disk, 952.81 GB in total, 739.14 GB free` -
+  # a LABEL, then the letter, then what it is - so taking the first word
+  # asked the file browser to open a folder called "Windows". A drive with
+  # no label ("(D:): Removable Disk") is the same shape with the label
+  # empty, which is why the brackets are what is looked for.
+  def drive_letter(text)
+    found = text.to_s[/\(([A-Za-z]:)\)/, 1]
+    return found if found
+    # A drive Windows names some other way: the first thing that looks like
+    # a root, and failing that whatever was there, so a browser opening on
+    # nothing is the worst case rather than a crash.
+    text.to_s[/\b([A-Za-z]:)/, 1] || text.to_s.split(" ").first.to_s
+  end
+
   def lines(action, args)
     answer = TitanUI.ask(@bus, "shell", action, args, :title => _("Reading..."))
     return [[answer.text.to_s, nil]] if !answer.ok?
@@ -140,7 +155,7 @@ class TitanShell
       answer = TitanUI.perform(@bus, "titan", "launch", {"name" => value["name"]},
                                :title => label)
       TitanUI.tell(answer, label) if answer != nil
-    when "drive"   then browse(value["name"].to_s.split(" ").first.to_s)
+    when "drive"   then browse(drive_letter(value["name"]))
     end
   end
 
@@ -175,11 +190,23 @@ class TitanShell
         run("open_explorer", {"path" => here})
         return
       end
-      # A row is "name  size  type  date"; what can be walked into is the
-      # name, and Titan answers plainly when it is not a folder.
-      name = entries[index - 1].to_s.split(/\s{2,}/).first.to_s
+      # **A row is `N. <name> - <type>[, <size>]`**, which is what
+      # `shell.list_folder` writes. It was read as columns separated by two
+      # spaces - a shape nothing here produces - so the whole line went
+      # back as the folder name and every step into a folder asked Titan
+      # for "1. appcompat - File folder". The type is appended after the
+      # LAST " - ", which is also what keeps a file called "a - b.txt"
+      # whole.
+      name = entry_name(entries[index - 1])
       here = here.end_with?("\\") ? "#{here}#{name}" : "#{here}\\#{name}"
     end
+  end
+
+  # The name out of one row of `shell.list_folder`.
+  def entry_name(line)
+    text = line.to_s.strip.sub(/\A\d+\.\s*/, "")
+    at = text.rindex(" - ")
+    at ? text[0...at].strip : text
   end
 
   # -------------------------------------------------------------- the menus
@@ -260,14 +287,30 @@ class TitanShell
   # is not something to get one keypress wrong.
   def power
     answer = TitanUI.ask(@bus, "shell", "power_options", {}, :title => _("Power"))
-    options = answer.text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
-    options = options.reject(&:empty?)
-    return alert(answer.text.to_s) if options.empty?
-    index = selector(options, :header => _("Power"), :cancel_index => -1)
+    # **`shell.power_options` writes `logoff: Log off "Tito"`** - the
+    # identifier, then the words. `shell.power` takes the identifier and
+    # nothing else, so splitting on whitespace sent it "logoff:" with the
+    # colon still on and every entry came back "This computer can do:
+    # logoff, shutdown, restart, ...". And the identifier is not something
+    # to show anybody: what goes on the screen is the words.
+    choices = answer.text.to_s.split("\n").map { |line| line.strip }
+                    .reject(&:empty?).map { |line| power_choice(line) }
+    return alert(answer.text.to_s) if choices.empty?
+    index = selector(choices.map { |choice| choice[1] }, :header => _("Power"),
+                     :cancel_index => -1)
     return if index == nil || index < 0
-    what = options[index].split(/[\s-]/).first.to_s.downcase
-    return if !confirm(_("Really: %s?") % options[index])
-    run("power", {"action" => what})
+    return if !confirm(_("Really: %s?") % choices[index][1])
+    run("power", {"action" => choices[index][0]})
+  end
+
+  # [what to send, what to show] for one line of `shell.power_options`. A
+  # line with no colon is its own identifier and its own label, which is
+  # what an older Titan wrote.
+  def power_choice(line)
+    text = line.to_s.strip.sub(/\A\d+\.\s*/, "")
+    at = text.index(":")
+    return [text.downcase, text] if at == nil
+    [text[0...at].strip.downcase, text[(at + 1)..-1].to_s.strip]
   end
 
   def run(action, args)

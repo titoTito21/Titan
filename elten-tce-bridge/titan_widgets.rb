@@ -49,6 +49,7 @@ class TitanWidgets
   def use(value, label)
     return if !value.is_a?(Hash)
     name = value["name"].to_s
+    TitanSounds.play(TitanSounds::WIDGET)
     surface = Static.new(label)
     activate = Button.new(_("Press it"))
     back = Button.new(_("Back"))

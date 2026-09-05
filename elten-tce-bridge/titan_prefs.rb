@@ -18,6 +18,7 @@ module TitanPrefs
     "speak_answers" => true,
     "confirm_launch" => false,
     "tce_sounds" => true,
+    "elten_notifications" => true,
   }.freeze
 
   class << self
@@ -54,6 +55,10 @@ module TitanPrefs
 
     def tce_sounds?
       get("tce_sounds") == true
+    end
+
+    def elten_notifications?
+      get("elten_notifications") == true
     end
   end
 end
