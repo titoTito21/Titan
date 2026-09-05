@@ -84,6 +84,70 @@ class TitanNetClient
                         :on_open => method(:open_entry)).open
   end
 
+
+  # What Titan-Net's own window keeps under the account: the address, who is
+  # blocked, making a room or a group, and a message to everybody.
+  def account_rows
+    [[_("My address"), {"open" => "email"}],
+     [_("Who I have blocked"), {"open" => "blocked"}],
+     [_("Make a room..."), {"open" => "new_room"}],
+     [_("Make a group..."), {"open" => "new_group"}],
+     [_("Send a message to everybody..."), {"open" => "broadcast"}],
+     [_("Is Titan-Net connected"), {"open" => "status"}]]
+  end
+
+  # The context-menu key on a row: what one does TO a room, a person or a
+  # group, rather than in it.
+  def entry_menu(value, label)
+    return if !value.is_a?(Hash)
+    case value["open"]
+    when "room"         then room_menu(value["name"].to_s, label)
+    when "conversation" then person_menu(value["name"].to_s, label)
+    when "group"        then group_menu(value["id"].to_s, label)
+    end
+  end
+
+  def room_menu(name, label)
+    chosen = select_action([["join_room", _("Join it")],
+                            ["leave_room", _("Leave it")],
+                            ["delete_room", _("Delete it")]],
+                           :header => label)
+    return if chosen == nil
+    if chosen == "delete_room"
+      return if !confirm(_("Delete the room %s?") % name)
+    end
+    args = {"room" => name}
+    if chosen == "join_room"
+      password = input_text(_("Password (empty if it has none):"), :escapable => true)
+      args["password"] = password.to_s if password != nil
+    end
+    answer = TitanUI.perform(@bus, "titannet", chosen, args, :title => label)
+    alert(answer.text.to_s) if answer != nil
+  end
+
+  def person_menu(name, label)
+    chosen = select_action([["write", _("Write to them")],
+                            ["block", _("Block them")],
+                            ["unblock", _("Unblock them")]],
+                           :header => label)
+    return if chosen == nil
+    return conversation(name) if chosen == "write"
+    return if chosen == "block" && !confirm(_("Block %s?") % name)
+    answer = TitanUI.perform(@bus, "titannet", chosen, {"username" => name},
+                             :title => label)
+    alert(answer.text.to_s) if answer != nil
+  end
+
+  def group_menu(id, label)
+    chosen = select_action([["join_group_by_id", _("Join it")],
+                            ["group_forums", _("Its forums")]],
+                           :header => label)
+    return if chosen == nil
+    answer = TitanUI.perform(@bus, "titannet", chosen, {"group" => id},
+                             :title => label)
+    TitanUI.tell(answer, label) if answer != nil
+  end
+
   def title
     _("Titan-Net (%s)") % signed_in_as
   end
@@ -234,7 +298,8 @@ class TitanNetClient
     when "conversation" then conversation(value["name"].to_s)
     when "topic"        then topic(value["id"].to_s, value["title"].to_s)
     when "mail"         then one_mail(value["id"].to_s, value["subject"].to_s)
-    when "group"        then page("group_forums", {"group" => value["id"].to_s}, label)
+    when "group"        then group_forums(value["id"].to_s, label)
+    when "forum_topics" then forum_topics(value["forum"].to_s, label)
     when "feedback_item" then feedback_item(value["id"].to_s, value["title"].to_s)
     when "repository_item" then page("repository_item", {"app" => value["id"].to_s}, label)
     when "announcement" then page("announcement", {"name" => value["name"].to_s}, label)
@@ -285,6 +350,10 @@ class TitanNetClient
   # Enter on a message reads the whole of it, because a row is one line and
   # a message is not.
   def room(name)
+    # Titan joins the room and then opens it; a room one has not joined is
+    # not one whose messages arrive.
+    TitanUI.ask(@bus, "titannet", "join_room", {"room" => name},
+                :title => _("Joining %s...") % name)
     conversation_screen(_("Room %s") % name,
                         proc { rows("room_messages", "messages", {"room" => name}) { |m| message_row(m) } },
                         proc { |text| TitanUI.perform(@bus, "titannet", "send_room_message",
@@ -363,11 +432,18 @@ class TitanNetClient
   end
 
   # ------------------------------------------------------------------ forum
+  # Titan's own Forum entry opens the GROUPS first (show_groups_view), and
+  # a group leads to its forums and then to their topics. The latest topics
+  # are a tab beside them rather than the whole of it.
   def forum
-    tabs = [[_("Topics"), proc { rows("topics", "topics") { |t| topic_row(t) } }]]
-    screen = TitanUI::Screen.new(@bus, _("Titan-Net forum"), tabs,
+    tabs = [[_("Groups"), proc { rows("groups", "groups") { |g| group_row(g) } }],
+            [_("Latest topics"), proc { rows("topics", "topics") { |t| topic_row(t) } }]]
+    screen = TitanUI::Screen.new(@bus, _("Titan-Net - Groups"), tabs,
                                  :on_open => method(:open_entry),
-                                 :on_menu => proc { |_value, _label| forum_menu })
+                                 :on_menu => proc { |value, label|
+                                   value.is_a?(Hash) && value["open"] == "group" ?
+                                     group_menu(value["id"].to_s, label) : forum_menu
+                                 })
     screen.open
   end
 
@@ -423,6 +499,27 @@ class TitanNetClient
       loop_update
       form.update
     end
+  end
+
+  def group_forums(id, label)
+    rows = proc do
+      answer = TitanUI.ask(@bus, "titannet", "group_forums", {"group" => id},
+                           :title => label)
+      next [[answer.text.to_s, nil]] if !answer.ok?
+      answer.text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
+            .reject(&:empty?)
+            .map { |line| [line, {"open" => "forum_topics", "forum" => line}] }
+    end
+    TitanUI::Screen.new(@bus, label, [[label, rows]],
+                        :on_open => method(:open_entry)).open
+  end
+
+  def forum_topics(forum, label)
+    rows = proc do
+      rows("topics", "topics", {"category" => forum}) { |t| topic_row(t) }
+    end
+    TitanUI::Screen.new(@bus, label, [[label, rows]],
+                        :on_open => method(:open_entry)).open
   end
 
   # ------------------------------------------------------------------- mail

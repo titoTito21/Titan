@@ -45,6 +45,8 @@
 require_relative "titan_bus"
 require_relative "titan_ui"
 require_relative "titan_api"
+require_relative "titan_prefs"
+require_relative "titan_sounds"
 require_relative "titan_speech_output"
 require_relative "titan_actions"
 require_relative "titan_settings"
@@ -80,6 +82,8 @@ class ProgramTCEBridge < Program
       # Asking for it again once the output exists is what makes the choice
       # survive a restart.
       apply_voice_settings
+      TitanPrefs.source = self
+      TitanSounds.bus = bus
       TitanWatch.start(bus)
       register_quick_actions
       extension("tce_bridge") do |extension|
@@ -89,7 +93,8 @@ class ProgramTCEBridge < Program
         # a question to the bus and says whatever the last answer brought,
         # and it never waits for either.
         extension.tick(:interval => 5) do
-          TitanWatch.enabled = announce_news?
+          TitanWatch.enabled = TitanPrefs.announce_news?
+          TitanWatch.interval = TitanPrefs.news_minutes * 60
           TitanWatch.tick
         end
 
@@ -108,6 +113,54 @@ class ProgramTCEBridge < Program
             :set => proc { |value|
               update_json("settings.json", :default => {}) do |state|
                 state["announce_news"] = (value == true)
+              end
+            }
+          )
+
+          # In minutes, because that is what somebody thinks in when they
+          # decide how often to be interrupted. Every check is a call into
+          # Titan's own interface thread, so the floor is a minute.
+          settings.integer(
+            "news_minutes",
+            :label => _("How often to look, in minutes"),
+            :range => (1..60),
+            :get => proc { news_minutes },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["news_minutes"] = value.to_i
+              end
+            }
+          )
+
+          settings.boolean(
+            "speak_answers",
+            :label => _("Read the AI's answer out loud"),
+            :get => proc { speak_answers? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["speak_answers"] = (value == true)
+              end
+            }
+          )
+
+          settings.boolean(
+            "tce_sounds",
+            :label => _("Use TCE's own sounds"),
+            :get => proc { TitanPrefs.tce_sounds? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["tce_sounds"] = (value == true)
+              end
+            }
+          )
+
+          settings.boolean(
+            "confirm_launch",
+            :label => _("Ask before starting a TCE application"),
+            :get => proc { confirm_launch? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["confirm_launch"] = (value == true)
               end
             }
           )
@@ -152,9 +205,35 @@ class ProgramTCEBridge < Program
     # On by default: somebody who installed a Titan-Net client wants to be
     # told when a message arrives.
     def announce_news?
-      read_json("settings.json", :default => {}).fetch("announce_news", true) == true
+      setting("announce_news", true) == true
+    end
+
+    # Minutes between looks; 3 by default, which is what the watcher used
+    # before this was a setting.
+    def news_minutes
+      value = setting("news_minutes", 3).to_i
+      value < 1 ? 3 : [value, 60].min
+    end
+
+    def speak_answers?
+      setting("speak_answers", true) == true
+    end
+
+    def confirm_launch?
+      setting("confirm_launch", false) == true
+    end
+
+    # The one place the application's own store is read. `TitanPrefs` asks
+    # for this and answers with defaults when there is nobody to ask, so a
+    # screen never has to know where the settings live.
+    def bridge_setting(key, fallback)
+      read_json("settings.json", :default => {}).fetch(key, fallback)
     rescue Exception
-      true
+      fallback
+    end
+
+    def setting(key, fallback)
+      bridge_setting(key, fallback)
     end
 
     def apply_voice_settings

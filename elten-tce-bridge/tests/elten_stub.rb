@@ -187,7 +187,11 @@ class Program
     def initialize; @categories = []; @booleans = []; end
     def category(label) @categories.push(label); end
     def boolean(key, label:, get:, set:) @booleans.push([key, label, get, set]); end
-    def integer(key, label:, get:, set:, range: nil) end
+    def integer(key, label:, get:, set:, range: nil)
+      @integers ||= []
+      @integers.push([key, label, range, get, set])
+    end
+    def integers; @integers ||= []; end
     def text(key, label:, get:, set:) end
     def choice(key, label:, choices:, get:, set:) end
   end

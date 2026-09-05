@@ -74,23 +74,67 @@ def _hello(_args):
 # --------------------------------------------------------------------------- #
 # Applications, games, Titan IM modules - from the managers themselves
 # --------------------------------------------------------------------------- #
-def _app_record(info):
+def _language(args):
+    """The two-letter language the CALLER wants, or Titan's own.
+
+    An add-on's name is written per language in its manifest - `name_pl`,
+    `name_en` - and Titan picks by the language IT is running in. A bridge
+    is read by somebody sitting in another program, which may well be in
+    another language, so the caller says which it wants and gets that.
+    """
+    wanted = str(args.get('language') or '').strip().lower()
+    wanted = wanted.replace('_', '-').split('-')[0]
+    if len(wanted) == 2:
+        return wanted
+    try:
+        from src.titan_core.translation import language_code
+        return str(language_code or 'en')[:2]
+    except Exception:
+        return 'en'
+
+
+def _named(info, language):
+    """The record's own name in that language, then English, then whatever
+    it has - the rule `read_app_info` uses, applied to games too."""
+    for key in (f'name_{language}', 'name_en', 'name'):
+        value = info.get(key)
+        if value:
+            return str(value)
+    return str(info.get('shortname') or '')
+
+
+def _app_record(info, language='en'):
     return {
-        'name': str(info.get('name') or info.get('shortname') or ''),
+        'name': _named(info, language),
         'shortname': str(info.get('shortname') or ''),
-        'description': str(info.get('description') or ''),
+        'description': str(info.get(f'description_{language}')
+                           or info.get('description') or ''),
         'path': str(info.get('path') or ''),
     }
 
 
-def _apps(_args):
+def _apps(args):
+    language = _language(args)
+
     def read():
         from src.titan_core import app_manager
-        return [_app_record(info) for info in app_manager.get_applications()]
+        out = []
+        for info in app_manager.get_applications():
+            # Read again in the language asked for: `get_applications` has
+            # already chosen Titan's own.
+            path = info.get('path')
+            detailed = info
+            if path:
+                try:
+                    detailed = app_manager.read_app_info(path, language) or info
+                except Exception:
+                    detailed = info
+            out.append(_app_record(detailed, language))
+        return out
     data, error = run_on_gui(read)
     if error:
         raise RuntimeError(error)
-    return {'applications': data}
+    return {'applications': data, 'language': language}
 
 
 def _open_app(args):
@@ -104,6 +148,17 @@ def _open_app(args):
         for info in app_manager.get_applications():
             names = {str(info.get('name') or '').lower(),
                      str(info.get('shortname') or '').lower()}
+            # Whatever language the list was read in, that is the name the
+            # user pressed - so every spelling of it opens the same thing.
+            path = info.get('path')
+            if path:
+                for language in ('en', 'pl'):
+                    try:
+                        other = app_manager.read_app_info(path, language) or {}
+                    except Exception:
+                        continue
+                    if other.get('name'):
+                        names.add(str(other['name']).lower())
             if wanted in names:
                 app_manager.open_application(info)
                 return str(info.get('name') or wanted)
@@ -116,19 +171,21 @@ def _open_app(args):
     return {'opened': opened}
 
 
-def _games(_args):
+def _games(args):
+    language = _language(args)
+
     def read():
         from src.titan_core import game_manager
         out = []
         for info in game_manager.get_games():
-            out.append({'name': str(info.get('name') or ''),
+            out.append({'name': _named(info, language),
                         'platform': str(info.get('platform') or ''),
                         'path': str(info.get('path') or '')})
         return out
     data, error = run_on_gui(read)
     if error:
         raise RuntimeError(error)
-    return {'games': data}
+    return {'games': data, 'language': language}
 
 
 def _open_game(args):
@@ -139,7 +196,11 @@ def _open_game(args):
     def start():
         from src.titan_core import game_manager
         for info in game_manager.get_games():
-            if str(info.get('name') or '').lower() == wanted:
+            names = {str(info.get('name') or '').lower()}
+            for key in ('name_en', 'name_pl'):
+                if info.get(key):
+                    names.add(str(info[key]).lower())
+            if wanted in names:
                 game_manager.open_game(info)
                 return str(info.get('name'))
         return None
@@ -370,6 +431,42 @@ def _addon_run(args):
     return answer
 
 
+
+# --------------------------------------------------------------------------- #
+# Titan's own sounds
+#
+# A bridge that makes Titan's interface usable somewhere else should sound
+# like Titan while doing it: the user chose a sound theme, and a new private
+# message is `titannet/new_message.ogg` in whichever theme that is. The name
+# is theme-relative, exactly as Titan's own code plays them, so nothing here
+# has to know where a theme lives or which one is chosen.
+# --------------------------------------------------------------------------- #
+def _play_sound(args):
+    name = str(args.get('name') or '').strip()
+    if not name:
+        raise ValueError('name is required')
+    pan = args.get('pan')
+
+    def play():
+        from src.titan_core import sound
+        sound.play_sound(name, pan=None if pan in (None, '') else float(pan))
+        return True
+    played, error = run_on_gui(play)
+    if error:
+        raise RuntimeError(error)
+    return {'played': bool(played), 'name': name}
+
+
+def _sound_theme(_args):
+    def read():
+        from src.settings.settings import get_setting
+        return str(get_setting('sound_theme', 'default') or 'default')
+    theme, error = run_on_gui(read)
+    if error:
+        raise RuntimeError(error)
+    return {'theme': theme}
+
+
 CALLS = {
     'hello': _hello,
     'apps.list': _apps,
@@ -403,6 +500,8 @@ CALLS = {
     'ai.ask': _ai_ask,
     'ai.history': _ai_history,
     'ai.forget': _ai_forget,
+    'sounds.play': _play_sound,
+    'sounds.theme': _sound_theme,
     'addons.list': _addons,
     'addons.actions': _addon_actions,
     'addons.run': _addon_run,

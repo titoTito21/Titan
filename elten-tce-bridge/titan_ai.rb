@@ -135,9 +135,10 @@ class TitanAI
                            :title => _("Asking the AI..."))
       entry.set_text("") if answer.ok?
       refresh.call
-      # The answer is spoken as well as listed: a reader should not have to
-      # go looking for what it just asked for.
-      speak(answer.text.to_s)
+      # Spoken as well as listed, unless the user turned that off: a reader
+      # should not have to go looking for what it just asked for, but
+      # somebody who reads the list themselves should not hear it twice.
+      speak(answer.text.to_s) if TitanPrefs.speak_answers?
     end
 
     list.on(:select) do

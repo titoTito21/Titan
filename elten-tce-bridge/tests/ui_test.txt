@@ -82,4 +82,6 @@ PASS Titan-Net's menu is Titan's own menu, in Titan's own order
 PASS the lists come from Titan's own managers, through one typed call
      alert: Started Cult of the Lamb.
 PASS a Titan that is a version behind is told about, and still works
+PASS a screen works without the application class, on the defaults
+PASS the bridge can sound like TCE, and is silent when told to be
 done

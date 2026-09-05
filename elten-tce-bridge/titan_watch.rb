@@ -20,6 +20,9 @@ class TitanWatch
   # How often Titan is asked. Titan runs every in-process action on its own
   # interface thread, so this is minutes rather than seconds - and it is
   # what the setting below can turn off entirely.
+  # How often Titan is asked, in seconds. It is the DEFAULT: the user sets
+  # it in Elten's own settings, in minutes, because minutes is what somebody
+  # thinks in when they decide how often to be interrupted.
   INTERVAL = 180.0
   KEYS = %w[unread_messages unread_forum_topics new_apps app_updates unread_mail].freeze
 
@@ -49,12 +52,21 @@ class TitanWatch
       @enabled != false
     end
 
+    def interval=(seconds)
+      value = seconds.to_f
+      @interval = value if value > 0
+    end
+
+    def interval
+      (@interval || INTERVAL).to_f
+    end
+
     # Called from the extension tick. Must return at once.
     def tick
       announce_pending
       return if !enabled? || @bus == nil || !@bus.connected?
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      return if now - @last_asked < INTERVAL
+      return if now - @last_asked < interval
       @last_asked = now
       @bus.call("titannet", "news") { |text| absorb(text) }
       nil
@@ -79,7 +91,10 @@ class TitanWatch
       grown = counts.select { |key, value| value > @seen[key].to_i }
       @seen = counts
       @news = describe(counts)
-      @pending = describe(grown) if grown.size > 0
+      if grown.size > 0
+        @pending = describe(grown)
+        @pending_keys = grown.keys
+      end
     rescue Exception
       nil
     end
@@ -100,7 +115,12 @@ class TitanWatch
     def announce_pending
       return if @pending == nil || @pending.empty?
       lines = @pending
+      keys = @pending_keys
       @pending = nil
+      @pending_keys = nil
+      # Titan plays a sound per kind of news before it says it; so does
+      # this, with the same sounds out of the same theme.
+      TitanSounds.for_news(keys.first) if keys.is_a?(Array) && !keys.empty?
       # Said without stopping whatever is being read: news is not urgent
       # enough to cut a sentence in half.
       speak(_("Titan-Net: %s") % lines.join(", "), :stop => false)

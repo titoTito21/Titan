@@ -712,6 +712,16 @@ def _op_sound_close(app, args):
 def _op_sound_pool_play(app, args):
     path = _op_sound_asset(app, args)
     if path is None:
+        # A sound the application asked for but did not ship. When the user
+        # has turned on Titan's sounds in the bridge, a fire-and-forget play
+        # like this lands on the nearest Titan cue rather than silence.
+        from . import cues as cues_module
+        from . import settings as settings_module
+        if settings_module.use_titan_sounds():
+            fallback = cues_module.titan_fallback(str(args.get('name') or ''))
+            if fallback:
+                return bool(app.sounds.mixer.cue(fallback,
+                                                 args.get('position', 0.0)))
         return None
     return app.sounds.pool_play(path, args.get('volume', 1.0),
                                 args.get('max_voices',
@@ -734,16 +744,26 @@ def _op_play_cue(app, args):
     a cue and can never lose one.
     """
     from . import cues as cues_module
+    from . import settings as settings_module
     name = str(args.get('name') or '')
     position = args.get('position', 0.0)
-    titan = cues_module.titan_cue(name)
-    if titan:
-        if app.sounds.mixer.cue(titan, position):
+    titan_on = settings_module.use_titan_sounds()
+    # With Titan's sounds on, an interface cue is Titan's; with it off, the
+    # application's own file comes first and Titan is never reached for it.
+    if titan_on:
+        titan = cues_module.titan_cue(name)
+        if titan and app.sounds.mixer.cue(titan, position):
             return True
     own = _op_sound_asset(app, {'name': name})
     if own:
         return app.sounds.pool_play(own, args.get('volume', 1.0),
                                     host_module.POOL_VOICES, position)
+    # The application did not ship this sound. If the user asked for Titan's
+    # sounds in the bridge, play the nearest one rather than nothing.
+    if titan_on:
+        fallback = cues_module.titan_fallback(name)
+        if fallback and app.sounds.mixer.cue(fallback, position):
+            return True
     return False
 
 

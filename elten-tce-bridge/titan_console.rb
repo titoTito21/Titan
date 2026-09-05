@@ -85,12 +85,27 @@ class TitanConsole
      {"id" => "network", "short_name" => _("Titan IM")}]
   end
 
+  # Titan's own labels arrive in TITAN's language. The view ids are stable,
+  # so the ones this add-on knows are named in Elten's language; a view a
+  # component registered keeps Titan's wording, which is the only wording
+  # there is for it.
+  VIEW_NAMES = {
+    "apps" => "Applications", "games" => "Games", "network" => "Titan IM",
+    "widgets" => "Widgets", "components" => "Components",
+    "shell" => "System desktop",
+  }.freeze
+
   def view
     @views[@tab] || {}
   end
 
+  def view_name(entry)
+    known = VIEW_NAMES[entry["id"].to_s]
+    known ? _(known) : entry["short_name"].to_s
+  end
+
   def header
-    "#{view['short_name']} (#{@rows.size})"
+    "#{view_name(view)} (#{@rows.size})"
   end
 
   def cycle(direction)
@@ -220,7 +235,8 @@ class TitanConsole
                   when "im_module" then ["im.modules", "modules"]
                   end
       if call
-        data = @api.data(call, {}, :title => _("Reading Titan..."))
+        data = @api.data(call, {"language" => @api.language},
+                         :title => _("Reading Titan..."))
         entries = data.is_a?(Hash) ? data[key] : nil
         if entries.is_a?(Array)
           return @inventory[kind] = entries.map { |entry| entry["name"].to_s }
@@ -287,6 +303,7 @@ class TitanConsole
   # Opened by the name the list gave, through the manager that owns it -
   # not by matching a name against a page of text.
   def launch(name, kind = nil)
+    return if TitanPrefs.confirm_launch? && !confirm(_("Start %s?") % name)
     if @api.available?
       call = {"app" => "apps.open", "game" => "games.open",
               "im_module" => "im.open"}[kind.to_s]
@@ -365,11 +382,22 @@ class TitanConsole
     data = JSON.parse(answer.text) rescue nil
     groups = data.is_a?(Hash) ? (data["groups"] || []) : []
     return alert(_("Titan's menu is empty.")) if groups.empty?
+    # Titan translated these into its own language; the ids are stable, so
+    # the entries this add-on knows are said in Elten's.
+    known = {"install_package" => "Install data package",
+             "ai_agent" => "AI Agent", "ai_assistant" => "AI Assistant",
+             "ai_assistant_live" => "AI Assistant (live)",
+             "ai_ocr" => "AI OCR", "ai_projects" => "Projects"}
+    group_names = {"program" => "Program", "ai" => "AI",
+                   "programmer" => "Programmer"}
     entries = []
     groups.each do |group|
+      group_label = group_names[group["id"].to_s]
+      group_label = group_label ? _(group_label) : group["label"].to_s
       (group["entries"] || []).each do |entry|
-        entries.push([entry["id"].to_s,
-                      "#{group['label']}: #{entry['label']}"])
+        label = known[entry["id"].to_s]
+        label = label ? _(label) : entry["label"].to_s
+        entries.push([entry["id"].to_s, "#{group_label}: #{label}"])
       end
     end
     # The entries every face of Titan has of its own - Titan's menu module

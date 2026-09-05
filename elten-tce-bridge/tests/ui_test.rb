@@ -6,7 +6,7 @@
 require "json"
 require_relative "elten_stub"
 BASE = File.expand_path("..", __dir__)
-%w[titan_bus titan_ui titan_api titan_speech_output titan_watch titan_actions titan_settings
+%w[titan_bus titan_ui titan_api titan_prefs titan_sounds titan_speech_output titan_watch titan_actions titan_settings
    titan_net titan_im titan_system titan_tools_ui titan_widgets titan_components titan_macros titan_cling titan_ai titan_shell
    titan_areas titan_console].each { |f| require_relative "#{BASE}/#{f}" }
 
@@ -434,7 +434,23 @@ check("activate registers the voice and the setting, and leaves Elten's menu alo
   # window. Adding four more top-level entries was clutter.
   raise "it put entries in Elten's menu: #{$extension.commands.map { |c| c.label }.inspect}" if !$extension.commands.empty?
   raise "no settings" if $extension.settings_builder.nil?
-  raise "no switch for the announcements" if $extension.settings_builder.booleans.empty?
+  builder = $extension.settings_builder
+  labels = builder.booleans.map { |entry| entry[1] } + builder.integers.map { |entry| entry[1] }
+  [_("Say when something arrives on Titan-Net"),
+   _("How often to look, in minutes"),
+   _("Read the AI's answer out loud"),
+   _("Ask before starting a TCE application")].each do |wanted|
+    raise "#{wanted} is not in Elten's settings: #{labels.inspect}" if !labels.include?(wanted)
+  end
+  # The interval is offered in minutes and bounded, because every look is a
+  # call into Titan's own interface thread.
+  minutes = builder.integers.find { |entry| entry[0] == "news_minutes" }
+  raise "the interval has no range" if minutes.nil? || minutes[2].nil?
+  raise "the range is wrong: #{minutes[2]}" if minutes[2].first < 1 || minutes[2].last > 60
+
+  # And what the settings say is what the watcher does.
+  TitanWatch.interval = 7 * 60
+  raise "the interval is not honoured: #{TitanWatch.interval}" if TitanWatch.interval != 420.0
   raise "the voice is not registered" if !SpeechOutput.outputs.include?(TitanSpeechOutput)
   # TCE's lists belong in Elten's own quick actions - a list the user puts
   # together - rather than in its main menu.
@@ -675,6 +691,58 @@ check("a Titan that is a version behind is told about, and still works") do
   apps = console.inventory("app")
   raise "the fallback list is empty" if apps.empty?
   bus.call_sync("probe", "bridge_on", {})
+end
+
+
+check("a screen works without the application class, on the defaults") do
+  # A screen that reached into the Program class could not be opened
+  # without it. TitanPrefs answers with defaults when nobody has been
+  # handed over, which is what makes the screens usable on their own.
+  TitanPrefs.source = nil
+  raise "the defaults are wrong" if !TitanPrefs.announce_news?
+  raise "starting should not ask by default" if TitanPrefs.confirm_launch?
+  raise "the interval default is wrong" if TitanPrefs.news_minutes != 3
+
+  # And what the application keeps is what they answer.
+  keeper = Object.new
+  def keeper.bridge_setting(key, fallback)
+    {"confirm_launch" => true, "news_minutes" => 9}.fetch(key, fallback)
+  end
+  TitanPrefs.source = keeper
+  raise "the setting was not read" if !TitanPrefs.confirm_launch?
+  raise "the interval was not read" if TitanPrefs.news_minutes != 9
+  TitanPrefs.source = nil
+end
+
+
+check("the bridge can sound like TCE, and is silent when told to be") do
+  bus.call_sync("probe", "bridge_on", {})
+  bus.call_sync("probe", "forget", {})
+  TitanSounds.bus = bus
+  TitanPrefs.source = nil                       # defaults: TCE sounds on
+
+  # Titan plays its own sound per kind of news; so does this, and it is the
+  # same name out of the same theme.
+  raise "the mapping is wrong" if TitanSounds::FOR_NEWS["unread_messages"] != "titannet/new_message.ogg"
+  TitanSounds.for_news("unread_forum_topics")
+  sleep 0.3
+  played = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  entry = played.find { |e| e[0] == "sound" }
+  raise "nothing was played: #{played.inspect}" if entry.nil?
+  raise "the wrong sound: #{entry[1]}" if entry[1] != "titannet/new_feedpost.ogg"
+
+  # Off means off: no call is made at all.
+  quiet = Object.new
+  def quiet.bridge_setting(key, fallback)
+    key == "tce_sounds" ? false : fallback
+  end
+  TitanPrefs.source = quiet
+  bus.call_sync("probe", "forget", {})
+  TitanSounds.play(TitanSounds::NEW_MESSAGE)
+  sleep 0.2
+  after = JSON.parse(bus.call_sync("probe", "spoken", {}).text) rescue []
+  raise "it played with the setting off" if after.any? { |e| e[0] == "sound" }
+  TitanPrefs.source = nil
 end
 
 bus.stop

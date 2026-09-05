@@ -83,6 +83,16 @@ class TitanAPI
     end
   end
 
+  # The language ELTEN is in, as two letters. Titan writes an add-on's name
+  # per language in its manifest and picks by the language IT runs in, so a
+  # Polish Titan would hand "Menedzer Plikow" to an English Elten. Asking in
+  # Elten's own language is what stops that.
+  def language
+    value = (Configuration.language.to_s rescue "")
+    value = value.tr("_", "-").split("-").first.to_s.downcase
+    value.size == 2 ? value : "en"
+  end
+
   # Data or nil, for the callers that only want the list.
   def data(name, args = {}, title: nil)
     answer = call(name, args, :title => title)

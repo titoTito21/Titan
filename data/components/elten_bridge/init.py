@@ -228,6 +228,44 @@ def stop_all():
 # ---------------------------------------------------------------------------
 def add_menu(component_manager):
     component_manager.register_menu_function(_(TITLE), _on_menu_action)
+    _register_settings(component_manager)
+
+
+def _register_settings(component_manager):
+    """A settings category for the bridge - one switch so far, whether it
+    uses Titan's own sounds (see `eltenkit/settings.py`)."""
+    if not hasattr(component_manager, 'register_settings_category'):
+        return
+    wx = _wx()
+    if wx is None:
+        return
+    from eltenkit import settings as bridge_settings
+
+    def build_panel(parent):
+        panel = wx.Panel(parent)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        panel.tce_sounds = wx.CheckBox(
+            panel, label=_("Use TCE (Titan) sounds in the bridge"))
+        panel.tce_sounds.SetToolTip(_(
+            "Play Titan's own interface sounds for Elten applications, and "
+            "fall back to a Titan sound when an application asks for one it "
+            "did not ship. Turn this off to hear each application exactly as "
+            "its author shipped it."))
+        sizer.Add(panel.tce_sounds, 0, wx.ALL, 8)
+        panel.SetSizer(sizer)
+        return panel
+
+    def load_panel(panel):
+        panel.tce_sounds.SetValue(bridge_settings.use_titan_sounds())
+
+    def save_panel(panel):
+        bridge_settings.set_use_titan_sounds(panel.tce_sounds.GetValue())
+
+    try:
+        component_manager.register_settings_category(
+            _(TITLE), build_panel, save_panel, load_panel)
+    except Exception as error:
+        print(f"[elten bridge] settings category failed: {error}")
 
 
 def _on_menu_action(_event=None):

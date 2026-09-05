@@ -77,6 +77,11 @@ def bridge(request):
         data = {"games": [{"name": "Cult of the Lamb", "platform": "Steam", "path": ""}]}
     elif call == "im.modules":
         data = {"modules": [{"id": "exampleim", "name": "Example IM"}]}
+    elif call == "sounds.play":
+        SPOKEN.append(("sound", args.get("name"), None))
+        data = {"played": True, "name": args.get("name")}
+    elif call == "sounds.theme":
+        data = {"theme": "default"}
     elif call in ("apps.open", "games.open", "im.open"):
         name = args.get("name") or args.get("id")
         known = {"apps.open": ["Edytor Tekstowy", "Notatki"],

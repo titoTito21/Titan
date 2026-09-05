@@ -105,3 +105,51 @@ def titan_cue(name):
     from ever losing a sound.
     """
     return CUES.get(str(name or '').strip().lower(), '')
+
+
+#: Keyword heuristics for a MISSING sound that is not one of the named cues
+#: above. A game that asks for a file it did not ship still makes a sound
+#: close to what it meant, rather than silence, when the user has asked for
+#: Titan's sounds in the bridge. Ordered - the first keyword found wins.
+_FALLBACK_KEYWORDS = (
+    ('error', 'core/error.ogg'),
+    ('fail', 'core/error.ogg'),
+    ('wrong', 'core/error.ogg'),
+    ('cancel', 'ui/popupclose.ogg'),
+    ('close', 'ui/dialogclose.ogg'),
+    ('open', 'ui/dialog.ogg'),
+    ('select', 'core/SELECT.ogg'),
+    ('choose', 'core/SELECT.ogg'),
+    ('enter', 'core/SELECT.ogg'),
+    ('ok', 'core/SELECT.ogg'),
+    ('press', 'core/SELECT.ogg'),
+    ('click', 'core/click.ogg'),
+    ('move', 'core/FOCUS.ogg'),
+    ('focus', 'core/FOCUS.ogg'),
+    ('border', 'ui/endoflist.ogg'),
+    ('edge', 'ui/endoflist.ogg'),
+    ('end', 'ui/endoflist.ogg'),
+    ('notify', 'ui/notify.ogg'),
+    ('message', 'ui/msg.ogg'),
+    ('msg', 'ui/msg.ogg'),
+)
+
+
+def titan_fallback(name):
+    """A Titan theme sound for a MISSING Elten sound, or ''.
+
+    First the exact cue map (so a named interface cue is exact), then a
+    keyword guess so an unnamed one still lands somewhere sensible, and ''
+    when nothing fits - a card or a bird has no Titan equivalent and is
+    better silent than wrong. Only ever consulted when the user has turned
+    on "Use TCE sounds in the bridge" and the application's own file is not
+    there.
+    """
+    exact = titan_cue(name)
+    if exact:
+        return exact
+    lowered = str(name or '').strip().lower()
+    for keyword, sound in _FALLBACK_KEYWORDS:
+        if keyword in lowered:
+            return sound
+    return ''

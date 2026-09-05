@@ -491,9 +491,19 @@ class WxUI(object):
                     # Escape hears it too. AudioMemory shows its board on a
                     # form and asks "abort the game?" from
                     # `runner.on_key(:key_escape)`; without the key on the
-                    # stream, Escape on the board did nothing at all - the
-                    # game could not be left except by closing the window.
-                    self._stream(application, event)
+                    # stream, Escape on the board did nothing at all.
+                    #
+                    # **But only from the ROOT screen.** Escape in a
+                    # subscreen - a form opened ON TOP of another - must
+                    # back out of that subscreen and nothing more: streaming
+                    # it to the outer loop reached a `Runner` several
+                    # screens up and stopped the whole application, so
+                    # Escape in some inner screen closed the program. A
+                    # form that is not the only one open therefore consumes
+                    # Escape (the `escape` event above still backs it out),
+                    # and only the single root screen streams it.
+                    if len(self._forms) <= 1:
+                        self._stream(application, event)
                     return
                 focused = self._focused_index(form_id)
                 # The control's own menu, where everybody looks for it:
