@@ -147,12 +147,22 @@ class TitanApps
   # The INDEX is deliberately left out. The cursor moving is not the
   # screen changing, and rebuilding the form for it would take the
   # keyboard away from the user on every arrow key.
-  def fingerprint(screen)
+  #
+  # **What the user just typed is not the screen changing.** `ignore` is
+  # the control a value was just sent for, and its own value and tick are
+  # left out of both sides of the comparison - because the application
+  # answers a set with the control holding what was set, which differs
+  # from what it held a letter ago every single time. Counted as a change
+  # the form was rebuilt on EVERY KEYSTROKE, and a rebuilt EditBox starts
+  # with its caret at the beginning: the next letter went in front of the
+  # last one and a typed word came out backwards.
+  def fingerprint(screen, ignore = nil)
     return "" if !screen.is_a?(Hash)
     [screen["id"], screen["kind"], screen["title"],
      (screen["controls"] || []).map do |c|
-       [c["id"], c["kind"], c["label"], c["value"], c["items"],
-        c["options"], c["columns"], c["checked"], c["enabled"]]
+       mine = ignore != nil && c["id"] == ignore
+       [c["id"], c["kind"], c["label"], mine ? nil : c["value"], c["items"],
+        c["options"], c["columns"], mine ? nil : c["checked"], c["enabled"]]
      end,
      (screen["menus"] || []).map { |m| m["label"] }].inspect
   end
@@ -684,20 +694,34 @@ class TitanApps
                        :title => _("Working..."))
     ok = took(answer)
     TitanApps.note("press #{control} -> #{ok ? (@moved ? 'the screen changed' : 'nothing changed') : 'FAILED'}")
+    still_working
     ok
+  end
+
+  # **"It did nothing" and "it has not answered yet" are opposite
+  # things.** TCE says which; without that a button whose application is
+  # still working - or stuck - reads exactly like a button that is not
+  # wired to anything, and the screen shown is one that may no longer be
+  # true. Said only for a press and a key: a letter typed must never
+  # raise anything.
+  def still_working
+    return if @answered != false
+    TitanApps.note("the application did not answer in time")
+    alert(_("The application has not answered yet. It may still be working; the screen shown may be out of date."))
   end
 
   def send_value(control, value, wait = true)
     answer = @api.call("app.set", {"session" => @session, "control" => control,
                                    "value" => value},
                        :title => wait ? _("Working...") : nil)
-    took(answer)
+    took(answer, control)
   end
 
   def send_key(key)
     answer = @api.call("app.key", {"session" => @session, "key" => key})
     ok = took(answer)
     TitanApps.note("key #{key} -> #{ok ? (@moved ? 'the screen changed' : 'nothing changed') : 'FAILED'}")
+    still_working
     ok
   end
 
@@ -706,7 +730,7 @@ class TitanApps
   # the form showing the old one has to go, or the user is left working a
   # screen that is no longer there - which is what "it will not click on
   # anything" was.
-  def took(answer)
+  def took(answer, ignore = nil)
     if !answer.ok?
       TitanSounds.event(:error)
       @running = false
@@ -714,14 +738,17 @@ class TitanApps
       alert(answer.error.to_s)
       return false
     end
-    before = fingerprint(@screen)
+    # Older TCEs do not say; not saying is not the same as saying no.
+    @answered = answer.data.is_a?(Hash) && answer.data.key?("answered") ?
+                answer["answered"] == true : nil
+    before = fingerprint(@screen, ignore)
     @screen = answer["screen"]
     if !@screen.is_a?(Hash)
       @running = false
       @moved = true
       return true
     end
-    @moved = true if fingerprint(@screen) != before
+    @moved = true if fingerprint(@screen, ignore) != before
     true
   end
 

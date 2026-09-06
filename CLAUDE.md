@@ -4029,7 +4029,7 @@ is the third time in this repository that has been true.
 - After all of it: **seven of seven walk clean**, and the only time left
   anywhere is the file manager really reading directories (1-2 s).
 
-- Tests: `tests/test_app_ui.py` (run it directly; 69 tests). Nothing opens
+- Tests: `tests/test_app_ui.py` (run it directly; 75 tests). Nothing opens
   a window, plays a sound, speaks or reaches the network, and the
   applications driven are Titan's real ones - testing the shim against a
   hand-built stand-in would test the wrong thing. The shim's own long-tail
@@ -4410,6 +4410,45 @@ nothing in Titan knows it exists.
   voice, and `wire` listened only for the inner list a `TableBox` has -
   which a `ListBox` has not - so the download manager's downloads and the
   organiser's table could be walked and never opened.
+- **What the user just typed is not the screen changing.** The
+  comparison that decides whether the form is rebuilt reads what the
+  controls HOLD - that is what made Enter and Backspace work in the file
+  manager - and an application answers a set with the control holding
+  what was just set, which differs from what it held a letter ago every
+  single time. So the form was rebuilt on EVERY KEYSTROKE, and a rebuilt
+  EditBox starts with its caret at the beginning: the next letter went in
+  front of the last one and a typed word came out **backwards**.
+  `fingerprint(screen, ignore)` leaves the value and the tick of the
+  control just set out of both sides, and `send_value` says which one
+  that is.
+- **A dialog's OK and Cancel are wx's own, not the application's.**
+  `wx.Button(panel, wx.ID_OK, label=_('OK'))` with nothing bound to it
+  anywhere is how a dialog is written - wxDialog ends the modal itself
+  when a button carrying a standard id is pressed - and the shim threw
+  the id away, so those buttons did nothing at all. The same throwing
+  away cost the editor its whole File and Edit menu and the file manager
+  its edit menu: `self.Bind(wx.EVT_MENU, self.OnSave, id=wx.ID_SAVE)` is
+  how both bind theirs, and a binding by an id nobody remembered matched
+  nothing. `_Widget` keeps `_wx_id` now, `_fire` matches on it, and a
+  standard button with no handler ends the modal - the application's own
+  handler still wins where there is one.
+- **`with wx.FileDialog(...) as chooser:` is how a file dialog is
+  written**, and wxPython really does make its dialogs context managers.
+  A special method is looked up on the TYPE, so the long tail that
+  answers an unwritten name never sees it: the `with` raised inside the
+  application's own handler, and Open, Save and Save as in the editor did
+  nothing with nothing said about it. Measured after these three: the
+  editor went from **1 screen to 10** and the ElevenLabs client from 3 to
+  13.
+- **A handler that raised is a fault, and a fault has to be findable.**
+  An exception in the application's own code was announced into a channel
+  nothing renders, so a button whose handler died halfway through read
+  exactly like a button that is not wired to anything. `RUNTIME.failed()`
+  writes it to stderr as well, which is what `app.log` reads back.
+- **"It did nothing" and "it has not answered yet" are opposite things.**
+  `tell` now says whether an answer really came and `app.press` / `set` /
+  `key` carry `answered`, so the renderer can say the application is
+  still working rather than showing a screen that is no longer true.
 - **The renderer is RUN, on every real screen** - which is the only thing
   that finds either of those. `tests/capture_screens.py` opens every TCE
   application through `titan.bridge` and writes its 28 screens to
@@ -4423,7 +4462,11 @@ nothing in Titan knows it exists.
   table, Backspace is forwarded from a list and KEPT by a field being
   typed into, a menu shortcut presses its own item. Neither needs Titan
   or Elten. Both were proved by putting each bug back and watching them
-  name it.
+  name it. The capture presses no button that COMMITS: it runs against
+  the user's own live applications, and pressing OK on a new-download
+  dialog with nothing filled in really wrote an empty download to a file
+  that would not parse again - the application did not start at all
+  afterwards.
 - **Where an application appears when it is started is a CHOICE, not a
   decision made for the user.** Starting one from the bridge has always
   meant a window on Titan's screen, which is what somebody sitting at

@@ -262,6 +262,17 @@ class _Widget(object):
 
     def __init__(self, parent=None, identifier=ID_ANY, label='', **kw):
         self._parent = parent
+        # **The id the APPLICATION asked for.** wx lets a control be given
+        # a standard id - `wx.Button(panel, wx.ID_OK)`, `menu.Append(
+        # wx.ID_SAVE, ...)` - and then bound by that id rather than by the
+        # object: `self.Bind(wx.EVT_MENU, self.OnSave, id=wx.ID_SAVE)` is
+        # how tEdit binds its WHOLE menu and TFM its edit menu. Thrown
+        # away, every one of those bindings matched nothing and every one
+        # of those menu items did nothing at all.
+        try:
+            self._wx_id = int(identifier)
+        except (TypeError, ValueError):
+            self._wx_id = ID_ANY
         self._label = str(label or kw.get('label', '') or '')
         self._name = ''
         self._value = None
@@ -342,6 +353,19 @@ class _Widget(object):
         RUNTIME.forget(self)
         return True
 
+    # **`with wx.FileDialog(...) as chooser:` is how a dialog is written**,
+    # and wxPython really does make its dialogs context managers. A
+    # special method is looked up on the TYPE, so the long tail that
+    # answers an unwritten name never sees it: `with` raised TypeError
+    # inside the application's own handler, and Open, Save and Save as in
+    # the editor did nothing at all with nothing said about it.
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_a):
+        self.Destroy()
+        return False
+
     def GetChildren(self):
         return list(self._children)
 
@@ -377,7 +401,8 @@ class _Widget(object):
                 if source is not None and source is not self \
                         and getattr(source, '_id', None) != self._id:
                     continue
-                if source is None and identifier not in (ID_ANY, self._id) \
+                if source is None and identifier not in (
+                        ID_ANY, self._id, self._wx_id) \
                         and holder is not self:
                     continue
                 if source is None and holder is not self \
@@ -587,8 +612,28 @@ class StaticBox(StaticText):
     pass
 
 
+#: The buttons a `wxDialog` answers ITSELF, with no handler anywhere.
+DIALOG_ANSWERS = (ID_OK, ID_CANCEL, ID_YES, ID_NO)
+
+
 class Button(_Widget):
     _kind = 'button'
+
+    def _pressed(self, message):
+        """**A dialog's OK and Cancel are wx's own, not the
+        application's.** `wx.Button(panel, wx.ID_OK, label=_('OK'))` with
+        nothing bound to it anywhere is how a dialog is written - wx ends
+        the modal itself when a button carrying a standard id is pressed -
+        so a shim that only ran handlers left those dialogs with an OK
+        that did nothing and no way out but Escape."""
+        if self._fire(self._press_event()):
+            return
+        if self._wx_id not in DIALOG_ANSWERS:
+            return
+        for holder in self._up():
+            if isinstance(holder, Dialog) and holder._modal_ended is None:
+                holder.EndModal(self._wx_id)
+                return
 
     def describe(self):
         if not self._shown:

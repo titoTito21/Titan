@@ -200,12 +200,24 @@ class Application(object):
             del self.log[0]
         self.log.append((level, text))
 
+    #: How long to wait for the interface to answer one message. An
+    #: application reading a folder or saving a file takes a moment; one
+    #: that is stuck takes for ever, and an interface has to be able to
+    #: tell the two apart.
+    PATIENCE = 8.0
+
     def tell(self, kind, **rest):
         """Say what the user did, and wait for the interface to answer.
 
         Every message changes the screen, so this waits for the next one -
         an interface that sent a key press and then read the screen would
         otherwise read the screen from before it.
+
+        **Answers whether one really came.** Silence and "nothing
+        changed" look identical from the outside and mean opposite
+        things: one is a button that did its work quietly, the other is
+        an application still busy - or stuck - and the interface showing
+        a screen that is no longer true.
         """
         if self.process is None or self.ended.is_set():
             return False
@@ -217,8 +229,7 @@ class Application(object):
         except Exception:
             self.ended.set()
             return False
-        self.changed.wait(5.0)
-        return True
+        return self.changed.wait(self.PATIENCE)
 
     # -------------------------------------------------------------- stop
     def ask_report(self):

@@ -340,6 +340,91 @@ class TheLongTailDegrades(unittest.TestCase):
             'print([one["what"] for one in wx.RUNTIME.refused])'))
 
 
+class TheIdTheApplicationAskedFor(unittest.TestCase):
+    """**wx lets a control be given a standard id and then bound by that
+    id rather than by the object**, and Titan's applications use it
+    everywhere: tEdit binds its WHOLE menu with
+    `self.Bind(wx.EVT_MENU, self.OnSave, id=wx.ID_SAVE)` and TFM its edit
+    menu the same way, and a dialog's OK is `wx.Button(panel, wx.ID_OK)`
+    with no handler anywhere - wx ends the modal itself.
+
+    Thrown away, every one of those did nothing at all, and did it
+    silently: the whole File and Edit menu of the editor, and the OK and
+    Cancel of every dialog written the ordinary way.
+
+    Asked in a subprocess, because that is where the shim lives.
+    """
+
+    def ask(self, source):
+        import subprocess
+        shim = os.path.join(TITAN, 'src', 'app_ui', 'shim')
+        code = 'import sys\nsys.path.insert(0, r"%s")\n%s' % (shim, source)
+        answer = subprocess.run([sys.executable, '-c', code],
+                                capture_output=True, text=True, timeout=60,
+                                cwd=TITAN)
+        self.assertEqual(answer.returncode, 0,
+                         'the shim raised:\n%s' % answer.stderr[-1500:])
+        return answer.stdout.strip()
+
+    def test_a_menu_item_bound_by_its_id_fires(self):
+        said = self.ask(
+            'import wx\n'
+            'frame = wx.Frame(None)\n'
+            'menu = wx.Menu()\n'
+            'item = menu.Append(wx.ID_SAVE, "&Save\\tCtrl+S")\n'
+            'bar = wx.MenuBar()\n'
+            'bar.Append(menu, "&File")\n'
+            'frame.SetMenuBar(bar)\n'
+            'frame.Bind(wx.EVT_MENU, lambda e: print("saved"), id=wx.ID_SAVE)\n'
+            'item._pressed(None)\n')
+        self.assertEqual(said, 'saved')
+
+    def test_a_dialogs_ok_needs_no_handler(self):
+        said = self.ask(
+            'import wx\n'
+            'dialog = wx.Dialog(None, wx.ID_ANY, "Settings")\n'
+            'panel = wx.Panel(dialog)\n'
+            'ok = wx.Button(panel, wx.ID_OK, label="OK")\n'
+            'ok._pressed(None)\n'
+            'print(dialog._modal_ended == wx.ID_OK)\n')
+        self.assertEqual(said, 'True')
+
+    def test_a_dialogs_cancel_needs_no_handler(self):
+        said = self.ask(
+            'import wx\n'
+            'dialog = wx.Dialog(None, wx.ID_ANY, "Settings")\n'
+            'cancel = wx.Button(dialog, wx.ID_CANCEL, label="Cancel")\n'
+            'cancel._pressed(None)\n'
+            'print(dialog._modal_ended == wx.ID_CANCEL)\n')
+        self.assertEqual(said, 'True')
+
+    def test_the_applications_own_handler_still_wins(self):
+        """A handler the application bound is the answer; wx's default is
+        only what happens when there is none."""
+        said = self.ask(
+            'import wx\n'
+            'dialog = wx.Dialog(None, wx.ID_ANY, "Settings")\n'
+            'ok = wx.Button(dialog, wx.ID_OK, label="OK")\n'
+            'dialog.Bind(wx.EVT_BUTTON, lambda e: print("mine"), ok)\n'
+            'ok._pressed(None)\n'
+            'print(dialog._modal_ended)\n')
+        self.assertEqual(said.splitlines(), ['mine', 'None'])
+
+    def test_a_dialog_is_a_context_manager(self):
+        """`with wx.FileDialog(self, ...) as chooser:` is how a file
+        dialog is written, and wxPython really does make its dialogs
+        context managers. A special method is looked up on the TYPE, so
+        the long tail that answers an unwritten name never sees it: the
+        `with` raised inside the application's own handler and Open, Save
+        and Save as in the editor did nothing at all."""
+        said = self.ask(
+            'import wx\n'
+            'with wx.FileDialog(None, "Open", wildcard="Text (*.txt)|*.txt",\n'
+            '                   style=wx.FD_OPEN) as chooser:\n'
+            '    print(chooser.GetPath() == "")\n')
+        self.assertEqual(said, 'True')
+
+
 class WhatTheWalkFound(unittest.TestCase):
     """Opening is not working. Every one of these was found by pressing
     things - the technique that found every real gap in Cling and in the
@@ -913,7 +998,7 @@ class WhatCOUNTSAsTheScreenChanging(unittest.TestCase):
 
     def test_the_content_is_part_of_it(self):
         block = self.read()
-        where = block.index('def fingerprint(screen)')
+        where = block.index('def fingerprint(screen,')
         block = block[where:block.index('\n  end\n', where)]
         for field in ('"value"', '"items"', '"options"', '"columns"'):
             self.assertIn(field, block,
@@ -924,9 +1009,28 @@ class WhatCOUNTSAsTheScreenChanging(unittest.TestCase):
         """The cursor moving is not the screen changing, and rebuilding
         the form for it would take the keyboard away on every arrow."""
         block = self.read()
-        where = block.index('def fingerprint(screen)')
+        where = block.index('def fingerprint(screen,')
         block = block[where:block.index('\n  end\n', where)]
         self.assertNotIn('c["index"]', block)
+
+    def test_what_the_user_just_typed_is_not(self):
+        """**A letter typed is not the screen changing.** The application
+        answers a set with the control holding what was set, which
+        differs from what it held a letter ago every single time -
+        counted as a change, the form was rebuilt on every keystroke, and
+        a rebuilt EditBox starts with its caret at the beginning, so the
+        next letter went in front of the last one and a typed word came
+        out backwards."""
+        block = self.read()
+        where = block.index('def fingerprint(screen,')
+        body = block[where:block.index('\n  end\n', where)]
+        self.assertIn('ignore', body,
+                      'the control just set is not left out of the '
+                      'comparison, so typing rebuilds the screen')
+        self.assertIn('mine ? nil : c["value"]', body)
+        # and the caller really passes it
+        self.assertIn('took(answer, control)', block,
+                      'send_value does not say which control it set')
 
     def test_titan_really_answers_a_different_screen(self):
         """And the half this can measure: the application does move."""

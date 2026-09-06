@@ -103,7 +103,7 @@
       ],
       [
        "Recent",
-       "2026-09-06 17:41:26",
+       "2026-09-06 21:45:47",
        "Folder"
       ],
       [
@@ -530,6 +530,42 @@
   }
  },
  {
+  "app": "tfm",
+  "screen": {
+   "id": 58,
+   "kind": "entry",
+   "title": "Zmiana nazwy",
+   "controls": [
+    {
+     "id": 59,
+     "kind": "text",
+     "label": "Podaj nową nazwę:",
+     "value": "AppData",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 60,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 61,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 59,
+   "modal": false
+  }
+ },
+ {
   "app": "elevenlabs",
   "screen": {
    "id": 1,
@@ -571,7 +607,17 @@
       "Daniel - Steady Broadcaster",
       "Lily - Velvety Actress",
       "Adam - Dominant, Firm",
-      "Bill - Wise, Mature, Balanced"
+      "Bill - Wise, Mature, Balanced",
+      "Piotr Fronczewski™",
+      "hop",
+      "Bandyta",
+      "zombonecitizen1",
+      "Koenraad Breker -  Gruff, Seasoned, & Authentickaplan1",
+      "rycerz1",
+      "Czilis",
+      "stary człowiek",
+      "kerowniku",
+      "rycerz2"
      ],
      "index": 0,
      "enabled": true,
@@ -743,60 +789,39 @@
   "screen": {
    "id": 43,
    "kind": "dialog",
-   "title": "Ustawienia generowania głosu",
+   "title": "Ustawienia klienta",
    "controls": [
     {
      "id": 46,
-     "kind": "slider",
-     "label": "Stabilność (0-100)",
-     "value": 50,
-     "minimum": 0,
-     "maximum": 100,
+     "kind": "text",
+     "label": "Klucz API",
+     "value": "sk_b218e252f7ba238749c6806d401b2c906d995b49503e387c",
      "enabled": true,
+     "readonly": false,
+     "secret": false,
      "labelled_by": "the text before it"
     },
     {
      "id": 48,
-     "kind": "slider",
-     "label": "Wzmocnienie podobieństwa (0-100)",
-     "value": 75,
-     "minimum": 0,
-     "maximum": 100,
+     "kind": "choice",
+     "label": "Tryb odtwarzania",
+     "options": [
+      "mpv (domyślny)",
+      "t player (nowy, mniej stabilny)"
+     ],
+     "index": 1,
      "enabled": true,
      "labelled_by": "the text before it"
     },
     {
-     "id": 50,
-     "kind": "slider",
-     "label": "Styl (0-100)",
-     "value": 0,
-     "minimum": 0,
-     "maximum": 100,
-     "enabled": true,
-     "labelled_by": "the text before it"
-    },
-    {
-     "id": 51,
-     "kind": "check",
-     "label": "Użyj wzmocnienia mówcy",
-     "value": true,
-     "enabled": true
-    },
-    {
-     "id": 52,
-     "kind": "label",
-     "label": "Stabilność: Wyższe wartości sprawiają, że głos jest bardziej spójny\nWzmocnienie podobieństwa: Wyższe wartości sprawiają, że głos jest bliższy oryginałowi\nStyl: Kontroluje ekspresję (tylko modele V2)\nWzmocnienie mówcy: Zwiększa podobieństwo do oryginalnego mówcy",
-     "enabled": true
-    },
-    {
-     "id": 53,
+     "id": 49,
      "kind": "button",
      "label": "OK",
      "enabled": true,
      "default": false
     },
     {
-     "id": 54,
+     "id": 50,
      "kind": "button",
      "label": "Anuluj",
      "enabled": true,
@@ -811,22 +836,883 @@
  {
   "app": "elevenlabs",
   "screen": {
-   "id": 55,
-   "kind": "message",
-   "title": "Błąd",
+   "id": 51,
+   "kind": "dialog",
+   "title": "Menedżer głosów",
    "controls": [
     {
+     "id": 54,
+     "kind": "table",
+     "label": "Twoje głosy",
+     "columns": [
+      "Nazwa",
+      "Kategoria",
+      "Opis",
+      "Etykiety"
+     ],
+     "items": [
+      [
+       "Roger - Laid-Back, Casual, Resonant",
+       "premade",
+       "Easy going and perfect for casual conversations.",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Sarah - Mature, Reassuring, Confident",
+       "premade",
+       "Young adult woman with a confident and warm, matur",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Laura - Enthusiast, Quirky Attitude",
+       "premade",
+       "This young adult female voice delivers sunny enthu",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Charlie - Deep, Confident, Energetic",
+       "premade",
+       "A young Australian male with a confident and energ",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "George - Warm, Captivating Storyteller",
+       "premade",
+       "Warm resonance that instantly captivates listeners",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Callum - Husky Trickster",
+       "premade",
+       "Deceptively gravelly, yet unsettling edge.",
+       "accent, age, language, use_case, gender"
+      ],
+      [
+       "River - Relaxed, Neutral, Informative",
+       "premade",
+       "A relaxed, neutral voice ready for narrations or c",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Harry - Fierce Warrior",
+       "premade",
+       "An animated warrior ready to charge forward.",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Liam - Energetic, Social Media Creator",
+       "premade",
+       "A young adult with energy and warmth - suitable fo",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Alice - Clear, Engaging Educator",
+       "premade",
+       "Clear and engaging, friendly woman with a British ",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Matilda - Knowledgable, Professional",
+       "premade",
+       "A professional woman with a pleasing alto pitch. S",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Will - Relaxed Optimist",
+       "premade",
+       "Conversational and laid back.",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Jessica - Playful, Bright, Warm",
+       "premade",
+       "Young and popular, this playful American female vo",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Eric - Smooth, Trustworthy",
+       "premade",
+       "A smooth tenor pitch from a man in his 40s - perfe",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Bella - Professional, Bright, Warm",
+       "premade",
+       "This voice is warm, bright, and professional, char",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Chris - Charming, Down-to-Earth",
+       "premade",
+       "Natural and real, this down-to-earth voice is grea",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Brian - Deep, Resonant and Comforting",
+       "premade",
+       "Middle-aged man with a resonant and comforting ton",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Daniel - Steady Broadcaster",
+       "premade",
+       "A strong voice perfect for delivering a profession",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Lily - Velvety Actress",
+       "premade",
+       "Velvety British female voice delivers news and nar",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Adam - Dominant, Firm",
+       "premade",
+       "A bright tenor pitch that immediately cuts through",
+       "accent, age, language, use_case, gender"
+      ],
+      [
+       "Bill - Wise, Mature, Balanced",
+       "premade",
+       "Friendly and comforting voice ready to narrate you",
+       "accent, age, language, use_case, gender, descriptive"
+      ],
+      [
+       "Piotr Fronczewski™",
+       "professional",
+       "Piotr Fronczewski is one of Poland’s most recogniz",
+       "accent, gender, language"
+      ],
+      [
+       "hop",
+       "cloned",
+       "test voice",
+       ""
+      ],
+      [
+       "Bandyta",
+       "generated",
+       "",
+       "accent, gender, age"
+      ],
+      [
+       "zombonecitizen1",
+       "cloned",
+       "",
+       ""
+      ],
+      [
+       "Koenraad Breker -  Gruff, Seasoned, & Authentickaplan1",
+       "generated",
+       "Koenraad Breker's voice is the embodiment of the r",
+       "accent, descriptive, gender, use_case, age"
+      ],
+      [
+       "rycerz1",
+       "generated",
+       "",
+       "accent, gender, age"
+      ],
+      [
+       "Czilis",
+       "generated",
+       "",
+       "accent, gender, age"
+      ],
+      [
+       "stary człowiek",
+       "generated",
+       "",
+       "accent, gender, age"
+      ],
+      [
+       "kerowniku",
+       "cloned",
+       "this is a drunken male voice",
+       ""
+      ],
+      [
+       "rycerz2",
+       "generated",
+       "",
+       "accent, gender, age"
+      ]
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 55,
+     "kind": "button",
+     "label": "Odśwież",
+     "enabled": true,
+     "default": false
+    },
+    {
      "id": 56,
-     "kind": "label",
-     "label": "Proszę wprowadzić tekst do wygenerowania.",
-     "enabled": true
+     "kind": "button",
+     "label": "Pokaż szczegóły",
+     "enabled": false,
+     "default": false
     },
     {
      "id": 57,
      "kind": "button",
+     "label": "Edytuj głos",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 58,
+     "kind": "button",
+     "label": "Ustawienia głosu",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 59,
+     "kind": "button",
+     "label": "Usuń",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 60,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 61,
+   "kind": "dialog",
+   "title": "Klonowanie głosu",
+   "controls": [
+    {
+     "id": 64,
+     "kind": "text",
+     "label": "Nazwa głosu",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 66,
+     "kind": "text",
+     "label": "Opis głosu",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 68,
+     "kind": "text",
+     "label": "Ścieżka do głosu",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 69,
+     "kind": "button",
+     "label": "Przeglądaj...",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 70,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 71,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 72,
+   "kind": "dialog",
+   "title": "Dziękuję za używanie klienta ElevenLabs",
+   "controls": [
+    {
+     "id": 73,
+     "kind": "label",
+     "label": "Jeśli uważasz, że ten program jest przydatny, rozważ wsparcie mnie kawą, piwem lub paczką papierosów, aby pomóc w utrzymaniu kosztów serwera bazy danych głosów.",
+     "enabled": true
+    },
+    {
+     "id": 74,
+     "kind": "button",
+     "label": "Dotacja",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 75,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 88,
+   "kind": "message",
+   "title": "Błąd",
+   "controls": [
+    {
+     "id": 89,
+     "kind": "label",
+     "label": "Error loading history: HistoryClient.get() missing 1 required positional argument: 'history_item_id'",
+     "enabled": true
+    },
+    {
+     "id": 90,
+     "kind": "button",
      "label": "OK",
      "enabled": true,
      "default": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 91,
+   "kind": "dialog",
+   "title": "Pamięć podręczna generacji",
+   "controls": [
+    {
+     "id": 93,
+     "kind": "label",
+     "label": "Cached Items: 2 / 10  |  Size: 0.03 MB",
+     "enabled": true
+    },
+    {
+     "id": 95,
+     "kind": "table",
+     "label": "Zapisane generacje",
+     "columns": [
+      "Czas",
+      "Podgląd tekstu",
+      "Głos",
+      "Model",
+      "Znaki"
+     ],
+     "items": [
+      [
+       "2026-09-06 21:51",
+       "kurwa",
+       "Sarah - Mature, Reassuring, Confident",
+       "eleven_multilingual_v2",
+       "5"
+      ],
+      [
+       "2026-09-06 21:48",
+       "kurwa",
+       "Roger - Laid-Back, Casual, Resonant",
+       "eleven_multilingual_v2",
+       "5"
+      ]
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 97,
+     "kind": "multiline",
+     "label": "Szczegóły",
+     "value": "",
+     "enabled": true,
+     "readonly": true,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 98,
+     "kind": "button",
+     "label": "Odtwórz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 99,
+     "kind": "button",
+     "label": "Użyj tego",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 100,
+     "kind": "button",
+     "label": "Usuń",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 101,
+     "kind": "button",
+     "label": "Wyczyść wszystko",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 102,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 103,
+   "kind": "dialog",
+   "title": "Konwersja mowy na mowę",
+   "controls": [
+    {
+     "id": 105,
+     "kind": "label",
+     "label": "Konwertuj mowę z jednego głosu na inny.\nWybierz plik audio i docelowy głos, aby stworzyć nową wersję.",
+     "enabled": true
+    },
+    {
+     "id": 107,
+     "kind": "text",
+     "label": "Wejściowy plik audio",
+     "value": "",
+     "enabled": true,
+     "readonly": true,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 108,
+     "kind": "button",
+     "label": "Przeglądaj...",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 110,
+     "kind": "choice",
+     "label": "Docelowy głos",
+     "options": [
+      "Roger - Laid-Back, Casual, Resonant",
+      "Sarah - Mature, Reassuring, Confident",
+      "Laura - Enthusiast, Quirky Attitude",
+      "Charlie - Deep, Confident, Energetic",
+      "George - Warm, Captivating Storyteller",
+      "Callum - Husky Trickster",
+      "River - Relaxed, Neutral, Informative",
+      "Harry - Fierce Warrior",
+      "Liam - Energetic, Social Media Creator",
+      "Alice - Clear, Engaging Educator",
+      "Matilda - Knowledgable, Professional",
+      "Will - Relaxed Optimist",
+      "Jessica - Playful, Bright, Warm",
+      "Eric - Smooth, Trustworthy",
+      "Bella - Professional, Bright, Warm",
+      "Chris - Charming, Down-to-Earth",
+      "Brian - Deep, Resonant and Comforting",
+      "Daniel - Steady Broadcaster",
+      "Lily - Velvety Actress",
+      "Adam - Dominant, Firm",
+      "Bill - Wise, Mature, Balanced",
+      "Piotr Fronczewski™",
+      "hop",
+      "Bandyta",
+      "zombonecitizen1",
+      "Koenraad Breker -  Gruff, Seasoned, & Authentickaplan1",
+      "rycerz1",
+      "Czilis",
+      "stary człowiek",
+      "kerowniku",
+      "rycerz2"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 112,
+     "kind": "choice",
+     "label": "Model",
+     "options": [
+      "eleven_english_sts_v2",
+      "eleven_multilingual_sts_v2"
+     ],
+     "index": 1,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 113,
+     "kind": "gauge",
+     "label": "Progress",
+     "value": 0,
+     "maximum": 100,
+     "unnamed": true
+    },
+    {
+     "id": 114,
+     "kind": "button",
+     "label": "Konwertuj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 115,
+     "kind": "button",
+     "label": "Odtwórz wynik",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 116,
+     "kind": "button",
+     "label": "Zapisz wynik",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 117,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 118,
+   "kind": "dialog",
+   "title": "Generowanie efektów dźwiękowych",
+   "controls": [
+    {
+     "id": 120,
+     "kind": "label",
+     "label": "Generuj efekty dźwiękowe używając AI.\nOpisz dźwięk, który chcesz stworzyć.",
+     "enabled": true
+    },
+    {
+     "id": 122,
+     "kind": "multiline",
+     "label": "Opis dźwięku",
+     "value": "Szczekanie psa",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 123,
+     "kind": "label",
+     "label": "Czas trwania (sekundy, 0.5-22):",
+     "enabled": true
+    },
+    {
+     "id": 125,
+     "kind": "slider",
+     "label": "Wpływ opisu (0.0-1.0)",
+     "value": 30,
+     "minimum": 0,
+     "maximum": 100,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 126,
+     "kind": "gauge",
+     "label": "Progress",
+     "value": 0,
+     "maximum": 100,
+     "unnamed": true
+    },
+    {
+     "id": 127,
+     "kind": "button",
+     "label": "Generuj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 128,
+     "kind": "button",
+     "label": "Odtwórz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 129,
+     "kind": "button",
+     "label": "Save",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 130,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 131,
+   "kind": "dialog",
+   "title": "Informacje o użytkowniku i subskrypcja",
+   "controls": [
+    {
+     "id": 133,
+     "kind": "multiline",
+     "label": "Text",
+     "value": "==================================================\nINFORMACJE O SUBSKRYPCJI\n==================================================\n\nTier: starter\nCharacter Count: 4\nCharacter Limit: 88,194\nUsage: 0.0%\nCharacters Remaining: 88,190\nCan Extend Limit: False\nAllowed to Extend: True\nNext Reset: 2026-10-03 11:15:30\nVoice Limit: 10\nProfessional Voice Limit: 0\nInstant Voice Cloning: True\nProfessional Voice Cloning: False\n\n==================================================\nINFORMACJE O UŻYTKOWNIKU\n==================================================\n\nFirst Name: None\nNew User: True",
+     "enabled": true,
+     "readonly": true,
+     "secret": false,
+     "unnamed": true
+    },
+    {
+     "id": 134,
+     "kind": "button",
+     "label": "Odśwież",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 135,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 143,
+   "kind": "message",
+   "title": "Informacja",
+   "controls": [
+    {
+     "id": 144,
+     "kind": "label",
+     "label": "API modeli niedostępne. Pokazuję znane modele.",
+     "enabled": true
+    },
+    {
+     "id": 145,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 136,
+   "kind": "dialog",
+   "title": "Dostępne modele",
+   "controls": [
+    {
+     "id": 139,
+     "kind": "table",
+     "label": "Dostępne modele",
+     "columns": [
+      "ID modelu",
+      "Nazwa",
+      "Języki"
+     ],
+     "items": [
+      [
+       "eleven_monolingual_v1",
+       "Eleven Monolingual v1",
+       "en"
+      ],
+      [
+       "eleven_multilingual_v1",
+       "Eleven Multilingual v1",
+       "en, de, pl, es, it, ..."
+      ],
+      [
+       "eleven_multilingual_v2",
+       "Eleven Multilingual v2",
+       "en, ja, zh, de, hi, ..."
+      ],
+      [
+       "eleven_turbo_v2",
+       "Eleven Turbo v2",
+       "en, ja, zh, de, hi, ..."
+      ],
+      [
+       "eleven_turbo_v2_5",
+       "Eleven Turbo v2.5",
+       "en, ja, zh, de, hi, ..."
+      ],
+      [
+       "eleven_english_sts_v2",
+       "Eleven English STS v2",
+       "en"
+      ],
+      [
+       "eleven_multilingual_sts_v2",
+       "Eleven Multilingual STS v2",
+       "en, ja, zh, de, hi, ..."
+      ]
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 141,
+     "kind": "multiline",
+     "label": "Szczegóły modelu",
+     "value": "",
+     "enabled": true,
+     "readonly": true,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 142,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 79,
+   "kind": "dialog",
+   "title": "Menedżer historii",
+   "controls": [
+    {
+     "id": 82,
+     "kind": "table",
+     "label": "Historia generowania",
+     "columns": [
+      "Data",
+      "Tekst",
+      "Głos",
+      "Znaki"
+     ],
+     "items": [],
+     "index": -1,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 83,
+     "kind": "button",
+     "label": "Odśwież",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 84,
+     "kind": "button",
+     "label": "Odtwórz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 85,
+     "kind": "button",
+     "label": "Pobierz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 86,
+     "kind": "button",
+     "label": "Usuń",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 87,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
     }
    ],
    "menus": [],
@@ -1162,6 +2048,397 @@
   }
  },
  {
+  "app": "tedit",
+  "screen": {
+   "id": 39,
+   "kind": "entry",
+   "title": "Otwórz plik",
+   "controls": [
+    {
+     "id": 40,
+     "kind": "text",
+     "label": "Otwórz plik",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "path": "open",
+     "extensions": [
+      "txt",
+      "docx",
+      "doc",
+      "pdf"
+     ]
+    },
+    {
+     "id": 41,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 42,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 40,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 43,
+   "kind": "entry",
+   "title": "Zapisz plik jako",
+   "controls": [
+    {
+     "id": 44,
+     "kind": "text",
+     "label": "Zapisz plik jako",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "path": "save",
+     "extensions": [
+      "txt"
+     ]
+    },
+    {
+     "id": 45,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 46,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 44,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 47,
+   "kind": "entry",
+   "title": "Zapisz plik jako",
+   "controls": [
+    {
+     "id": 48,
+     "kind": "text",
+     "label": "Zapisz plik jako",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "path": "save",
+     "extensions": [
+      "txt"
+     ]
+    },
+    {
+     "id": 49,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 50,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 48,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 51,
+   "kind": "dialog",
+   "title": "Ustawienia programu",
+   "controls": [
+    {
+     "id": 53,
+     "kind": "tabs",
+     "label": "Tabs",
+     "options": [
+      "Ogólne",
+      "Tekst"
+     ],
+     "index": 0,
+     "unnamed": true
+    },
+    {
+     "id": 67,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 68,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 57,
+     "kind": "choice",
+     "label": "Zapis co",
+     "options": [
+      "5 minut",
+      "10 minut",
+      "wyłączone"
+     ],
+     "index": 2,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 59,
+     "kind": "check",
+     "label": "Włącz sprawdzanie pisowni (wymaga słownika)",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 60,
+     "kind": "label",
+     "label": "Program spróbuje pobrać słownik pl_PL do podkatalogu data/dicts\njeśli nie będzie dostępny systemowo.",
+     "enabled": true
+    },
+    {
+     "id": 64,
+     "kind": "choice",
+     "label": "Symbol końca linii",
+     "options": [
+      "windows",
+      "MAC OS/linux/unix",
+      "inny symbol..."
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 55,
+     "kind": "label",
+     "label": "Automatyczny zapis",
+     "enabled": true
+    },
+    {
+     "id": 58,
+     "kind": "label",
+     "label": "Sprawdzanie pisowni",
+     "enabled": true
+    },
+    {
+     "id": 62,
+     "kind": "label",
+     "label": "Znaki końca linii",
+     "enabled": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 69,
+   "kind": "dialog",
+   "title": "Znajdź",
+   "controls": [
+    {
+     "id": 72,
+     "kind": "text",
+     "label": "Szukaj",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 73,
+     "kind": "button",
+     "label": "Znajdź dalej",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 74,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 75,
+   "kind": "dialog",
+   "title": "Zamień tekst",
+   "controls": [
+    {
+     "id": 78,
+     "kind": "text",
+     "label": "Szukaj",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 80,
+     "kind": "text",
+     "label": "Zamień na",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 81,
+     "kind": "button",
+     "label": "Zamień",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 82,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 83,
+   "kind": "message",
+   "title": "Sprawdzanie pisowni - Status",
+   "controls": [
+    {
+     "id": 84,
+     "kind": "label",
+     "label": "Sprawdzanie pisowni jest wyłączone w ustawieniach lub słownik nie został poprawnie załadowany.",
+     "enabled": true
+    },
+    {
+     "id": 85,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 86,
+   "kind": "message",
+   "title": "Wskazówka",
+   "controls": [
+    {
+     "id": 87,
+     "kind": "label",
+     "label": "Spróbuj włączyć sprawdzanie pisowni w Ustawieniach programu.",
+     "enabled": true
+    },
+    {
+     "id": 88,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 89,
+   "kind": "dialog",
+   "title": "Wstaw znak Unicode",
+   "controls": [
+    {
+     "id": 92,
+     "kind": "text",
+     "label": "Podaj kod punktu kodowego (np. U+00A9)",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 93,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 94,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
   "app": "media",
   "screen": {
    "id": 1,
@@ -1275,19 +2552,8 @@
       "Data utworzenia",
       "Data edytowania"
      ],
-     "items": [
-      [
-       "aaaaa",
-       "2026-09-06 17:47",
-       "2026-09-06 17:47"
-      ],
-      [
-       "test",
-       "2026-09-06 18:11",
-       "2026-09-06 18:11"
-      ]
-     ],
-     "index": 0,
+     "items": [],
+     "index": -1,
      "enabled": true
     },
     {
@@ -1567,8 +2833,16 @@
       "Godzina",
       "Priorytet"
      ],
-     "items": [],
-     "index": -1,
+     "items": [
+      [
+       "",
+       "",
+       "2026-01-01",
+       "00:00",
+       "Średni"
+      ]
+     ],
+     "index": 0,
      "enabled": true,
      "unnamed": true
     }
@@ -2223,10 +3497,8 @@
      "id": 56,
      "kind": "list",
      "label": "Odwiedzone strony",
-     "items": [
-      "Titan - titanic computer environment — https://titosofttitan.com/titan/"
-     ],
-     "index": 0,
+     "items": [],
+     "index": -1,
      "enabled": true,
      "labelled_by": "the text before it"
     },
@@ -2254,10 +3526,8 @@
      "id": 61,
      "kind": "list",
      "label": "Zapisane zakładki",
-     "items": [
-      "Titan - titanic computer environment — https://titosofttitan.com/titan"
-     ],
-     "index": 0,
+     "items": [],
+     "index": -1,
      "enabled": true,
      "labelled_by": "the text before it"
     }

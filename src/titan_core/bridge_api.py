@@ -737,23 +737,31 @@ def _app_ui_screen(args):
     return {'screen': _app_ui_session(args).application.screen}
 
 
+#: Said when the application has not answered in time. Silence and "the
+#: screen did not change" look identical to a renderer and mean opposite
+#: things - the second is a button that quietly did its work, the first
+#: is an application still busy, or stuck, with the interface showing a
+#: screen that is no longer true.
+def _app_ui_answer(held, answered):
+    return {'screen': held.application.screen, 'answered': bool(answered)}
+
+
 def _app_ui_press(args):
     held = _app_ui_session(args)
-    held.application.tell('press', control=_whole(args.get('control')))
-    return {'screen': held.application.screen}
+    return _app_ui_answer(held, held.application.tell(
+        'press', control=_whole(args.get('control'))))
 
 
 def _app_ui_set(args):
     held = _app_ui_session(args)
-    held.application.tell('set', control=_whole(args.get('control')),
-                          value=args.get('value'))
-    return {'screen': held.application.screen}
+    return _app_ui_answer(held, held.application.tell(
+        'set', control=_whole(args.get('control')), value=args.get('value')))
 
 
 def _app_ui_key(args):
     held = _app_ui_session(args)
-    held.application.tell('key', key=str(args.get('key') or ''))
-    return {'screen': held.application.screen}
+    return _app_ui_answer(held, held.application.tell(
+        'key', key=str(args.get('key') or '')))
 
 
 def _app_ui_close(args):

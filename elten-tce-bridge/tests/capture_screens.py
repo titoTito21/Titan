@@ -28,6 +28,15 @@ from src.titan_core import titan_actions as ta
 DANGEROUS = re.compile(r'usu|delet|remov|kasuj|format|wyczy|zamknij|exit|wyjd|zako',
                        re.I)
 
+#: **A button that COMMITS is not pressed either.** This runs against the
+#: user's own live applications: pressing OK on a new-download dialog with
+#: nothing filled in really added an empty download, and the file it was
+#: written to would not parse again - the application would not start at
+#: all afterwards. Reaching one more screen is not worth that.
+COMMITS = re.compile(r'^(ok|zapisz|save|generuj|generate|pobierz|download|'
+                     r'start|wykonaj|apply|zastosuj|wyślij|send|dodaj|add)\b',
+                     re.I)
+
 
 def main():
     ta.connect(id='screen_capture', label='Screen capture', kind='app')
@@ -82,7 +91,9 @@ def main():
                 if got.get('ok') and visit((got.get('data') or {}).get('screen')):
                     bridge('app.key', session=session, key='escape')
         for control in list(first.get('controls') or []):
-            if control['kind'] != 'button' or DANGEROUS.search(control['label']):
+            if control['kind'] != 'button' \
+                    or DANGEROUS.search(control['label']) \
+                    or COMMITS.match(control['label'].strip()):
                 continue
             got = bridge('app.press', session=session, control=control['id'])
             if got.get('ok') and visit((got.get('data') or {}).get('screen')):

@@ -219,7 +219,7 @@ class Runtime(object):
             try:
                 self._act(message)
             except Exception as error:
-                self.say('said', text='%s: %s' % (type(error).__name__, error))
+                self.failed(error)
             self._drain()
             self._tick()
         self.running = False
@@ -254,7 +254,7 @@ class Runtime(object):
             try:
                 timer.fire(now)
             except Exception as error:
-                self.say('said', text='%s: %s' % (type(error).__name__, error))
+                self.failed(error)
         self._drain()
 
     # ----------------------------------------------------------- the read
@@ -295,7 +295,7 @@ class Runtime(object):
             try:
                 work(*args, **kwargs)
             except Exception as error:
-                self.say('said', text='%s: %s' % (type(error).__name__, error))
+                self.failed(error)
 
     def later(self, work, *args, **kwargs):
         with self.lock:
@@ -339,6 +339,24 @@ class Runtime(object):
             return
 
     # -------------------------------------------------- what it could not do
+    def failed(self, error):
+        """**A handler that raised is a fault, and a fault has to be
+        findable.** Announced only, it reached a channel nothing renders:
+        `on_save` raising halfway through meant `EndModal` was never
+        reached, the dialog stayed up, and the Save button read as a
+        button that did nothing - with nothing anywhere to say otherwise.
+        So it is written to stderr as well, which is what `app.log`
+        reads back.
+        """
+        import traceback
+        text = '%s: %s' % (type(error).__name__, error)
+        self.say('said', text=text)
+        try:
+            sys.stderr.write('[app_ui] %s\n%s' % (text, traceback.format_exc()))
+            sys.stderr.flush()
+        except Exception:
+            pass
+
     def refuse(self, what, detail=''):
         """Something wx offers that this cannot be. Recorded and said, never
         raised: an application that asks for a web view should lose the web

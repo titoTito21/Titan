@@ -48,8 +48,20 @@ class StillThere
   def initialize(screen) @screen = screen; @asked = [] end
   def language() "pl" end
   def available?() true end
+  # **A set is ECHOED**, because that is what an application does: it
+  # answers with the control holding what was just put in it. A fake that
+  # hands the old screen back would make the one thing worth testing here
+  # - that typing a letter does not rebuild the form - true for free.
   def call(name, args = {}, title: nil)
     @asked.push([name.to_s, args])
+    if name.to_s == "app.set"
+      @screen = Marshal.load(Marshal.dump(@screen))
+      (@screen["controls"] || []).each do |c|
+        next if c["id"] != args["control"]
+        c["value"] = args["value"]
+        c["checked"] = args["value"] if c["kind"] == "check"
+      end
+    end
     Answer.new(true, {"screen" => @screen}, nil)
   end
 end
@@ -128,6 +140,27 @@ screens.each do |entry|
                      described["label"].to_s])
     end
   end
+  # **Typing a letter is not the screen changing.** The application
+  # answers a set with the control holding what was set, so counted as a
+  # change the form was rebuilt on every keystroke - and a rebuilt
+  # EditBox starts with its caret at the beginning, which is how a typed
+  # word came out backwards.
+  bound.each do |described, widget|
+    next if !%w[text multiline check].include?(described["kind"].to_s)
+    renderer.instance_variable_set(:@moved, false)
+    if widget.respond_to?(:set_text)
+      widget.set_text("#{widget.text}x")
+    elsif widget.respond_to?(:checked=)
+      widget.checked = !widget.checked
+    end
+    widget.trigger(:change)
+    if renderer.instance_variable_get(:@moved)
+      problems.push("%s / %s: typing into the %s %p rebuilds the screen" %
+                    [app, screen["title"].to_s, described["kind"],
+                     described["label"].to_s])
+    end
+  end
+
   (form.menus || []).each do |_label, entries|
     walk = lambda do |list|
       list.each do |text, thing|
