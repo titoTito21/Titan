@@ -168,6 +168,92 @@ CommandEvent = KeyEvent = CloseEvent = ListEvent = TreeEvent = Event
 # --------------------------------------------------------------------------
 # Every control
 # --------------------------------------------------------------------------
+class Point(object):
+    """Where something is, which here is always nowhere."""
+
+    __slots__ = ('x', 'y')
+
+    def __init__(self, x=0, y=0):
+        self.x, self.y = int(x or 0), int(y or 0)
+
+    def __iter__(self):
+        return iter((self.x, self.y))
+
+    def __getitem__(self, index):
+        return (self.x, self.y)[index]
+
+    def Get(self):
+        return (self.x, self.y)
+
+
+class Size(Point):
+    """How big, which here is always nothing."""
+
+    def __init__(self, width=0, height=0):
+        Point.__init__(self, width, height)
+
+    @property
+    def width(self):
+        return self.x
+
+    @property
+    def height(self):
+        return self.y
+
+    GetWidth = lambda self: self.x       # noqa: E731 - wx's own spelling
+    GetHeight = lambda self: self.y      # noqa: E731
+
+
+class Rect(object):
+    """**Geometry answers ZEROS, not nothing.**
+
+    "Layout does not matter" is right about what is described and wrong
+    about what is ANSWERED: an application that lays nothing out still
+    asks where things are, and does arithmetic on the answer.
+    `rect.x + 2` on a nothing is a `TypeError` that ends the browser
+    before it has drawn a line.
+    """
+
+    __slots__ = ('x', 'y', 'width', 'height')
+
+    def __init__(self, x=0, y=0, width=0, height=0):
+        self.x, self.y = int(x or 0), int(y or 0)
+        self.width, self.height = int(width or 0), int(height or 0)
+
+    def __iter__(self):
+        return iter((self.x, self.y, self.width, self.height))
+
+    def __getitem__(self, index):
+        return (self.x, self.y, self.width, self.height)[index]
+
+    def GetX(self):
+        return self.x
+
+    def GetY(self):
+        return self.y
+
+    def GetWidth(self):
+        return self.width
+
+    def GetHeight(self):
+        return self.height
+
+    def GetPosition(self):
+        return Point(self.x, self.y)
+
+    def GetSize(self):
+        return Size(self.width, self.height)
+
+    def Contains(self, *_a):
+        return False
+
+    def Inflate(self, *_a):
+        return self
+
+    def Deflate(self, *_a):
+        return self
+
+
 class _Widget(object):
     """What every control here has. A control is a thing with a name, a
     kind and a value; where it sits is not part of it."""
@@ -212,8 +298,15 @@ class _Widget(object):
     def label(self):
         """**The accessible name first.** Titan's applications call
         `SetName` on every control precisely because they are written for
-        people who cannot see them, so it is the best label there is."""
-        return self._name or self._label or ''
+        people who cannot see them, so it is the best label there is.
+
+        And **without the accelerator ampersand**. "&Play" underlines the
+        P for somebody using a mouse and a keyboard; to a reader it is
+        the word "ampersand" in front of every second button. It was
+        taken off menu items and left on everything else, so the
+        ElevenLabs client offered "ampersand Odtworz" and "ampersand
+        Zapisz na dysku"."""
+        return _without_ampersand(self._name or self._label or '')
 
     # ------------------------------------------------------------- state
     def Enable(self, enable=True):
@@ -344,8 +437,17 @@ class _Widget(object):
     SetToolTip = SetHelpText = SetDoubleBuffered = SetSize
 
     def GetSize(self, *_a, **_k):
-        return (0, 0)
-    GetClientSize = GetBestSize = GetSize
+        return Size(0, 0)
+    GetClientSize = GetBestSize = GetMinSize = GetMaxSize = GetSize
+    GetVirtualSize = GetTextExtent = GetSize
+
+    def GetRect(self, *_a, **_k):
+        return Rect(0, 0, 0, 0)
+    GetClientRect = GetScreenRect = GetUpdateRegion = GetRect
+
+    def GetPosition(self, *_a, **_k):
+        return Point(0, 0)
+    GetScreenPosition = ClientToScreen = ScreenToClient = GetPosition
 
     def __getattr__(self, name):
         # A method nobody wrote answers nothing rather than raising. This
@@ -379,7 +481,13 @@ class _Silence(object):
         return _Silence(self.name)
 
     def __getattr__(self, name):
-        if name.startswith('__'):
+        # **A private name is refused, not answered.** Answering `_parent`
+        # with another nothing made `_window_of` walk up a chain that
+        # never ends - the browser hung there, inside its own first
+        # window, before it had built anything. Everything in this shim
+        # asks about private names with `getattr(x, '_thing', None)`, and
+        # that only works if the answer can be "there is none".
+        if name.startswith('_'):
             raise AttributeError(name)
         RUNTIME.note_unknown('%s.%s' % (self.name, name))
         return _Silence('%s.%s' % (self.name, name))
@@ -389,6 +497,42 @@ class _Silence(object):
 
     def __len__(self):
         return 0
+
+    # **A nothing that survives arithmetic.** Everything unwritten here
+    # answers with one of these, and geometry is what applications do
+    # sums on: `rect.x + 2` must be a number that means nothing rather
+    # than an exception that ends the application. Same rule as
+    # `_Unknown`, one level further in.
+    def __int__(self):
+        return 0
+
+    def __float__(self):
+        return 0.0
+
+    def __index__(self):
+        return 0
+
+    def __add__(self, other):
+        return other
+
+    def __radd__(self, other):
+        return other
+
+    def __sub__(self, other):
+        return -other if isinstance(other, (int, float)) else other
+
+    def __rsub__(self, other):
+        return other
+
+    def __mul__(self, other):
+        return 0
+    __rmul__ = __mul__
+
+    def __lt__(self, other):
+        return True
+
+    def __gt__(self, other):
+        return False
 
     def __eq__(self, other):
         return other is self or other is None
@@ -405,9 +549,19 @@ class _Silence(object):
 
 
 def _window_of(widget):
-    while widget is not None:
+    """The window a control belongs to.
+
+    Only real widgets are walked: a parent that is something else - a
+    class this shim never wrote, standing in for a container - has no
+    chain to follow, and following one anyway is how this hung.
+    """
+    seen = 0
+    while isinstance(widget, _Widget):
         if isinstance(widget, _Window):
             return widget
+        seen += 1
+        if seen > 200:          # a parent chain that has a loop in it
+            return None
         widget = getattr(widget, '_parent', None)
     return None
 
@@ -527,7 +681,11 @@ class TextCtrl(_Widget):
                              # opening and a folder is not a file.
                              path=getattr(self, '_path', None) or None,
                              extensions=getattr(self, '_extensions', None)
-                             or None)
+                             or None,
+                             # A page carries where it came from, so an
+                             # interface can offer it to its own browser
+                             # instead of only reading it out.
+                             url=getattr(self, '_url', None) or None)
 
     def _set_from_user(self, value):
         self._value = '' if value is None else str(value)
@@ -1257,13 +1415,19 @@ def _belongs_to(menu, window):
             item._parent = menu
 
 
+def _without_ampersand(text):
+    """The accelerator ampersand off, a real one kept: wx writes a
+    literal ampersand as `&&`."""
+    return str(text or '').replace('&&', '\0').replace('&', '').replace('\0', '&')
+
+
 def _split_accelerator(text):
     """"&New note\\tCtrl+N" is a label and a shortcut. The ampersand is a
     mouse-and-keyboard idea (the underlined letter) and means nothing in an
     interface made of speech, so it goes; the shortcut is real and is kept,
     because it is how somebody drives the application quickly."""
     label, _tab, key = str(text or '').partition('\t')
-    return label.replace('&&', '\0').replace('&', '').replace('\0', '&'), key
+    return _without_ampersand(label), key
 
 
 # --------------------------------------------------------------------------
@@ -1914,25 +2078,82 @@ def IsMainThread():
 
 
 class Timer(object):
-    """A timer with nothing to tick it. An application that polls with one
-    still runs; what it polls for arrives when the user does something
-    instead. Recorded, so a screen that depends on it can be recognised."""
+    """**A timer that really ticks.**
+
+    It used to be a recorded refusal, and for an application that merely
+    polls that was survivable - what it polled for arrived when the user
+    did something. For one that WAITS on a timer it was fatal: the
+    browser reports its engine attaching on one, so it never showed
+    anything at all and could only be looked at through its own window.
+
+    The loop now waits with a deadline rather than blocking on the pipe,
+    so a timer fires between keystrokes as well as after them. It is not
+    a real clock - nothing runs while the application is inside a handler,
+    exactly as in wx, where a timer is a message like any other - and it
+    cannot fire more often than the loop goes round.
+    """
 
     def __init__(self, owner=None, identifier=ID_ANY):
-        self._owner = owner
-        RUNTIME.refuse('wx.Timer', 'a timer has nothing to tick it here')
+        self._owner = owner if owner is not None else self
+        self._id = identifier
+        self.due = None
+        self._every = None
 
-    def Start(self, *_a, **_k):
+    def Start(self, milliseconds=-1, oneShot=False):
+        import time as _time
+        try:
+            seconds = max(0.01, float(milliseconds) / 1000.0)
+        except (TypeError, ValueError):
+            seconds = 1.0
+        self._every = None if oneShot else seconds
+        self.due = _time.time() + seconds
+        RUNTIME.add_timer(self)
         return True
 
+    StartOnce = Start
+
     def Stop(self, *_a, **_k):
+        self.due = None
+        RUNTIME.drop_timer(self)
         return True
 
     def IsRunning(self):
-        return False
+        return self.due is not None
+
+    def GetId(self):
+        return self._id
+
+    def GetInterval(self):
+        return int((self._every or 0) * 1000)
+
+    def fire(self, now):
+        """The loop says the moment has come."""
+        if self._every is None:
+            self.due = None
+            RUNTIME.drop_timer(self)
+        else:
+            self.due = now + self._every
+        event = Event(source=self, identifier=self._id)
+        owner = self._owner
+        if isinstance(owner, _Widget):
+            for holder in owner._up():
+                for bound, handler, source, identifier in list(holder._handlers):
+                    if bound is not EVT_TIMER:
+                        continue
+                    if source is not None and source is not self:
+                        continue
+                    handler(event)
+                    return
+        self.Notify()
 
     def Notify(self):
         return None
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('Timer.%s' % name)
+        return _Silence(name)
 
 
 _APP = None
@@ -1959,7 +2180,7 @@ class _UnknownMeta(type):
     """
 
     def __getattr__(cls, name):
-        if name.startswith('__'):
+        if name.startswith('_'):
             raise AttributeError(name)
         RUNTIME.note_unknown('<class>.%s' % name)
         return _Silence(name)

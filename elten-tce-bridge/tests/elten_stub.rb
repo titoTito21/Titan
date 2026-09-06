@@ -29,9 +29,14 @@ def input_text(header = "", **_o)
   $said.push("ask: #{header}")
   $script.shift
 end
-def loop_update; end
-def key_pressed?(_key, **_o) false end
-def raw_key_held?(_key) false end
+# The keys a driven screen is pressing this frame. A loop that reads the
+# keyboard cannot be tested without one.
+$keys = []
+$frames = 0
+def loop_update; $frames += 1; end
+def key_pressed?(key, **_o) $keys.include?(key) end
+def raw_key_held?(key) $keys.include?(key) end
+def modifier_held?(name) $keys.include?(name) end
 def play_sound(*_a); end
 
 module Log
@@ -107,8 +112,51 @@ class ChoiceListBox < Control
   end
 end
 
+class CheckBox < Control
+  attr_accessor :label, :checked
+  def initialize(label = "", **_o) super(); @label = label; @checked = false; end
+end
+
+# Elten's TableBox is a wrapper around a ListBox and forwards only `:move`,
+# so the renderer listens to the inner list for `:select`. A stub without
+# `sel` would hide exactly that.
+class TableBox < Control
+  attr_accessor :index
+  attr_reader :columns, :rows, :sel
+  def initialize(columns = [], rows = [], header: "", **_o)
+    super()
+    @columns = columns; @rows = rows; @header = header; @index = 0
+    @sel = ListBox.new(rows.map { |r| Array(r).join(", ") }, :header => header)
+  end
+end
+
+class FilesTree < Control
+  attr_accessor :index
+  attr_reader :path, :selected
+  def initialize(header = "", path: "", **_o)
+    super()
+    @header = header; @path = path.to_s; @selected = @path
+  end
+end
+
+# What `bind_context` is handed: submenus and options, recorded so a test
+# can say what the menu bar really became.
+class StubMenu
+  attr_reader :entries
+  def initialize; @entries = []; end
+  def submenu(label, &block)
+    inner = StubMenu.new
+    block.call(inner) if block
+    @entries.push([label, inner.entries])
+  end
+  def option(label, _icon = nil, _key = nil, &block)
+    @entries.push([label, block])
+  end
+end
+
 class Form
-  attr_accessor :cancel_button, :accept_button, :fields
+  attr_accessor :cancel_button, :accept_button, :fields, :header
+  attr_reader :menus
   attr_reader :index
   def initialize(fields = [], **_o)
     @fields = fields; @index = 0
@@ -132,6 +180,11 @@ class Form
   end
   def wait; end
   def resume; end
+  def bind_context(label = "", &block)
+    menu = StubMenu.new
+    block.call(menu) if block
+    (@menus ||= []).push([label, menu.entries])
+  end
 end
 
 class SpeechOutput

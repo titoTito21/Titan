@@ -4029,7 +4029,7 @@ is the third time in this repository that has been true.
 - After all of it: **seven of seven walk clean**, and the only time left
   anywhere is the file manager really reading directories (1-2 s).
 
-- Tests: `tests/test_app_ui.py` (run it directly; 60 tests). Nothing opens
+- Tests: `tests/test_app_ui.py` (run it directly; 69 tests). Nothing opens
   a window, plays a sound, speaks or reaches the network, and the
   applications driven are Titan's real ones - testing the shim against a
   hand-built stand-in would test the wrong thing. The shim's own long-tail
@@ -4229,6 +4229,21 @@ Then the file manager and the editor, worked by hand:
     long tail answers an unknown name with 0, which is right for a style
     flag nobody reads and wrong for one that DECIDES something: `FD_SAVE`
     fabricated as 0 made every save dialog look like an open dialog.
+- **What counts as "the screen changed" is what decides whether anything
+  the user does is ever SEEN** - and it read only the ids, kinds and
+  labels of the controls. Opening a folder in the file manager changes
+  the ROWS and nothing else: not the title, not the controls. So the
+  application really moved, the form went on showing the folder it was
+  built with, and Enter and Backspace both looked like keys that did
+  nothing - one cause, two symptoms, and neither of them about keys. The
+  comparison now reads what the controls HOLD (values, items, options,
+  columns, ticks) and deliberately not the INDEX: the cursor moving is
+  not the screen changing, and rebuilding the form for it would take the
+  keyboard away on every arrow.
+  - Found by reading the renderer's own log rather than guessing a fourth
+    time. It said `backspace -> the application` and nothing about Enter,
+    which is two different faults and could not have been told apart from
+    the outside.
 - **A `TableBox` is a wrapper around a `ListBox` and forwards only
   `:move`** - `@sel.on(:move) {|arg| trigger(:move, arg)}` is the whole
   of what its constructor binds - so Enter fired `:select` on the inner
@@ -4250,6 +4265,54 @@ Then the file manager and the editor, worked by hand:
   `loop_update` / `update` inside its window does not see them. So Elten
   can be READ from outside while somebody works it, and driven only as far
   as its scenes; a rendered application has to be walked by hand.
+
+#### A page is describable, so the browser is an application like any other
+
+Asked as a question - "could a web page in tWeb show in the renderer the
+way a page shows in Elten?" - and the answer turned out to be yes, which
+moved the browser out of the floor entirely.
+
+- **A browser ENGINE cannot be a list of controls, but a PAGE can be.**
+  What somebody wants out of a browser is the page, and a page is text
+  with an address, which every interface here can carry. `wx.html2` is
+  written now (`shim/wx/html2.py`): the view navigates, reports where it
+  is and what the page is called, its events fire, and what it DESCRIBES
+  is the page as readable text plus the `url` it came from - so an
+  interface can read it out or hand the address to its own browser.
+  Given up honestly: nothing on the page runs. `RunScript` answers False
+  and records why rather than pretending.
+- **A timer that never ticks is fatal to anything that WAITS on one**, and
+  the browser waits on one for its engine to attach - so it never showed
+  anything at all. The loop now waits on the wire **with a deadline**
+  (the read moved to a thread of its own; everything the application runs
+  still happens on the one thread it was started on), so a timer fires
+  between keystrokes as well as after them.
+- **`_window_of` walked a chain that never ended.** A parent that was not
+  a widget - a class this shim never wrote, standing in for a container -
+  answered `_parent` with another nothing, for ever. Two fixes, both
+  general: a nothing REFUSES private names (everything here asks with
+  `getattr(x, '_thing', None)`, which only works if the answer can be
+  "there is none"), and only real widgets are walked.
+- **Geometry answers ZEROS, not nothing.** "Layout does not matter" is
+  right about what is described and wrong about what is ANSWERED: an
+  application that lays nothing out still asks where things are and does
+  arithmetic on the answer, and `rect.x + 2` on a nothing is a
+  `TypeError` that ends the application. There is a `Rect`, a `Point` and
+  a `Size` now, and a `_Silence` survives arithmetic as 0 so the next
+  unwritten geometry call does not stop anything either.
+- **The accelerator ampersand comes off every label, not just menu
+  items.** "&Play" underlines the P for somebody with a mouse; to a
+  reader it is the word "ampersand" in front of every second button - the
+  ElevenLabs client offered "ampersand Odtworz" and "ampersand Zapisz na
+  dysku".
+- **A control that will not build is ONE control**, and a screen that
+  will not show says so. Unguarded, the first control to raise took the
+  whole screen with it and what reached the user was whatever Ruby said,
+  with nothing about which control, which screen or which application.
+  Both are recorded in the renderer's log now.
+- Measured after: **8 of 8 applications describable, 24+ screens, 0
+  faults** by the readability check, and every control kind and menu
+  shortcut handled.
 
 #### The floor: read off the window when it cannot be described
 
@@ -4330,6 +4393,37 @@ nothing in Titan knows it exists.
   **TCE applications**, and only when Titan really has the `app_ui`
   provider - so the menu never promises something that answers "there is
   no such add-on".
+- **`%r` is Python's, and Ruby answers it with "malformed format
+  string".** It sat in the line `show` writes down for EVERY screen, so
+  the first screen raised, the exception left the renderer, and
+  `render_here` did what it is written to do with a renderer that failed
+  - fell back to starting the application in TCE. Reported as two things
+  and it was one: "malformed something in the file manager", and then a
+  renderer that had stopped rendering anything at all. Worse, the line
+  the RESCUE wrote carried the same `%r`, so the diagnostic added to find
+  it was what stopped it being reported. A note can now never be the
+  fault (`self.note` rescues), and `tests/check_formats.py` reads every
+  literal used with the `%` operator and fails on a specifier Ruby has
+  not got - `strftime` is a different format language and is left alone.
+- **A table with no columns IS a list, and Enter has to reach it.**
+  `table_for` falls back to a `ListBox` so a row still reads in one
+  voice, and `wire` listened only for the inner list a `TableBox` has -
+  which a `ListBox` has not - so the download manager's downloads and the
+  organiser's table could be walked and never opened.
+- **The renderer is RUN, on every real screen** - which is the only thing
+  that finds either of those. `tests/capture_screens.py` opens every TCE
+  application through `titan.bridge` and writes its 28 screens to
+  `screens.json`; `tests/check_renderer_builds.rb` builds each one with
+  the real `TitanApps#show` against the Elten stub, fires every event
+  every control fires, calls every menu option, and fails if a control
+  described was not built, a menu was not bound, choosing a row reaches
+  nothing, or `wire`'s per-control rescue swallowed a warning;
+  `tests/check_renderer_keys.rb` runs the real `pump` with a scripted
+  keyboard and asserts what reached TCE - Enter on a table presses that
+  table, Backspace is forwarded from a list and KEPT by a field being
+  typed into, a menu shortcut presses its own item. Neither needs Titan
+  or Elten. Both were proved by putting each bug back and watching them
+  name it.
 - **Where an application appears when it is started is a CHOICE, not a
   decision made for the user.** Starting one from the bridge has always
   meant a window on Titan's screen, which is what somebody sitting at

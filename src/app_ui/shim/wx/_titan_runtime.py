@@ -28,6 +28,10 @@ Three things carry the whole design:
 import os
 import sys
 import threading
+import time
+
+#: The reader thread puts this when the wire has closed.
+_ENDED = object()
 
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..', '..', '..')))
@@ -59,6 +63,8 @@ class Runtime(object):
         self.running = False
         self.quitting = False
         self.pending = []              # CallAfter, drained on the loop
+        self.timers = []               # what is waiting to tick
+        self._incoming = None          # what the reader thread has read
         self.refused = []              # what the application asked for and
         self.unknown = []              # what wx name it wanted
         self.modal_result = {}
@@ -187,17 +193,26 @@ class Runtime(object):
         # blocking cannot be early or late: it is the definition of what
         # is showing.
         self.running = True
-        stream = wire.lines(self._in)
+        self._start_reading()
         while True:
             if self.quitting:
                 break
             if until is not None and until():
                 break
             self.send_screen()
-            try:
-                raw = next(stream)
-            except StopIteration:
+            # **The wait has a deadline, so a timer can really tick.**
+            # Blocking on the pipe until the user does something meant an
+            # application waiting on a timer waited for ever - which for
+            # the browser, whose engine reports itself on one, was an
+            # application that never showed anything at all. The read is
+            # on a thread of its own; everything the application runs
+            # still happens here, on the one thread it was started on.
+            raw = self._next(self._until_a_timer_is_due())
+            if raw is _ENDED:
                 break
+            if raw is None:
+                self._tick()
+                continue
             message = wire.unpack(raw)
             if message is None:
                 continue
@@ -206,7 +221,66 @@ class Runtime(object):
             except Exception as error:
                 self.say('said', text='%s: %s' % (type(error).__name__, error))
             self._drain()
+            self._tick()
         self.running = False
+
+    # ---------------------------------------------------------- the clock
+    def add_timer(self, timer):
+        with self.lock:
+            if timer not in self.timers:
+                self.timers.append(timer)
+
+    def drop_timer(self, timer):
+        with self.lock:
+            if timer in self.timers:
+                self.timers.remove(timer)
+
+    def _until_a_timer_is_due(self):
+        """How long this may wait, or None for as long as it likes."""
+        now = time.time()
+        due = [timer.due for timer in list(self.timers)
+               if getattr(timer, 'due', None) is not None]
+        if not due:
+            return None
+        # Never busy-wait, and never sleep through one.
+        return max(0.01, min(due) - now)
+
+    def _tick(self):
+        now = time.time()
+        for timer in list(self.timers):
+            when = getattr(timer, 'due', None)
+            if when is None or when > now:
+                continue
+            try:
+                timer.fire(now)
+            except Exception as error:
+                self.say('said', text='%s: %s' % (type(error).__name__, error))
+        self._drain()
+
+    # ----------------------------------------------------------- the read
+    def _start_reading(self):
+        if self._incoming is not None:
+            return
+        import queue
+        self._incoming = queue.Queue()
+
+        def read():
+            try:
+                for raw in wire.lines(self._in):
+                    self._incoming.put(raw)
+            except Exception:
+                pass
+            self._incoming.put(_ENDED)
+
+        threading.Thread(target=read, name='app-ui-wire', daemon=True).start()
+
+    def _next(self, timeout):
+        import queue
+        try:
+            return self._incoming.get(timeout=timeout) if timeout is not None \
+                else self._incoming.get()
+        except queue.Empty:
+            return None
 
     def _drain(self):
         """Whatever `CallAfter` queued. An application does its slow work on

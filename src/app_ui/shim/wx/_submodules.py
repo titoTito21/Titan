@@ -24,6 +24,7 @@ because a no-op is measurably wrong there:
   mode and the Elten port for a protected leaderboard.
 """
 
+import os
 import sys
 import types
 
@@ -61,7 +62,24 @@ class _Finder(object):
 
     @staticmethod
     def _ours(name):
-        return name == 'wx' or name.startswith('wx.')
+        """Every `wx.*` EXCEPT one this package really has.
+
+        `wx/html2.py` is a real module now - a web view that describes the
+        page instead of drawing it - and a finder that answered for every
+        name would have fabricated an empty module over the top of it,
+        which is the one way to make a written submodule do nothing.
+        """
+        if name == 'wx':
+            return True
+        if not name.startswith('wx.'):
+            return False
+        rest = name[3:]
+        if '.' not in rest:
+            here = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                rest + '.py')
+            if os.path.isfile(here):
+                return False
+        return True
 
 
 class _Loader(object):
@@ -78,8 +96,9 @@ class _Loader(object):
 
 
 #: What each of these is FOR, said in the words an interface can pass on.
+#: `wx.html2` is deliberately NOT here any more: it is written, and what
+#: it gives up (nothing on the page runs) it says for itself.
 REFUSED = {
-    'wx.html2': 'a web view cannot be shown by an interface made of controls',
     'wx.media': 'a media player cannot be shown by an interface made of controls',
     'wx.glcanvas': 'a drawing surface cannot be shown as controls',
 }

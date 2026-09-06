@@ -193,7 +193,7 @@ def open_application(name, owner='', language='en', mirror=None):
 #: What the shim refuses that a window can still show. A timer is not one
 #: of these - plenty of applications ask for one and describe themselves
 #: perfectly well without it.
-MIRRORABLE = ('wx.html2', 'wx.media', 'wx.glcanvas')
+MIRRORABLE = ('wx.media', 'wx.glcanvas')
 
 
 def _can_be_mirrored(application):

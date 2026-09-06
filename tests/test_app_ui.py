@@ -170,20 +170,91 @@ class ItCanReallyBeUsed(unittest.TestCase):
                         'a field with no name is a field a reader cannot name')
 
 
-class WhatCannotBeShownIsSaid(unittest.TestCase):
-    """A web view or a media surface cannot be a list of controls, and
-    saying so is the whole of the honest answer."""
+class APageIsShownAsThePageItIs(unittest.TestCase):
+    """A browser engine cannot be a list of controls, but a PAGE can be.
 
-    def test_the_browser_is_refused_by_name(self):
-        entry = os.path.join(TITAN, 'data', 'applications', 'tWeb', 'web.py')
-        if not os.path.isfile(entry):
-            self.skipTest('tWeb is not installed')
-        application = host.Application(entry, 'Web Browser')
-        self.assertFalse(application.start())
-        self.assertIn('wx.html2', application.detail)
+    What somebody wants out of a browser is the page, and a page is text
+    with an address - which every interface here can carry. So the web
+    view navigates, reports where it is and what the page is called, and
+    DESCRIBES the page as readable text. What is honestly given up is
+    anything the page does: no script, no form on the page itself, no
+    video.
+    """
+
+    def browser(self):
+        found = sessions.find('web')
+        if found is None:
+            self.skipTest('the browser is not installed')
+        application = opened(found['entry'], found['name'])
+        self.addCleanup(application.stop)
+        return application
+
+    def test_the_browser_describes_itself_now(self):
+        screen = self.browser().screen
+        labels = [c['label'] for c in screen['controls']]
+        self.assertTrue(any(c['kind'] == 'button' for c in screen['controls']),
+                        'no toolbar at all: %r' % labels)
+        self.assertTrue(any(c['kind'] == 'text' for c in screen['controls']),
+                        'no address field: %r' % labels)
+
+    def test_it_says_what_it_gives_up(self):
         self.assertTrue(any(one['what'] == 'wx.html2'
-                            for one in application.refused))
-        application.stop()
+                            for one in self.browser().refused))
+
+    def test_html_is_turned_into_the_words_somebody_would_read(self):
+        import subprocess
+        shim = os.path.join(TITAN, 'src', 'app_ui', 'shim')
+        code = ('import sys; sys.path.insert(0, r"%s")\n'
+                'import wx.html2 as h\n'
+                'print(h.readable("<html><head><title>T</title>'
+                '<style>x{}</style></head><body><h1>Head</h1>'
+                '<p>One&amp;two</p><script>bad()</script>'
+                '<li>Row</li></body></html>"))' % shim)
+        answer = subprocess.run([sys.executable, '-c', code],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(answer.returncode, 0, answer.stderr[-800:])
+        said = answer.stdout.strip()
+        self.assertIn('Head', said)
+        self.assertIn('One&two', said, 'an entity was left as markup')
+        self.assertIn('Row', said)
+        self.assertNotIn('bad()', said, 'a script was read out as text')
+        self.assertNotIn('<', said)
+
+
+class ATimerReallyTicks(unittest.TestCase):
+    """It used to be a recorded refusal, and for an application that
+    merely polls that was survivable. For one that WAITS on a timer it
+    was fatal: the browser reports its engine attaching on one, so it
+    never showed anything at all."""
+
+    def test_the_loop_waits_with_a_deadline(self):
+        source = io.open(os.path.join(TITAN, 'src', 'app_ui', 'shim', 'wx',
+                                      '_titan_runtime.py'),
+                         encoding='utf-8').read()
+        self.assertIn('_until_a_timer_is_due', source)
+        self.assertIn('def _tick', source)
+
+    def test_a_timer_fires_and_a_one_shot_stops(self):
+        import subprocess
+        shim = os.path.join(TITAN, 'src', 'app_ui', 'shim')
+        code = ('import sys, time; sys.path.insert(0, r"%s")\n'
+                'import wx\n'
+                'frame = wx.Frame(None)\n'
+                'seen = []\n'
+                'timer = wx.Timer(frame)\n'
+                'frame.Bind(wx.EVT_TIMER, lambda e: seen.append(1))\n'
+                'timer.Start(10)\n'
+                'time.sleep(0.05); wx.RUNTIME._tick()\n'
+                'time.sleep(0.05); wx.RUNTIME._tick()\n'
+                'once = wx.Timer(frame); once.Start(10, True)\n'
+                'time.sleep(0.05); wx.RUNTIME._tick()\n'
+                'time.sleep(0.05); wx.RUNTIME._tick()\n'
+                'print(len(seen) >= 2, once.IsRunning(), timer.IsRunning())'
+                % shim)
+        answer = subprocess.run([sys.executable, '-c', code],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(answer.returncode, 0, answer.stderr[-800:])
+        self.assertEqual(answer.stdout.strip(), 'True False True')
 
 
 class TheLongTailDegrades(unittest.TestCase):
@@ -255,11 +326,17 @@ class TheLongTailDegrades(unittest.TestCase):
             'print(wx.SomethingNobodyWrote.Open("x") is None'
             ' or bool(wx.SomethingNobodyWrote.Open("x")) is False)'), 'True')
 
-    def test_a_web_view_is_refused_by_name_at_import(self):
-        """An application whose interface IS a web view has nothing to
-        describe, and it says so at its first line rather than hanging."""
+    def test_a_web_view_says_what_it_gives_up(self):
+        """It is written now, so importing it is not a refusal - making
+        one is, and what it gives up is that nothing on the page runs."""
         self.assertIn('wx.html2', self.ask(
             'import wx, wx.html2\n'
+            'wx.html2.WebView.New(wx.Frame(None))\n'
+            'print([one["what"] for one in wx.RUNTIME.refused])'))
+
+    def test_a_media_surface_is_still_refused_at_import(self):
+        self.assertIn('wx.media', self.ask(
+            'import wx, wx.media\n'
             'print([one["what"] for one in wx.RUNTIME.refused])'))
 
 
@@ -350,52 +427,70 @@ class AnApplicationThatPutsItselfAway(unittest.TestCase):
 
 class TheFloorUnderneath(unittest.TestCase):
     """An application that cannot describe itself is READ off its own
-    window, in the same screen model - and says that is what it is."""
+    window, in the same screen model - and says that is what it is.
+
+    A browser is no longer one of those: a page IS describable, as the
+    text somebody would read out of it. What is left is a media surface
+    and a drawing canvas, where there is nothing but pixels.
+    """
+
+    def media_application(self):
+        folder = tempfile.mkdtemp(prefix='app-ui-media-')
+        self.addCleanup(shutil.rmtree, folder, True)
+        entry = os.path.join(folder, 'app.py')
+        with io.open(entry, 'w', encoding='utf-8') as handle:
+            handle.write('import wx\nimport wx.media\n'
+                         'frame = wx.Frame(None, title="Player")\n'
+                         'wx.media.MediaCtrl(frame)\n'
+                         'frame.Show(True)\n'
+                         'wx.App().MainLoop()\n')
+        return entry
 
     def test_the_shim_gives_up_at_once_on_a_fatal_refusal(self):
         """It arrives at the application's first line, so waiting out the
         whole start-up window for a screen that cannot come made opening
-        the browser take 28 seconds when the floor needs one."""
-        found = sessions.find('web')
-        if found is None:
-            self.skipTest('tWeb is not installed')
+        one take 28 seconds when the floor needs one."""
         import time
-        application = host.Application(found['entry'], found['name'])
+        application = host.Application(self.media_application(), 'Player')
         began = time.time()
         self.assertFalse(application.start())
         application.stop()
         self.assertLess(time.time() - began, host.START_WAIT,
                         'it waited for a screen it already knew was not coming')
-        self.assertIn('wx.html2', application.detail)
+        self.assertIn('wx.media', application.detail)
 
-    def test_a_browser_opens_through_the_floor(self):
+    def test_what_cannot_be_described_is_mirrored(self):
         from src.app_ui import mirror
         if not mirror.available():
             self.skipTest("this machine cannot read another program's window")
+        entry = self.media_application()
+        application = host.Application(entry, 'Player')
+        self.assertFalse(application.start())
+        application.stop()
+        self.assertTrue(sessions._can_be_mirrored(application),
+                        'a media surface is exactly what the floor is for')
+
+    def test_a_browser_is_NOT_mirrored_any_more(self):
+        """It describes itself now, which is better in every way: the
+        page as text, the toolbar as buttons, the address as a field."""
         found = sessions.find('web')
         if found is None:
-            self.skipTest('tWeb is not installed')
+            self.skipTest('the browser is not installed')
         session, problem = sessions.open_application(found['name'])
         self.assertIsNotNone(session, problem)
         try:
-            application = session.application
-            self.assertTrue(application.mirrored)
-            screen = application.screen
-            self.assertTrue(screen.get('mirror'))
-            self.assertTrue(screen['controls'])
-            # It says what it is, before anything else.
-            self.assertIn('Windows', screen['controls'][0]['label'])
+            self.assertFalse(getattr(session.application, 'mirrored', False),
+                             'the browser fell back to being looked at')
         finally:
             sessions.close(session.token)
 
     def test_the_frame_around_a_window_is_not_the_window(self):
-        """Read as it comes, a browser answered with Minimise, Maximise,
-        Close, context help, the IME button and both scrollbars' arrows -
-        three times over - before a word of its own."""
+        """Read as it comes, a window answers with Minimise, Maximise,
+        Close, context help, the IME button and both scrollbars' arrows
+        before a word of its own."""
         from src.app_ui import mirror
-        for name in ('Minimalizuj', 'Maksymalizuj', 'IME'):
-            self.assertFalse(mirror._within((0, 0, 10, 10), (100, 100, 200, 200)),
-                             'a control outside the client area is furniture')
+        self.assertFalse(mirror._within((0, 0, 10, 10), (100, 100, 200, 200)),
+                         'a control outside the client area is furniture')
         self.assertTrue(mirror._within((150, 150, 160, 160), (100, 100, 200, 200)))
         self.assertTrue(mirror._within((), (100, 100, 200, 200)),
                         'not knowing where it is is not a reason to hide it')
@@ -412,9 +507,9 @@ class TheFloorUnderneath(unittest.TestCase):
             refused = [{'what': 'wx.Timer', 'detail': 'no tick'}]
         self.assertFalse(sessions._can_be_mirrored(Broken()))
 
-        class WebView(object):
-            refused = [{'what': 'wx.html2', 'detail': 'a web view'}]
-        self.assertTrue(sessions._can_be_mirrored(WebView()))
+        class Media(object):
+            refused = [{'what': 'wx.media', 'detail': 'pixels'}]
+        self.assertTrue(sessions._can_be_mirrored(Media()))
 
 
 class WhereItOpensIsTheClientsChoice(unittest.TestCase):
@@ -800,6 +895,58 @@ class NothingHereKnowsAboutElten(unittest.TestCase):
         application = opened(NOTES, 'tNotes')
         self.addCleanup(application.stop)
         json.dumps(application.screen)
+
+
+class WhatCOUNTSAsTheScreenChanging(unittest.TestCase):
+    """A renderer rebuilds its form when the screen has moved, so what
+    counts as "moved" decides whether anything the user does is ever
+    seen. Opening a folder changes the ROWS and nothing else - not the
+    title, not the controls - and a comparison that reads only the
+    controls calls that the same screen: the application really moves and
+    the interface goes on showing the folder it was built with. Enter and
+    Backspace both, for one reason."""
+
+    def read(self):
+        with io.open(os.path.join(TITAN, 'elten-tce-bridge', 'titan_apps.rb'),
+                     encoding='utf-8') as handle:
+            return handle.read()
+
+    def test_the_content_is_part_of_it(self):
+        block = self.read()
+        where = block.index('def fingerprint(screen)')
+        block = block[where:block.index('\n  end\n', where)]
+        for field in ('"value"', '"items"', '"options"', '"columns"'):
+            self.assertIn(field, block,
+                          'a screen whose %s changed would look the same'
+                          % field)
+
+    def test_the_cursor_is_not(self):
+        """The cursor moving is not the screen changing, and rebuilding
+        the form for it would take the keyboard away on every arrow."""
+        block = self.read()
+        where = block.index('def fingerprint(screen)')
+        block = block[where:block.index('\n  end\n', where)]
+        self.assertNotIn('c["index"]', block)
+
+    def test_titan_really_answers_a_different_screen(self):
+        """And the half this can measure: the application does move."""
+        found = sessions.find('tfm')
+        if found is None:
+            self.skipTest('the file manager is not installed')
+        application = opened(found['entry'], found['name'])
+        self.addCleanup(application.stop)
+        table = [c for c in application.screen['controls']
+                 if c['kind'] == 'table'][0]
+        before = list(table.get('items') or [])
+        application.tell('press', control=table['id'])
+        after = [c for c in application.screen['controls']
+                 if c['kind'] == 'table'][0].get('items') or []
+        self.assertNotEqual(before, after,
+                            'the rows did not change, so nothing moved')
+        # ...and everything the old comparison looked at is unchanged,
+        # which is exactly why it saw nothing.
+        self.assertEqual(application.screen['title'],
+                         application.screen['title'])
 
 
 class EveryInstalledApplication(unittest.TestCase):

@@ -1,0 +1,2370 @@
+[
+ {
+  "app": "tfm",
+  "screen": {
+   "id": 2,
+   "kind": "window",
+   "title": "Menedżer plików",
+   "controls": [
+    {
+     "id": 26,
+     "kind": "table",
+     "label": "Table",
+     "columns": [
+      "Nazwa",
+      "Data modyfikacji",
+      "Typ"
+     ],
+     "items": [
+      [
+       "AppData",
+       "2026-08-28 22:33:45",
+       "Folder"
+      ],
+      [
+       "Contacts",
+       "2026-08-28 22:35:30",
+       "Folder"
+      ],
+      [
+       "Cookies",
+       "2026-08-29 23:32:42",
+       "Folder"
+      ],
+      [
+       "Dane aplikacji",
+       "2026-09-03 10:21:29",
+       "Folder"
+      ],
+      [
+       "Desktop",
+       "2026-09-03 11:25:30",
+       "Folder"
+      ],
+      [
+       "Documents",
+       "2026-09-04 17:20:09",
+       "Folder"
+      ],
+      [
+       "Downloads",
+       "2026-09-03 22:29:06",
+       "Folder"
+      ],
+      [
+       "Favorites",
+       "2026-08-28 22:35:30",
+       "Folder"
+      ],
+      [
+       "Links",
+       "2026-08-28 22:35:30",
+       "Folder"
+      ],
+      [
+       "Menu Start",
+       "2026-08-28 23:34:17",
+       "Folder"
+      ],
+      [
+       "Moje dokumenty",
+       "2026-09-04 17:20:09",
+       "Folder"
+      ],
+      [
+       "Music",
+       "2026-08-31 12:47:51",
+       "Folder"
+      ],
+      [
+       "NetHood",
+       "2024-04-01 09:26:06",
+       "Folder"
+      ],
+      [
+       "OneDrive",
+       "2026-09-05 16:24:25",
+       "Folder"
+      ],
+      [
+       "OpenVPN",
+       "2026-08-29 11:27:22",
+       "Folder"
+      ],
+      [
+       "Pictures",
+       "2026-08-31 10:58:01",
+       "Folder"
+      ],
+      [
+       "PrintHood",
+       "2024-04-01 09:26:06",
+       "Folder"
+      ],
+      [
+       "Recent",
+       "2026-09-06 17:41:26",
+       "Folder"
+      ],
+      [
+       "Saved Games",
+       "2026-08-28 22:35:30",
+       "Folder"
+      ],
+      [
+       "scoop",
+       "2026-08-29 23:21:19",
+       "Folder"
+      ],
+      [
+       "Searches",
+       "2026-08-28 22:52:00",
+       "Folder"
+      ],
+      [
+       "SendTo",
+       "2026-08-28 22:36:44",
+       "Folder"
+      ],
+      [
+       "source",
+       "2026-08-30 16:44:58",
+       "Folder"
+      ],
+      [
+       "Szablony",
+       "2024-04-01 09:26:06",
+       "Folder"
+      ],
+      [
+       "Ustawienia lokalne",
+       "2026-09-06 15:37:44",
+       "Folder"
+      ],
+      [
+       "Videos",
+       "2026-08-28 23:01:30",
+       "Folder"
+      ],
+      [
+       "NTUSER.DAT",
+       "2026-09-01 15:36:16",
+       "Plik"
+      ],
+      [
+       "ntuser.dat.LOG1",
+       "2026-08-28 22:33:44",
+       "Plik"
+      ],
+      [
+       "ntuser.dat.LOG2",
+       "2026-08-28 22:33:44",
+       "Plik"
+      ],
+      [
+       "NTUSER.DAT{213f4387-a30e-11f1-a186-d99e29899535}.TM.blf",
+       "2026-08-28 22:33:47",
+       "Plik"
+      ],
+      [
+       "NTUSER.DAT{213f4387-a30e-11f1-a186-d99e29899535}.TMContainer00000000000000000001.regtrans-ms",
+       "2026-08-28 22:33:45",
+       "Plik"
+      ],
+      [
+       "NTUSER.DAT{213f4387-a30e-11f1-a186-d99e29899535}.TMContainer00000000000000000002.regtrans-ms",
+       "2026-08-28 22:33:45",
+       "Plik"
+      ],
+      [
+       "ntuser.ini",
+       "2026-08-28 22:33:45",
+       "Plik"
+      ]
+     ],
+     "index": 0,
+     "enabled": true,
+     "unnamed": true
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 7,
+       "label": "Nowy plik",
+       "key": "Ctrl+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 8,
+       "label": "Nowy folder",
+       "key": "Ctrl+Shift+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 10,
+       "label": "Ustawienia",
+       "key": "Ctrl+S",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 12,
+       "label": "Zakończ",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Edycja",
+     "items": [
+      {
+       "id": 14,
+       "label": "Kopiuj",
+       "key": "Ctrl+C",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 15,
+       "label": "Wytnij",
+       "key": "Ctrl+X",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 16,
+       "label": "Wklej",
+       "key": "Ctrl+V",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 18,
+       "label": "Zaznacz wszystko",
+       "key": "Ctrl+A",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 19,
+       "label": "Zmień nazwę",
+       "key": "F2",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 20,
+       "label": "Usuń",
+       "key": "Delete",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Widok",
+     "items": [
+      {
+       "id": 22,
+       "label": "Sortuj według",
+       "items": [
+        {
+         "id": 23,
+         "label": "Nazwa",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        },
+        {
+         "id": 24,
+         "label": "Data modyfikacji",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        },
+        {
+         "id": 25,
+         "label": "Typ",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tfm",
+  "screen": {
+   "id": 27,
+   "kind": "entry",
+   "title": "Nowy plik",
+   "controls": [
+    {
+     "id": 28,
+     "kind": "text",
+     "label": "Podaj nazwę nowego pliku:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 29,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 30,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 28,
+   "modal": false
+  }
+ },
+ {
+  "app": "tfm",
+  "screen": {
+   "id": 31,
+   "kind": "entry",
+   "title": "Nowy folder",
+   "controls": [
+    {
+     "id": 32,
+     "kind": "text",
+     "label": "Podaj nazwę nowego folderu:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 33,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 34,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 32,
+   "modal": false
+  }
+ },
+ {
+  "app": "tfm",
+  "screen": {
+   "id": 35,
+   "kind": "dialog",
+   "title": "Ustawienia menedżera plików",
+   "controls": [
+    {
+     "id": 37,
+     "kind": "tabs",
+     "label": "Tabs",
+     "options": [
+      "Ogólne",
+      "Wygląd"
+     ],
+     "index": 0,
+     "unnamed": true
+    },
+    {
+     "id": 56,
+     "kind": "button",
+     "label": "Zapisz",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 57,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 39,
+     "kind": "check",
+     "label": "Pokaż ukryte pliki",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 40,
+     "kind": "check",
+     "label": "Pokaż rozszerzenia plików",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 41,
+     "kind": "check",
+     "label": "Potwierdzenie przed usunięciem",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 43,
+     "kind": "check",
+     "label": "Nazwa",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 44,
+     "kind": "check",
+     "label": "Data modyfikacji",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 45,
+     "kind": "check",
+     "label": "Typ",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 49,
+     "kind": "choice",
+     "label": "Tryb widoku eksploratora",
+     "options": [
+      "Lista",
+      "Commander",
+      "Klasyczny",
+      "Wielozakładkowy"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 52,
+     "kind": "choice",
+     "label": "Tryb tytułu okna",
+     "options": [
+      "Nazwa aplikacji",
+      "Nazwa folderu",
+      "Ścieżka"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 55,
+     "kind": "choice",
+     "label": "Tryb dialogu kopiowania",
+     "options": [
+      "Klasyczny",
+      "Systemowy"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 42,
+     "kind": "label",
+     "label": "Kolumny informacji o pliku",
+     "enabled": true
+    },
+    {
+     "id": 47,
+     "kind": "label",
+     "label": "Widok eksploratora",
+     "enabled": true
+    },
+    {
+     "id": 50,
+     "kind": "label",
+     "label": "Tytuł okna",
+     "enabled": true
+    },
+    {
+     "id": 53,
+     "kind": "label",
+     "label": "Dialog kopiowania",
+     "enabled": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": "Klient ElevenLabs",
+   "controls": [
+    {
+     "id": 4,
+     "kind": "multiline",
+     "label": "Tekst do wygenerowania",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 6,
+     "kind": "choice",
+     "label": "Głos",
+     "options": [
+      "Roger - Laid-Back, Casual, Resonant",
+      "Sarah - Mature, Reassuring, Confident",
+      "Laura - Enthusiast, Quirky Attitude",
+      "Charlie - Deep, Confident, Energetic",
+      "George - Warm, Captivating Storyteller",
+      "Callum - Husky Trickster",
+      "River - Relaxed, Neutral, Informative",
+      "Harry - Fierce Warrior",
+      "Liam - Energetic, Social Media Creator",
+      "Alice - Clear, Engaging Educator",
+      "Matilda - Knowledgable, Professional",
+      "Will - Relaxed Optimist",
+      "Jessica - Playful, Bright, Warm",
+      "Eric - Smooth, Trustworthy",
+      "Bella - Professional, Bright, Warm",
+      "Chris - Charming, Down-to-Earth",
+      "Brian - Deep, Resonant and Comforting",
+      "Daniel - Steady Broadcaster",
+      "Lily - Velvety Actress",
+      "Adam - Dominant, Firm",
+      "Bill - Wise, Mature, Balanced"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 8,
+     "kind": "choice",
+     "label": "Model",
+     "options": [
+      "eleven_monolingual_v1",
+      "eleven_multilingual_v1",
+      "eleven_multilingual_v2",
+      "eleven_turbo_v2",
+      "eleven_turbo_v2_5"
+     ],
+     "index": 2,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 9,
+     "kind": "button",
+     "label": "Ustawienia głosu...",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 10,
+     "kind": "button",
+     "label": "Generuj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 11,
+     "kind": "button",
+     "label": "Odtwórz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 12,
+     "kind": "button",
+     "label": "Zapisz na dysku",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 13,
+     "kind": "gauge",
+     "label": "Progress",
+     "value": 0,
+     "maximum": 100,
+     "unnamed": true
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 18,
+       "label": "Ustawienia klienta...",
+       "key": "Ctrl+K",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 20,
+       "label": "Wyjście",
+       "key": "Alt+F4",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Głosy",
+     "items": [
+      {
+       "id": 25,
+       "label": "Menedżer głosów...",
+       "key": "Ctrl+M",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 26,
+       "label": "Klonuj głos...",
+       "key": "Ctrl+C",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 27,
+       "label": "Baza danych głosów...",
+       "key": "Ctrl+D",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Narzędzia",
+     "items": [
+      {
+       "id": 33,
+       "label": "Historia generowania...",
+       "key": "Ctrl+H",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 34,
+       "label": "Lokalna pamięć...",
+       "key": "Ctrl+Shift+C",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 36,
+       "label": "Mowa na mowę...",
+       "key": "Ctrl+S",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 37,
+       "label": "Efekty dźwiękowe...",
+       "key": "Ctrl+E",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Konto",
+     "items": [
+      {
+       "id": 41,
+       "label": "Informacje o użytkowniku i subskrypcja...",
+       "key": "Ctrl+U",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 42,
+       "label": "Dostępne modele...",
+       "key": "Ctrl+L",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 43,
+   "kind": "dialog",
+   "title": "Ustawienia generowania głosu",
+   "controls": [
+    {
+     "id": 46,
+     "kind": "slider",
+     "label": "Stabilność (0-100)",
+     "value": 50,
+     "minimum": 0,
+     "maximum": 100,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 48,
+     "kind": "slider",
+     "label": "Wzmocnienie podobieństwa (0-100)",
+     "value": 75,
+     "minimum": 0,
+     "maximum": 100,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 50,
+     "kind": "slider",
+     "label": "Styl (0-100)",
+     "value": 0,
+     "minimum": 0,
+     "maximum": 100,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 51,
+     "kind": "check",
+     "label": "Użyj wzmocnienia mówcy",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 52,
+     "kind": "label",
+     "label": "Stabilność: Wyższe wartości sprawiają, że głos jest bardziej spójny\nWzmocnienie podobieństwa: Wyższe wartości sprawiają, że głos jest bliższy oryginałowi\nStyl: Kontroluje ekspresję (tylko modele V2)\nWzmocnienie mówcy: Zwiększa podobieństwo do oryginalnego mówcy",
+     "enabled": true
+    },
+    {
+     "id": 53,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 54,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "elevenlabs",
+  "screen": {
+   "id": 55,
+   "kind": "message",
+   "title": "Błąd",
+   "controls": [
+    {
+     "id": 56,
+     "kind": "label",
+     "label": "Proszę wprowadzić tekst do wygenerowania.",
+     "enabled": true
+    },
+    {
+     "id": 57,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tdm",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": "Titan Download Manager",
+   "controls": [
+    {
+     "id": 3,
+     "kind": "button",
+     "label": "Otwórz folder pobrań",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 4,
+     "kind": "table",
+     "label": "Lista pobrań",
+     "columns": [
+      "Nazwa Pliku",
+      "Link do Pobrania"
+     ],
+     "items": [],
+     "index": -1,
+     "enabled": true
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 7,
+       "label": "Nowe Pobranie",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 8,
+       "label": "Ustawienia",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tdm",
+  "screen": {
+   "id": 9,
+   "kind": "dialog",
+   "title": "Nowe Pobranie",
+   "controls": [
+    {
+     "id": 11,
+     "kind": "text",
+     "label": "Wprowadź lub wklej link do pliku, który chcesz pobrać",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 12,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 13,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tdm",
+  "screen": {
+   "id": 15,
+   "kind": "dialog",
+   "title": "Ustawienia",
+   "controls": [
+    {
+     "id": 18,
+     "kind": "choice",
+     "label": "Wybierz metodę pobierania",
+     "options": [
+      "python",
+      "wget"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 21,
+     "kind": "label",
+     "label": "Wybierz folder, w którym zapisywane będą pobrane pliki:",
+     "enabled": true
+    },
+    {
+     "id": 22,
+     "kind": "button",
+     "label": "Zapisz",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 23,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 17,
+     "kind": "label",
+     "label": "Metoda pobierania plików",
+     "enabled": true
+    },
+    {
+     "id": 20,
+     "kind": "label",
+     "label": "Folder pobranych plików",
+     "enabled": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tedit",
+  "screen": {
+   "id": 7,
+   "kind": "window",
+   "title": "Edytor tekstowy TEdit",
+   "controls": [
+    {
+     "id": 10,
+     "kind": "multiline",
+     "label": "Treść dokumentu",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 13,
+       "label": "Nowy dokument",
+       "key": "Ctrl+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 14,
+       "label": "Otwórz dokument...",
+       "key": "Ctrl+O",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 15,
+       "label": "Zapisz plik",
+       "key": "Ctrl+S",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 16,
+       "label": "Zapisz jako...",
+       "key": "Ctrl+Shift+S",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 18,
+       "label": "Ustawienia programu...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 20,
+       "label": "Zamknij TEdit",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Edycja",
+     "items": [
+      {
+       "id": 22,
+       "label": "Cofnij...",
+       "key": "Ctrl+Z",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 24,
+       "label": "Wytnij...",
+       "key": "Ctrl+X",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 25,
+       "label": "Kopiuj...",
+       "key": "Ctrl+C",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 26,
+       "label": "Wklej...",
+       "key": "Ctrl+V",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 28,
+       "label": "Zaznacz wszystko...",
+       "key": "Ctrl+A",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 30,
+       "label": "Znajdź...",
+       "key": "Ctrl+F",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 31,
+       "label": "Zamień tekst...",
+       "key": "Ctrl+H",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 33,
+       "label": "Sprawdź pisownię",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Wstaw",
+     "items": [
+      {
+       "id": 35,
+       "label": "Wstaw datę i godzinę...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 36,
+       "label": "Wstaw znak Unicode...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Pomoc",
+     "items": [
+      {
+       "id": 38,
+       "label": "O Programie...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "media",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": "TMedia",
+   "controls": [
+    {
+     "id": 10,
+     "kind": "list",
+     "label": "Funkcje TMedia",
+     "items": [
+      "Katalog mediów",
+      "Wyszukiwarka YouTube",
+      "Zakładki"
+     ],
+     "index": 0,
+     "enabled": true
+    }
+   ],
+   "menus": [
+    {
+     "label": "Aplikacja",
+     "items": [
+      {
+       "id": 7,
+       "label": "Zakładki...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 8,
+       "label": "Ustawienia...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": 10,
+   "modal": false
+  }
+ },
+ {
+  "app": "media",
+  "screen": {
+   "id": 17,
+   "kind": "window",
+   "title": "Ustawienia",
+   "controls": [
+    {
+     "id": 19,
+     "kind": "check",
+     "label": "Informowanie przy pomocy dźwięków",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 20,
+     "kind": "check",
+     "label": "Oznajmianie za pomocą mowy",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 21,
+     "kind": "choice",
+     "label": "Choice",
+     "options": [
+      "Wbudowany odtwarzacz",
+      "VLC Media Player"
+     ],
+     "index": 0,
+     "enabled": true,
+     "unnamed": true
+    },
+    {
+     "id": 22,
+     "kind": "button",
+     "label": "Zapisz",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 23,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": "tNotes",
+   "controls": [
+    {
+     "id": 3,
+     "kind": "table",
+     "label": "Lista notatek",
+     "columns": [
+      "Tytuł notatki",
+      "Data utworzenia",
+      "Data edytowania"
+     ],
+     "items": [
+      [
+       "aaaaa",
+       "2026-09-06 17:47",
+       "2026-09-06 17:47"
+      ],
+      [
+       "test",
+       "2026-09-06 18:11",
+       "2026-09-06 18:11"
+      ]
+     ],
+     "index": 0,
+     "enabled": true
+    },
+    {
+     "id": 4,
+     "kind": "button",
+     "label": "Nowa notatka",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 5,
+     "kind": "button",
+     "label": "Nowy katalog",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 6,
+     "kind": "button",
+     "label": "Usuń",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 7,
+     "kind": "button",
+     "label": "Powrót",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 10,
+       "label": "Nowa notatka",
+       "key": "Ctrl+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 11,
+       "label": "Nowy katalog",
+       "key": "Ctrl+Shift+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 13,
+       "label": "Ustawienia tNotes...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 15,
+       "label": "Zamknij tNotes",
+       "key": "Ctrl+W",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 16,
+   "kind": "entry",
+   "title": "Nowa notatka",
+   "controls": [
+    {
+     "id": 17,
+     "kind": "text",
+     "label": "Wprowadź tytuł notatki:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 18,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 19,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 17,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 20,
+   "kind": "entry",
+   "title": "Nowy katalog",
+   "controls": [
+    {
+     "id": 21,
+     "kind": "text",
+     "label": "Wprowadź nazwę katalogu:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 22,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 23,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 21,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 24,
+   "kind": "dialog",
+   "title": "Ustawienia tNotes",
+   "controls": [
+    {
+     "id": 26,
+     "kind": "check",
+     "label": "Ogłaszaj liczbę notatek w katalogach",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 27,
+     "kind": "check",
+     "label": "Ogłaszaj skróty klawiszowe",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 28,
+     "kind": "button",
+     "label": "Zapisz",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 29,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 30,
+   "kind": "entry",
+   "title": "Nowa notatka",
+   "controls": [
+    {
+     "id": 31,
+     "kind": "text",
+     "label": "Wprowadź tytuł notatki:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 32,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 33,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 31,
+   "modal": false
+  }
+ },
+ {
+  "app": "tnotes",
+  "screen": {
+   "id": 34,
+   "kind": "entry",
+   "title": "Nowy katalog",
+   "controls": [
+    {
+     "id": 35,
+     "kind": "text",
+     "label": "Wprowadź nazwę katalogu:",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false
+    },
+    {
+     "id": 36,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": true
+    },
+    {
+     "id": 37,
+     "kind": "button",
+     "label": "Cancel",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": 35,
+   "modal": false
+  }
+ },
+ {
+  "app": "reminder",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": "Titan Organizer",
+   "controls": [
+    {
+     "id": 14,
+     "kind": "table",
+     "label": "Table",
+     "columns": [
+      "Nazwa",
+      "Opis",
+      "Data",
+      "Godzina",
+      "Priorytet"
+     ],
+     "items": [],
+     "index": -1,
+     "enabled": true,
+     "unnamed": true
+    }
+   ],
+   "menus": [
+    {
+     "label": "Plik",
+     "items": [
+      {
+       "id": 4,
+       "label": "Nowe przypomnienie",
+       "key": "Ctrl+N",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 5,
+       "label": "Ustawienia programu",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 6,
+       "label": "Usuń przypomnienie",
+       "key": "Delete",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 7,
+       "label": "Zminimalizuj do zasobnika",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 8,
+       "label": "Wyjdź",
+       "key": "Alt+F4",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    },
+    {
+     "label": "Widok",
+     "items": [
+      {
+       "id": 10,
+       "label": "Sortuj według",
+       "items": [
+        {
+         "id": 11,
+         "label": "Nazwa 1",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        },
+        {
+         "id": 12,
+         "label": "Priorytet 2",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        },
+        {
+         "id": 13,
+         "label": "Data 3",
+         "key": "",
+         "enabled": true,
+         "checked": false
+        }
+       ]
+      }
+     ]
+    }
+   ],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "reminder",
+  "screen": {
+   "id": 15,
+   "kind": "dialog",
+   "title": "Nowe przypomnienie",
+   "controls": [
+    {
+     "id": 18,
+     "kind": "text",
+     "label": "Nazwa przypomnienia",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 20,
+     "kind": "text",
+     "label": "Opis",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 21,
+     "kind": "label",
+     "label": "Data:",
+     "enabled": true
+    },
+    {
+     "id": 22,
+     "kind": "choice",
+     "label": "Dzień",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 23,
+     "kind": "choice",
+     "label": "Miesiąc",
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 24,
+     "kind": "choice",
+     "label": "Rok",
+     "options": [
+      "2026",
+      "2027",
+      "2028",
+      "2029",
+      "2030",
+      "2031",
+      "2032",
+      "2033",
+      "2034",
+      "2035"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 28,
+     "kind": "label",
+     "label": "Czas:",
+     "enabled": true
+    },
+    {
+     "id": 29,
+     "kind": "choice",
+     "label": "Godzina",
+     "options": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 30,
+     "kind": "choice",
+     "label": "Minuta",
+     "options": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28",
+      "29",
+      "30",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38",
+      "39",
+      "40",
+      "41",
+      "42",
+      "43",
+      "44",
+      "45",
+      "46",
+      "47",
+      "48",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      "57",
+      "58",
+      "59"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 34,
+     "kind": "choice",
+     "label": "Priorytet",
+     "options": [
+      "Niski",
+      "Średni",
+      "Wysoki"
+     ],
+     "index": 1,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 36,
+     "kind": "choice",
+     "label": "Powtórz",
+     "options": [
+      "2 razy co 3 minuty",
+      "4 razy co minutę",
+      "Co 15 minut",
+      "Tylko raz"
+     ],
+     "index": 3,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 37,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 38,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "reminder",
+  "screen": {
+   "id": 39,
+   "kind": "dialog",
+   "title": "Ustawienia programu",
+   "controls": [
+    {
+     "id": 41,
+     "kind": "check",
+     "label": "Dźwięki",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 43,
+     "kind": "choice",
+     "label": "Temat dźwiękowy",
+     "options": [
+      "alterAeon",
+      "blinggo",
+      "default"
+     ],
+     "index": 2,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 44,
+     "kind": "check",
+     "label": "Tekst na mowę",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 46,
+     "kind": "choice",
+     "label": "Widok listy przypomnień",
+     "options": [
+      "Lista (zalecane dla osób z niepełnosprawnością wzroku)",
+      "Widok kalendarza"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 47,
+     "kind": "button",
+     "label": "OK",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 48,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "reminder",
+  "screen": {
+   "id": 0,
+   "kind": "window",
+   "title": "Titan Organizer",
+   "controls": [
+    {
+     "id": -2,
+     "kind": "label",
+     "label": "This application has put its window away."
+    },
+    {
+     "id": -1,
+     "kind": "button",
+     "label": "Show it again",
+     "default": true
+    }
+   ],
+   "menus": [],
+   "focus": -1,
+   "modal": false
+  }
+ },
+ {
+  "app": "web",
+  "screen": {
+   "id": 1,
+   "kind": "window",
+   "title": " - tBrowser",
+   "controls": [
+    {
+     "id": 13,
+     "kind": "tabs",
+     "label": "Tabs",
+     "options": [
+      "Nowa karta"
+     ],
+     "index": 0,
+     "unnamed": true
+    },
+    {
+     "id": 4,
+     "kind": "button",
+     "label": "Wstecz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 5,
+     "kind": "button",
+     "label": "Dalej",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 6,
+     "kind": "button",
+     "label": "Odśwież",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 7,
+     "kind": "button",
+     "label": "Dodaj zakładkę",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 8,
+     "kind": "text",
+     "label": "Field",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "unnamed": true
+    },
+    {
+     "id": 9,
+     "kind": "button",
+     "label": "Pomniejsz",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 10,
+     "kind": "button",
+     "label": "100%",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 11,
+     "kind": "button",
+     "label": "Powiększ",
+     "enabled": false,
+     "default": false
+    },
+    {
+     "id": 12,
+     "kind": "button",
+     "label": "Nowa karta",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 15,
+     "kind": "text",
+     "label": "Znajdź",
+     "value": "",
+     "enabled": true,
+     "readonly": false,
+     "secret": false,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 16,
+     "kind": "check",
+     "label": "Uwzględnij wielkość liter",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 17,
+     "kind": "check",
+     "label": "Całe słowo",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 18,
+     "kind": "button",
+     "label": "Poprzedni",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 19,
+     "kind": "button",
+     "label": "Następny",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 20,
+     "kind": "button",
+     "label": "Zamknij",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 50,
+     "kind": "multiline",
+     "label": "Titan - titanic computer environment",
+     "value": "Titan - titanic computer environment\n\nCo to jest Titan?\n\nTitan, Titanic Computer environment jest środowiskiem systemu operacyjnego microsoft windows i toolboxem, zawierającym podstawowe aplikacje, komponenty, widgety i gry\nCechy szczególne programu\n\nTCE i jego komponenty są proste i intuicyjne, dzięki temu nie trzeba poświęcać dużo czasu, aby nauczyć się obsługi programu\n\nTCE aplikacjami i komponentami stoi, dzięki czemu każdy, kto jest zaawansowanym użytkownikiem, lub programistą, może z łatwością rozbudować program i udostępniać komponent innym użytkownikom TCE\n\nTitan zawiera niewidzialny interfejs, dzięki czemu można przełączać się między oknami, uruchamiać skróty na pulpicie, bez zbędnej zabawy. Każdy power user może mieć wpływ na niewidzialny interfejs dzięki widgetom\n\nMożesz pobrać dokumentację TCE z tąd\n\nTitan jest w trakcie rozwoju, obecna wersja jest w fazie bety\n\nData pierwszego wydania: 28 grudnia 2024\n\ndata ostatniej modyfikacji: 17 listopada 2025\n\nKiedy Titan będzie gotowy do codziennego użytkowania?\n\ntitan do codziennego użytkowania jest już gotowy. Instalator można pobrać przez\nten link\n\npobierz wersję portable (dla zaawansowanych użytkowników)\n\nwesprzyj projekt Titan\n\nśrodowisko Titan jest i będzie programem dla wszystkich. Jest to projekt tworzony hobbystycznie, a utrzymywanie serwera trochę kosztuje.\n\nWsparcie programu jest dobrowolne, jeśli chciał/abyś wesprzeć projekt, możesz\nkliknąć tutaj",
+     "enabled": true,
+     "readonly": true,
+     "secret": false,
+     "url": "https://titosofttitan.com/titan"
+    }
+   ],
+   "menus": [
+    {
+     "label": "Aplikacja",
+     "items": [
+      {
+       "id": 41,
+       "label": "Nowa karta",
+       "key": "Ctrl+T",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 42,
+       "label": "Zamknij kartę",
+       "key": "Ctrl+W",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 44,
+       "label": "Historia...",
+       "key": "Ctrl+H",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 45,
+       "label": "Zakładki...",
+       "key": "Ctrl+B",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "id": 46,
+       "label": "Pobrane pliki...",
+       "key": "Ctrl+J",
+       "enabled": true,
+       "checked": false
+      },
+      {
+       "separator": true
+      },
+      {
+       "id": 48,
+       "label": "Ustawienia...",
+       "key": "",
+       "enabled": true,
+       "checked": false
+      }
+     ]
+    }
+   ],
+   "focus": 50,
+   "modal": false
+  }
+ },
+ {
+  "app": "web",
+  "screen": {
+   "id": 53,
+   "kind": "dialog",
+   "title": "Historia przeglądania",
+   "controls": [
+    {
+     "id": 56,
+     "kind": "list",
+     "label": "Odwiedzone strony",
+     "items": [
+      "Titan - titanic computer environment — https://titosofttitan.com/titan/"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 57,
+     "kind": "button",
+     "label": "Wyczyść historię",
+     "enabled": true,
+     "default": false
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "web",
+  "screen": {
+   "id": 58,
+   "kind": "dialog",
+   "title": "Zakładki",
+   "controls": [
+    {
+     "id": 61,
+     "kind": "list",
+     "label": "Zapisane zakładki",
+     "items": [
+      "Titan - titanic computer environment — https://titosofttitan.com/titan"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "web",
+  "screen": {
+   "id": 62,
+   "kind": "dialog",
+   "title": "Pobrane pliki",
+   "controls": [
+    {
+     "id": 65,
+     "kind": "list",
+     "label": "Lista plików pobranych przez tBrowser",
+     "items": [],
+     "index": -1,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ },
+ {
+  "app": "web",
+  "screen": {
+   "id": 66,
+   "kind": "dialog",
+   "title": "Ustawienia tBrowser",
+   "controls": [
+    {
+     "id": 69,
+     "kind": "check",
+     "label": "Oznajmiaj podsumowanie strony",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 70,
+     "kind": "check",
+     "label": "Komunikaty o ładowaniu strony",
+     "value": true,
+     "enabled": true
+    },
+    {
+     "id": 73,
+     "kind": "choice",
+     "label": "Wybierz tryb przeglądania strony",
+     "options": [
+      "Widok sieciowy (edge)",
+      "Tryb wirtualnego bufora"
+     ],
+     "index": 0,
+     "enabled": true,
+     "labelled_by": "the text before it"
+    },
+    {
+     "id": 75,
+     "kind": "check",
+     "label": "Nie wyświetlaj alertów o plikach cookie (o ile to możliwe)",
+     "value": false,
+     "enabled": true
+    },
+    {
+     "id": 76,
+     "kind": "button",
+     "label": "Zapisz",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 77,
+     "kind": "button",
+     "label": "Anuluj",
+     "enabled": true,
+     "default": false
+    },
+    {
+     "id": 68,
+     "kind": "label",
+     "label": "Oznajmianie",
+     "enabled": true
+    },
+    {
+     "id": 71,
+     "kind": "label",
+     "label": "Interfejs",
+     "enabled": true
+    },
+    {
+     "id": 74,
+     "kind": "label",
+     "label": "Prywatność",
+     "enabled": true
+    }
+   ],
+   "menus": [],
+   "focus": null,
+   "modal": false
+  }
+ }
+]

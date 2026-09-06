@@ -36,7 +36,10 @@ MAX_LOG = 400
 #: has nothing left to describe, and there is no point waiting for it.
 #: `wx.Timer` is deliberately not here: plenty of applications ask for a
 #: timer and describe themselves perfectly well without one.
-FATAL = ('wx.html2', 'wx.media', 'wx.glcanvas')
+#: `wx.html2` is not here: a page IS describable - as the text somebody
+#: would read out of it - so a browser is an application like any other
+#: now, and only a media surface and a drawing canvas are not.
+FATAL = ('wx.media', 'wx.glcanvas')
 
 
 class Application(object):

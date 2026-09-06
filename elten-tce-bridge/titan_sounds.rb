@@ -11,6 +11,12 @@
 # and nothing else; and it costs nothing when it is off, because the call is
 # never made.
 #
+# The setting is asked for here, so it is required here: a file that
+# names a constant and leaves somebody else to have loaded it works
+# only in the order it happens to be loaded in.
+
+require_relative "titan_prefs"
+#
 # **Three of these sounds already mean one thing each, and they are spent on
 # that and on nothing else.** They are the only ones every TCE theme carries,
 # which is what makes them the vocabulary rather than decoration:

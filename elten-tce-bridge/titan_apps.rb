@@ -116,15 +116,45 @@ class TitanApps
       # `show` builds a form for this screen and comes back only when the
       # application has answered with a different one - so a key it did
       # nothing with never rebuilds the form and never moves the focus.
-      show(@screen)
+      begin
+        show(@screen)
+      rescue Exception => e
+        # **Said, written down, and the application closed cleanly.** An
+        # exception let out of here reaches the user as whatever Ruby
+        # said - "malformed" something - with nothing about which screen
+        # it was or what was being built, and the add-on falls over
+        # around it.
+        TitanApps.note("showing %p raised %s: %s" %
+                       [@screen["title"].to_s, e.class, e.message])
+        TitanSounds.event(:error)
+        alert(_("This screen could not be shown: %s") %
+              "#{e.class}: #{e.message}")
+        @running = false
+      end
     end
     TitanSounds.event(:close)
   end
 
+  # **What is ON the screen, not just what the screen is made of.**
+  #
+  # This decided whether the form is rebuilt, and it read only the ids,
+  # kinds and labels of the controls - so opening a folder in the file
+  # manager, which changes the ROWS and nothing else, looked like the
+  # same screen. The application really moved; the form went on showing
+  # the folder it was built with, and every key looked like it did
+  # nothing. Enter and Backspace both, for one reason.
+  #
+  # The INDEX is deliberately left out. The cursor moving is not the
+  # screen changing, and rebuilding the form for it would take the
+  # keyboard away from the user on every arrow key.
   def fingerprint(screen)
     return "" if !screen.is_a?(Hash)
     [screen["id"], screen["kind"], screen["title"],
-     (screen["controls"] || []).map { |c| [c["id"], c["kind"], c["label"]] }].inspect
+     (screen["controls"] || []).map do |c|
+       [c["id"], c["kind"], c["label"], c["value"], c["items"],
+        c["options"], c["columns"], c["checked"], c["enabled"]]
+     end,
+     (screen["menus"] || []).map { |m| m["label"] }].inspect
   end
 
   # ---------------------------------------------------------------- render
@@ -142,7 +172,18 @@ class TitanApps
     widgets = []
     bound = []
     controls.each do |described|
-      widget = build(described)
+      # **A control that will not build is ONE control.** Unguarded, the
+      # first one to raise took the whole screen with it and the message
+      # that reached the user was whatever Ruby said, with nothing about
+      # which control or which application it was.
+      widget = begin
+        build(described)
+      rescue Exception => e
+        TitanApps.note("%s %s would not build: %s: %s" %
+                       [described["kind"], described["id"].inspect,
+                        e.class, e.message])
+        Static.new("%s (%s)" % [described["label"].to_s, e.class])
+      end
       next if widget == nil
       widgets.push(widget)
       bound.push([described, widget])
@@ -150,6 +191,8 @@ class TitanApps
     widgets.push(Static.new(_("This screen has nothing on it."))) if widgets.empty?
     back = Button.new(_("Back"))
     widgets.push(back)
+    TitanApps.note("built %p: %s" % [screen["title"].to_s,
+                                     bound.map { |d, _w| d["kind"] }.join(", ")])
     form = Form.new(widgets)
     form.header = screen["title"].to_s
     form.cancel_button = back
@@ -176,12 +219,20 @@ class TitanApps
   def self.note(text)
     log.unshift("%s %s" % [Time.now.strftime("%H:%M:%S"), text])
     log.pop while log.size > 40
+  rescue Exception
+    # Never the fault. A note that cannot be written is a note lost, and
+    # that is the whole of the damage it may do.
   end
 
   def pump(form, screen, bound)
     loop do
       loop_update
-      form.update
+      begin
+        form.update
+      rescue Exception => e
+        TitanApps.note("the form raised: %s: %s" % [e.class, e.message])
+        raise
+      end
       break if !@running || @moved
       # **Alt is the application's menu bar**, where it is in every
       # program that has one. The context-menu key opens it too, for
@@ -200,6 +251,10 @@ class TitanApps
       # the file manager and the organiser could be walked and never
       # opened.
       focused = bound[form.index.to_i]
+      if key_pressed?(:key_enter) || key_pressed?(0x0D)
+        TitanApps.note("enter seen; the cursor is on %s" %
+                       (focused == nil ? "nothing" : focused[0]["kind"]))
+      end
       # **Enter opens the row even when the cursor is not where this
       # thought it was.** A TableBox fires no event of its own, so the key
       # is read here - and reading it only when `form.index` happens to
@@ -349,7 +404,12 @@ class TitanApps
         EditBox.new(label, :text => described["value"].to_s)
       end
     when "multiline"
-      EditBox.new(label, :text => described["value"].to_s,
+      # A page keeps its address in the header, so somebody can read it
+      # out and hand it to a browser - the text is what is here, and the
+      # address is what is not.
+      header = label
+      header = "%s - %s" % [label, described["url"]] if described["url"].to_s != ""
+      EditBox.new(header, :text => described["value"].to_s,
                   :type => EditBox::Flags::MultiLine)
     when "button"
       Button.new(label == "" ? _("Button") : label)
@@ -506,7 +566,20 @@ class TitanApps
         # event that was never passed on. The inner list is `attr_reader
         # :sel`, so it can be listened to directly.
         if widget.respond_to?(:sel) && widget.sel != nil
-          widget.sel.on(:select) { press(id) }
+          TitanApps.note("table #{id}: listening to its inner list")
+          widget.sel.on(:select) do
+            TitanApps.note("table #{id}: the inner list says select")
+            press(id)
+          end
+        else
+          # **A table with no columns, or with none yet, IS a list** -
+          # `table_for` falls back to one so a row still reads in one
+          # voice - and a list fires `:select` itself. Listening only for
+          # an inner list that a ListBox has not got left those rows
+          # unopenable: the download manager's downloads and the
+          # organiser's table both answered Enter with nothing.
+          TitanApps.note("table #{id}: it is a list, listening to it")
+          widget.on(:select) { press(id) }
         end
       when "text", "multiline", "slider"
         if widget.respond_to?(:selected)
@@ -609,7 +682,9 @@ class TitanApps
   def press(control)
     answer = @api.call("app.press", {"session" => @session, "control" => control},
                        :title => _("Working..."))
-    took(answer)
+    ok = took(answer)
+    TitanApps.note("press #{control} -> #{ok ? (@moved ? 'the screen changed' : 'nothing changed') : 'FAILED'}")
+    ok
   end
 
   def send_value(control, value, wait = true)
@@ -621,7 +696,9 @@ class TitanApps
 
   def send_key(key)
     answer = @api.call("app.key", {"session" => @session, "key" => key})
-    took(answer)
+    ok = took(answer)
+    TitanApps.note("key #{key} -> #{ok ? (@moved ? 'the screen changed' : 'nothing changed') : 'FAILED'}")
+    ok
   end
 
   # **Whether the SCREEN moved is what ends the form.** A press, a chosen
