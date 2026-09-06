@@ -54,6 +54,7 @@ class Runtime(object):
     def __init__(self):
         self.controls = {}
         self.screens = []              # the stack; the last one is showing
+        self.put_away = None           # hidden, and the way back to it
         self.next_id = 0
         self.running = False
         self.quitting = False
@@ -114,27 +115,56 @@ class Runtime(object):
     # -------------------------------------------------------- the screens
     def push(self, window):
         self.screens.append(window)
+        if self.put_away is window:
+            self.put_away = None
         self.changed()
 
     def pop(self, window):
         if window in self.screens:
             self.screens.remove(window)
+            self.put_away = window
         self.changed()
 
     def showing(self):
         return self.screens[-1] if self.screens else None
 
+    #: The control id of the one button on the "it put itself away"
+    #: screen. Negative, so it can never collide with a real control.
+    SHOW_AGAIN = -1
+
     def describe(self):
+        """What is on the screen - and something is ALWAYS on it while the
+        application is running.
+
+        **An application with no window open is not an application with
+        nothing to say.** The organiser's "minimise to system tray" hides
+        its only window, and there is no tray here: the screen stack went
+        empty, this answered None, nothing was sent, and every message
+        from then on waited out its whole timeout against an application
+        that was alive and perfectly well. Silence is the one answer an
+        interface cannot do anything with, so it says what happened and
+        offers the way back - which is what a tray icon is for.
+        """
         window = self.showing()
-        if window is None:
+        if window is not None:
+            return window._describe()
+        if self.put_away is None or not getattr(self.put_away, '_alive', False):
             return None
-        return window._describe()
+        title = self.put_away.label() or ''
+        return {'id': 0, 'kind': 'window', 'title': title,
+                'controls': [
+                    {'id': self.SHOW_AGAIN - 1, 'kind': 'label',
+                     'label': 'This application has put its window away.'},
+                    {'id': self.SHOW_AGAIN, 'kind': 'button',
+                     'label': 'Show it again', 'default': True}],
+                'menus': [], 'focus': self.SHOW_AGAIN, 'modal': False}
 
     def send_screen(self):
         described = self.describe()
         if described is not None:
             self.say('screen', screen=described)
         self._dirty = False
+        return described is not None
 
     # ----------------------------------------------------------- the loop
     def run(self, until=None):
@@ -145,10 +175,29 @@ class Runtime(object):
         dialog, so this does too, or an application that opens a dialog and
         reads its fields afterwards would read them before they were filled.
         """
+        # **The screen is sent when this is about to WAIT, and at no
+        # other time.** Sending it after handling a message instead is
+        # nearly the same thing and wrong in two ways that both reach the
+        # user as an interface that has hung: a nested loop that is
+        # leaving would announce the dialog it had just left, and a
+        # message answered from INSIDE a nested loop - a `CallAfter` that
+        # opened one - left the outer caller waiting out its whole
+        # timeout for a screen that had already been sent by somebody
+        # else. Saying "this is what is showing" immediately before
+        # blocking cannot be early or late: it is the definition of what
+        # is showing.
         self.running = True
-        if self._dirty:
+        stream = wire.lines(self._in)
+        while True:
+            if self.quitting:
+                break
+            if until is not None and until():
+                break
             self.send_screen()
-        for raw in wire.lines(self._in):
+            try:
+                raw = next(stream)
+            except StopIteration:
+                break
             message = wire.unpack(raw)
             if message is None:
                 continue
@@ -157,12 +206,6 @@ class Runtime(object):
             except Exception as error:
                 self.say('said', text='%s: %s' % (type(error).__name__, error))
             self._drain()
-            if self._dirty:
-                self.send_screen()
-            if self.quitting:
-                break
-            if until is not None and until():
-                break
         self.running = False
 
     def _drain(self):
@@ -187,12 +230,20 @@ class Runtime(object):
     def _act(self, message):
         what = str(message.get('do') or '')
         if what == 'quit':
+            self.report()
             self.quitting = True
+            return
+        if what == 'report':
+            self.report()
             return
         if what == 'read':
             self.changed()
             return
         if what == 'press':
+            if message.get('control') == self.SHOW_AGAIN:
+                if self.put_away is not None:
+                    self.put_away.Show(True)
+                return
             target = self.find(message.get('control'))
             if target is not None:
                 target._pressed(message)
@@ -226,6 +277,19 @@ class Runtime(object):
     def note_unknown(self, name):
         if name not in self.unknown:
             self.unknown.append(name)
+
+    def report(self):
+        """Everything the application asked wx for that is not here.
+
+        The one thing that makes finishing this possible: without it,
+        working out what an application still needs is reading its source
+        and guessing, and with it the answer is a list. Cling's `report()`
+        and the Elten port's `report()` exist for exactly this and were
+        the difference between a subsystem that could be finished and one
+        that could not.
+        """
+        self.say('report', unknown=list(self.unknown),
+                 refused=list(self.refused))
 
 
 RUNTIME = Runtime()

@@ -507,32 +507,119 @@ class TitanNetClient
     end
   end
 
-  # **`group_id`, not `group`.** Titan's two group actions do not agree
-  # about what the argument is called - `join_group_by_id` takes `group`
-  # and `group_forums` takes `group_id` - and an argument Titan does not
-  # recognise is a REQUIRED one that was not supplied, which the Action API
-  # turns into a question built from the parameter's own description. So
-  # opening a group asked "this action needs group id" and went no further:
-  # a screen that cannot be opened at all, over one word.
+  # -------------------------------------------------- a group and its forums
+  # **Read as RECORDS, not out of a sentence.** This used to ask
+  # `titannet.group_forums` - the prose an AI tool writes - and split its
+  # lines, which made every forum's name "  forum #3 General" including
+  # the hash and the number. And the sentence itself was wrong: Titan read
+  # the forums off `get_group`, which has never carried them, so a group
+  # full of forums answered "this group has no forums". `titannet.forums`
+  # gives the id to act on apart from everything that is only there to be
+  # read.
   def group_forums(id, label)
-    rows = proc do
-      answer = TitanUI.ask(@bus, "titannet", "group_forums", {"group_id" => id},
-                           :title => label)
-      next [[answer.text.to_s, nil]] if !answer.ok?
-      answer.text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
-            .reject(&:empty?)
-            .map { |line| [line, {"open" => "forum_topics", "forum" => line}] }
+    listing = proc do
+      found = rows("forums", "forums", {"group" => id}) { |forum| forum_row(forum) }
+      found.empty? ? [[_("This group has no forums yet."), nil]] : found
     end
-    TitanUI::Screen.new(@bus, label, [[label, rows]],
-                        :on_open => method(:open_entry)).open
+    TitanUI::Screen.new(@bus, label, [[_("Forums"), listing]],
+                        :on_open => method(:open_entry),
+                        :on_menu => method(:forum_row_menu)).open
   end
 
+  # ------------------------------------------------------ a forum's threads
+  # A thread row says what somebody choosing one needs: who started it, how
+  # many replies it has and when it last moved - which is what every forum
+  # ever written shows, and what "Wątek" on its own does not.
   def forum_topics(forum, label)
-    rows = proc do
-      rows("topics", "topics", {"category" => forum}) { |t| topic_row(t) }
+    listing = proc do
+      found = rows("forum_topics", "topics", {"forum" => forum}) { |t| thread_row(t) }
+      found.empty? ? [[_("There are no threads in this forum yet."), nil]] : found
     end
-    TitanUI::Screen.new(@bus, label, [[label, rows]],
-                        :on_open => method(:open_entry)).open
+    TitanUI::Screen.new(@bus, label, [[_("Threads"), listing]],
+                        :on_open => method(:open_entry),
+                        :on_menu => proc { |value, row_label|
+                          thread_menu(value, row_label, forum, label)
+                        }).open
+  end
+
+  # A forum row says how much is in it, which is what somebody choosing
+  # between forums needs.
+  def forum_row(forum)
+    count = forum["topic_count"].to_i
+    text = forum["name"].to_s
+    text += " (%s)" % (count == 1 ? _("1 thread") : _("%d threads") % count)
+    what = forum["description"].to_s
+    text += " - %s" % what if what != ""
+    [text, {"open" => "forum_topics", "forum" => forum["id"],
+            "name" => forum["name"].to_s}]
+  end
+
+  def thread_row(topic)
+    who = (topic["author"] || topic["username"] || "").to_s
+    replies = (topic["reply_count"] || topic["replies"] || 0).to_i
+    when_ = (topic["last_reply_at"] || topic["updated_at"] ||
+             topic["created_at"]).to_s
+    marks = []
+    marks.push(_("pinned")) if topic["pinned"].to_i == 1 || topic["is_pinned"] == true
+    marks.push(_("locked")) if topic["locked"].to_i == 1 || topic["is_locked"] == true
+    text = topic["title"].to_s
+    text += " [%s]" % marks.join(", ") if !marks.empty?
+    text += " - %s" % who if who != ""
+    text += ", %s" % (replies == 1 ? _("1 reply") : _("%d replies") % replies)
+    text += ", %s" % when_ if when_ != ""
+    [text, {"open" => "topic", "id" => topic["id"],
+            "title" => topic["title"].to_s}]
+  end
+
+  # What can be done to a forum from its row.
+  def forum_row_menu(value, label)
+    return if !value.is_a?(Hash) || value["open"] != "forum_topics"
+    chosen = select_action([["open", _("Open it")],
+                            ["post", _("Write a new thread here")]],
+                           :header => label)
+    return if chosen == nil
+    return forum_topics(value["forum"].to_s, value["name"].to_s) if chosen == "open"
+    write_thread(value["forum"].to_s, value["name"].to_s)
+  end
+
+  # And to a thread from its row.
+  def thread_menu(value, label, forum, forum_label)
+    if !value.is_a?(Hash) || value["open"] != "topic"
+      return write_thread(forum, forum_label)
+    end
+    chosen = select_action([["read", _("Read it")],
+                            ["reply", _("Reply to it")],
+                            ["new", _("Write a new thread here")]],
+                           :header => label)
+    return if chosen == nil
+    case chosen
+    when "read" then topic(value["id"].to_s, value["title"].to_s)
+    when "reply" then reply_to(value["id"].to_s, value["title"].to_s)
+    when "new" then write_thread(forum, forum_label)
+    end
+  end
+
+  # **A new thread is written INTO the forum it was started from.** The
+  # forum menu's "write a topic" posted into whatever Titan's default
+  # category is, so a thread started inside a group's forum appeared
+  # somewhere else entirely.
+  def write_thread(forum, label)
+    values = collect(_("New thread in %s") % label,
+                     [["title", _("Title")], ["content", _("Text")]])
+    return if values == nil
+    answer = TitanUI.perform(@bus, "titannet", "post_topic",
+                             values.merge({"forum_id" => forum}),
+                             :title => _("Posting..."))
+    TitanUI.tell(answer, label) if answer != nil
+  end
+
+  def reply_to(id, label)
+    what = ask_for(_("Your reply:"))
+    return if what == nil
+    answer = TitanUI.perform(@bus, "titannet", "reply",
+                             {"topic_id" => id, "content" => what},
+                             :title => _("Replying..."))
+    TitanUI.tell(answer, label) if answer != nil
   end
 
   # ------------------------------------------------------------------- mail

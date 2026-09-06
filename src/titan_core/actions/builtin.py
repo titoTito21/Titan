@@ -302,6 +302,42 @@ def _elten_client_addon():
     return addon
 
 
+def _app_ui_addon():
+    """A TCE application whose interface is described rather than drawn.
+
+    An ordinary wxPython application, unmodified, launched with a `wx`
+    that describes what it built instead of painting it - so an interface
+    that has nothing to draw with can still show it: the Invisible UI, a
+    Titan Script, an external client on the Action Bus (the Elten bridge
+    is the first, and deliberately not the only one).
+    """
+    from src.app_ui.actions import TITAN_ACTIONS
+
+    addon = AddonActions(kind='builtin', addon_id='app_ui', name='app_ui',
+                         path='', label="TCE applications, described",
+                         description="Open a TCE application with no window "
+                                     "and work it through a description of "
+                                     "its interface: what controls it has, "
+                                     "what they say, what they hold. The "
+                                     "application is never modified.",
+                         transport='inproc')
+    addon.source = 'builtin'
+    addon.builtin = True
+    for declared in TITAN_ACTIONS:
+        prepared = {}
+        for pname, pspec in (declared.get('params') or {}).items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+        action = ActionSpec(name=declared['name'],
+                            summary=declared.get('summary', ''),
+                            params=prepared, risk=declared.get('risk', 'auto'),
+                            mode='any', addon=addon)
+        action.run = declared['run']
+        addon.actions.append(action)
+    return addon
+
+
 def _shell_addon():
     """The system shell: the desktop, taskbar, notification area and menu.
 
@@ -603,6 +639,10 @@ def build():
         addons.append(_elten_client_addon())
     except Exception as e:
         print(f"[actions] Built-in 'elten_client' unavailable: {e}")
+    try:
+        addons.append(_app_ui_addon())
+    except Exception as e:
+        print(f"[actions] Built-in 'app_ui' unavailable: {e}")
     try:
         _add_settings_ui(addons)
     except Exception as e:

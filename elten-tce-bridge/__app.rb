@@ -66,6 +66,7 @@ require_relative "elten_link"
 require_relative "titan_components"
 require_relative "titan_macros"
 require_relative "titan_cling"
+require_relative "titan_apps"
 require_relative "titan_ai"
 require_relative "titan_shell"
 require_relative "titan_areas"
@@ -107,7 +108,30 @@ class ProgramTCEBridge < Program
         # arrived on Titan-Net. The tick is Elten's own main pump: it posts
         # a question to the bus and says whatever the last answer brought,
         # and it never waits for either.
-        extension.tick(:interval => 5) do
+        # **The tick is the marshaller's, and there is only ONE tick.**
+        # `extension.tick` is `single_callback!` - declaring a second one
+        # raises and takes the whole extension declaration with it, so
+        # NOTHING ticked at all: the news stopped and every question that
+        # needs Elten's own thread waited out its timeout until the bus
+        # dropped the connection. Asked for twice, it is not two ticks; it
+        # is none.
+        #
+        # So the fast one is the tick, because that is what a marshaller
+        # needs. Anything Titan asked that needs Elten's own thread -
+        # reading the screen, opening one of its programs, pressing a key
+        # - waits here and this is the only place it can run. Drained on
+        # the five-second news tick it took 5.15 s and 10.04 s to answer,
+        # against Titan's own eight-second limit, so half the questions
+        # timed out. `EltenMain.pump` gives itself a budget of 0.15 s and
+        # returns, so asking it often is cheap.
+        extension.tick(:interval => 0.1) do
+          EltenMain.pump
+        end
+
+        # And the slow half on Elten's own scheduler, which is what it is
+        # for: this posts a question to the bus and says whatever the last
+        # answer brought, and it never waits for either.
+        extension.every(:news, :seconds => 5) do
           TitanWatch.enabled = TitanPrefs.announce_news?
           TitanWatch.interval = TitanPrefs.news_minutes * 60
           TitanWatch.tick
@@ -117,10 +141,6 @@ class ProgramTCEBridge < Program
           # reaches no network.
           EltenNews.enabled = TitanPrefs.elten_notifications?
           EltenNews.tick
-          # **And this is Elten's own thread.** Anything Titan asked that
-          # needs the screen - reading it, opening one of Elten's programs
-          # - is waiting here, and this is the only place it can run.
-          EltenMain.pump
         end
 
         # Deliberately NO extra entries in Elten's main menu. The manifest
@@ -220,6 +240,17 @@ class ProgramTCEBridge < Program
             :set => proc { |value|
               update_json("settings.json", :default => {}) do |state|
                 state["tce_sounds"] = (value == true)
+              end
+            }
+          )
+
+          settings.boolean(
+            "render_apps",
+            :label => _("Render TCE applications (experimental)"),
+            :get => proc { TitanPrefs.render_apps? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["render_apps"] = (value == true)
               end
             }
           )

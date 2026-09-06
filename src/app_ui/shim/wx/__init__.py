@@ -11,6 +11,8 @@ that a list-shaped interface throws away. What is NOT implemented answers
 instead of raising - see `_titan_runtime.Runtime.refuse` and `_Unknown`.
 """
 
+import os
+
 from ._titan_runtime import RUNTIME, model
 
 # --------------------------------------------------------------------------
@@ -35,6 +37,13 @@ TE_MULTILINE, TE_READONLY, TE_PASSWORD, TE_PROCESS_ENTER = 32, 16, 2048, 1024
 LC_REPORT, LC_LIST, LC_ICON, LC_SINGLE_SEL = 32, 2048, 1024, 16384
 LB_SINGLE, LB_MULTIPLE, LB_EXTENDED = 0, 8, 16
 CB_READONLY, CB_DROPDOWN = 16, 4
+# **A constant that is only made up is a constant that is zero.** The
+# long tail answers an unknown name with 0, which is right for a style
+# flag nobody reads and wrong for one that DECIDES something: `FD_SAVE`
+# fabricated as 0 made every save dialog look like an open dialog.
+FD_OPEN, FD_SAVE, FD_OVERWRITE_PROMPT = 1, 4, 8
+FD_FILE_MUST_EXIST, FD_MULTIPLE, FD_CHANGE_DIR = 16, 32, 128
+DD_DIR_MUST_EXIST, DD_CHANGE_DIR = 512, 256
 DEFAULT_FRAME_STYLE = 541072960
 DEFAULT_DIALOG_STYLE = 536877120
 ACCEL_CTRL, ACCEL_ALT, ACCEL_SHIFT, ACCEL_NORMAL = 2, 1, 4, 0
@@ -113,6 +122,16 @@ class Event(object):
     def GetIndex(self):
         return getattr(self._source, '_index', -1)
 
+    def GetItem(self):
+        """`event.GetItem().GetId()` is how the file manager and the
+        download manager both read which row was opened."""
+        index = getattr(self._source, '_index', -1)
+        text = ''
+        rows = getattr(self._source, '_rows', None)
+        if rows is not None and 0 <= index < len(rows):
+            text = rows[index][0] if rows[index] else ''
+        return ListItem(index, text)
+
     def GetInt(self):
         return getattr(self._source, '_index', -1)
 
@@ -164,6 +183,7 @@ class _Widget(object):
         self._shown = True
         self._handlers = []
         self._children = []
+        self._sizer = None
         self._alive = True
         RUNTIME.register(self)
         window = _window_of(parent)
@@ -302,9 +322,18 @@ class _Widget(object):
                              enabled=self._enabled)
 
     # ------------------------------- everything a window is asked and is not
-    def SetSizer(self, *_a, **_k):
+    def SetSizer(self, sizer=None, *_a, **_k):
+        # Kept for its ORDER, which is the reading order of the screen.
+        if isinstance(sizer, _Sizer):
+            self._sizer = sizer
         return None
-    SetSizerAndFit = SetAutoLayout = Layout = Fit = SetSizer
+
+    def SetSizerAndFit(self, sizer=None, *_a, **_k):
+        return self.SetSizer(sizer)
+
+    def SetAutoLayout(self, *_a, **_k):
+        return None
+    Layout = Fit = SetAutoLayout
 
     def SetSize(self, *_a, **_k):
         return None
@@ -330,8 +359,16 @@ class _Widget(object):
 
 
 class _Silence(object):
-    """A method that is not here. Answers itself, so a chain of them is
-    still only one thing that did not happen."""
+    """A method that is not here.
+
+    **It answers a chain, not just a call.** `bar.SetStatusWidths(...)`
+    on something that is already nothing must be nothing again, or the
+    application stops one attribute further along than it would have -
+    which is exactly where the browser stopped. So calling it, reading
+    off it and iterating it all give something that is still nothing, and
+    the application carries on being wrong about one thing instead of
+    ending.
+    """
 
     __slots__ = ('name',)
 
@@ -339,7 +376,28 @@ class _Silence(object):
         self.name = name
 
     def __call__(self, *_a, **_k):
-        return None
+        return _Silence(self.name)
+
+    def __getattr__(self, name):
+        if name.startswith('__'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('%s.%s' % (self.name, name))
+        return _Silence('%s.%s' % (self.name, name))
+
+    def __iter__(self):
+        return iter(())
+
+    def __len__(self):
+        return 0
+
+    def __eq__(self, other):
+        return other is self or other is None
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __str__(self):
+        return ''
 
     def __bool__(self):
         return False
@@ -456,7 +514,20 @@ class TextCtrl(_Widget):
         return model.control(self._id, self._kind, self.label(),
                              value=self._value, enabled=self._enabled,
                              readonly=bool(self._style & TE_READONLY),
-                             secret=bool(self._style & TE_PASSWORD))
+                             secret=bool(self._style & TE_PASSWORD),
+                             # **A path is said to be one.** There is no
+                             # file system on the other side of this - the
+                             # interface may be in another program, or on
+                             # another machine - so the field cannot be a
+                             # file chooser here. Saying that it holds a
+                             # PATH lets the interface offer its own,
+                             # which is the one the user already knows.
+                             # `open`, `save` or `folder` - what the
+                             # chooser is FOR, because saving is not
+                             # opening and a folder is not a file.
+                             path=getattr(self, '_path', None) or None,
+                             extensions=getattr(self, '_extensions', None)
+                             or None)
 
     def _set_from_user(self, value):
         self._value = '' if value is None else str(value)
@@ -674,6 +745,14 @@ class ListCtrl(_Widget):
     def GetColumnCount(self):
         return len(self._columns)
 
+    def GetColumn(self, index):
+        """A column answers its own heading. The file manager finds its
+        Date and Type columns by reading them - `GetColumn(i).GetText()` -
+        so a column that is None ends the application on its first
+        listing."""
+        return _Column(self._columns[index]
+                       if 0 <= int(index) < len(self._columns) else '')
+
     def SetColumnWidth(self, *_a, **_k):
         return None
 
@@ -789,6 +868,58 @@ class ListCtrl(_Widget):
 
     def _pressed(self, _message):
         self._fire(EVT_LIST_ITEM_ACTIVATED)
+
+
+class _Column(object):
+    """What `ListCtrl.GetColumn` answers."""
+
+    __slots__ = ('_text',)
+
+    def __init__(self, text=''):
+        self._text = str(text or '')
+
+    def GetText(self):
+        return self._text
+
+    def SetText(self, text):
+        self._text = str(text or '')
+
+    def GetWidth(self):
+        return 0
+
+
+class ListItem(object):
+    """`wx.ListItem` - a row an application builds before adding it, and
+    what a list event answers when asked which row it was about."""
+
+    def __init__(self, index=-1, text=''):
+        self._index = int(index)
+        self._text = str(text or '')
+        self._column = 0
+
+    def GetId(self):
+        return self._index
+
+    def SetId(self, index):
+        self._index = int(index)
+
+    def GetText(self):
+        return self._text
+
+    def SetText(self, text):
+        self._text = str(text or '')
+
+    def GetColumn(self):
+        return self._column
+
+    def SetColumn(self, column):
+        self._column = int(column)
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('ListItem.%s' % name)
+        return _Silence(name)
 
 
 class Gauge(_Widget):
@@ -1081,6 +1212,9 @@ class Menu(_Widget):
 
     def describe(self):
         items = []
+        # The menu's OWN label is written "&Plik" as well, and the
+        # ampersand is a mouse-and-keyboard idea that means nothing in an
+        # interface made of speech.
         for item in self._items:
             if isinstance(item, Menu):
                 items.append({'id': item._id, 'label': item.label(),
@@ -1089,7 +1223,8 @@ class Menu(_Widget):
                 described = item.describe()
                 if described is not None:
                     items.append(described)
-        return {'label': self.label(), 'items': items}
+        return {'label': _split_accelerator(self.label())[0],
+                'items': items}
 
 
 class MenuBar(_Widget):
@@ -1110,6 +1245,16 @@ class MenuBar(_Widget):
 
     def describe(self):
         return [menu.describe() for menu in self._menus]
+
+
+def _belongs_to(menu, window):
+    """A menu and everything on it answer to this window."""
+    menu._parent = window
+    for item in getattr(menu, '_items', []):
+        if isinstance(item, Menu):
+            _belongs_to(item, window)
+        else:
+            item._parent = menu
 
 
 def _split_accelerator(text):
@@ -1142,7 +1287,19 @@ class _Window(_Widget):
         self._owned.append(child)
 
     def SetMenuBar(self, menubar):
+        """**And the menus become this window's.**
+
+        A menu item is created with the MENU as its parent and a menu has
+        no parent at all, so walking up from an item reached the menu and
+        stopped - while every application binds its menu on the FRAME
+        (`self.Bind(wx.EVT_MENU, self.on_new_note, new_note_item)`, which
+        is how all 24 menus across Titan's applications are written). So
+        not one menu item did anything: the file manager and the editor
+        both answered every menu press with the screen they already had.
+        """
         self._menubar = menubar
+        for menu in getattr(menubar, '_menus', []):
+            _belongs_to(menu, self)
         RUNTIME.changed()
 
     def GetMenuBar(self):
@@ -1207,30 +1364,49 @@ class _Window(_Widget):
             described = child.describe()
             if described is not None:
                 controls.append(described)
+        _label_from_the_left(controls)
         menus = self._menubar.describe() if self._menubar is not None else []
         return model.screen(self._id, self._screen_kind, self.label(),
                             controls, menus, self._focus,
                             modal=self._modal_ended is not None)
 
     def _flatten(self):
-        found, seen = [], set()
+        """Every control on this screen, in the order it is READ in.
 
-        def walk(widget):
-            for child in getattr(widget, '_children', []):
-                if id(child) in seen or not getattr(child, '_alive', True):
-                    continue
-                seen.add(id(child))
-                if isinstance(child, _Window):
-                    continue
-                found.append(child)
-                walk(child)
-        walk(self)
+        **Every control belongs to the WINDOW, and the order lives in the
+        panels' sizers**, so the two have to be put back together. A
+        control is created with a panel as its parent but registered on
+        the window (`_Window._adopt`), which is what makes a screen one
+        flat list; the sizer of each container then says what order those
+        were laid out in.
+
+        Order is not geometry. Where a control sits on a rectangle means
+        nothing to an interface made of speech, but the order it was added
+        in is exactly the reading order - and it is what pairs a label
+        with the control it names. The organiser BUILDS three drop-downs
+        and only then adds "Day:", the day, "Month:", the month to the
+        sizer: read in creation order the labels are stranded at the end
+        and two of the drop-downs have no name at all.
+
+        Anything no sizer took keeps its creation order, after the rest: a
+        control the application built and never laid out is still a
+        control.
+        """
+        order = {}
+        for holder in [self] + list(self._owned):
+            sizer = getattr(holder, '_sizer', None)
+            if not isinstance(sizer, _Sizer):
+                continue
+            for item in sizer.leaves():
+                if id(item) not in order:
+                    order[id(item)] = len(order)
+        laid_out, loose = [], []
         for child in self._owned:
-            if id(child) not in seen and getattr(child, '_alive', True) \
-                    and not isinstance(child, _Window):
-                seen.add(id(child))
-                found.append(child)
-        return found
+            if not getattr(child, '_alive', True) or isinstance(child, _Window):
+                continue
+            (laid_out if id(child) in order else loose).append(child)
+        laid_out.sort(key=lambda child: order[id(child)])
+        return laid_out + loose
 
 
 class Frame(_Window):
@@ -1259,8 +1435,100 @@ class Dialog(_Window):
         else:
             self.Close()
 
+    def _key(self, name):
+        """**Escape leaves a dialog, because it does in wx.** wx answers
+        it itself - no application binds it - so a shim that only passed
+        it to the application left every dialog with no way out but the
+        button the application happened to provide."""
+        if _Window._key(self, name):
+            return True
+        if name.rsplit('+', 1)[-1].lower() == 'escape' \
+                and self._modal_ended is None:
+            self.EndModal(ID_CANCEL)
+            return True
+        return False
+
     def _pressed(self, message):
         _Widget._pressed(self, message)
+
+
+def _extensions(wildcard):
+    """The extensions out of a wx wildcard, so a chooser can filter.
+
+    `"Text files (*.txt)|*.txt|All files (*.*)|*.*"` is the shape; what
+    an interface needs from it is `['txt']`, and `*.*` means anything,
+    which is the same as saying nothing.
+    """
+    found = []
+    for piece in str(wildcard or '').split('|'):
+        for pattern in piece.split(';'):
+            pattern = pattern.strip()
+            if not pattern.startswith('*.') or pattern == '*.*':
+                continue
+            suffix = pattern[2:].lower()
+            if suffix and suffix not in found:
+                found.append(suffix)
+    return found
+
+
+def _label_from_the_left(controls):
+    """A control with no name takes the text just before it.
+
+    That is how every wx program is built - a `StaticText` and then the
+    field it names - and it is the rule Titan already applies to its own
+    settings (`src/settings/ui_model.py`: "a `wx.Choice` is labelled by
+    the static text in front of it"). Without it tNotes' note dialog
+    describes a field called nothing followed by another field called
+    nothing, and an interface made of speech has no way to tell the title
+    from the body.
+
+    A control that named ITSELF keeps its name: `SetName` is deliberate,
+    and Titan's applications call it precisely because they are written
+    for people who cannot see the screen.
+    """
+    named = ('text', 'multiline', 'list', 'table', 'choice', 'tree',
+             'slider', 'gauge', 'tabs')
+    previous = None
+    used = []
+    for index, entry in enumerate(controls):
+        if entry.get('kind') in named and not entry.get('label') \
+                and previous is not None:
+            entry['label'] = controls[previous].get('label', '').rstrip(':').strip()
+            entry['labelled_by'] = 'the text before it'
+            used.append(previous)
+        previous = index if entry.get('kind') == 'label' else None
+    # **And it is not read twice.** A label that has named the control
+    # after it is that control's name now; leaving it on its own line as
+    # well makes the reader say "Reminder name" and then "Reminder name,
+    # field".
+    for index in reversed(used):
+        del controls[index]
+    # **A label with nothing to say is nothing.** The file manager builds
+    # an empty `StaticText` as a status line and fills it in later; read
+    # as it comes it is a line the reader stops on and says nothing about.
+    controls[:] = [entry for entry in controls
+                   if entry.get('kind') != 'label' or entry.get('label')]
+    # **A control the application never named says what it IS.** Two of
+    # Titan's own applications put their main table up with no name and
+    # no text before it, and a table called nothing is, to somebody
+    # working by ear, a list of rows belonging to nothing. The kind word
+    # is the most that can be said without inventing content, and
+    # `unnamed` marks it so an interface can tell it from a real name.
+    for entry in controls:
+        if entry.get('label') or entry.get('kind') not in _MUST_BE_NAMED:
+            continue
+        entry['label'] = _KIND_WORDS.get(entry['kind'], entry['kind'])
+        entry['unnamed'] = True
+
+
+#: A control that cannot be used without knowing which one it is.
+_MUST_BE_NAMED = ('text', 'multiline', 'choice', 'check', 'slider', 'list',
+                  'table', 'tree', 'gauge', 'tabs', 'button')
+
+_KIND_WORDS = {'text': 'Field', 'multiline': 'Text', 'choice': 'Choice',
+               'check': 'Check box', 'slider': 'Slider', 'list': 'List',
+               'table': 'Table', 'tree': 'Tree', 'gauge': 'Progress',
+               'tabs': 'Tabs', 'button': 'Button'}
 
 
 def _key_code(name):
@@ -1273,3 +1541,477 @@ def _key_code(name):
             'pageup': WXK_PAGEUP, 'pagedown': WXK_PAGEDOWN,
             }.get(str(name or '').rsplit('+', 1)[-1].lower(),
                   ord(str(name or ' ')[-1].upper()) if name else 0)
+
+
+# --------------------------------------------------------------------------
+# The ready-made dialogs, which are most of what an application says
+# --------------------------------------------------------------------------
+class _Answered(Dialog):
+    """A dialog wx builds for the application: a message, a question, a
+    field, a list of things to pick from.
+
+    **Its buttons are real controls.** They were described as nothing at
+    all at first, which left an interface with a question on the screen
+    and no way to answer it - the entry dialog could be typed into and
+    never accepted. Building them as ordinary `Button`s instead means
+    pressing one goes down exactly the same path as pressing any other
+    button, so there is one implementation of "the user pressed
+    something" rather than a second one for the dialogs wx supplies.
+    """
+
+    def _answers(self, pairs):
+        self._answer_buttons = []
+        for label, result in pairs:
+            button = Button(self, ID_ANY, label)
+            button._answer = result
+            button.Bind(EVT_BUTTON, self._answer_pressed)
+            if result in (ID_OK, ID_YES):
+                button._default = True
+            self._answer_buttons.append(button)
+
+    def _answer_pressed(self, event):
+        source = event.GetEventObject()
+        self.EndModal(getattr(source, '_answer', ID_OK))
+
+
+class MessageDialog(_Answered):
+    _screen_kind = 'message'
+
+    def __init__(self, parent=None, message='', caption='', style=OK, **kw):
+        Dialog.__init__(self, parent, ID_ANY, caption or kw.get('caption', ''))
+        self._style = int(style or OK)
+        StaticText(self, ID_ANY, str(message or ''))
+        self._answers(_message_buttons(self._style))
+
+    @property
+    def _screen_kind(self):
+        return 'question' if self._style & YES_NO else 'message'
+
+
+def _message_buttons(style):
+    if style & YES_NO:
+        answers = [('Yes', ID_YES), ('No', ID_NO)]
+        if style & CANCEL:
+            answers.append(('Cancel', ID_CANCEL))
+        return answers
+    if style & CANCEL:
+        return [('OK', ID_OK), ('Cancel', ID_CANCEL)]
+    return [('OK', ID_OK)]
+
+
+def MessageBox(message='', caption='', style=OK, parent=None, **_kw):
+    """`wx.MessageBox` is 111 call sites across Titan's applications - more
+    than any widget but the button - so it is the one thing that has to be
+    exactly right."""
+    dialog = MessageDialog(parent, message, caption, style)
+    answer = dialog.ShowModal()
+    dialog.Destroy()
+    return answer
+
+
+class TextEntryDialog(_Answered):
+    _screen_kind = 'entry'
+
+    def __init__(self, parent=None, message='', caption='', value='', **kw):
+        Dialog.__init__(self, parent, ID_ANY, caption or kw.get('caption', ''))
+        self._field = TextCtrl(self, ID_ANY, str(value or kw.get('value', '') or ''))
+        self._field.SetName(str(message or ''))
+        self._focus = self._field._id
+        self._answers([('OK', ID_OK), ('Cancel', ID_CANCEL)])
+
+    def GetValue(self):
+        return self._field.GetValue()
+
+    def SetValue(self, value):
+        self._field.SetValue(value)
+
+
+class PasswordEntryDialog(TextEntryDialog):
+    def __init__(self, *args, **kw):
+        TextEntryDialog.__init__(self, *args, **kw)
+        self._field._style |= TE_PASSWORD
+
+
+class SingleChoiceDialog(_Answered):
+    _screen_kind = 'pick'
+
+    def __init__(self, parent=None, message='', caption='', choices=None, **kw):
+        Dialog.__init__(self, parent, ID_ANY, caption or kw.get('caption', ''))
+        self._list = ListBox(self, ID_ANY, choices=list(choices or []))
+        self._list.SetName(str(message or ''))
+        self._focus = self._list._id
+        self._answers([('OK', ID_OK), ('Cancel', ID_CANCEL)])
+
+    def GetSelection(self):
+        return self._list.GetSelection()
+
+    def GetStringSelection(self):
+        return self._list.GetStringSelection()
+
+    def SetSelection(self, index):
+        self._list.SetSelection(index)
+
+
+class MultiChoiceDialog(SingleChoiceDialog):
+    def GetSelections(self):
+        index = self._list.GetSelection()
+        return [index] if index >= 0 else []
+
+
+class _PathDialog(_Answered):
+    """A file or folder chooser.
+
+    **There is no file system on the other side of this**, so this cannot
+    be a chooser - the interface may be in another program, on another
+    machine, or made of nothing but speech. What it can do is say that a
+    PATH is what is wanted here and what for, and let the interface use
+    the chooser it already has: Elten has a file tree, Emacs has dired, a
+    console has a prompt with completion. Every one of those is better
+    than the field this would otherwise be, and none of them is something
+    this can know about.
+
+    So the field carries `path` - `open`, `save` or `folder` - and the
+    extensions the application asked for. An interface that does not
+    recognise any of it still gets a text field with a sensible name,
+    which is the rule the whole description is built on.
+    """
+
+    _screen_kind = 'entry'
+
+    def __init__(self, parent=None, message='', defaultDir='',
+                 defaultFile='', wildcard='', style=0, *_a, **kw):
+        Dialog.__init__(self, parent, ID_ANY, str(message or ''))
+        folder = bool(kw.pop('_folder', False))
+        start = (defaultDir or defaultFile or kw.get('defaultDir')
+                 or kw.get('defaultFile') or kw.get('defaultPath') or '')
+        if defaultDir and defaultFile:
+            start = os.path.join(str(defaultDir), str(defaultFile))
+        self._field = TextCtrl(self, ID_ANY, str(start))
+        self._field.SetName(str(message or 'Path'))
+        # `wx.FD_SAVE` is 0x0004 and `wx.FD_OPEN` 0x0001; an application
+        # that says neither means open, which is wx's own default.
+        saving = bool(int(style or kw.get('style', 0) or 0) & 0x0004)
+        self._field._path = 'folder' if folder else (
+            'save' if saving else 'open')
+        self._field._extensions = _extensions(wildcard or kw.get('wildcard'))
+        self._focus = self._field._id
+        self._answers([('OK', ID_OK), ('Cancel', ID_CANCEL)])
+        RUNTIME.refuse(
+            'wx.FileDialog',
+            'there is no file chooser here - the interface offers its own')
+
+    def GetPath(self):
+        return self._field.GetValue()
+
+    def GetPaths(self):
+        return [self.GetPath()] if self.GetPath() else []
+
+    def GetFilename(self):
+        return os.path.basename(self.GetPath())
+
+    def GetDirectory(self):
+        return os.path.dirname(self.GetPath())
+
+    def SetPath(self, value):
+        self._field.SetValue(value)
+
+
+class FileDialog(_PathDialog):
+    pass
+
+
+class DirDialog(_PathDialog):
+    """A folder, which an interface may offer differently from a file."""
+
+    def __init__(self, parent=None, message='', *_a, **kw):
+        kw['_folder'] = True
+        _PathDialog.__init__(self, parent, message, *_a, **kw)
+
+
+class ProgressDialog(Dialog):
+    def __init__(self, title='', message='', maximum=100, parent=None, **kw):
+        Dialog.__init__(self, parent, ID_ANY, title)
+        self._bar = Gauge(self, ID_ANY, int(maximum or 100))
+        self._bar.SetName(str(message or ''))
+
+    def Update(self, value, newmsg=None):
+        self._bar.SetValue(value)
+        if newmsg is not None:
+            self._bar.SetName(str(newmsg))
+        return (True, False)
+
+    def Pulse(self, newmsg=None):
+        return self.Update(self._bar.GetValue(), newmsg)
+
+
+# --------------------------------------------------------------------------
+# Sizers - the sink. A fifth of everything Titan's applications call.
+# --------------------------------------------------------------------------
+class _Sizer(object):
+    """**Where a control sits is thrown away; the ORDER it was added in is
+    not.**
+
+    Saying "layout does not matter" was right about geometry and wrong
+    about order, and the difference is what pairs a label with its
+    control. The organiser BUILDS three drop-downs and only then adds
+    "Day:", the day, "Month:", the month, "Year:", the year to the sizer -
+    so read in creation order the three labels are stranded at the end and
+    two of the drop-downs have no name at all, which for somebody who
+    cannot see the dialog is three unnamed lists in a row. Read in the
+    order they were added, each label is next to the thing it names.
+
+    An interface made of speech has no rectangle, but it certainly has a
+    reading order.
+    """
+
+    def __init__(self, *_a, **_k):
+        self.items = []
+
+    def Add(self, item=None, *_a, **_k):
+        if isinstance(item, (_Widget, _Sizer)):
+            self.items.append(item)
+        return None
+
+    def AddMany(self, items=None, *_a, **_k):
+        for entry in items or []:
+            self.Add(entry[0] if isinstance(entry, (list, tuple)) else entry)
+        return None
+
+    def Insert(self, index=0, item=None, *_a, **_k):
+        if isinstance(item, (_Widget, _Sizer)):
+            try:
+                self.items.insert(int(index), item)
+            except (TypeError, ValueError):
+                self.items.append(item)
+        return None
+
+    def Prepend(self, item=None, *_a, **_k):
+        return self.Insert(0, item)
+
+    def Detach(self, item=None, *_a, **_k):
+        if item in self.items:
+            self.items.remove(item)
+        return None
+    Remove = Detach
+
+    def Clear(self, *_a, **_k):
+        self.items = []
+        return None
+
+    AddSpacer = AddStretchSpacer = Layout = Fit = FitInside = Clear
+    SetSizeHints = Show = Hide = SetMinSize = Clear
+
+    def GetChildren(self):
+        return list(self.items)
+
+    def leaves(self):
+        """The controls this sizer holds, in the order they were added."""
+        found = []
+        for item in self.items:
+            if isinstance(item, _Sizer):
+                found.extend(item.leaves())
+            else:
+                found.append(item)
+        return found
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return _Silence(name)
+
+
+BoxSizer = GridSizer = FlexGridSizer = GridBagSizer = WrapSizer = _Sizer
+
+
+class StaticBoxSizer(_Sizer):
+    def __init__(self, box=None, orient=VERTICAL, *_a, **_k):
+        _Sizer.__init__(self)
+        self.box = box
+
+
+class AcceleratorEntry(object):
+    def __init__(self, flags=0, keyCode=0, cmdID=0, *_a, **_k):
+        self.flags, self.key, self.command = flags, keyCode, cmdID
+
+
+class AcceleratorTable(object):
+    def __init__(self, entries=None, *_a, **_k):
+        self.entries = list(entries or [])
+
+
+# --------------------------------------------------------------------------
+# The application, its loop, and the two ways work comes back to it
+# --------------------------------------------------------------------------
+class App(object):
+    def __init__(self, *_a, **_k):
+        RUNTIME.open_wire()
+        self.OnInit()
+
+    def OnInit(self):
+        return True
+
+    def MainLoop(self):
+        RUNTIME.say('ready', refused=list(RUNTIME.refused))
+        RUNTIME.run()
+        RUNTIME.say('gone')
+
+    def ExitMainLoop(self):
+        RUNTIME.quitting = True
+
+    def SetTopWindow(self, *_a, **_k):
+        return None
+
+    def Yield(self, *_a, **_k):
+        RUNTIME._drain()
+        return True
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('App.%s' % name)
+        return _Silence(name)
+
+
+PySimpleApp = App
+
+
+def CallAfter(work, *args, **kwargs):
+    RUNTIME.later(work, *args, **kwargs)
+
+
+def CallLater(_milliseconds, work, *args, **kwargs):
+    RUNTIME.later(work, *args, **kwargs)
+    return _Silence('CallLater')
+
+
+def Yield(*_a, **_k):
+    RUNTIME._drain()
+    return True
+
+
+SafeYield = YieldIfNeeded = Yield
+
+
+def GetApp():
+    return _APP
+
+
+def Exit():
+    RUNTIME.quitting = True
+
+
+def NewId():
+    RUNTIME.next_id += 1
+    return 40000 + RUNTIME.next_id
+
+
+NewIdRef = NewId
+
+
+def IsMainThread():
+    import threading as _threading
+    return _threading.current_thread() is _threading.main_thread()
+
+
+class Timer(object):
+    """A timer with nothing to tick it. An application that polls with one
+    still runs; what it polls for arrives when the user does something
+    instead. Recorded, so a screen that depends on it can be recognised."""
+
+    def __init__(self, owner=None, identifier=ID_ANY):
+        self._owner = owner
+        RUNTIME.refuse('wx.Timer', 'a timer has nothing to tick it here')
+
+    def Start(self, *_a, **_k):
+        return True
+
+    def Stop(self, *_a, **_k):
+        return True
+
+    def IsRunning(self):
+        return False
+
+    def Notify(self):
+        return None
+
+
+_APP = None
+
+
+# --------------------------------------------------------------------------
+# Everything else
+# --------------------------------------------------------------------------
+class _Unknown(int):
+    """A wx name nobody wrote. It is an int so it works as a style flag or
+    an id, and callable so it works as a function - which between them is
+    what almost every unwritten name is used as."""
+
+    def __call__(self, *_a, **_k):
+        return _Unknown(0)
+
+
+class _UnknownMeta(type):
+    """**And on the class itself, not only on an instance.**
+    `wx.SomeThing.Open(...)` is a class attribute, which `__getattr__` on
+    the class body never sees - the download manager stopped on exactly
+    that (`type object '_UnknownClass' has no attribute 'Open'`). A
+    metaclass is where a class is asked about its own attributes.
+    """
+
+    def __getattr__(cls, name):
+        if name.startswith('__'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('<class>.%s' % name)
+        return _Silence(name)
+
+
+class _UnknownClass(object, metaclass=_UnknownMeta):
+    """A wx CLASS nobody wrote, so that `class Mine(wx.Something)` still
+    imports. Every method answers nothing."""
+
+    def __init__(self, *_a, **_k):
+        pass
+
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError(name)
+        RUNTIME.note_unknown('%s.%s' % (type(self).__name__, name))
+        return _Silence(name)
+
+
+# `import wx.adv` is an IMPORT and a module-level `__getattr__` cannot
+# answer one - three of Titan's eight applications failed at their first
+# line for want of this.
+from . import _submodules as _submodules_module   # noqa: E402
+import sys as _sys                                # noqa: E402
+_submodules_module.install(_sys.modules[__name__])
+
+# **The wire opens at import, not at `wx.App()`.** Everything an
+# application refuses it usually refuses at its very first line -
+# `import wx.html2` is the browser's - and an application that then never
+# reaches `MainLoop` had recorded the one useful sentence about itself and
+# had no way to say it. Guarded on the variable the host sets, so
+# importing the shim in a test does not take a test runner's stdout.
+if os.environ.get('TITAN_APP_UI'):
+    RUNTIME.open_wire()
+
+
+def __getattr__(name):
+    """**The long tail, answered rather than raised.**
+
+    98 of the 274 wx names Titan's applications use are used exactly once,
+    and a shim that raises on the first one it has not got never finishes.
+    So an unknown name becomes a constant or a class by how it is spelled -
+    ALL_CAPS is a flag, CamelCase is a class - and every one of them is
+    recorded, so what is missing can be read rather than guessed at.
+    """
+    if name.startswith('__'):
+        raise AttributeError(name)
+    RUNTIME.note_unknown('wx.%s' % name)
+    if name.isupper() or name.startswith(('ID_', 'WXK_', 'EVT_')):
+        if name.startswith('EVT_'):
+            return _EventKind(name[4:])
+        return _Unknown(0)
+    if name[:1].isupper():
+        return _UnknownClass
+    return _Silence(name)

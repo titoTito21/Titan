@@ -71,7 +71,17 @@ def _connected():
 #: arrives at the worst moment waits out that idle tick before it is seen.
 #: Eight seconds is that, with room; past it the far side is wedged and
 #: saying so beats hanging.
-ASK_TIMEOUT = 8.0
+#: Long enough for a question that has to reach ELTEN'S OWN THREAD.
+#: Reading the screen is marshalled onto it and answered on the add-on's
+#: tick, so the wait is at least one tick plus whatever Elten is busy
+#: with; eight seconds cut half of them off and reported the timeout as
+#: "Elten has not given permission", which was neither true nor what
+#: happened.
+ASK_TIMEOUT = 20.0
+
+
+#: Why the last question to Elten was not answered.
+_LAST_PROBLEM = ['']
 
 
 def _ask(action):
@@ -89,7 +99,14 @@ def _ask_with(action, args):
         return False, None
     ok, result = bus.invoke(CLIENT_ID, action, args or {}, timeout=ASK_TIMEOUT)
     if not ok:
+        # **The reason is carried, not thrown away.** A question that
+        # timed out and a bridge that refuses are different things, and
+        # answering both with "Elten is not running, or has not been given
+        # permission" told the user to go and check a setting that was
+        # already on.
+        _LAST_PROBLEM[0] = str(result or '')
         return False, None
+    _LAST_PROBLEM[0] = ''
     if isinstance(result, str):
         # A handler answers with a shape; a plain sentence is the bridge
         # saying why it will not - permission taken back, most likely - and
@@ -250,8 +267,47 @@ def _describe_news(counts, age):
 # happen at all. So they are asked, and when Elten is not there they say so.
 # --------------------------------------------------------------------------- #
 def _needs_elten():
-    return ("Elten is not running, or the TCE bridge in it has not been "
-            "given permission to share Elten's data with Titan.")
+    """Why Elten could not be asked - the real reason where there is one.
+
+    "It is not running, or it has not given permission" is one sentence
+    covering three different things, and for the two it gets wrong it
+    sends the user to check a setting that is already on. The bus says
+    which it was: a peer that is not there, an add-on that refused, or a
+    question that was not answered in time.
+    """
+    problem = _LAST_PROBLEM[0]
+    if problem:
+        return "Elten did not answer: %s" % problem
+    try:
+        from src.titan_core.actions import bus
+        if bus.get_peer(CLIENT_ID) is None:
+            return ("Elten is not running, or the TCE bridge add-on is not "
+                    "open in it.")
+    except Exception:
+        pass
+    return ("The TCE bridge in Elten has not been given permission to share "
+            "Elten's data with Titan - it asks once, and the answer is in "
+            "its own settings ('Share Elten's data with TCE').")
+
+
+def elten_client_render_log(**_):
+    """What the TCE-application renderer in Elten last saw.
+
+    "The key does nothing" is a report with no evidence in it. The
+    renderer's own loop is the only place that knows whether the key
+    arrived at all, whether the control under the cursor kept it, and
+    what was sent - so it is read rather than guessed at.
+    """
+    answered, live = _ask('render_log')
+    if not answered:
+        return _needs_elten()
+    if isinstance(live, str):
+        return live
+    lines = (live or {}).get('log') or []
+    if not lines:
+        return ("The renderer has seen no keys yet - no TCE application is "
+                "open in Elten, or none has been worked.")
+    return '\n'.join(str(line) for line in lines)
 
 
 def elten_client_screen(**_):
@@ -503,6 +559,12 @@ def get_elten_client_actions():
         ('programs',
          "The programs installed in Elten, as its own menu lists them.", {},
          'auto', elten_client_programs),
+        ('render_log',
+         "What the renderer showing a TCE application in Elten last saw: "
+         "which keys arrived, which the control under the cursor kept for "
+         "itself, and what was sent to the application. Read this when a "
+         "key 'does nothing' - it says which of those it was.", {},
+         'auto', elten_client_render_log),
         ('run_program',
          "Open one of Elten's own programs. It appears in Elten, in front "
          "of whoever is sitting there - so it is confirmed first.",

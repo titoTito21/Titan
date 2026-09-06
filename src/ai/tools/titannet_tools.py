@@ -294,18 +294,30 @@ def titannet_group_forums(group_id, **_):
     client, error = _client()
     if error:
         return error
+    # **`get_group` has never carried the forums.** It answers the group
+    # ROW - `SELECT g.*` plus the caller's membership - and there is no
+    # `forums` key on it at all, so reading one and defaulting to an
+    # empty list told every user "this group has no forums" about a group
+    # full of them. The forums have their own listing, and it has been
+    # there all along: `/api/groups/<id>/forums`, with a thread count per
+    # forum.
     try:
         result = client.get_group(int(group_id))
+        listing = client.list_group_forums(int(group_id))
     except Exception as e:
         return f"Could not read group {group_id}: {e}"
     failure = _failed(result, f"Reading group {group_id}")
     if failure:
         return failure
     group = result.get('group') or result
-    forums = group.get('forums') or []
+    forums = []
+    if isinstance(listing, dict) and listing.get('success'):
+        forums = listing.get('forums') or []
     header = f"{group.get('name')} - {_clip(group.get('description'), 200)}"
     return header + "\n" + _lines(
-        forums, lambda f: f"  forum #{f.get('id')} {f.get('name')}",
+        forums,
+        lambda f: (f"  forum #{f.get('id')} {f.get('name')}"
+                   f" ({f.get('topic_count', 0)} threads)"),
         "  (this group has no forums)")
 
 

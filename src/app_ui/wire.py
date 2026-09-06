@@ -70,9 +70,15 @@ def unpack(raw):
 def lines(stream):
     """Whole lines off a byte stream, with a ceiling on how long one may be."""
     buffered = b''
+    # **`read1`, not `read`.** `BufferedReader.read(n)` on a pipe returns
+    # only when it has n bytes or the far end closes - so a whole screen
+    # sat in the buffer, unread, until the application exited, and the
+    # first thing this ever saw was a corpse. `read1` returns what has
+    # arrived, which is what a line-based protocol needs.
+    reader = getattr(stream, 'read1', None) or stream.read
     while True:
         try:
-            chunk = stream.read(65536)
+            chunk = reader(65536)
         except Exception:
             return
         if not chunk:

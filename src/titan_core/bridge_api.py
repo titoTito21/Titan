@@ -35,7 +35,7 @@ from src.titan_core.actions.inproc import run_on_gui
 
 # Raised by one call by name; the client compares it with its own and says
 # plainly that Titan is older than the add-on rather than guessing.
-API_VERSION = 1
+API_VERSION = 2
 
 
 # --------------------------------------------------------------------------- #
@@ -138,10 +138,22 @@ def _apps(args):
 
 
 def _open_app(args):
-    """Open one by its own name - the name the list gave, not a guess."""
+    """Open one by its own name - the name the list gave, not a guess.
+
+    **Where it opens is the CLIENT's choice.** By default it opens where
+    it always has: a window on this machine's screen, which is what a
+    person sitting at Titan wants. A client that is going to render the
+    interface itself - a bridge on another machine, a launcher, a script -
+    passes `render` and gets the application described instead, with a
+    session to work it through. It is one argument rather than a second
+    call so that the choice is discoverable: a client should not have to
+    already know that `app.open` exists to find out it can do this.
+    """
     wanted = str(args.get('name') or '').strip().lower()
     if not wanted:
         raise ValueError('name is required')
+    if args.get('render'):
+        return _app_ui_open(args)
 
     def start():
         from src.titan_core import app_manager
@@ -685,6 +697,97 @@ def _sound_theme(_args):
     return {'theme': theme}
 
 
+# ---------------------------------------------------------------------------
+# A TCE application, described rather than drawn
+# ---------------------------------------------------------------------------
+# **The point of these is that they are not Elten's.** The bridge in Elten
+# is one external client and the first to want them, but an application's
+# interface arrives here as data - controls with kinds, labels and values -
+# so any program that can reach this doorway renders it however it renders
+# anything. That is the rule `src/settings/ui_model.py` already established
+# for the settings and it buys the same thing twice: one description, every
+# interface, and an application that is never modified.
+def _app_ui_list(args):
+    from src.app_ui import sessions
+    return sessions.applications(str(args.get('language') or 'en'))
+
+
+def _app_ui_open(args):
+    from src.app_ui import sessions
+    wanted = args.get('mirror')
+    session, problem = sessions.open_application(
+        args.get('name'), owner=str(args.get('client') or ''),
+        language=str(args.get('language') or 'en'),
+        mirror=None if wanted is None else bool(wanted))
+    if session is None:
+        raise ValueError(problem)
+    return {'session': session.token,
+            'application': session.application.name,
+            'screen': session.application.screen,
+            # **Which of the two it got.** A described screen is the
+            # application's own account of itself; a mirrored one is what
+            # Windows can see of its window, which is a weaker thing. A
+            # client that could not tell them apart would present a
+            # mirror as though it were the application.
+            'mirror': bool(getattr(session.application, 'mirrored', False)),
+            'refused': session.application.refused}
+
+
+def _app_ui_screen(args):
+    return {'screen': _app_ui_session(args).application.screen}
+
+
+def _app_ui_press(args):
+    held = _app_ui_session(args)
+    held.application.tell('press', control=_whole(args.get('control')))
+    return {'screen': held.application.screen}
+
+
+def _app_ui_set(args):
+    held = _app_ui_session(args)
+    held.application.tell('set', control=_whole(args.get('control')),
+                          value=args.get('value'))
+    return {'screen': held.application.screen}
+
+
+def _app_ui_key(args):
+    held = _app_ui_session(args)
+    held.application.tell('key', key=str(args.get('key') or ''))
+    return {'screen': held.application.screen}
+
+
+def _app_ui_close(args):
+    from src.app_ui import sessions
+    return {'closed': bool(sessions.close(args.get('session')))}
+
+
+def _app_ui_sessions(_args):
+    from src.app_ui import sessions
+    return sessions.open_sessions()
+
+
+def _app_ui_log(args):
+    held = _app_ui_session(args)
+    return {'log': [{'level': level, 'text': text}
+                    for level, text in held.application.log[-120:]],
+            'refused': held.application.refused}
+
+
+def _app_ui_session(args):
+    from src.app_ui import sessions
+    held = sessions.get(args.get('session'))
+    if held is None:
+        raise ValueError('there is no application open with that session')
+    return held
+
+
+def _whole(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
 CALLS = {
     'hello': _hello,
     'apps.list': _apps,
@@ -729,6 +832,15 @@ CALLS = {
     'notifications.add': _notification_add,
     'notifications.clear': _notification_clear,
     'client.report': _client_report,
+    'app.list': _app_ui_list,
+    'app.open': _app_ui_open,
+    'app.screen': _app_ui_screen,
+    'app.press': _app_ui_press,
+    'app.set': _app_ui_set,
+    'app.key': _app_ui_key,
+    'app.close': _app_ui_close,
+    'app.sessions': _app_ui_sessions,
+    'app.log': _app_ui_log,
 }
 
 

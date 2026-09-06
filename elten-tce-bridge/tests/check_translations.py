@@ -85,7 +85,7 @@ def main():
     untranslated = sorted(m for m in said if not catalogue.get(m))
     print(f"{len(said)} string(s) said, {len(said) - len(untranslated)} "
           f"translated, {len(untranslated)} English only")
-    for message in untranslated[:15]:
+    for message in untranslated[:60]:
         print(f"  - {message!r} ({', '.join(sorted(set(said[message])))})")
     if len(untranslated) > 15:
         print(f"  ... and {len(untranslated) - 15} more")

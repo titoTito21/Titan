@@ -3895,6 +3895,471 @@ in there is code running inside somebody else's program.
   application that stopped, and a signature guessed from call sites is an
   `ArgumentError` inside somebody else's program.
 
+### TCE applications, described rather than drawn
+
+`src/app_ui/` is the Elten API port in reverse. That one runs somebody
+else's applications inside Titan's interface; this one lets **Titan's own
+applications be worn by somebody else's** - Elten's, an external client's
+on the Action Bus, the Invisible UI's, a Titan Script's. The application is
+never modified. It goes on being an ordinary wxPython program; what changes
+is which `wx` it imports.
+
+**The opportunity is that `app_manager` already launches every TCE
+application as its own subprocess and builds its `sys.path` itself.** So a
+shim `wx` goes first on that path and the application's own `import wx`
+reaches it, with nothing to change in the application - the same move as
+Cling under a Klango application and the Elten port under an `.eltenapp`:
+do not rewrite the program, put a platform under it.
+
+- **And it must stay renderable by anything.** The bridge in Elten is the
+  first client and deliberately only the first - the same description has
+  to serve the Invisible UI, a Titan Script, a launcher, and something
+  nobody has written yet, on a terminal or in another editor. So
+  `tests/test_app_ui.py` fails if a client is named anywhere in the CODE
+  of `src/app_ui/` (in the prose it is named freely, because explaining
+  the design is worth doing and a docstring cannot behave differently),
+  if a control kind cannot be put into words, or if a screen is not plain
+  JSON.
+- **The description is neutral, and that is the whole design.** It would
+  have been shorter to describe a screen the way Elten wants one, and it
+  would have been the mistake `src/settings/ui_model.py` already avoided:
+  one description, every interface. `model.py` is controls with a kind, a
+  label and a value, and no layout at all - a sizer says where a button
+  sits on a rectangle, and an interface made of speech has no rectangle.
+  Measured: layout and cosmetics are a fifth of everything Titan's
+  applications call, and all of it is a sink in the shim.
+- **A control's NAME is its label.** Titan's applications call `SetName` on
+  every control precisely because they are written for people who cannot
+  see them, so the accessible name is the best label there is. A control
+  that named nothing takes **the text just before it** - how every wx
+  program is built, and the rule `ui_model.py` already applies to Titan's
+  own settings. Without it tNotes' note dialog is a field called nothing
+  followed by another field called nothing.
+- **What is not there answers rather than raising.** Of the 274 wx names
+  Titan's applications use, **98 are used exactly once**, and a shim that
+  raises on the first one it has not got never finishes. An unknown name
+  becomes a constant or a class by how it is spelled and is recorded;
+  `_Silence` answers a whole CHAIN (`bar.SetStatusWidths(...)` on
+  something that is already nothing), which is where the browser stopped
+  one attribute further along than it needed to. Cling's `report()` and
+  the Elten port's `__index` are the same rule, arrived at from the same
+  place.
+- **`import wx.adv` is an IMPORT, and a module-level `__getattr__` cannot
+  answer one.** Three of the eight applications failed at their first line
+  for want of a submodule - the organiser's `wx.adv`, the download
+  manager's `wx.lib.newevent`, the browser's `wx.html2` - so a meta path
+  finder answers any `wx.*` with a permissive module.
+  `wx.lib.newevent.NewEvent()` gets a real PAIR, because the caller
+  unpacks it on the same line.
+- **What cannot be shown is said, by name.** A web view or a media surface
+  cannot be a list of controls. `wx.html2` is refused at import and the
+  refusal is what explains the failure - "Web Browser is built on
+  wx.html2: a web view cannot be shown by an interface made of controls" -
+  rather than "it did not describe an interface", which is true and
+  useless. The wire is opened at shim IMPORT for this reason: an
+  application that never reaches `MainLoop` had recorded the one useful
+  sentence about itself and no way to say it.
+- **`ShowModal` blocks, as wx's does**, or an application that opens a
+  dialog and reads its fields on the next line reads them before anybody
+  filled them in. And **a loop that is leaving must not send a screen**:
+  the modal that has just been answered would announce itself one last
+  time and the caller, waiting for what came next, would be handed the
+  dialog it had already left.
+- **The ready-made dialogs' buttons are real controls.** Described as
+  nothing at first, which left a question on the screen and no way to
+  answer it. Built as ordinary `Button`s, pressing one goes down the same
+  path as pressing any other button. **Escape leaves a dialog** because wx
+  answers that itself and no application binds it.
+- **Two doorways, and the second is the one a program should use.**
+  `app_ui.*` on the Action API answers prose, for a person and for a
+  model; `titan.bridge`'s `app.list` / `open` / `screen` / `press` / `set`
+  / `key` / `close` / `sessions` / `log` answers JSON in one shape. This
+  repository has already paid for the difference once, when the Elten
+  bridge read a macro's name out of a sentence and got the whole line.
+- **`read1`, not `read`.** `BufferedReader.read(n)` on a pipe returns only
+  when it has n bytes or the far end closes, so a whole screen sat unread
+  until the application exited and the first thing Titan ever saw was a
+  corpse.
+- Measured on the eight installed applications: **seven open, describe
+  themselves and can be worked**; the ElevenLabs client is missing its own
+  `elevenlabs` package (it would not run in Titan either) and tWeb is the
+  browser, refused by name. tNotes has been driven end to end through the
+  typed doorway alone - New note, a title into wx's own entry dialog, the
+  application's own dialog, the body, Save - and the note is on the list
+  with its dates, written to disk.
+
+#### Walked, not merely opened
+
+The sweep opens each application; the WALK presses things - every button
+that is not destructive, every menu item, a move in every list - and comes
+back out. Every one of these was found that way and by nothing else, which
+is the third time in this repository that has been true.
+
+- **Not one menu item in any application did anything.** A `MenuItem` is
+  created with the MENU as its parent and a `Menu` had no parent at all,
+  so walking up from an item reached the menu and stopped - while every
+  application binds its menu on the FRAME (`self.Bind(wx.EVT_MENU,
+  self.on_new_note, new_note_item)`, which is how all 24 menus across
+  Titan's applications are written). `SetMenuBar` now makes the menus the
+  window's. The file manager went from 1 screen to 8.
+- **A press that changed nothing was answered with silence**, so the
+  caller waited out its whole timeout - five seconds per no-op, which over
+  one walk of the file manager was 45 seconds of an interface that looked
+  hung. The screen is now sent immediately before the shim BLOCKS for
+  input and at no other time: that cannot be early or late, because it is
+  the definition of what is showing. Sending it after handling a message
+  instead is nearly the same thing and wrong twice - a nested loop that is
+  leaving announces the dialog it has just left, and a message answered
+  from inside a nested loop leaves the outer caller waiting for a screen
+  somebody else already sent.
+- **An application with no window open is not one with nothing to say.**
+  The organiser's "minimise to system tray" hides its only window and
+  there is no tray here: the stack went empty, nothing was sent, and every
+  message after it timed out against an application that was alive and
+  well. It now says it has put its window away and offers the one button
+  that brings it back, which is what a tray icon is for.
+- **A class answers its own attributes too.** `wx.SomeThing.Open(...)` is
+  a CLASS attribute and `__getattr__` in a class body never sees one - the
+  download manager stopped on exactly that. A metaclass is where a class
+  is asked about itself.
+- `ListCtrl.GetColumn(i).GetText()` is how the file manager finds its Date
+  and Type columns, and `event.GetItem().GetId()` is how both it and the
+  download manager read which row was opened. A column that is None ends
+  the application on its first listing.
+- After all of it: **seven of seven walk clean**, and the only time left
+  anywhere is the file manager really reading directories (1-2 s).
+
+- Tests: `tests/test_app_ui.py` (run it directly; 60 tests). Nothing opens
+  a window, plays a sound, speaks or reaches the network, and the
+  applications driven are Titan's real ones - testing the shim against a
+  hand-built stand-in would test the wrong thing. The shim's own long-tail
+  behaviour is asked in a SUBPROCESS, because that is where it lives and
+  the test runner has the real wxPython imported already.
+
+#### Readable, not merely described
+
+Found by driving the LIVE Titan over the Action Bus, exactly as the bridge
+does, and reading what a renderer is actually handed. A structural check
+passed all of it; none of these is a structural fault.
+
+- **A sizer's ORDER is not its geometry, and throwing both away was
+  wrong.** "Layout does not matter" is true about where a control sits on
+  a rectangle and false about the order it was added in, which is the
+  reading order - and it is what pairs a label with the control it names.
+  The organiser BUILDS three drop-downs and only then adds "Day:", the
+  day, "Month:", the month, "Year:", the year to the sizer, so read in
+  creation order the three labels are stranded at the end and two of the
+  drop-downs have no name at all: three unnamed lists in a row, which for
+  somebody working by ear is the dialog being unusable. Sizers now keep
+  what they were given, in order, and nothing else.
+  - Putting that back together needed both halves: **every control belongs
+    to the WINDOW** (`_Window._adopt`, which is what makes a screen one
+    flat list) **and the order lives in the panels' sizers**. Walking the
+    children alone found nothing, because nothing is ever a child.
+- **A label that named the control after it is not read as well.** Leaving
+  it makes the reader say "Reminder name" and then "Reminder name, field".
+- **A label with nothing to say is nothing.** The file manager builds an
+  empty `StaticText` as a status line and fills it in later; read as it
+  came it was a line the reader stopped on and said nothing about.
+- **A control the application never named says what it IS.** Two of
+  Titan's own put their main table up with no name and no text before it,
+  and a table called nothing is a list of rows belonging to nothing. The
+  kind word is the most that can be said without inventing content, and
+  `unnamed` marks it - so the INTERFACE picks the word, because the shim
+  runs inside the application and cannot know what language the reader
+  speaks.
+- **A submenu is walked into, not offered as a command.** A menu entry
+  holding other entries has no handler of its own, so pressing it did
+  nothing at all - and the file manager, the editor and the organiser all
+  keep "Sort by" that way, which is the whole of their View menu.
+- **`previous` was an index, and index 0 is falsy** - which took the name
+  off the first field of every screen whose first control is its own
+  label.
+- Measured after: **24 screens across the 7 describable applications, 0
+  faults** by a check that looks for exactly these - an unnamed control, a
+  label said twice, a screen with nothing on it.
+
+#### The renderer was checked against Elten's own source, and was wrong
+
+Reported as "there are errors in rendering". The description Titan sends
+was measured correct - 24 screens, no faults - so the fault was in the
+Ruby, and Elten's own sources say exactly where:
+
+- **`Form.new(fields, index:, silent:, quiet:)` takes no `header:`**, and
+  it was given one, so `unknown keyword` was raised while building EVERY
+  screen. The renderer had never shown one. A form's caption is
+  `FormBase#header`, set afterwards.
+- **`EditBox.new(header = "", type: 0, text: "")` takes its caption
+  POSITIONALLY and its flags as `type:`**, and it was called with
+  `header:` and `flags:` - which is how `ListBox` and `TableBox` really do
+  take theirs. Written by analogy, every text field and every multiline
+  field raised. Elten's own `scenes/ban.rb` writes it the right way:
+  `EditBox.new(p_("Ban", "The reason"), type: EditBox::Flags::MultiLine)`.
+- `tests/check_elten_api.py` checked that every METHOD exists and said
+  nothing about the arguments a constructor is called with, which is
+  where this went. It now reads each class's own `initialize` out of
+  Elten's source and checks the keywords - proved by putting the bug back
+  and watching it name all three.
+  - Two things make that readable at all in files whose indentation is
+    erratic (`list_box.rb` declares its nested `class Flags` at column 0
+    while the `class ListBox` holding it is at column 4): the constructor
+    is chosen **by shape** - a control's carries the options, a helper
+    struct's is positional - and a file is cut only where ANOTHER class
+    the check knows about begins, which is what separates `Form` from
+    `FormTimer` without taking `ListBox`'s own constructor away.
+  - A keyword only ever begins an argument, so it is matched after `(` or
+    `,`: without that the `:` of a ternary read as one.
+  - A class whose constructor cannot be read is **said**, not skipped: a
+    check that quietly gives up on a class is a check that passes for the
+    wrong reason.
+
+Then, reported again as "it will not click on anything, there is no menu
+bar, the application's keys do nothing" - three symptoms, and Elten's own
+source says they are three faults with one shape: **the renderer was
+written by analogy instead of read out of Elten.**
+
+- **`Form#wait` owns the loop, and that is why nothing worked.** It is
+  `focus` and then `loop_update` plus `update` for ever, with no way to
+  hand a key back or to be stopped from inside a handler. So no key of
+  the application's could arrive, the menu bar could not be opened, and
+  pressing something changed the screen underneath while the form went on
+  showing what it had. `TitanUI::Screen` in this same add-on writes its
+  loop out for exactly that reason **and says so in its own comment** -
+  the lesson was already written down here and ignored. Elten's own code
+  writes it out too (`scenes/account.rb` drives a TableBox that way).
+- **The event names were invented.** Every control's `on` is inherited
+  from `FormBase`, so `on(:changed)` checks out perfectly and fires
+  never: Elten's check box and edit box fire **`:change`**, a list fires
+  **`:move`** as the cursor goes and **`:select`** when a row is chosen,
+  and a table fires **only `:move`**. Not one tick box, field, option or
+  row selection ever reached the application - only buttons, which really
+  do fire `:press`.
+- **A TableBox has no `:select` at all**, so Enter is read in the loop -
+  which is how Elten opens one - and without it the main screen of the
+  notes, the file manager and the organiser could be walked and never
+  opened.
+- **The menu bar is Elten's own menu**, built with `bind_context` and
+  `menu.submenu` / `menu.option`, so the platform says how many items
+  there are, walks into a submenu and closes on Escape with none of that
+  written here. It opens on **Alt**, where a menu bar is in every program
+  that has one, and on the context-menu key as well; the bridge's own row
+  menu answers Alt now for the same reason.
+- The application's own keys (F1-F12, Delete, Insert) are forwarded from
+  the loop; F5 keeps its "read this again" meaning here too.
+- `check_elten_api.py` grew the check that would have caught it: every
+  `on(:name)` against every event any Elten control really fires. Where
+  the control's class can be read from the code it is checked per class;
+  where it arrives from a block - `bound.each do |described, widget|`,
+  which is most of a renderer - it is checked against every event that
+  exists, because a name nothing fires is wrong whichever control it was
+  meant for. Proved by putting `:changed` back and watching it named with
+  its line.
+
+What the MCP server gave without any grant is the thing that mattered:
+**Elten's own sources**, which is where all three of those came from.
+
+With the consent given, the live Elten answered - and answered late, which
+was a fault of its own:
+
+- **Declared twice is declared NONE.** `extension.tick` goes through
+  `single_callback!`, so a second one raises inside the declaration and
+  the whole extension is abandoned - nothing ticks at all. Splitting the
+  marshaller onto a tick of its own that way stopped the news AND left
+  every question that needs Elten's own thread waiting until the bus
+  dropped the connection, reported as "the application disconnected",
+  which says nothing about two ticks. The fast one IS the tick, because
+  that is what a marshaller needs, and the slow half went to
+  `extension.every`, which is what Elten has it for. `check_elten_api.py`
+  reads the `single_callback!` names out of Elten and fails on a second
+  declaration of any of them.
+- **The marshaller was drained on a five-second tick.** Anything Titan
+  asks that needs Elten's own thread - reading the screen, opening one of
+  its programs, pressing a key - waits to be run on the add-on's tick, and
+  that tick was the news one at `interval: 5`. Measured live: **5.15 s and
+  10.04 s** to read the screen, against Titan's own eight-second limit, so
+  half the questions timed out. `EltenMain.pump` gives itself a budget of
+  0.15 s and returns, so it now has a tick of its own at 0.1 s.
+- **And a timeout was reported as "Elten has not given permission"**,
+  which sent the user to check a setting that was already on. One sentence
+  covered three different things; the bus knows which it was - a peer that
+  is not there, an add-on that refused, a question not answered in time -
+  and `_ask_with` now carries the reason instead of throwing it away.
+  `ASK_TIMEOUT` is 20 s, because the wait is at least one tick plus
+  whatever Elten is busy with.
+Then the file manager and the editor, worked by hand:
+
+- **Backspace was never forwarded**, and in a file manager it is "the
+  folder above", which is most of how one is walked. It is now - **and
+  never taken from a control being typed into**, where it is the letter
+  just typed. The same for Delete and Insert, which were being forwarded
+  unconditionally and would have made a field impossible to correct.
+- **Enter opened nothing unless the cursor happened to be on the table.**
+  A `TableBox` fires no event of its own so the key is read in the loop,
+  and reading it only when `form.index` pointed at the table meant it did
+  nothing whenever the focus was anywhere else. It now finds the table.
+- **`Ctrl+S` is a MENU shortcut, so the menu item is pressed.** The
+  application declares it - "Save\tCtrl+S" - and pressing the item is
+  exactly what the accelerator would have done, without the shim having
+  to implement accelerators at all. Nothing was forwarded before, so
+  every Ctrl+key in every application did nothing. **Shift is part of the
+  shortcut**: read without it, "Save as...\tCtrl+Shift+S" became a second
+  Ctrl+S and shadowed "Save". A field keeps Ctrl+A, C, V and X.
+- **Every screen of every application is CHECKED, not hoped for.** "All
+  the screens of all the applications must work" is a promise, and one
+  about eight programs nobody here wrote cannot be kept by reading them.
+  `elten-tce-bridge/tests/check_render_coverage.py` opens every one
+  through Titan, walks every screen it can reach, and collects the two
+  things a renderer can silently get wrong: every control kind that
+  really appears and every menu shortcut that really appears. Measured:
+  **11 kinds and 23 shortcuts across 8 applications, all handled.**
+  `Alt+F4` is the one deliberate exception - it means "close the
+  application" and in Elten it would close ELTEN, so it is left to Escape
+  and the Back button, and the menu item is still there to be pressed.
+- **A file dialog offers the interface's own file chooser.** There is no
+  file system on the other side of this wire, so the shim turns
+  `wx.FileDialog` into a field - and now says a PATH is wanted and WHAT
+  FOR: `path` is `open`, `save` or `folder`, with the `extensions` the
+  application named. Every interface answers that with the chooser it
+  already has - Elten a file tree, Emacs dired, a console a prompt with
+  completion - and none of those is something this could know about.
+  Typing a path out is not what anybody meant by "open". An interface
+  that recognises none of it still gets a text field with a sensible
+  name, which is the rule the whole description is built on.
+  - **A constant that is only made up is a constant that is zero.** The
+    long tail answers an unknown name with 0, which is right for a style
+    flag nobody reads and wrong for one that DECIDES something: `FD_SAVE`
+    fabricated as 0 made every save dialog look like an open dialog.
+- **A `TableBox` is a wrapper around a `ListBox` and forwards only
+  `:move`** - `@sel.on(:move) {|arg| trigger(:move, arg)}` is the whole
+  of what its constructor binds - so Enter fired `:select` on the inner
+  list, reached nobody and was consumed there. Not a key that went
+  missing: an event that was never passed on. The inner list is
+  `attr_reader :sel`, so it is listened to directly.
+- **And what the loop actually saw is recorded** (`elten_client.
+  render_log`): which keys arrived, which the control under the cursor
+  kept for itself, and what was sent. "The key does nothing" is a report
+  with no evidence in it, and the loop is the only place that knows which
+  of those three it was.
+- **One `rescue` around the whole binding loop meant one control that
+  would not bind left every control after it unbound**, and nothing said
+  so. It is per control now.
+
+- **`press_key` does not reach a program's own form loop.** It puts
+  virtual key codes into Elten's `$setkeys`, which the global `key_update`
+  drains into that frame's synthetic keys - and a program running its own
+  `loop_update` / `update` inside its window does not see them. So Elten
+  can be READ from outside while somebody works it, and driven only as far
+  as its scenes; a rendered application has to be walked by hand.
+
+#### The floor: read off the window when it cannot be described
+
+`src/app_ui/mirror.py`. Some applications cannot be described. tWeb's
+interface IS a web view - a document being rendered by a browser engine,
+not a list of controls - and a media surface is the same. The shim refuses
+those by name, which is honest and leaves the user with nothing. So
+underneath it the application is launched **normally**, with the real
+wxPython and a real window, and that window is READ into the same neutral
+screen model. The interface at the other end renders it with the code it
+already has, and nothing new was built to read it: Titan Access has read
+any window this way since it was written.
+
+- **It is a mirror and it says so**, in its first line and in the answer's
+  own `mirror` flag. A described screen is the application's account of
+  itself; this is what Windows can see of a window, which is weaker - a
+  control Windows cannot name has no name here. Presenting the two as the
+  same would be the dishonesty this subsystem exists to avoid.
+- **The raw child-window tree FIRST**, which is the opposite of Titan
+  Access's order for a window in general and right here for a specific,
+  measured reason: a TCE application is wxWidgets, where every control IS
+  a real child window. On tWeb's own window, UI Automation answered **0**
+  nodes, MSAA answered **530** - 349 buttons, 52 menu bars, 52 scroll
+  bars, almost all of it the frame's furniture and none of it carrying a
+  rectangle - and win32 answered **15**, every one a control the
+  application had put there: Back, Forward, Refresh, Add bookmark, the
+  address field.
+- **The frame around a window is not the window.** Read as it came, the
+  browser answered with Minimise, Maximise, Close, context help, the IME
+  button and both scrollbars' arrows, three times over, before a word of
+  its own. They live in the NON-CLIENT area, which is the one test that
+  does not depend on what language Windows is in. A container's CLASS
+  name ("panel", "wxWebView", "Chrome Legacy Window") is not something on
+  the screen either, and **a field that is empty is still a field** -
+  dropping the unnamed, empty address bar took away the one control the
+  whole application is for.
+- **An application that is merely broken is not mirrored.** A missing
+  library fails in a window too, and putting one up to prove it wastes
+  the user's time and leaves a process behind. Only a refusal that IS the
+  interface (`wx.html2`, `wx.media`, `wx.glcanvas`) falls through -
+  `wx.Timer` deliberately does not.
+- **And the shim gives up at once on one of those.** That refusal arrives
+  at the application's first line, and waiting out the full start-up
+  window for a screen that could never come made opening the browser take
+  **28 seconds** when the floor underneath needs one. Now 8, of which the
+  mirror is 1.0 s and a re-read is instant.
+- `app.open` takes `mirror`: True reads the window even for an
+  application that could describe itself, False refuses rather than
+  falling back, and left out it describes what it can and reads what it
+  cannot.
+- Measured on all eight installed applications: **seven described, one
+  mirrored, eight open**.
+
+#### And rendered, in Elten
+
+`elten-tce-bridge/titan_apps.rb` is the first consumer, and deliberately
+only the first: it reads `titan.bridge`'s `app.*` and builds a real Elten
+`Form` out of the description - a `ListBox` for a list, a `TableBox` for a
+table, an `EditBox` for a field, a `CheckBox` for a tick box, a `Button`
+for a button. Nothing in it knows which application it is showing, and
+nothing in Titan knows it exists.
+
+- **A control kind it has never heard of becomes a line of text** rather
+  than disappearing, which is how an older bridge goes on working against
+  a newer Titan - and a control silently missing is the worst answer there
+  is for somebody who cannot see the screen. Same rule for a `TableBox`
+  this Elten has not got: a list of joined rows says everything a table
+  says.
+- **There is no slider in Elten**, and a control pretending to be one is a
+  control that cannot be set, so it is a field with the range in its name -
+  which is what a slider really is.
+- **Escape is the application's first.** A TCE window answers it - a
+  dialog closes, a browser goes up a folder - and only when the screen is
+  unchanged by it does it mean "leave", which is what Escape means
+  everywhere else in Elten. F5 and the context-menu key (the described
+  menu bar) go the same way.
+- Reachable from the bridge's own areas list and its console, under
+  **TCE applications**, and only when Titan really has the `app_ui`
+  provider - so the menu never promises something that answers "there is
+  no such add-on".
+- **Where an application appears when it is started is a CHOICE, not a
+  decision made for the user.** Starting one from the bridge has always
+  meant a window on Titan's screen, which is what somebody sitting at
+  both computers wants; **Settings -> Render TCE applications
+  (experimental)** makes it a screen in Elten instead. One place decides
+  (`TitanConsole#launch`), because the Applications tab and the areas
+  list disagreeing about what pressing a row does would be worse than
+  either behaviour. A renderer that fails falls back to starting it in
+  Titan and says so - it must not swallow the application. A game and a
+  Titan IM module are deliberately not offered this way: a game is played
+  in Titan, and a module is a service rather than a screen.
+- **An application answers to every name it has.** A client shows the
+  applications in the user's own language and then asks for the one they
+  pressed - "Notatki" - and looking that up under a single language
+  answered "there is no TCE application called 'Notatki'" about the row
+  they had just chosen. `bridge_api._open_app` has known this since it was
+  written; `sessions.find` did not. Every spelling an application carries
+  is collected, in every language Titan has rather than the two written
+  into the code, and an exact match is tried before a containing one so
+  that "no" cannot find Notes by accident.
+- **And any client can choose at the ordinary call.** `apps.open` takes
+  `render`, which hands back the described session instead of opening a
+  window here. One argument rather than a second call, so the choice is
+  discoverable: a client should not have to already know `app.open`
+  exists to find out it can do this.
+- Off by default because it really is experimental: an application whose
+  interface cannot be described is read off its own window instead, and
+  no amount of care makes "somebody else's program, rendered by us" as
+  sure as the program's own window.
+
 ### The same menus in all three interfaces
 
 `src/ui/program_menu.py` names what the menu bar can do, once. The graphical

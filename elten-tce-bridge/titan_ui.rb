@@ -216,7 +216,13 @@ module TitanUI
           fill
           speak(_("Refreshed. %s") % header)
         end
-        if @on_menu != nil && key_pressed?(:key_context_menu)
+        # **Alt opens it too.** That is where a menu bar is in every
+        # program that has one, and somebody who came here from TCE
+        # reaches for Alt before the context-menu key. Both work; taking
+        # the context key away would surprise anybody who already knows
+        # it.
+        if @on_menu != nil &&
+           (key_pressed?(:key_context_menu) || key_pressed?(:key_alt))
           row = current
           TitanSounds.event(:menu) if row != nil
           if row != nil

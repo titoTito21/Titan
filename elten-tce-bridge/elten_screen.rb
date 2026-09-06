@@ -22,7 +22,21 @@ class EltenScreen
         "screen" => proc { |_args| read_screen },
         "programs" => proc { |_args| list_programs },
         "run_program" => proc { |args| run_program(args["name"]) },
+        # **What the TCE-application renderer actually saw.** "The key
+        # does nothing" is a report with no evidence in it, and the loop
+        # is the only place that knows whether the key arrived, whether
+        # the control under the cursor kept it, and what was sent. Read
+        # rather than guessed at a second time.
+        "render_log" => proc { |_args| render_log },
       }
+    end
+
+    def render_log
+      return refusal if !TitanConsent.granted?
+      return {"log" => []} if !defined?(TitanApps)
+      {"log" => TitanApps.log}
+    rescue Exception => e
+      {"log" => [], "error" => "#{e.class}: #{e.message}"}
     end
 
     def refusal

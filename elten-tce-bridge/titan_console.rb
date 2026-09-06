@@ -285,6 +285,7 @@ class TitanConsole
     when "screen"
       case value["screen"]
       when "cling"  then TitanCling.new(@bus).open
+      when "tce_apps" then TitanApps.new(@bus, TitanAPI.new(@bus)).open
       when "macros" then TitanMacros.new(@bus).open
       when "reader" then TitanAreas.new(@bus).reader_screen
       end
@@ -315,6 +316,15 @@ class TitanConsole
   # not by matching a name against a page of text.
   def launch(name, kind = nil)
     return if TitanPrefs.confirm_launch? && !confirm(_("Start %s?") % name)
+    # **One place decides where an application appears.** Starting one
+    # from here has always meant a window on TCE's screen; with "Render
+    # TCE applications" on it means a screen in Elten instead, built out
+    # of the application's own description of its interface. Putting the
+    # choice anywhere but the one function that starts things would mean
+    # the Applications tab and the areas list disagreeing about what
+    # pressing a row does.
+    return if kind.to_s != "game" && kind.to_s != "im_module" &&
+              render_here(name)
     if @api.available?
       call = {"app" => "apps.open", "game" => "games.open",
               "im_module" => "im.open"}[kind.to_s]
@@ -337,6 +347,23 @@ class TitanConsole
                              :title => _("Starting %s...") % name)
     return if answer == nil
     alert(answer.text.to_s == "" ? _("Started.") : answer.text.to_s)
+  end
+
+  # Answers true when the application was shown here, so the caller stops.
+  # A game and an IM module are deliberately not offered this way: a game
+  # is played in TCE and a module is a service rather than a screen.
+  def render_here(name)
+    return false if !TitanPrefs.render_apps?
+    return false if !@api.available?
+    TitanApps.new(@bus, @api).run(name)
+    true
+  rescue Exception => e
+    # A renderer that failed must not swallow the application: fall back
+    # to starting it in TCE, which is what would have happened anyway.
+    TitanSounds.event(:error)
+    alert(_("It could not be shown here (%s), so it will be started in TCE.") %
+          "#{e.class}: #{e.message}")
+    false
   end
 
   def current

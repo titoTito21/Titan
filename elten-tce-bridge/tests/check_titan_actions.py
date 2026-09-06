@@ -34,6 +34,49 @@ CALL = re.compile(
     r'(?:@?\w+)\.call(?:_sync)?\s*\(\s*)'
     r',?\s*"([a-z_][\w]*)"\s*,\s*"([a-z_][\w]*)"')
 
+#: **The helpers that name an action indirectly.** Several screens reach
+#: Titan through one of their own - `rows("forums", "forums", {...})`,
+#: `page("blocked", {}, ...)` - which end at `TitanUI.ask(@bus, "<addon>",
+#: action, ...)` with the action in a VARIABLE, so the pattern above sees
+#: nothing at all. Twenty-six calls were invisible to this check, which is
+#: most of the Titan-Net screens.
+#:
+#: Which add-on a helper reaches is read out of the helper's own
+#: definition, per file, rather than written down here: the same helper
+#: name goes to `titannet` in one file, `macros` in another and `cling` in
+#: a third, and a table would have said one of them and been wrong about
+#: the rest.
+HELPER = re.compile(
+    r'def\s+(\w+)\(\s*(\w+)\s*,[^)]*\)\s*\n\s*'
+    r'(?:\w+\s*=\s*)?TitanUI\.ask\(\s*@?\w+\s*,\s*"([a-z_]\w*)"\s*,\s*(\w+)')
+
+
+def helpers_in(text):
+    """{helper name: (add-on, which argument carries the arguments)}."""
+    found = {}
+    for match in HELPER.finditer(text):
+        helper, first, addon, passed = match.groups()
+        if passed != first:
+            continue          # it passes something else as the action
+        # The arguments are whatever comes after the action. `page(action,
+        # args, header)` puts them next; `rows(action, key, args)` one
+        # further along.
+        names = _parameters(text, match.start())
+        try:
+            position = names.index(first) + 1
+        except ValueError:
+            position = 1
+        found[helper] = (addon, position)
+    return found
+
+
+def _parameters(text, at):
+    opened = text.index('(', at)
+    closed = text.index(')', opened)
+    return [one.strip().split('=')[0].strip()
+            for one in text[opened + 1:closed].split(',') if one.strip()]
+
+
 #: A key in a Ruby hash literal: `{"group_id" => id}`.
 HASH_KEY = re.compile(r'"([a-z_][\w]*)"\s*=>')
 
@@ -42,7 +85,7 @@ HASH_KEY = re.compile(r'"([a-z_][\w]*)"\s*=>')
 DECLARED = re.compile(r"['\"]name['\"]\s*:\s*['\"]([a-z_][\w]*)['\"]")
 
 
-def literal_arguments(text, after):
+def literal_arguments(text, after, skip=0):
     """The keys of the hash literal a call passes, or None.
 
     None means "not written at the call site" - a variable, or a hash built
@@ -51,11 +94,27 @@ def literal_arguments(text, after):
     is judged.
     """
     index = after
-    while index < len(text) and text[index] in ' \t\r\n':
+    # `rows("forums", "forums", {...})` - the hash is not the next
+    # argument, so step over the ones in between.
+    for _each in range(skip + 1):
+        while index < len(text) and text[index] in ' \t\r\n':
+            index += 1
+        if index >= len(text) or text[index] != ',':
+            return None
         index += 1
-    if index >= len(text) or text[index] != ',':
-        return None
-    index += 1
+        if _each < skip:
+            depth = 0
+            while index < len(text):
+                char = text[index]
+                if char in '([{':
+                    depth += 1
+                elif char in ')]}':
+                    if depth == 0:
+                        return None
+                    depth -= 1
+                elif char == ',' and depth == 0:
+                    break
+                index += 1
     while index < len(text) and text[index] in ' \t\r\n':
         index += 1
     if index >= len(text) or text[index] != '{':
@@ -97,6 +156,15 @@ def bridge_calls():
             addon, action = match.group(1), match.group(2)
             keys = literal_arguments(text, match.end())
             found.setdefault((addon, action), []).append((name, keys))
+        helpers = helpers_in(text)
+        if helpers:
+            indirect = re.compile(r'\b(%s)\(\s*"([a-z_][\w]*)"'
+                                  % '|'.join(sorted(helpers)))
+            for match in indirect.finditer(text):
+                helper, action = match.group(1), match.group(2)
+                addon, position = helpers[helper]
+                keys = literal_arguments(text, match.end(), skip=position - 1)
+                found.setdefault((addon, action), []).append((name, keys))
     return found
 
 

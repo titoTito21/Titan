@@ -20,6 +20,7 @@ module TitanPrefs
     "tce_sounds" => true,
     "elten_notifications" => true,
     "allow_keys" => false,
+    "render_apps" => false,
   }.freeze
 
   class << self
@@ -66,6 +67,27 @@ module TitanPrefs
     # TCE READ Elten and letting it PRESS KEYS in Elten are different
     # questions - Enter in a messenger sends the message - so they are asked
     # separately and this one starts as no.
+    # **Where a TCE application appears when it is started from here.**
+    #
+    # Off, it opens in TCE - a window on the other machine's screen, which
+    # is what starting an application has always meant here and what
+    # somebody who is at both computers wants.
+    #
+    # On, it opens IN ELTEN: the application runs with no window at all,
+    # describes its interface as data, and this add-on builds that out of
+    # Elten's own controls. Which is the more useful of the two depends
+    # entirely on where the person is sitting, so it is a choice rather
+    # than a decision made for them.
+    #
+    # Experimental, and off by default, because it really is: an
+    # application whose interface cannot be described (a web view, a media
+    # surface) is read off its own window instead, which is a weaker thing
+    # and says so - and no amount of care makes "somebody else's program,
+    # rendered by us" as sure as the program's own window.
+    def render_apps?
+      get("render_apps") == true
+    end
+
     def allow_keys?
       get("allow_keys") == true
     end

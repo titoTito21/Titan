@@ -38,6 +38,9 @@ class TitanBus
                 "is holding.",
     "programs" => "The programs installed in Elten, as its own menu lists "\
                   "them.",
+    "render_log" => "What the TCE-application renderer's own loop last saw: "\
+                    "which keys arrived, which the control under the cursor "\
+                    "kept for itself, and what was sent to the application.",
     "run_program" => "Open one of Elten's own programs, by name. It appears "\
                      "in Elten, in front of whoever is sitting there.",
     "press_key" => "Press a key in Elten, as if the person sitting there "\

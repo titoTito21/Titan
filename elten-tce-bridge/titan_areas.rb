@@ -35,6 +35,7 @@ class TitanAreas
       when "shell_view" then TitanShell.new(@bus).open
       when "macros_view" then TitanMacros.new(@bus).open
       when "cling_view"  then TitanCling.new(@bus).open
+      when "apps_view"   then TitanApps.new(@bus, TitanAPI.new(@bus)).open
       when "ai_view"     then TitanAI.new(@bus).open
       when "components_view" then TitanComponents.new(@bus).open
       when "widgets"     then TitanWidgets.new(@bus).open
@@ -63,6 +64,9 @@ class TitanAreas
     # rather than functions they call.
     list.push(["macros_view", _("Macros")]) if addon("macros") != nil
     list.push(["cling_view", _("Cling (Klango applications)")]) if addon("cling") != nil
+    # TCE's own applications, described rather than drawn - the same
+    # programs Titan runs in a window, here as Elten screens.
+    list.push(["apps_view", _("TCE applications")]) if addon("app_ui") != nil
     list.push(["ai_view", _("Titan AI")]) if @ai_available
     list.push(["widgets", _("Widgets")])
     list.push(["components_view", _("Component Manager")])

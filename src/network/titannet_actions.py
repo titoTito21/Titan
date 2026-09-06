@@ -168,6 +168,43 @@ def _topic(topic='', limit=100, **_):
     return json.dumps(payload, ensure_ascii=False, default=str)
 
 
+def _group_forums(group='', **_):
+    """The forums inside one group, as records.
+
+    The bridge used to read this out of the sentence `titannet.
+    group_forums` writes for a model, which is the mistake `bridge_api`
+    exists to end - and that sentence was itself wrong, because
+    `get_group` never carried the forums.
+    """
+    client, error = _client()
+    if error:
+        return error
+    text = str(group or '').strip()
+    if not text.isdigit():
+        return "Say the group's number."
+    try:
+        return _answer(client.list_group_forums(int(text)), ('forums',),
+                       "Listing the forums")
+    except Exception as e:
+        return f"Could not list the forums: {e}"
+
+
+def _forum_topics(forum='', limit=50, **_):
+    """The threads of ONE group forum, as records."""
+    client, error = _client()
+    if error:
+        return error
+    text = str(forum or '').strip()
+    if not text.isdigit():
+        return "Say the forum's number."
+    try:
+        return _answer(client.get_forum_topics(forum_id=int(text),
+                                               limit=int(limit or 50)),
+                       ('topics',), "Listing the threads")
+    except Exception as e:
+        return f"Could not list the threads: {e}"
+
+
 def _groups(**_):
     client, error = _client()
     if error:
@@ -274,6 +311,20 @@ def get_titannet_data_actions():
           'limit': dict(number, description="How many replies (default 100).")},
          'auto', _topic),
         ('groups', "The groups as JSON.", {}, 'auto', _groups),
+        # **`forums`, not `group_forums`.** That name is already the AI
+        # tool's, and a data action with the same name is not registered
+        # over it - it is silently dropped, which is a call that answers
+        # somebody else's shape.
+        ('forums', "The forums inside one group, as JSON, each with "
+                   "how many threads it holds.",
+         {'group': dict(string, description="The group's number.",
+                        required=True)},
+         'auto', _group_forums),
+        ('forum_topics', "The threads of one group forum, as JSON.",
+         {'forum': dict(string, description="The forum's number.",
+                        required=True),
+          'limit': dict(string, description="How many (default 50).")},
+         'auto', _forum_topics),
         ('mailbox', "A Titan Mail folder as JSON.",
          {'folder': dict(string, description="inbox, sent or unread "
                          "(default inbox).")},
