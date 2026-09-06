@@ -37,6 +37,7 @@ AL_ROLLOFF_FACTOR = 0x1021
 AL_LOOPING = 0x1007
 AL_VELOCITY = 0x1006
 AL_PAUSED = 0x1013
+AL_PITCH = 0x1003
 
 # EFX (environmental reverb) constants
 AL_EFFECT_TYPE = 0x8001
@@ -499,6 +500,38 @@ def set_gain(src_id, gain=1.0):
         try:
             _al.alSourcef(ctypes.c_uint(src_id), _al.AL_GAIN,
                           max(0.0, float(gain)))
+            return True
+        except Exception:
+            return False
+
+
+def set_pitch(src_id, ratio=1.0):
+    """How fast an already-playing source runs - OpenAL's `AL_PITCH`.
+
+    A rate change is a real thing a game does with a sound it is holding:
+    Purrposterous pitches a cat up as it gets hungrier, reading the file's
+    own sample rate first and then setting `frequency = basefrequency *
+    percent / 100` on every frame. There is no rate control on a `pygame`
+    channel, so on the stereo path that is honestly refused - but OpenAL has
+    always had one, and the caller was asking for a function that was simply
+    not here. What it got instead was a cat that never changed, which for a
+    game whose only warning is that pitch is the warning going missing.
+
+    `ratio` is relative: 1.0 is the file as recorded, 1.5 half again as fast
+    and half again as high. Returns True when the source took it.
+    """
+    if not _init_ok or src_id is None:
+        return False
+    try:
+        ratio = float(ratio)
+    except (TypeError, ValueError):
+        return False
+    # OpenAL refuses a pitch of zero or less, and a source told to run at
+    # sixteen times its rate is not something anybody meant.
+    ratio = max(0.05, min(16.0, ratio))
+    with _lock:
+        try:
+            _al.alSourcef(ctypes.c_uint(src_id), AL_PITCH, ratio)
             return True
         except Exception:
             return False

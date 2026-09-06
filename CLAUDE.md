@@ -3624,6 +3624,43 @@ application is written against them. Two things are Titan's:
 a condition variable because its network runs on other threads, and here the
 envelopes are collected by the frame - so it pumps.
 
+**A new screen comes forward and the keyboard lands ON a control.** Elten
+has one screen and it always has the keyboard; here a second form opened
+into a frame that was already shown did neither - no `Raise`, so the window
+stayed behind whatever was in front and the user had to Alt+Tab to the
+options screen after choosing a game. And the focus was set TWICE, the
+second time onto `widgets[0].window`: the outer PANEL of a wrapped control,
+which takes the keyboard and gives it to nothing. It is set once, after the
+window is up, and again once the activation has been through the queue -
+Windows answers `WM_ACTIVATE` by focusing the frame, which is the same trap
+Titan's own shell documents.
+
+**A sound a game plays is HEARD.** `find_channel()` answers None when every
+channel is busy, and a game is exactly what makes them busy: Purrposterous
+plays a step per key press over two looping cats and its music, with
+Titan's own cues on the same mixer. A sound that silently does not play is
+the worst answer for a game that is only sound - the player hears it stop
+and cannot know why - so the oldest channel is taken instead, which is what
+pygame's `force` is for.
+
+**A refusal has to arrive as `EltenLink::Error`.** That is what an
+application rescues - the Game Room's whole network layer is
+`rescue EltenLink::Error` and nothing else - so a raw
+`EltenBridge::RemoteError` from the `live` op or from `signal` walked past
+it, out of the screen, out of the main loop and out of `program_main`, which
+the user saw as **the program closing** after creating a table.
+`EltenLink.request` had always translated; the two direct callers had not.
+Draining envelopes never raises at all: it runs on the frame for every
+application with a session open, and ending a game because the network
+hiccupped is not something an application could have done anything about.
+
+**A declared action with no `name` is not an action.** `_parse_action`
+reads `raw['name']` and drops an entry that has none, with a warning nobody
+reads - and `data/components/elten_bridge` wrote `id`, so all four of its
+actions were declared and none of them existed: it offered Titan the three
+generic component ones and nothing of its own. `tests/test_component_actions.py`
+reads every component's `TITAN_ACTIONS` through that same rule.
+
 **When Elten is open, the port borrows ITS connection.** A live session is
 a conversation between two clients on one server, and the envelopes arrive
 on ONE long poll per account - the one Elten's own notification service is

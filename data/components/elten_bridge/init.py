@@ -432,21 +432,27 @@ def _action_status(**_arguments):
     return status()
 
 
+# **`name`, not `id`.** `actions/manifest.py`'s `_parse_action` reads
+# `raw['name']` and drops an entry that has none - "an action has no usable
+# 'name'; ignored" - so all four of these were declared and none of them
+# existed: `elten_bridge` offered Titan the three generic component actions
+# and nothing of its own. `run` is the callable, which is what the
+# component convention is (`data/components/cling` and every other one).
 TITAN_ACTIONS = [
-    {'id': 'list_applications', 'label': 'List Elten applications',
+    {'name': 'list_applications', 'label': 'List Elten applications',
      'summary': 'Every Elten API application installed on this machine.',
-     'handler': _action_list, 'params': {}},
-    {'id': 'details', 'label': 'Elten application details',
+     'run': _action_list, 'params': {}},
+    {'name': 'details', 'label': 'Elten application details',
      'summary': 'What one application is, who signed it and where it lives.',
-     'handler': _action_details,
+     'run': _action_details,
      'params': {'name': {'type': 'string', 'required': True,
                          'description': 'The application, by name or id.'}}},
-    {'id': 'run', 'label': 'Run an Elten application',
+    {'name': 'run', 'label': 'Run an Elten application',
      'summary': 'Open an Elten API application in Titan.',
-     'handler': _action_run,
+     'run': _action_run,
      'params': {'name': {'type': 'string', 'required': True,
                          'description': 'The application, by name or id.'}}},
-    {'id': 'status', 'label': 'Elten bridge status',
+    {'name': 'status', 'label': 'Elten bridge status',
      'summary': 'Whether the bridge can run anything, and on which Ruby.',
-     'handler': _action_status, 'params': {}},
+     'run': _action_status, 'params': {}},
 ]

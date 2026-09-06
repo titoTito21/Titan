@@ -971,6 +971,13 @@ class TheRubySideAnswersEltensOwnShapes(unittest.TestCase):
 $LOAD_PATH.unshift(%s)
 module EltenBridge
   class Closed < StandardError; end
+  # The real one lives in `eapi/bridge.rb`, which this stub replaces - and
+  # every EltenLink-facing call rescues it by name, so a stub without it
+  # turns the rescue itself into a NameError.
+  class RemoteError < StandardError
+    attr_reader :kind
+    def initialize(message, kind = "error"); super(message); @kind = kind; end
+  end
   def self.call(*_a); nil; end
   def self.notify(*_a); nil; end
   def self.now; Time.now.to_f; end
@@ -1160,6 +1167,13 @@ class _RubyAsk(unittest.TestCase):
 $LOAD_PATH.unshift(%s)
 module EltenBridge
   class Closed < StandardError; end
+  # The real one lives in `eapi/bridge.rb`, which this stub replaces - and
+  # every EltenLink-facing call rescues it by name, so a stub without it
+  # turns the rescue itself into a NameError.
+  class RemoteError < StandardError
+    attr_reader :kind
+    def initialize(message, kind = "error"); super(message); @kind = kind; end
+  end
   def self.call(op, args = {})
     $calls ||= []
     $calls << [op, args]
@@ -1256,6 +1270,62 @@ class LiveSessionsAreEltensOwn(_RubyAsk):
         'module EltenAPI::LiveSessions\n'
         '  def self.whoami; $whoami.to_s; end\n'
         'end\n')
+
+    def test_a_refusal_arrives_as_the_error_applications_rescue(self):
+        """**An application rescues `EltenLink::Error` and nothing else.**
+
+        The Game Room's whole network layer is `rescue EltenLink::Error`,
+        so a raw `EltenBridge::RemoteError` walked straight past it, out of
+        the screen, out of the main loop and out of `program_main` - which
+        the user saw as the program CLOSING after creating a table.
+        """
+        source = ('module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_refuse, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      raise RemoteError.new("EltenLink refused") if op == "live"\n'
+                  '      __before_refuse(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'class Probe < Program\n'
+                  '  def program_main; end\n'
+                  'end\n'
+                  'Program.manifest = {"id" => '
+                  '"ce5cff0e-6a9e-43da-afb3-d050b0ffc4ae"}\n'
+                  'p1 = Probe.new\n'
+                  'from_signal = begin\n'
+                  '  p1.signal("dawid", {})\n'
+                  '  :none\n'
+                  'rescue EltenLink::Error\n'
+                  '  :elten_error\n'
+                  'end\n'
+                  'from_live = begin\n'
+                  '  EltenAPI::LiveSessions.api("create")\n'
+                  '  :none\n'
+                  'rescue EltenLink::Error\n'
+                  '  :elten_error\n'
+                  'end\n'
+                  'puts [from_signal, from_live].inspect\n')
+        self.assertEqual(self.ask(source), '[:elten_error, :elten_error]')
+
+    def test_draining_never_raises_into_the_frame(self):
+        """It runs on the frame for every application with a session open.
+        A refusal there is not the application's to hear about - there is
+        nothing it could do with it - and raising would end a game because
+        the network hiccupped."""
+        source = ('module EltenBridge\n'
+                  '  class << self\n'
+                  '    alias_method :__before_drain, :call\n'
+                  '    def call(op, args = {})\n'
+                  '      raise RemoteError.new("no") if op == "live"\n'
+                  '      __before_drain(op, args)\n'
+                  '    end\n'
+                  '  end\n'
+                  'end\n'
+                  'EltenAPI::LiveSessions.send(:drain)\n'
+                  'puts "survived"\n')
+        self.assertEqual(self.ask(source), 'survived')
 
     def test_a_signal_really_goes_out_now(self):
         """`signal` answered false for as long as the port had no relay -
@@ -2619,6 +2689,13 @@ class AProtectedTableFallsBackToTitanNet(_RubyAsk):
         stub = '''
 module EltenBridge
   class Closed < StandardError; end
+  # The real one lives in `eapi/bridge.rb`, which this stub replaces - and
+  # every EltenLink-facing call rescues it by name, so a stub without it
+  # turns the rescue itself into a NameError.
+  class RemoteError < StandardError
+    attr_reader :kind
+    def initialize(message, kind = "error"); super(message); @kind = kind; end
+  end
   @shared = []
   def self.call(op, args = {})
     return nil unless op == 'elten_app'
@@ -2891,6 +2968,36 @@ class TheRealWidgetsReportThroughTheRealSendEvent(unittest.TestCase):
         button = self.widget_of(gui, form_id, 1)
         self.assertFalse(listbox.accepts_enter(self.control_enter()))
         self.assertFalse(button.accepts_enter(self.control_enter()))
+
+    def test_a_new_screen_comes_forward_and_takes_the_keyboard(self):
+        """Elten has ONE screen and it always has the keyboard. Here a
+        second form opened into a frame that was already shown did neither:
+        no `Raise`, so the window stayed behind whatever was in front and
+        the user had to Alt+Tab to the options screen after choosing a
+        game - and the focus was set twice, the second time onto
+        `widgets[0].window`, the outer PANEL of a wrapped control, which
+        takes the keyboard and gives it to nothing."""
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'static', 'label': 'Choose game options'},
+            {'kind': 'listbox', 'header': 'Length', 'options': ['short']},
+            {'kind': 'button', 'label': 'Create table'}])
+        static = self.widget_of(gui, form_id, 0)
+        focused = self.wx.Window.FindFocus()
+        self.assertIsNotNone(focused, 'nothing has the keyboard')
+        # It is a control, not the panel a wrapped control lives on.
+        self.assertTrue(
+            any(widget.owns(focused)
+                for widget in gui._forms[form_id].widgets),
+            f"the keyboard is on {focused!r}, which is no control")
+
+    def test_the_first_control_that_will_take_it_gets_it(self):
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'Games', 'options': ['chess']},
+            {'kind': 'button', 'label': 'Select'}])
+        listbox = self.widget_of(gui, form_id, 0)
+        self.assertTrue(listbox.owns(self.wx.Window.FindFocus()))
 
     def test_a_line_of_text_can_be_landed_on_and_read(self):
         """A `wx.StaticText` cannot be focused and a reader cannot land on

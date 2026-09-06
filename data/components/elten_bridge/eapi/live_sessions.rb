@@ -745,9 +745,21 @@ module EltenAPI
 
       # One bridge op. Never `getattr` on a name an application supplied:
       # the call is one of a written-down set on Titan's side.
+      #
+      # **A refusal has to arrive as `EltenLink::Error`.** That is what an
+      # application rescues - the Game Room's whole network layer is
+      # `rescue EltenLink::Error` and nothing else - and a raw
+      # `EltenBridge::RemoteError` walks straight past it, out of the
+      # screen, out of the main loop and out of `program_main`, which the
+      # user sees as the program CLOSING after creating a table.
       def api(what, args = {})
         answer = EltenBridge.call('live', args.merge('do' => what.to_s))
         answer.is_a?(Hash) ? answer : {}
+      rescue EltenBridge::RemoteError => e
+        raise EltenLink::Error.new(e.message, e.kind)
+      rescue EltenBridge::Closed
+        raise EltenLink::Error.new('Titan has closed this application',
+                                   'closed')
       end
 
       def whoami
@@ -771,6 +783,10 @@ module EltenAPI
 
         receive(answer['envelopes'])
       rescue Exception
+        # Draining runs on the FRAME, for every application with a session
+        # open. A refusal here is not the application's to hear about -
+        # there is nothing it could do with it - and raising would end a
+        # game because the network hiccupped.
         nil
       end
 

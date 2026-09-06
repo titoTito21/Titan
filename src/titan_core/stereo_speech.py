@@ -2432,7 +2432,8 @@ class StereoSpeech:
             print(f"[StereoSpeech] spd-say direct error: {e}")
             return False
 
-    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True, _seq=None, elevation=0.0):
+    def speak(self, text, position=0.0, pitch_offset=0, use_fallback=True, _seq=None, elevation=0.0,
+              position_always=False):
         """
         Speaks text with optional stereo / 3D positioning and pitch control.
 
@@ -2481,7 +2482,7 @@ class StereoSpeech:
             try:
                 # Fast direct speech path: center position, no pitch change, no stereo needed
                 if (not spatial_3d and elevation == 0.0
-                        and (position == 0.0 or not self.is_stereo_enabled())
+                        and (position == 0.0 or not (self.is_stereo_enabled() or position_always))
                         and pitch_offset == 0):
                     if self.engine == 'espeak_dll' and self.espeak_dll:
                         try:
@@ -2775,7 +2776,7 @@ class StereoSpeech:
                         # Fall through to pygame/stereo if spatial playback failed.
 
                     # Apply stereo panning if enabled
-                    if position != 0.0 and self.is_stereo_enabled():
+                    if position != 0.0 and (self.is_stereo_enabled() or position_always):
                         panned_audio = audio.pan(position)
                     else:
                         panned_audio = audio
@@ -2878,7 +2879,8 @@ class StereoSpeech:
             if lock_acquired:
                 self.speech_lock.release()
     
-    def speak_async(self, text, position=0.0, pitch_offset=0, use_fallback=True, elevation=0.0):
+    def speak_async(self, text, position=0.0, pitch_offset=0, use_fallback=True, elevation=0.0,
+                    position_always=False):
         """
         Wypowiada tekst asynchronicznie z pozycjonowaniem stereo / 3D.
         Używa licznika sekwencji, żeby stare wiadomości czekające na lock były pomijane.
@@ -2906,7 +2908,8 @@ class StereoSpeech:
             # If a newer message arrived while we were waiting, skip this one
             if my_seq != self._speak_seq:
                 return
-            self.speak(text, position, pitch_offset, use_fallback, _seq=my_seq, elevation=elevation)
+            self.speak(text, position, pitch_offset, use_fallback, _seq=my_seq, elevation=elevation,
+                       position_always=position_always)
 
         thread = threading.Thread(target=speak_thread)
         thread.daemon = True
@@ -3911,7 +3914,8 @@ def get_stereo_speech():
         print(f"Error getting stereo speech instance: {e}")
         return None
 
-def speak_stereo(text, position=0.0, pitch_offset=0, async_mode=False, elevation=0.0):
+def speak_stereo(text, position=0.0, pitch_offset=0, async_mode=False, elevation=0.0,
+                 position_always=False):
     """
     Funkcja pomocnicza do szybkiego użycia stereo / 3D speech.
 
@@ -3925,13 +3929,22 @@ def speak_stereo(text, position=0.0, pitch_offset=0, async_mode=False, elevation
         pitch_offset (int): Przesunięcie wysokości głosu -10 do +10
         async_mode (bool): Czy mówić asynchronicznie
         elevation (float): Pozycja w pionie -1.0 (dół) do 1.0 (góra), tylko tryb 3D
+        position_always (bool): Wymuś pozycjonowanie nawet przy sound_mode
+            'none'. Domyślnie False, więc ustawienie użytkownika decyduje -
+            jak dotąd. Ustawiają to tylko podsystemy, w których dźwięk JEST
+            interfejsem: emulowana gra nie jest rysowana, gracz celuje
+            słuchem, a wyśrodkowanie wszystkiego nie czyni jej cichszą,
+            tylko niegrywalną.
     """
     stereo_speech = get_stereo_speech()
 
     if async_mode:
-        stereo_speech.speak_async(text, position, pitch_offset, elevation=elevation)
+        stereo_speech.speak_async(text, position, pitch_offset,
+                                  elevation=elevation,
+                                  position_always=position_always)
     else:
-        stereo_speech.speak(text, position, pitch_offset, elevation=elevation)
+        stereo_speech.speak(text, position, pitch_offset, elevation=elevation,
+                            position_always=position_always)
 
 def stop_stereo_speech():
     """Zatrzymuje aktualną stereo mowę."""

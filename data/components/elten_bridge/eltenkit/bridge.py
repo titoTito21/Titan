@@ -1431,4 +1431,11 @@ NOTIFICATIONS = {
     'runner_end': _note_runner_end,
     'control_set': _op_control_set,
     'form_close': _op_form_close,
+    # Told, not asked: a game moves, re-gains and re-pitches a sound it is
+    # holding on every frame, and nothing reads the answer. Answered here
+    # as well as in OPERATIONS so an older `eapi` that still CALLS them
+    # keeps working.
+    'sound_position': _op_sound_position,
+    'sound_volume': _op_sound_volume,
+    'sound_pitch': _op_sound_pitch,
 }

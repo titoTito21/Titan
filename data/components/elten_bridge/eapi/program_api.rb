@@ -256,6 +256,12 @@ class Program
 
     !!EltenBridge.call('live', { 'do' => 'signal', 'appid' => appid,
                                  'user' => user, 'packet' => packet })
+  rescue EltenBridge::RemoteError => error
+    # An application rescues `EltenLink::Error` and nothing else. A raw
+    # `RemoteError` here walked out of the Game Room's `run_network_task`,
+    # out of the screen and out of `program_main` - which the user saw as
+    # the program closing after creating a table.
+    raise EltenLink::Error.new(error.message, error.kind)
   rescue EltenBridge::Closed
     false
   end

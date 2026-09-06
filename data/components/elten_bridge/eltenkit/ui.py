@@ -146,6 +146,37 @@ def _t(text):
         return text
 
 
+def _focus_first(widgets):
+    """Put the keyboard on the first control that will take it.
+
+    A control that cannot (a line of text on some platforms, an unknown
+    kind) must not swallow it, which is why `focus` answers honestly.
+    """
+    for widget in widgets or []:
+        try:
+            if widget.focus():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _call_after(window, work):
+    """Run it once the event loop has been round - and not at all if the
+    window has gone by then, which is Titan's own rule for anything queued
+    at a window it does not own the lifetime of."""
+    def guarded():
+        if _alive(window):
+            try:
+                work()
+            except Exception:
+                pass
+    try:
+        wx.CallAfter(guarded)
+    except Exception:
+        pass
+
+
 def _cue(name, pan=None):
     """One of Titan's own interface sounds, straight from the user's theme.
 
@@ -157,19 +188,23 @@ def _cue(name, pan=None):
     moving through a list made no sound at all.
 
     `pan` is Titan's own -1 (left) to 1 (right), which is the spelling
-    every part of Titan outside `sound.py` uses; `sound.play_sound` takes
-    0 to 1, and handing one straight to the other is what once put the
-    shell's sounds in the left speaker.
+    every part of Titan outside `sound.py` uses.
+
+    **And it is really played there.** `sound.play_sound` drops the pan
+    unless the user's `sound_mode` is stereo or 3D - which is right for
+    Titan's own interface, where positioning is a preference, and wrong
+    here, where the interface IS the sound: with positioning off every cue
+    in every Elten application came out of the middle, so a list no longer
+    told you how far down it you were and the end of it sounded like the
+    middle of it. This goes through the bridge's own mixer instead, which
+    places a sound on every mode - Cling's rule, for Cling's reason.
     """
     try:
-        from src.titan_core import sound
+        from . import host as host_module
     except Exception:
         return False
     try:
-        where = None if pan is None else max(0.0, min(1.0,
-                                                      (float(pan) + 1.0) / 2.0))
-        sound.play_sound(name, pan=where)
-        return True
+        return bool(host_module.cue_sound(name, pan))
     except Exception:
         return False
 
@@ -477,10 +512,9 @@ class WxUI(object):
         #
         # The first control that can take it, which is also the first one
         # Tab would reach - so where the keyboard starts and where it
-        # goes next agree.
-        for widget in widgets:
-            if widget.focus():
-                break
+        # goes next agree. Done again after the window is up, because an
+        # activation undoes it.
+        _focus_first(widgets)
 
         def on_key(event):
             """Keys the application asked about, and nothing else.
@@ -659,9 +693,26 @@ class WxUI(object):
             event.Veto()               # Ruby decides whether to really close.
 
         frame.Bind(wx.EVT_CLOSE, on_close)
-        if widgets:
-            widgets[0].window.SetFocus()
+        # **The window has to come FORWARD, and the keyboard has to land in
+        # it.** Elten has one screen and it always has the keyboard; here a
+        # second form opened into a frame that was already shown did
+        # neither - no `Raise`, so the window stayed behind whatever was in
+        # front, and the user had to Alt+Tab to the options screen after
+        # choosing a game.
+        #
+        # And the focus was set TWICE, the second time wrongly: the loop
+        # above focuses the first control that will take it, and this then
+        # focused `widgets[0].window` - the outer panel of a wrapped
+        # control, which takes the keyboard and gives it to nothing.
+        #
+        # Windows answers `WM_ACTIVATE` by focusing the FRAME, and that
+        # happens after this returns, so the focus is set again once the
+        # activation has been through the queue. Titan's own shell
+        # documents the same trap.
         frame.Show()
+        frame.Raise()
+        _focus_first(widgets)
+        _call_after(frame, lambda: _focus_first(widgets))
         return form_id
 
     def close_form(self, form_id):

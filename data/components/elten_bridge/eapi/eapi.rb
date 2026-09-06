@@ -189,16 +189,28 @@ class EltenSound
     false
   end
 
+  # ------------------------------------------------------ told, not asked
+  # **These four are notifications, and that is what makes a game
+  # playable.** Nothing reads their answer - each returns the value it was
+  # given - but each used to block the application's own thread until
+  # Titan had replied, and a game changes them on the FRAME: Purrposterous
+  # runs at 100 Hz and re-places every cat on every frame, so three cats
+  # were three hundred blocking round trips a second on the thread that
+  # also has to run the game. The stalling that reads as "the sound stops"
+  # is that. Order on the wire is unchanged, so a `playing?` asked after a
+  # move still sees the moved sound.
   def volume=(value)
     @volume = value.to_f
-    EltenBridge.call('sound_volume', { 'handle' => @handle, 'volume' => value })
+    EltenBridge.notify('sound_volume', { 'handle' => @handle, 'volume' => value })
+    value
   rescue EltenBridge::Closed
     nil
   end
 
   def position=(value)
-    EltenBridge.call('sound_position', { 'handle' => @handle,
-                                         'position' => value })
+    EltenBridge.notify('sound_position', { 'handle' => @handle,
+                                           'position' => value })
+    value
   rescue EltenBridge::Closed
     nil
   end
@@ -236,8 +248,8 @@ class EltenSound
     cancel_spatial_position_slide
     @spatial = true
     @position = position
-    EltenBridge.call('sound_position', { 'handle' => @handle,
-                                         'position' => position })
+    EltenBridge.notify('sound_position', { 'handle' => @handle,
+                                           'position' => position })
     position
   rescue EltenBridge::Closed
     position
@@ -277,14 +289,14 @@ class EltenSound
                   origin[1] + (target[1] - origin[1]) * part,
                   origin[2] + (target[2] - origin[2]) * part]
           @position = step
-          EltenBridge.call('sound_position', { 'handle' => @handle,
-                                              'position' => step })
+          EltenBridge.notify('sound_position', { 'handle' => @handle,
+                                                'position' => step })
           sleep(0.02)
         end
         unless @closed
           @position = target
-          EltenBridge.call('sound_position', { 'handle' => @handle,
-                                              'position' => target })
+          EltenBridge.notify('sound_position', { 'handle' => @handle,
+                                                'position' => target })
         end
       rescue StandardError, EltenBridge::Closed
         nil
@@ -390,8 +402,14 @@ class EltenSound
     _coordinates(@position)[0]
   end
 
+  # **And it is remembered.** `position=` sends it and answered nothing, so
+  # `pan` read back whatever the sound was made with - a game that placed a
+  # sound and then asked where it was got the old answer. Purrposterous
+  # places every cat on every step.
   def pan=(value)
+    @position = value
     self.position = value
+    value
   end
 
   def volume
@@ -423,9 +441,9 @@ class EltenSound
   # same thing heard - a sound played faster is a sound played higher.
   def frequency=(value)
     @frequency = value.to_f
-    EltenBridge.call('sound_pitch',
-                     { 'handle' => @handle,
-                       'pitch' => basefrequency.to_f.zero? ? 1.0 : @frequency / basefrequency.to_f })
+    EltenBridge.notify('sound_pitch',
+                       { 'handle' => @handle,
+                         'pitch' => basefrequency.to_f.zero? ? 1.0 : @frequency / basefrequency.to_f })
     @frequency
   rescue EltenBridge::Closed
     @frequency

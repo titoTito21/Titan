@@ -173,9 +173,26 @@ class Speaker(object):
         module = self._speech_module()
         if module is not None:
             try:
-                module.speak_stereo(text, position=_place(position)[0],
-                                    pitch_offset=_clamp(pitch, -10.0, 10.0),
-                                    async_mode=not wait)
+                # **Placed whatever the desktop's positioning setting
+                # says.** `sound_mode` decides whether TITAN's own interface
+                # is positioned, and it is off by default - but an Elten
+                # application is not drawn, it is heard, and a line an
+                # application deliberately put on the left ("the cursor is
+                # here", "the cat is over there") carries information that
+                # centring it destroys. Refusing to position it would not
+                # make the application quieter, it would make it wrong.
+                # Titan's setting still decides where TITAN speaks.
+                try:
+                    module.speak_stereo(text, position=_place(position)[0],
+                                        pitch_offset=_clamp(pitch, -10.0, 10.0),
+                                        async_mode=not wait,
+                                        position_always=True)
+                except TypeError:
+                    # An older Titan whose speech does not take it: the
+                    # line is still said, in the middle.
+                    module.speak_stereo(text, position=_place(position)[0],
+                                        pitch_offset=_clamp(pitch, -10.0, 10.0),
+                                        async_mode=not wait)
                 return True
             except Exception as error:
                 print('[elten] speech failed: %s' % error)
@@ -283,7 +300,18 @@ class Sounds(object):
         live = self.mixer.start(entry['path'], pan,
                                 gain=_clamp(entry['volume'] * falloff,
                                             0.0, 1.0),
-                                loop=bool(repeating), elevation=elevation)
+                                loop=bool(repeating), elevation=elevation,
+                                # **A LOOPING sound is the bed.** Every
+                                # sound an Elten application holds arrives
+                                # through here, one-shots included - its
+                                # sound pool is Ruby's and plays through
+                                # ordinary handles - so "held" cannot be
+                                # what decides whose channel may be taken.
+                                # What the application actually said is
+                                # `loop:`: a bed loops, a footstep does
+                                # not, and losing a footstep is losing
+                                # nothing.
+                                hold=bool(repeating))
         entry['live'] = live
         entry['paused'] = False
         return live is not None
@@ -404,7 +432,8 @@ class Sounds(object):
         live = self.mixer.start(path, pan,
                                 gain=_clamp(_clamp(volume, 0.0, 1.0) * falloff,
                                             0.0, 1.0),
-                                loop=bool(loop), elevation=elevation)
+                                loop=bool(loop), elevation=elevation,
+                                hold=False)
         if live is None:
             return None
         with self._lock:
@@ -797,7 +826,13 @@ class Stream(object):
             import pygame
             if not pygame.mixer.get_init():
                 return None
-            self._channel = pygame.mixer.find_channel(True)
+            # A free one first: a player holds its channel for the whole
+            # track, so taking the longest-running one would be taking
+            # exactly the sound somebody is already listening to. Forced
+            # only when there is genuinely nothing else, because a player
+            # the user just started must play.
+            self._channel = (pygame.mixer.find_channel(False)
+                             or pygame.mixer.find_channel(True))
         except Exception:
             self._channel = None
         return self._channel
@@ -890,6 +925,11 @@ class Mixer(object):
         self._pygame = _MISSING
         self.closed = False
         self.played = []
+        #: The channels this mixer has handed out, oldest first. It exists
+        #: so a channel is never taken from a sound somebody is listening
+        #: to, and so an operation on a channel that HAS been taken reaches
+        #: nothing instead of reaching a stranger's sound.
+        self._book = []
 
     def _sound_module(self):
         if self._sound is _MISSING:
@@ -941,7 +981,23 @@ class Mixer(object):
         except Exception:
             return 1.0
 
-    def start(self, path, pan=0.0, gain=1.0, loop=False, elevation=0.0):
+    def start(self, path, pan=0.0, gain=1.0, loop=False, elevation=0.0,
+              hold=False):
+        """Play a file, PLACED.
+
+        **The mode decides how a sound is positioned, never whether.**
+        `sound_mode` is Titan's answer to "should my desktop's interface
+        come from where the thing is", it is off by default, and reading it
+        as "make no stereo" is what would break every game here: an Elten
+        application is not drawn, and a player aims by ear. So 3D means
+        HRTF and anything else - including 'none' - means an ordinary
+        constant-power pan on a channel. This is Cling's rule, for the same
+        reason and in the same words.
+
+        `hold` says the caller will stop this sound itself (a bed, a
+        looping cat) rather than firing and forgetting it, which is what
+        decides whose channel may be taken when they run out.
+        """
         if self.closed or not path or not os.path.isfile(path):
             return None
         self.played.append((os.path.basename(path), round(float(pan), 3),
@@ -951,7 +1007,7 @@ class Mixer(object):
             source = self._spatial_start(path, pan, gain, loop, elevation)
             if source is not None:
                 return source
-        return self._channel_start(path, pan, gain, loop)
+        return self._channel_start(path, pan, gain, loop, hold=hold)
 
     def _spatial_start(self, path, pan, gain, loop, elevation=0.0):
         spatial = self._spatial_module()
@@ -973,20 +1029,97 @@ class Mixer(object):
             print('[elten] 3D playback failed: %s' % error)
             return None
 
-    def _channel_start(self, path, pan, gain, loop):
+    def _channel_start(self, path, pan, gain, loop, hold=False):
+        """Start a file on a pygame channel, and remember whose it is.
+
+        **A channel is shared and pygame will hand the same one out twice.**
+        `find_channel()` answers None when everything is busy and
+        `find_channel(True)` answers the channel that has been playing
+        LONGEST - which in a game is precisely the thing that must not be
+        taken: the background bed, or the looping cat the player is walking
+        towards. Purrposterous plays a footstep per key press over two or
+        three looping cats and its music, on a mixer Titan's own cues are
+        also using, so the channels really do run out; forced, every one of
+        those footsteps stole a cat, and the game went quiet where it was
+        loudest. Worse, nothing noticed: the stolen `Channel` object is
+        still valid, so the cat's next `set_gain` panned a footstep and its
+        `stop` stopped one.
+
+        So a channel is chosen in this order, and never taken from a held
+        sound of ours that is still playing:
+
+        1. one genuinely free,
+        2. one of ours whose sound has finished or been taken from us,
+        3. our oldest ONE-SHOT - a footstep nobody is listening for is the
+           right thing to lose,
+        4. nothing, and the sound does not play. Which is honest: with
+           every channel carrying a bed somebody is listening to, the last
+           thing to do is silence one of them for a click.
+        """
         pygame = self._pygame_mixer()
         if pygame is None:
             return None
         try:
             clip = pygame.mixer.Sound(path)
-            channel = pygame.mixer.find_channel()
-            if channel is None:
-                return None
-            self._set_volume(channel, pan, gain * self._theme_volume())
-            channel.play(clip, loops=-1 if loop else 0)
-            return channel
         except Exception:
             return None
+        channel = self._take_channel(pygame, hold)
+        if channel is None:
+            return None
+        try:
+            self._set_volume(channel, pan, gain * self._theme_volume())
+            channel.play(clip, loops=-1 if loop else 0)
+        except Exception:
+            return None
+        live = _Channel(channel, clip, bool(hold))
+        self._book.append(live)
+        return live
+
+    def _take_channel(self, pygame, hold):
+        # Anything in the book that is no longer ours is not ours to keep.
+        self._book = [live for live in self._book if self._still_ours(live)]
+        try:
+            channel = pygame.mixer.find_channel(False)
+        except Exception:
+            channel = None
+        if channel is not None:
+            return channel
+        for index, live in enumerate(self._book):
+            if not live.hold:
+                try:
+                    live.channel.stop()
+                except Exception:
+                    pass
+                self._book.pop(index)
+                return live.channel
+        # Everything live is a held sound. A NEW held sound may take the
+        # oldest of them - an application that asks for more beds than
+        # there are channels has to lose one, and the oldest is the one it
+        # has had longest - but a one-shot may not.
+        if hold and self._book:
+            live = self._book.pop(0)
+            try:
+                live.channel.stop()
+            except Exception:
+                pass
+            return live.channel
+        return None
+
+    @staticmethod
+    def _still_ours(live):
+        """Is that channel still playing the clip we put on it?
+
+        pygame answers `get_busy()` about the CHANNEL, so a channel taken
+        from us reports busy for somebody else's sound. `get_sound()` is
+        the question that actually distinguishes them, and every operation
+        on a channel handle asks it first - otherwise moving our sound
+        moves theirs, and stopping ours stops theirs.
+        """
+        try:
+            return live.channel.get_sound() is live.clip \
+                and bool(live.channel.get_busy())
+        except Exception:
+            return False
 
     def _set_volume(self, channel, pan, volume):
         """Constant power, as everywhere else in Titan: a sound that crosses
@@ -1037,8 +1170,10 @@ class Mixer(object):
                     or moved
             except Exception:
                 return moved
+        if not self._still_ours(handle):
+            return False
         try:
-            self._set_volume(handle, pan, gain * self._theme_volume())
+            self._set_volume(handle.channel, pan, gain * self._theme_volume())
             return True
         except Exception:
             return False
@@ -1058,8 +1193,10 @@ class Mixer(object):
                 return bool(pauser(handle.source, bool(paused)))
             except Exception:
                 return False
+        if not self._still_ours(handle):
+            return False
         try:
-            handle.pause() if paused else handle.unpause()
+            handle.channel.pause() if paused else handle.channel.unpause()
             return True
         except Exception:
             return False
@@ -1115,18 +1252,23 @@ class Mixer(object):
     def set_pitch(self, handle, ratio):
         """Play it at a different rate.
 
-        There is no rate control on a `pygame` channel and none on an
-        OpenAL source through `spatial_audio`'s current surface, so this
-        is asked for by name and answers honestly when it is not there -
-        a game gets a cat that does not rise in pitch rather than a game
-        that stops.
+        There is no rate control on a `pygame` channel, so on the stereo
+        path this is honestly refused - a game gets a cat that does not
+        rise in pitch rather than a game that stops. OpenAL has one
+        (`AL_PITCH`), and the 3D path now uses it: what a source is asked
+        about is its **source id**, and handing `spatial_audio` the handle
+        object instead meant every rate change in every emulated game
+        failed silently, which for Purrposterous is the hungry-cat warning
+        never happening.
         """
+        if not isinstance(handle, _Spatial):
+            return False
         spatial = self._spatial_module()
         setter = getattr(spatial, 'set_pitch', None) if spatial else None
         if setter is None:
             return False
         try:
-            return bool(setter(handle, float(ratio)))
+            return bool(setter(handle.source, float(ratio)))
         except Exception:
             return False
 
@@ -1141,10 +1283,7 @@ class Mixer(object):
                 return bool(spatial.is_playing(handle.source))
             except Exception:
                 return False
-        try:
-            return bool(handle.get_busy())
-        except Exception:
-            return False
+        return self._still_ours(handle)
 
     def stop(self, handle):
         if handle is None:
@@ -1157,16 +1296,49 @@ class Mixer(object):
                 except Exception:
                     pass
             return
+        # A channel we no longer own is playing somebody else's sound;
+        # stopping it would silence them for us.
+        if not self._still_ours(handle):
+            self._book = [live for live in self._book if live is not handle]
+            return
         try:
-            handle.stop()
+            handle.channel.stop()
         except Exception:
             pass
+        self._book = [live for live in self._book if live is not handle]
 
     def cue(self, name, pan=0.0):
-        """One of Titan's own interface sounds, by the name the theme uses."""
+        """One of Titan's own interface sounds, by the name the theme uses -
+        AND WHERE THE CALLER PUT IT.
+
+        This took a `pan` and threw it away: `sound.play_sound` centres a
+        cue unless the user's `sound_mode` is stereo or 3D, so every cue
+        this bridge played came out of the middle - the row cues spread
+        across a list, the end-of-list at the end it was, the file-kind
+        sound of the file you are standing on. All of it dead centre, on a
+        desktop whose whole claim here is that an Elten application sounds
+        like Titan.
+
+        So the theme file is resolved and played through this mixer's own
+        `start`, which places a sound on every mode. What is lost by not
+        calling `play_sound` is nothing: `feature_sound_path` is the same
+        resolution it does, per-user overlay first, and the fallback to the
+        default theme still asks the same setting the user answered.
+        """
         module = self._sound_module()
         if module is None or self.closed:
             return False
+        path = ''
+        try:
+            path = module.feature_sound_path('', name) or ''
+        except Exception:
+            path = ''
+        if path:
+            if self.start(path, _place(pan)[0],
+                          gain=1.0, loop=False, hold=False) is not None:
+                return True
+        # An older Titan with no `feature_sound_path`, or a theme that has
+        # not got it at all: better centred than silent.
         try:
             return bool(module.play_sound(name))
         except Exception:
@@ -1174,6 +1346,27 @@ class Mixer(object):
 
     def close(self):
         self.closed = True
+
+
+#: One mixer for the cues the Titan side plays on its own - a list moving,
+#: a dialog opening, the end of a list. They belong to no application (the
+#: window may outlive one, and the chooser that picks an application to run
+#: has no application at all), so they cannot come out of an application's
+#: mixer, and making one per cue would open the audio device per keystroke.
+_CUES = None
+
+
+def cue_sound(name, pan=None):
+    """One of Titan's own theme sounds, PLACED, whatever the mode.
+
+    The one way in for the bridge's interface cues. `pan` is -1 (left) to
+    1 (right) as everywhere in Titan outside `sound.py`; None is the
+    middle.
+    """
+    global _CUES
+    if _CUES is None:
+        _CUES = Mixer()
+    return bool(_CUES.cue(name, 0.0 if pan is None else pan))
 
 
 def _place(position):
@@ -1221,6 +1414,23 @@ def _place(position):
     distance = math.sqrt(x * x + y * y + z * z)
     gain = 1.0 if distance <= 1.0 else _clamp(1.0 / distance, 0.05, 1.0)
     return pan, elevation, gain
+
+
+class _Channel(object):
+    """A pygame channel this mixer started, and the clip it put on it.
+
+    The clip is what makes ownership answerable: pygame hands the same
+    channel out again when they run out, and a `Channel` object that has
+    been repurposed still looks perfectly valid. `get_sound() is clip` is
+    the only question that tells our sound from somebody else's.
+    """
+
+    __slots__ = ('channel', 'clip', 'hold')
+
+    def __init__(self, channel, clip, hold=False):
+        self.channel = channel
+        self.clip = clip
+        self.hold = bool(hold)
 
 
 class _Spatial(object):
