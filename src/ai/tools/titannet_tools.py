@@ -564,17 +564,40 @@ def titannet_list_rooms(**_):
                   "There are no rooms.")
 
 
+def _room_number(client, room_id):
+    """A room by its number, or by its NAME. (id, problem).
+
+    A window shows rooms by name and so does a person: nobody knows that
+    the general room is number 3. `int(room_id)` raised on every one of
+    those, and the caller then reported it as "could not send" - which
+    reads as the network failing rather than as the wrong kind of name.
+    `src/network/titannet_actions.py` has resolved a name this way all
+    along; these two are the pair that did not.
+    """
+    try:
+        from src.network.titannet_actions import _resolve_room
+    except Exception:
+        try:
+            return int(room_id), ''
+        except (TypeError, ValueError):
+            return None, f"There is no Titan-Net room '{room_id}'."
+    return _resolve_room(client, room_id)
+
+
 def titannet_send_room_message(room_id, message, **_):
     """Say something in a Titan-Net room."""
     client, error = _client()
     if error:
         return error
+    number, problem = _room_number(client, room_id)
+    if problem:
+        return problem
     try:
-        result = client.send_room_message(int(room_id), message)
+        result = client.send_room_message(number, message)
     except Exception as e:
         return f"Could not send to room {room_id}: {e}"
     failure = _failed(result, f"Sending to room {room_id}")
-    return failure or f"Sent to room #{room_id}."
+    return failure or f"Sent to room #{number}."
 
 
 def titannet_read_room(room_id, limit=30, **_):
@@ -582,8 +605,11 @@ def titannet_read_room(room_id, limit=30, **_):
     client, error = _client()
     if error:
         return error
+    number, problem = _room_number(client, room_id)
+    if problem:
+        return problem
     try:
-        result = client.get_room_messages(int(room_id), limit=int(limit or 30))
+        result = client.get_room_messages(number, limit=int(limit or 30))
     except Exception as e:
         return f"Could not read room {room_id}: {e}"
     failure = _failed(result, f"Reading room {room_id}")
@@ -728,13 +754,13 @@ def get_titannet_tools():
               titannet_list_rooms),
         _tool('titannet_read_room', "Read recent messages in a Titan-Net room.",
               titannet_read_room,
-              properties={'room_id': dict(N, description="Room id."),
+              properties={'room_id': dict(S, description="Room id, or its name."),
                           'limit': dict(N, description="How many (default 30).")},
               required=['room_id']),
         _tool('titannet_send_room_message',
               "Say something in a Titan-Net room. Everyone in the room sees it.",
               titannet_send_room_message, risk='confirm', always_confirm=True,
-              properties={'room_id': dict(N, description="Room id."),
+              properties={'room_id': dict(S, description="Room id, or its name."),
                           'message': dict(S, description="What to say.")},
               required=['room_id', 'message']),
         _tool('titannet_read_private',

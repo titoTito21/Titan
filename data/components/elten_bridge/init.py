@@ -204,6 +204,7 @@ def _watch(application, gui):
 
 
 def _finish(application, gui):
+    _remember_log(application)
     try:
         application.stop()
     except Exception:
@@ -215,6 +216,28 @@ def _finish(application, gui):
     for held in list(_running):
         if held[1] is application:
             _running.remove(held)
+
+
+#: The log of the application that ran most recently, kept after it has
+#: gone. An application that stopped, or that quietly did nothing, has
+#: already said why - `boot.rb` records the exception and its message, and
+#: every `puts` an application makes lands here too - but until now that
+#: went with the window, so the one moment it could be read was the moment
+#: nobody was looking. `(name, [(level, line), ...])`.
+_last_log = ('', [])
+
+
+def _remember_log(application):
+    global _last_log
+    try:
+        entry = getattr(application, 'entry', None)
+        name = (getattr(entry, 'name', '') or getattr(entry, 'stem', '')
+                or _last_log[0])
+        lines = list(getattr(application, 'log', []) or [])
+    except Exception:
+        return
+    if lines:
+        _last_log = (name, lines)
 
 
 def stop_all():
@@ -432,6 +455,41 @@ def _action_status(**_arguments):
     return status()
 
 
+def _action_log(name='', lines=60, **_arguments):
+    """What the application said - including what it stopped on.
+
+    An Elten application reports a failure the way Elten's own do: it
+    rescues, tells the user one sentence ("The operation could not be
+    completed"), and carries on. The reason is in the log, `boot.rb` puts
+    the exception class and message there, and until this there was no way
+    to read it once the window had gone - so "it still does not work" could
+    only be answered by guessing. This is the answer instead.
+    """
+    wanted = str(name or '').strip().lower()
+    held = None
+    for entry, application, _gui in list(_running):
+        if not wanted or wanted in (entry.name or '').lower() \
+                or wanted in (entry.stem or '').lower():
+            held = (entry.name or entry.stem, list(application.log or []))
+            break
+    if held is None:
+        held = _last_log
+    label, log = held
+    if not log:
+        return _('Nothing has been logged. No Elten application has run '
+                 'in this session.') if not label else \
+            _('%s logged nothing.') % label
+    try:
+        limit = max(1, min(500, int(lines)))
+    except (TypeError, ValueError):
+        limit = 60
+    tail = log[-limit:]
+    said = [_('%(name)s said (%(count)d of %(total)d lines):')
+            % {'name': label, 'count': len(tail), 'total': len(log)}]
+    said.extend('  %s: %s' % (level, text) for level, text in tail)
+    return '\n'.join(said)
+
+
 # **`name`, not `id`.** `actions/manifest.py`'s `_parse_action` reads
 # `raw['name']` and drops an entry that has none - "an action has no usable
 # 'name'; ignored" - so all four of these were declared and none of them
@@ -455,4 +513,16 @@ TITAN_ACTIONS = [
     {'name': 'status', 'label': 'Elten bridge status',
      'summary': 'Whether the bridge can run anything, and on which Ruby.',
      'run': _action_status, 'params': {}},
+    {'name': 'log', 'label': 'What an Elten application said',
+     'summary': ('The log of a running Elten application, or of the last '
+                 'one that ran - including the exception it stopped on. '
+                 'This is what to read when an application does nothing '
+                 'and says nothing.'),
+     'run': _action_log,
+     'params': {'name': {'type': 'string',
+                         'description': 'The application. Left out, '
+                                        'whichever ran last.'},
+                'lines': {'type': 'integer',
+                          'description': 'How many of the last lines. 60 '
+                                         'by default.'}}},
 ]

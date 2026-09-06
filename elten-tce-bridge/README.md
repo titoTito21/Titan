@@ -183,6 +183,31 @@ add-on names out of the Ruby and checks it against Titan's OWN registry, so
 "'Cling' has no action 'list_apps'" is a failed test rather than a message
 to the user.
 
+**And its ARGUMENTS, which is the half that reads as a working screen.** An
+action that exists, called with a name it does not take, is not reported as
+an error: a required parameter that was not supplied becomes a QUESTION,
+built from that parameter's own description. So opening a Titan-Net group
+asked *"this action needs group id"* and went no further - the bridge
+passed `group` and `group_forums` wants `group_id`. Titan's two group
+actions genuinely disagree about the name (`join_group_by_id` really does
+take `group`), so there was nothing to notice by reading. The check reads
+the hash literal at each call site - only its own top-level keys, so
+`{"request" => JSON.generate({"call" => ...})}` is one argument and not
+three - and compares it with the live `ActionSpec.params`. It found six
+more screens broken the same way and each one is a feature that stopped and
+asked the user for something they had no way to give: replying to a forum
+topic (`topic`/`text` for `topic_id`/`content`), replying to and deleting
+mail (`message` for `mail_id`), speaking in a room (`room` for `room_id`),
+reading an Elten conversation (`username` for `user`), remembering
+(`text` for `fact`) and forgetting (`text` for `query`), and launching a
+program (`name` for `path`).
+
+One of those was Titan's fault rather than the bridge's:
+`titannet.send_room_message` and `read_room` did `int(room_id)`, so a room
+named rather than numbered raised - and every window, this one included,
+shows rooms by name. They resolve a name now, the way
+`titannet.room_messages` always has.
+
 ## Titan's menu, and Titan's news
 
 **The menu is the one every face of Titan has.** `src/ui/program_menu.py`

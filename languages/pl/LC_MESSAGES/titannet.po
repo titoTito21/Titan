@@ -6680,3 +6680,6 @@ msgstr "Pokaż jako stronę\tCtrl+P"
 
 msgid "That link is not a web address, so Titan will not open it"
 msgstr "Ten odnośnik nie jest adresem internetowym, więc Titan go nie otworzy"
+
+msgid "Titan-Net could not open: {error}"
+msgstr "Nie udało się otworzyć Titan-Net: {error}"

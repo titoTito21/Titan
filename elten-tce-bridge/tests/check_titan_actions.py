@@ -34,22 +34,91 @@ CALL = re.compile(
     r'(?:@?\w+)\.call(?:_sync)?\s*\(\s*)'
     r',?\s*"([a-z_][\w]*)"\s*,\s*"([a-z_][\w]*)"')
 
+#: A key in a Ruby hash literal: `{"group_id" => id}`.
+HASH_KEY = re.compile(r'"([a-z_][\w]*)"\s*=>')
+
 #: A component's actions live on the module Titan loads, so they are read
 #: out of the source rather than by importing it.
 DECLARED = re.compile(r"['\"]name['\"]\s*:\s*['\"]([a-z_][\w]*)['\"]")
 
 
+def literal_arguments(text, after):
+    """The keys of the hash literal a call passes, or None.
+
+    None means "not written at the call site" - a variable, or a hash built
+    somewhere else - and that is not something to complain about; it is
+    something this check cannot see. Only a literal `{"a" => 1, "b" => 2}`
+    is judged.
+    """
+    index = after
+    while index < len(text) and text[index] in ' \t\r\n':
+        index += 1
+    if index >= len(text) or text[index] != ',':
+        return None
+    index += 1
+    while index < len(text) and text[index] in ' \t\r\n':
+        index += 1
+    if index >= len(text) or text[index] != '{':
+        return None
+    # Only the keys of THIS hash. A nested one is somebody else's
+    # argument - `{"request" => JSON.generate({"call" => ...})}` passes
+    # `request` and nothing else - and counting its keys as ours is a
+    # complaint about code that is right.
+    depth, end, top = 0, index, []
+    while end < len(text):
+        char = text[end]
+        if char == '{':
+            depth += 1
+            if depth == 1:
+                start = end
+        elif char == '}':
+            depth -= 1
+            if depth == 0:
+                break
+        elif depth == 1 and char == '"':
+            match = HASH_KEY.match(text, end)
+            if match:
+                top.append(match.group(1))
+        end += 1
+    if depth:
+        return None
+    return set(top)
+
+
 def bridge_calls():
-    """{(addon, action): [files]} for everything the bridge asks for."""
+    """{(addon, action): [(file, argument keys or None)]}."""
     found = {}
     for name in sorted(os.listdir(BRIDGE)):
         if not name.endswith('.rb'):
             continue
         text = open(os.path.join(BRIDGE, name), encoding='utf-8',
                     errors='replace').read()
-        for addon, action in CALL.findall(text):
-            found.setdefault((addon, action), []).append(name)
+        for match in CALL.finditer(text):
+            addon, action = match.group(1), match.group(2)
+            keys = literal_arguments(text, match.end())
+            found.setdefault((addon, action), []).append((name, keys))
     return found
+
+
+def titan_parameters(addon_id, action):
+    """{name: is it required} for one action, or None when nobody knows.
+
+    Read off the live `ActionSpec`, so this is what the action really
+    takes rather than a second list to keep in step.
+    """
+    try:
+        from src.titan_core import actions
+        found = actions.find_action(addon_id, action)
+    except Exception:
+        return None
+    if not found:
+        return None
+    spec = found[1] if isinstance(found, tuple) else found
+    params = getattr(spec, 'params', None)
+    if not isinstance(params, dict):
+        return None
+    return {name: bool(detail.get('required'))
+            for name, detail in params.items() if isinstance(detail, dict)}
 
 
 def titan_actions():
@@ -82,11 +151,13 @@ def titan_actions():
 
 def main():
     known = titan_actions()
+    calls = bridge_calls()
     problems = []
-    for (addon, action), files in sorted(bridge_calls().items()):
+    for (addon, action), sites in sorted(calls.items()):
+        where = ', '.join(sorted({name for name, _keys in sites}))
         if addon not in known:
             problems.append("%s.%s - Titan has no add-on '%s' (%s)"
-                            % (addon, action, addon, ', '.join(sorted(set(files)))))
+                            % (addon, action, addon, where))
             continue
         if action not in known[addon]:
             close = [name for name in sorted(known[addon])
@@ -94,11 +165,41 @@ def main():
             problems.append("%s.%s - no such action%s (%s)"
                             % (addon, action,
                                '; did you mean %s?' % ', '.join(close) if close else '',
-                               ', '.join(sorted(set(files)))))
+                               where))
+            continue
+        # **And the ARGUMENTS.** An action that exists, called with a name
+        # it does not take, is not an error the user sees as one: a
+        # required parameter that was not supplied becomes a QUESTION,
+        # built from that parameter's own description, so passing `group`
+        # to an action that wants `group_id` asked "this action needs group
+        # id" and the screen never opened. Titan's two group actions
+        # genuinely disagree about the name, which is how it happened.
+        wanted = titan_parameters(addon, action)
+        if wanted is None:
+            continue
+        for name, keys in sites:
+            if keys is None:
+                continue
+            for key in sorted(keys - set(wanted)):
+                close = [real for real in sorted(wanted)
+                         if key in real or real in key]
+                problems.append(
+                    "%s.%s - passes '%s', which it does not take%s (%s)"
+                    % (addon, action, key,
+                       '; it wants %s' % ', '.join(close) if close else
+                       '; it takes %s' % (', '.join(sorted(wanted)) or 'nothing'),
+                       name))
+            for required in sorted(name for name, is_it in wanted.items()
+                                   if is_it):
+                if required not in keys:
+                    problems.append(
+                        "%s.%s - never passes '%s', which it requires; "
+                        "Titan will stop and ask for it (%s)"
+                        % (addon, action, required, name))
     for line in problems:
         print(line)
     print('%d call%s checked, %d problem%s'
-          % (len(bridge_calls()), '' if len(bridge_calls()) == 1 else 's',
+          % (len(calls), '' if len(calls) == 1 else 's',
              len(problems), '' if len(problems) == 1 else 's'))
     return 1 if problems else 0
 

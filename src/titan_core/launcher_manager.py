@@ -674,11 +674,20 @@ class LauncherAPI:
                         logged_in = bool(result[0])
                     if logged_in:
                         try:
-                            show_titan_net_window(parent, self.titan_net_client)
+                            window = show_titan_net_window(
+                                parent, self.titan_net_client)
+                            if window is None:
+                                # It came back with nothing and this was
+                                # silent, so the launcher's Titan-Net entry
+                                # did nothing at all. It knows why.
+                                from src.network.titan_net_gui import (
+                                    last_open_problem)
+                                self._say_problem(last_open_problem())
                         except Exception as e:
                             print(f"[LauncherAPI] Error opening Titan-Net main window: {e}")
                             import traceback
                             traceback.print_exc()
+                            self._say_problem('%s: %s' % (type(e).__name__, e))
                 except Exception as e:
                     print(f"[LauncherAPI] Error opening Titan-Net: {e}")
                     import traceback
@@ -686,6 +695,20 @@ class LauncherAPI:
             wx.CallAfter(_open)
         except Exception as e:
             print(f"[LauncherAPI] Error opening Titan-Net: {e}")
+
+    def _say_problem(self, sentence):
+        """Tell the user a failure they would otherwise only see in a
+        console. A launcher owns the whole screen, so a menu entry that
+        does nothing and says nothing is the whole of what happened."""
+        if not sentence:
+            return
+        try:
+            self.speak_stereo(str(sentence))
+        except Exception:
+            try:
+                self.speaker.speak(str(sentence))
+            except Exception:
+                pass
 
     def open_eltenlink(self):
         """Open EltenLink login dialog. Requires titan_im feature."""

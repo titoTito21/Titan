@@ -95,11 +95,12 @@ class EveryDeclaredActionIsReal(unittest.TestCase):
                                  "callable as 'handler'; it belongs in 'run'")
         self.assertEqual(wrong, [])
 
-    def test_the_elten_bridge_offers_its_own_four(self):
+    def test_the_elten_bridge_offers_its_own(self):
         entries = declared_in(os.path.join(COMPONENTS, 'elten_bridge',
                                            'init.py'))
         self.assertEqual([entry.get('name') for entry in entries],
-                         ['list_applications', 'details', 'run', 'status'])
+                         ['list_applications', 'details', 'run', 'status',
+                          'log'])
 
     def test_cling_offers_its_own(self):
         entries = declared_in(os.path.join(COMPONENTS, 'cling', 'init.py'))

@@ -196,7 +196,7 @@ class TitanIM
       alert(answer.text.to_s) if answer != nil
     when "elten_chat"
       answer = TitanUI.ask(@bus, "elten", "read_conversation",
-                           {"username" => value["name"]}, :title => label)
+                           {"user" => value["name"]}, :title => label)
       display_text(answer.text.to_s, :header => label)
     when "chat"
       conversation(value["service"].to_s, value["chat"].to_s, label)

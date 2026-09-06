@@ -308,7 +308,7 @@ class SoundsAreBounded(unittest.TestCase):
             return 'none'
 
         def start(self, path, pan=0.0, gain=1.0, loop=False,
-                  elevation=0.0):
+                  elevation=0.0, hold=False):
             self.played.append((os.path.basename(path or ''), pan, gain))
             return object()
 
@@ -350,6 +350,260 @@ class SoundsAreBounded(unittest.TestCase):
         self.sounds.close()
         self.assertIsNone(self.sounds.create(self.file))
         self.assertIsNone(self.sounds.pool_play(self.file))
+
+
+class TheSoundIsPlaced(unittest.TestCase):
+    """An Elten application is heard, not drawn, so its sound is POSITIONED.
+
+    `sound_mode` answers "should Titan's own interface come from where the
+    thing is", it is off by default, and reading it as "make no stereo"
+    would make every emulated game unplayable rather than quieter - a
+    player aims by ear. This is Cling's rule, and these are the three
+    places it was not being followed.
+    """
+
+    class Recording(object):
+        """A pygame channel that remembers what it was told."""
+
+        def __init__(self):
+            self.volumes = []
+            self.sound = None
+            self.stopped = 0
+
+        def set_volume(self, *values):
+            self.volumes.append(tuple(round(float(v), 3) for v in values))
+
+        def play(self, clip, loops=0):
+            self.sound = clip
+
+        def get_sound(self):
+            return self.sound
+
+        def get_busy(self):
+            return self.sound is not None
+
+        def stop(self):
+            self.stopped += 1
+            self.sound = None
+
+    def test_the_pan_is_constant_power_whatever_the_mode(self):
+        mixer = host.Mixer()
+        mixer._mode = lambda: 'none'
+        for pan, expected in ((-1.0, (1.0, 0.0)), (0.0, (0.707, 0.707)),
+                              (1.0, (0.0, 1.0))):
+            channel = self.Recording()
+            mixer._set_volume(channel, pan, 1.0)
+            self.assertEqual(channel.volumes[-1], expected)
+
+    def test_a_cue_is_played_where_the_caller_put_it(self):
+        """`sound.play_sound` centres a cue unless the user turned
+        positioning on, so every cue this bridge played came out of the
+        middle - a list that no longer said how far down it you were."""
+        placed = []
+
+        class Placing(host.Mixer):
+            def _sound_module(self):
+                class Module(object):
+                    @staticmethod
+                    def feature_sound_path(subdir, name):
+                        return '/theme/%s' % name
+                return Module
+
+            def start(self, path, pan=0.0, gain=1.0, loop=False,
+                      elevation=0.0, hold=False):
+                placed.append((path, round(float(pan), 3)))
+                return object()
+
+        mixer = Placing()
+        self.assertTrue(mixer.cue('core/FOCUS.ogg', -1.0))
+        self.assertTrue(mixer.cue('ui/endoflist.ogg', 1.0))
+        self.assertEqual(placed, [('/theme/core/FOCUS.ogg', -1.0),
+                                  ('/theme/ui/endoflist.ogg', 1.0)])
+
+    def test_speech_is_positioned_even_with_positioning_off(self):
+        asked = {}
+
+        class Module(object):
+            @staticmethod
+            def speak_stereo(text, position=0.0, pitch_offset=0,
+                             async_mode=False, position_always=False):
+                asked.update(text=text, position=position,
+                             position_always=position_always)
+
+        speaker = host.Speaker()
+        speaker._stereo = Module
+        self.assertTrue(speaker.say('over there', position=-1.0))
+        self.assertEqual(asked['position'], -1.0)
+        self.assertTrue(asked['position_always'])
+
+    def test_an_older_titan_still_says_the_line(self):
+        """A `speak_stereo` that does not take the flag must lose the
+        position, never the sentence."""
+        said = []
+
+        class Module(object):
+            @staticmethod
+            def speak_stereo(text, position=0.0, pitch_offset=0,
+                             async_mode=False):
+                said.append(text)
+
+        speaker = host.Speaker()
+        speaker._stereo = Module
+        self.assertTrue(speaker.say('still said', position=-1.0))
+        self.assertEqual(said, ['still said'])
+
+
+class AChannelIsNotSharedBehindOurBack(unittest.TestCase):
+    """pygame hands the same channel out twice when they run out.
+
+    `find_channel(True)` answers the channel that has been playing
+    LONGEST, which in a game is exactly the one that must not be taken -
+    the background bed, or the looping cat the player is walking towards.
+    Purrposterous plays a footstep per key press over two or three looping
+    cats and its music, so the channels really do run out.
+    """
+
+    class Pygame(object):
+        """Just enough of pygame.mixer to run out of channels."""
+
+        def __init__(self, count):
+            outer = self
+
+            class Channel(TheSoundIsPlaced.Recording):
+                pass
+
+            self.channels = [Channel() for _ in range(count)]
+
+            class Mixer(object):
+                @staticmethod
+                def Sound(path):
+                    return object()
+
+                @staticmethod
+                def find_channel(force=False):
+                    for channel in outer.channels:
+                        if not channel.get_busy():
+                            return channel
+                    if not force:
+                        return None
+                    return outer.channels[0]
+            self.mixer = Mixer
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix='elten-chan-')
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def file(self, name):
+        path = os.path.join(self.root, name)
+        with open(path, 'wb') as handle:
+            handle.write(b'x')
+        return path
+
+    def mixer_with(self, channels):
+        pygame = self.Pygame(channels)
+        mixer = host.Mixer()
+        mixer._mode = lambda: 'stereo'
+        mixer._sound_module = lambda: None
+        mixer._pygame_mixer = lambda: pygame
+        return mixer, pygame
+
+    def test_a_footstep_never_takes_a_looping_bed(self):
+        mixer, pygame = self.mixer_with(3)
+        beds = [mixer.start(self.file('a.ogg'), 0.0, loop=True, hold=True)
+                for _ in range(3)]
+        self.assertTrue(all(bed is not None for bed in beds))
+        for _each in range(20):
+            mixer.start(self.file('step.ogg'), 0.0, loop=False, hold=False)
+        self.assertTrue(all(mixer.busy(bed) for bed in beds))
+
+    def test_a_footstep_takes_the_channel_of_the_footstep_before_it(self):
+        mixer, pygame = self.mixer_with(2)
+        bed = mixer.start(self.file('a.ogg'), 0.0, loop=True, hold=True)
+        first = mixer.start(self.file('step.ogg'), 0.0, hold=False)
+        second = mixer.start(self.file('step.ogg'), 0.0, hold=False)
+        self.assertIsNotNone(second)
+        self.assertIs(first.channel, second.channel)
+        self.assertTrue(mixer.busy(bed))
+
+    def test_with_every_channel_a_bed_a_footstep_is_simply_not_played(self):
+        """The last thing to do with a room full of sounds somebody is
+        listening to is silence one of them for a click."""
+        mixer, pygame = self.mixer_with(2)
+        for _each in range(2):
+            mixer.start(self.file('a.ogg'), 0.0, loop=True, hold=True)
+        self.assertIsNone(mixer.start(self.file('step.ogg'), 0.0, hold=False))
+
+    def test_a_new_bed_may_take_the_oldest_bed(self):
+        mixer, pygame = self.mixer_with(2)
+        oldest = mixer.start(self.file('a.ogg'), 0.0, loop=True, hold=True)
+        mixer.start(self.file('b.ogg'), 0.0, loop=True, hold=True)
+        self.assertIsNotNone(mixer.start(self.file('c.ogg'), 0.0, loop=True, hold=True))
+        self.assertFalse(mixer.busy(oldest))
+
+    def test_a_channel_taken_from_us_is_not_ours_to_move_or_to_stop(self):
+        """The stolen `Channel` object is still perfectly valid, so before
+        this the cat's next move panned a footstep and its stop stopped
+        one."""
+        mixer, pygame = self.mixer_with(1)
+        mine = mixer.start(self.file('a.ogg'), 0.0, loop=True, hold=True)
+        stranger = object()
+        mine.channel.play(stranger)          # somebody else took it
+        self.assertFalse(mixer.busy(mine))
+        self.assertFalse(mixer.set_gain(mine, 1.0, 1.0))
+        before = mine.channel.stopped
+        mixer.stop(mine)
+        self.assertEqual(mine.channel.stopped, before)
+        self.assertIs(mine.channel.get_sound(), stranger)
+
+
+class TheRateOfASoundThatIsPlaying(unittest.TestCase):
+    """Purrposterous pitches a cat up as it gets hungrier - which is the
+    only warning the game gives - by reading the file's own sample rate and
+    then setting `frequency` on every frame."""
+
+    def test_the_source_is_asked_not_the_handle(self):
+        asked = []
+
+        class Spatial(object):
+            @staticmethod
+            def set_pitch(src_id, ratio):
+                asked.append((src_id, ratio))
+                return True
+
+        mixer = host.Mixer()
+        mixer._spatial_module = lambda: Spatial
+        handle = host._Spatial(42)
+        self.assertTrue(mixer.set_pitch(handle, 1.5))
+        self.assertEqual(asked, [(42, 1.5)])
+
+    def test_a_channel_has_no_rate_and_says_so(self):
+        mixer = host.Mixer()
+        mixer._spatial_module = lambda: None
+        self.assertFalse(mixer.set_pitch(host._Channel(None, None), 1.5))
+
+
+class MovingASoundIsToldNotAsked(unittest.TestCase):
+    """A game re-places, re-gains and re-pitches a sound it is holding on
+    every FRAME, and nothing reads the answer. Asked as calls, three cats
+    at Purrposterous's 100 Hz were three hundred blocking round trips a
+    second on the thread that also has to run the game."""
+
+    def test_titan_answers_them_without_an_id(self):
+        for operation in ('sound_position', 'sound_volume', 'sound_pitch'):
+            self.assertIn(operation, bridge.NOTIFICATIONS)
+            # And still as calls, so an older `eapi` keeps working.
+            self.assertIn(operation, bridge.OPERATIONS)
+
+    def test_the_ruby_tells_titan_rather_than_asking_it(self):
+        with io.open(os.path.join(COMPONENT, 'eapi', 'eapi.rb'),
+                     encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn("call('sound_position'", source)
+        self.assertNotIn("call('sound_volume'", source)
+        self.assertNotIn("call('sound_pitch'", source)
+        self.assertIn("notify('sound_position'", source)
 
 
 class TheWire(unittest.TestCase):
@@ -473,7 +727,7 @@ class _NoMixer(host.Mixer):
         return 'none'
 
     def start(self, path, pan=0.0, gain=1.0, loop=False,
-                  elevation=0.0):
+              elevation=0.0, hold=False):
         return None
 
 

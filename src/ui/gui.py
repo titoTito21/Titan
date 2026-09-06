@@ -3642,6 +3642,13 @@ class TitanApp(wx.Frame):
             titan_win = show_titan_net_window(self, self.titan_client)
             if titan_win:
                 register_window("Titan-Net", window=titan_win, category='messenger')
+            else:
+                # It came back with nothing and this branch was silent, so
+                # the menu entry did nothing at all. It knows why.
+                from src.network.titan_net_gui import last_open_problem
+                problem = last_open_problem() or _("Error opening Titan-Net")
+                speaker.speak(problem)
+                play_sound('core/error.ogg')
 
         except Exception as e:
             print(f"Error opening Titan-Net window: {e}")

@@ -4612,7 +4612,14 @@ class TitanNetMainWindow(wx.Frame):
         details += f"{_('Version')}: {app.get('version', 'N/A')}\n"
         details += f"{_('Author')}: {app.get('uploader_username', 'N/A')}\n"
         details += f"{_('Category')}: {app.get('category', 'N/A')}\n"
-        details += f"{_('Downloads')}: {app.get('download_count', 0)}\n\n"
+        # **`downloads`, which is what the column is called.** The row comes
+        # straight out of `app_repository` (`SELECT ar.*`), the web
+        # repository reads `app.downloads` and the server sums
+        # `SUM(downloads)` - this was the one place in Titan that asked for
+        # `download_count`, a name nothing writes, so `.get(..., 0)` handed
+        # back the default and every application in the repository reported
+        # nought downloads however many it had.
+        details += f"{_('Downloads')}: {app.get('downloads', 0)}\n\n"
         details += f"{_('Description')}:\n{app.get('description', _('No description'))}\n\n"
         details += _("Do you want to download this app?")
 
@@ -9175,6 +9182,31 @@ def show_login_dialog(parent, titan_client: TitanNetClient):
 
 _titan_net_window = None
 
+#: Why the last `show_titan_net_window` came back with nothing.
+#:
+#: **It returns None for two completely different reasons** - the
+#: connection has gone, or the window would not build - and it used to say
+#: so ITSELF while every caller then said "Error opening Titan-Net" as
+#: well. Both announcements interrupt, so the second erased the first: the
+#: user heard the useless sentence and never the true one, which is
+#: exactly "sometimes there is an error opening Titan-Net". A dropped
+#: socket is what makes it intermittent - the window refreshes every 15
+#: seconds and the connection can go between one open and the next.
+#:
+#: So this says nothing now and records the reason instead, and the caller
+#: speaks it once, in its own face's voice.
+_titan_net_problem = ''
+
+
+def last_open_problem():
+    """One sentence saying why Titan-Net did not open, or ''.
+
+    Already translated - it is written where the failure happened, which
+    is the only place that knows what it was.
+    """
+    return _titan_net_problem
+
+
 def show_titan_net_window(parent, titan_client: TitanNetClient):
     """
     Show main Titan-Net window. Reuses existing hidden window if available.
@@ -9186,12 +9218,14 @@ def show_titan_net_window(parent, titan_client: TitanNetClient):
         titan_client: Titan-Net client instance (must be logged in).
 
     Returns:
-        The TitanNetMainWindow instance, or None on failure.
+        The TitanNetMainWindow instance, or None on failure -
+        :func:`last_open_problem` then says why.
     """
-    global _titan_net_window
+    global _titan_net_window, _titan_net_problem
+    _titan_net_problem = ''
 
     if not titan_client.is_connected:
-        speak_notification(_("Not connected to Titan-Net"), 'error')
+        _titan_net_problem = _("Not connected to Titan-Net")
         return None
 
     # Reuse existing hidden window if it still exists. A cached window
@@ -9232,7 +9266,10 @@ def show_titan_net_window(parent, titan_client: TitanNetClient):
         import traceback
         traceback.print_exc()
         _titan_net_window = None
-        speak_notification(_("Error opening Titan-Net"), 'error')
+        # The class and the message, not just "an error": a traceback goes
+        # to a console the people who use this cannot read.
+        _titan_net_problem = _("Titan-Net could not open: {error}").format(
+            error='%s: %s' % (type(e).__name__, e))
         return None
 
     try:

@@ -469,6 +469,31 @@ experience: it is a program that has disappeared.
   HTTP endpoints in `titan-net server/http_server.py` (`/api/repository/*`),
   web UI (`titan-net server/web/repository.html`), and the desktop client's
   Upload Package / Package Folder and Upload dialogs (`src/network/titan_net_gui.py`)
+  - **A field read by a name nothing writes is a working-looking zero.**
+    The column is `downloads`, the details endpoint answers `SELECT ar.*`,
+    the web repository reads `app.downloads` and the server sums
+    `SUM(downloads)` - and the desktop client alone asked for
+    `download_count`, so `.get(name, 0)` handed back its default and every
+    application in the repository reported nought downloads however many
+    it had. `.get` with a default is what makes this class of bug silent;
+    there is nothing to see in a traceback.
+- **Why Titan-Net did not open is said, once.** `show_titan_net_window`
+  answers with nothing for two completely different reasons - the
+  connection has gone, or the window would not build - and it announced
+  that ITSELF while every caller then said "Error opening Titan-Net" as
+  well. Both announcements interrupt, so the second erased the first: the
+  true sentence was said and wiped, and what the user was left with was the
+  useless one. That is the reported "sometimes there is an error opening
+  Titan-Net", and a dropped socket is what makes it intermittent - the
+  window refreshes every fifteen seconds. Now the opener says nothing and
+  records the reason (`last_open_problem()`), and the caller speaks it in
+  its own face's voice. Three of the four faces were worse than that:
+  gui.py, the Invisible UI's two window branches and the launcher were
+  **silent** when the window came back as nothing, so the menu entry did
+  nothing at all and said nothing about it. A failure that reaches only a
+  console reaches nobody here.
+  - Tests: `tests/test_titannet_window.py` (8; no window, no sound, no
+    network).
 
 ### Cerberus and Blackwall: the ban has to be true in the kernel
 
@@ -3401,6 +3426,88 @@ between two rounds needs neither lost.
   `read_url` (a Hash body is a multipart form, and the caller's `headers`
   hash is FILLED IN with the response's), `download_file`, `html_decode`,
   `html_encode`.
+
+#### A game is heard, so the sound is PLACED and the bed is never taken
+
+Purrposterous is a panned arcade game: cats meow from where they are, the
+player walks towards one and feeds it. Reported as "I hear the cat, then it
+stops, and there is no panning" - which turned out to be three separate
+faults, none of them in the panning arithmetic, which was measured correct
+all along (OpenAL read back x=-1.0 at hard left, 1.0 at hard right).
+
+- **`find_channel(True)` steals exactly the sound you are listening to.**
+  pygame answers None when every channel is busy and, forced, the channel
+  that has been playing LONGEST - which in a game is the background bed or
+  the looping cat, never the footstep. Titan gives 27 free channels and
+  Purrposterous asks for up to 24 one-shots over three cats and its music,
+  so they really do run out: every footstep took a cat, and the game went
+  quiet where it was loudest. Nothing noticed, because the stolen
+  `Channel` object stays perfectly valid - so the cat's next move panned a
+  footstep, and closing the cat stopped one.
+  - A channel is now taken in this order: one genuinely free, then one of
+    ours whose sound has finished or been taken from us, then our oldest
+    ONE-SHOT, then nothing at all. Silence for a click is right when every
+    channel is carrying something somebody is listening to; silencing one
+    of those for a click is not.
+  - **What decides is `loop:`, not "held".** Every sound an Elten
+    application holds arrives through the same call - its sound pool is
+    Ruby's and plays through ordinary handles - so "the application will
+    stop this itself" cannot tell a bed from a footstep. What the
+    application actually said is whether it loops.
+  - Every operation on a channel handle asks `get_sound() is clip` first
+    (`_still_ours`), so a channel that HAS been taken reaches nothing
+    instead of reaching a stranger's sound.
+- **The mode decides HOW a sound is positioned, never WHETHER.**
+  `sound_mode` is Titan's answer to "should my desktop's interface come
+  from where the thing is" and it is off by default, so `sound.play_sound`
+  and `speak_stereo` centre what they are given - correct for Titan, and
+  for an emulated game the difference between quieter and unplayable. So
+  the port places its own sound and its own speech, always, exactly as
+  Cling does: 3D means HRTF, everything else including 'none' means an
+  ordinary constant-power pan. `speak_stereo(..., position_always=True)`
+  is the same rule for a spoken line an application deliberately put on
+  the left; Titan's own speech is unchanged, the flag defaults off.
+  - **The interface cues were centred on every mode**, because
+    `Mixer.cue` took a `pan` and threw it away - so the row cues spread
+    across a list, the end-of-list and the file-kind sounds all came out
+    of the middle, on a desktop whose whole claim here is that an Elten
+    application sounds like Titan. The theme file is resolved with
+    `feature_sound_path` (the same resolution `play_sound` does, per-user
+    overlay first) and played through the port's own mixer.
+- **A sound is TOLD where it is, not asked.** `pan=`, `volume=` and
+  `frequency=` return the value they were given and nothing reads their
+  answer, but each blocked the application's own thread until Titan
+  replied - and a game changes them on the FRAME. Purrposterous runs at
+  100 Hz and re-places every cat every frame, so three cats were three
+  hundred blocking round trips a second on the thread that also has to run
+  the game. They are notifications now; order on the wire is unchanged
+  (one reader, one `_handle` per message, in order), so a `playing?` asked
+  after a move still sees the moved sound. Titan answers them as calls as
+  well, so an older `eapi` keeps working.
+- **`AL_PITCH` was asked of the handle rather than the source.**
+  `spatial_audio` had no `set_pitch` at all, so `getattr` found nothing and
+  every rate change in every emulated game answered False - which for
+  Purrposterous is the hungry-cat warning, the only warning it gives,
+  never happening. `spatial_audio.set_pitch(src_id, ratio)` is the missing
+  half (beside `set_gain`, `move_source` and `set_velocity`), clamped to
+  0.05-16 because OpenAL refuses zero; a pygame channel has no rate
+  control and still says so honestly.
+- The same fault in its milder form is still in Cling's mixer
+  (`_play_placed` uses a bare `find_channel()`, so a Klango one-shot goes
+  silent rather than stealing) - left alone deliberately rather than
+  rewritten unasked.
+
+#### An application that says nothing can now be asked
+
+`elten.log` (a fifth action beside `list_applications`, `details`, `run`
+and `status`). An Elten application reports a failure the way Elten's own
+do: it rescues, says one sentence ("The operation could not be completed.
+Please try again."), and carries on - so "it still does not work" was a
+report with no reason in it, and the reason was always there. `boot.rb`
+records the exception class and its message, every `puts` an application
+makes lands beside it, and until now all of it went with the window: the
+one moment it could be read was the moment nobody was looking. The log of
+the last application to run is kept after it has gone.
 
 #### More real-window gaps: a button's Space, a process, a form's header
 

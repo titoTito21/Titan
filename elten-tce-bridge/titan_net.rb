@@ -138,13 +138,18 @@ class TitanNetClient
     alert(answer.text.to_s) if answer != nil
   end
 
+  # The two actions name the same thing differently, so the argument is
+  # per action rather than one hash shared between them.
+  GROUP_ARGUMENT = {"join_group_by_id" => "group",
+                    "group_forums" => "group_id"}
+
   def group_menu(id, label)
     chosen = select_action([["join_group_by_id", _("Join it")],
                             ["group_forums", _("Its forums")]],
                            :header => label)
     return if chosen == nil
-    answer = TitanUI.perform(@bus, "titannet", chosen, {"group" => id},
-                             :title => label)
+    args = {GROUP_ARGUMENT[chosen] || "group_id" => id}
+    answer = TitanUI.perform(@bus, "titannet", chosen, args, :title => label)
     TitanUI.tell(answer, label) if answer != nil
   end
 
@@ -357,7 +362,7 @@ class TitanNetClient
     conversation_screen(_("Room %s") % name,
                         proc { rows("room_messages", "messages", {"room" => name}) { |m| message_row(m) } },
                         proc { |text| TitanUI.perform(@bus, "titannet", "send_room_message",
-                                                      {"room" => name, "message" => text},
+                                                      {"room_id" => name, "message" => text},
                                                       :title => _("Sending...")) })
   end
 
@@ -490,7 +495,7 @@ class TitanNetClient
       what = ask_for(_("Your reply:"))
       if what != nil
         answer = TitanUI.perform(@bus, "titannet", "reply",
-                                 {"topic" => id, "text" => what},
+                                 {"topic_id" => id, "content" => what},
                                  :title => _("Replying..."))
         alert(answer.text.to_s) if answer != nil
       end
@@ -502,9 +507,16 @@ class TitanNetClient
     end
   end
 
+  # **`group_id`, not `group`.** Titan's two group actions do not agree
+  # about what the argument is called - `join_group_by_id` takes `group`
+  # and `group_forums` takes `group_id` - and an argument Titan does not
+  # recognise is a REQUIRED one that was not supplied, which the Action API
+  # turns into a question built from the parameter's own description. So
+  # opening a group asked "this action needs group id" and went no further:
+  # a screen that cannot be opened at all, over one word.
   def group_forums(id, label)
     rows = proc do
-      answer = TitanUI.ask(@bus, "titannet", "group_forums", {"group" => id},
+      answer = TitanUI.ask(@bus, "titannet", "group_forums", {"group_id" => id},
                            :title => label)
       next [[answer.text.to_s, nil]] if !answer.ok?
       answer.text.to_s.split("\n").map { |line| line.strip.sub(/\A\d+\.\s*/, "") }
@@ -567,13 +579,13 @@ class TitanNetClient
       what = ask_for(_("Your reply:"))
       if what != nil
         answer = TitanUI.perform(@bus, "titannet", "reply_mail",
-                                 {"message" => id, "body" => what},
+                                 {"mail_id" => id, "body" => what},
                                  :title => _("Replying..."))
         alert(answer.text.to_s) if answer != nil
       end
     when "delete"
       return if !confirm(_("Delete this message?"))
-      answer = TitanUI.perform(@bus, "titannet", "delete_mail", {"message" => id},
+      answer = TitanUI.perform(@bus, "titannet", "delete_mail", {"mail_id" => id},
                                :title => _("Deleting..."))
       alert(answer.text.to_s) if answer != nil
     end

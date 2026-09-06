@@ -137,7 +137,7 @@ class TitanTools
         name = ask(_("Which program?"))
         next if name == nil
         started = TitanUI.perform(@bus, "desktop", "launch_program",
-                                  {"name" => name}, :title => name)
+                                  {"path" => name}, :title => name)
         TitanUI.tell(started, name) if started != nil
         next
       end

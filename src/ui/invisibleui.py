@@ -4190,8 +4190,17 @@ class InvisibleUI:
                             except Exception as speak_error:
                                 print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
                         else:
-                            # Re-enable Titan UI if window creation failed
+                            # **Say why.** This branch was silent, so a
+                            # Titan-Net that did not open was a keypress
+                            # that did nothing at all - and the reason was
+                            # known one function away.
+                            from src.network.titan_net_gui import last_open_problem
                             self._safe_on_dialog_close("titannet_window", None)
+                            try:
+                                self.speak(last_open_problem()
+                                           or _("Error opening Titan-Net"))
+                            except Exception:
+                                pass
 
                     else:
                         # Not logged in (or connection dropped) - show login dialog
@@ -4229,7 +4238,13 @@ class InvisibleUI:
                                 except Exception as speak_error:
                                     print(f"Warning: Could not speak Titan-Net announcement: {speak_error}")
                             else:
+                                from src.network.titan_net_gui import last_open_problem
                                 self._safe_on_dialog_close("titannet_window", None)
+                                try:
+                                    self.speak(last_open_problem()
+                                               or _("Error opening Titan-Net"))
+                                except Exception:
+                                    pass
 
                         elif offline_mode:
                             self.speak(_("Offline mode selected"))
@@ -4245,8 +4260,10 @@ class InvisibleUI:
                     # Re-enable Titan UI on error
                     self._safe_on_dialog_close("titannet_window", None)
                     try:
-                        self.speak(_("Error opening Titan-Net"))
-                    except:
+                        self.speak(_("Titan-Net could not open: {error}").format(
+                            error='%s: %s' % (type(launch_error).__name__,
+                                              launch_error)))
+                    except Exception:
                         pass
 
             # Use safer wx.CallAfter with error handling
@@ -4270,8 +4287,9 @@ class InvisibleUI:
             # Re-enable Titan UI on any error
             self._safe_on_dialog_close("titannet_window", None)
             try:
-                self.speak(_("Error opening Titan-Net"))
-            except:
+                self.speak(_("Titan-Net could not open: {error}").format(
+                    error='%s: %s' % (type(e).__name__, e)))
+            except Exception:
                 pass
 
     def open_eltenlink(self):

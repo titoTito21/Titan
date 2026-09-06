@@ -1141,9 +1141,14 @@ class KlangoMode:
                     except Exception:
                         pass
                 else:
-                    # show_titan_net_window returned None - surface the
-                    # failure instead of silently doing nothing.
-                    speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                    # show_titan_net_window returned None - say WHY. It
+                    # knows (the connection has gone, or the window would
+                    # not build) and used to announce it itself, which
+                    # this sentence then interrupted and erased: the user
+                    # heard "error opening Titan-Net" and never the reason.
+                    from src.network.titan_net_gui import last_open_problem
+                    speak_klango(last_open_problem() or _("Error opening Titan-Net"),
+                                 position=0.0, pitch_offset=0, interrupt=True)
                     play_sound("core/error.ogg")
             else:
                 speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
@@ -1153,7 +1158,9 @@ class KlangoMode:
             print(f"Error opening Titan-Net: {e}")
             import traceback
             traceback.print_exc()
-            speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+            speak_klango(_("Titan-Net could not open: {error}").format(
+                error='%s: %s' % (type(e).__name__, e)),
+                position=0.0, pitch_offset=0, interrupt=True)
             play_sound("core/error.ogg")
 
     def open_eltenlink(self):
@@ -2310,9 +2317,14 @@ class KlangoFrame(wx.Frame):
                     except Exception:
                         pass
                 else:
-                    # show_titan_net_window returned None - surface the
-                    # failure instead of silently doing nothing.
-                    speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+                    # show_titan_net_window returned None - say WHY. It
+                    # knows (the connection has gone, or the window would
+                    # not build) and used to announce it itself, which
+                    # this sentence then interrupted and erased: the user
+                    # heard "error opening Titan-Net" and never the reason.
+                    from src.network.titan_net_gui import last_open_problem
+                    speak_klango(last_open_problem() or _("Error opening Titan-Net"),
+                                 position=0.0, pitch_offset=0, interrupt=True)
                     play_sound("core/error.ogg")
             else:
                 speak_klango(_("Not logged in to Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
@@ -2322,7 +2334,9 @@ class KlangoFrame(wx.Frame):
             print(f"Error opening Titan-Net: {e}")
             import traceback
             traceback.print_exc()
-            speak_klango(_("Error opening Titan-Net"), position=0.0, pitch_offset=0, interrupt=True)
+            speak_klango(_("Titan-Net could not open: {error}").format(
+                error='%s: %s' % (type(e).__name__, e)),
+                position=0.0, pitch_offset=0, interrupt=True)
             play_sound("core/error.ogg")
 
     def open_eltenlink(self):

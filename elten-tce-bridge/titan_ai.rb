@@ -84,14 +84,14 @@ class TitanAI
     when "remember"
       text = ask_for(_("What should it remember?"))
       return if text == nil
-      answer = TitanUI.perform(@bus, "memory", "remember", {"text" => text},
+      answer = TitanUI.perform(@bus, "memory", "remember", {"fact" => text},
                                :title => _("Remembering..."))
       TitanUI.tell(answer, _("What it remembers")) if answer != nil
     when "note"
       chosen = select_action([["forget", _("Forget this")]], :header => label)
       return if chosen == nil
       return if !confirm(_("Forget this note?"))
-      answer = TitanUI.perform(@bus, "memory", "forget", {"text" => value["text"]},
+      answer = TitanUI.perform(@bus, "memory", "forget", {"query" => value["text"]},
                                :title => label)
       TitanUI.tell(answer, label) if answer != nil
     when "open_window"
