@@ -187,7 +187,7 @@ def build(announcement, synth=None, allow_pan=True, allow_marker=True,
         for index, (piece, offset) in enumerate(parts):
             sequence.append(compat.PitchCommand(offset=_offset(offset)))
             sequence.append(piece if index == len(parts) - 1
-                            else piece + ', ')
+                            else piece + ',')
         sequence.append(compat.PitchCommand(offset=0))
     else:
         sequence.append(text)

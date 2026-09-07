@@ -55,6 +55,8 @@ def _frame():
 
 def _hello(_args):
     """Who is answering, and what this Titan is."""
+    import os
+
     def read():
         from src.titan_core import translation
         language = getattr(translation, 'current_language', '') or ''
@@ -63,11 +65,21 @@ def _hello(_args):
             'api': API_VERSION,
             'language': str(language),
             'has_window': frame is not None,
+            # Which process Titan IS. A screen reader's add-on has to know,
+            # because "is this window Titan's?" is the question that decides
+            # whether it behaves like Titan's own reader - and it cannot work
+            # it out: Titan run from source is `python.exe`, and recognising
+            # it by name would take over every Python program on the machine.
+            # It used to be told this only when Titan first ANNOUNCED
+            # something, which on a quiet desktop is never, so the whole
+            # behaviour was switched off until Titan happened to speak.
+            'pid': os.getpid(),
             'at': time.time(),
         }
     data, error = run_on_gui(read)
     if error:
-        return {'api': API_VERSION, 'language': '', 'has_window': False}
+        return {'api': API_VERSION, 'language': '', 'has_window': False,
+                'pid': os.getpid()}
     return data
 
 
@@ -667,9 +679,21 @@ def _play_sound(args):
     if not name:
         raise ValueError('name is required')
     pan = args.get('pan')
+    pitch = args.get('pitch')
 
     def play():
         from src.titan_core import sound
+        # The reader's own cursor earcons - `cursor.ogg`, `listitem.ogg`,
+        # `edge.ogg`. They belong to the READER rather than to a theme (the
+        # user's theme may still override them), and they are the one set
+        # that is played PITCHED: a list item says where in the list it is
+        # by its tone. A screen reader's add-on asking for one of these
+        # means the cue Titan's own reader plays for that event.
+        if name.lower().startswith('reader/'):
+            return bool(sound.play_reader_sound(
+                name.split('/', 1)[1],
+                pan=None if pan in (None, '') else float(pan),
+                pitch=1.0 if pitch in (None, '') else float(pitch)))
         # The AI's own set belongs to the FEATURE rather than to a theme, so
         # Titan plays it through `play_ai_sound` - the user's theme first,
         # the default set filling in. A client naming one of those sounds

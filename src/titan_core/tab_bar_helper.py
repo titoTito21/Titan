@@ -100,7 +100,8 @@ def _make_char_hook_handler(callback):
     return _Hook()
 
 
-def announce_tab_bar_focus(tip_delay=4.0, schedule_tip=True):
+def announce_tab_bar_focus(tip_delay=4.0, schedule_tip=True,
+                           view_name='', index=None, count=None):
     """Selection has landed on the virtual tab bar row.
 
     Plays the ``ui/tapbar.ogg`` earcon, announces "Tab bar" through the
@@ -116,10 +117,16 @@ def announce_tab_bar_focus(tip_delay=4.0, schedule_tip=True):
     Args:
         tip_delay: Seconds to wait before speaking the tip (default 4.0).
         schedule_tip: When False, only the earcon + SR announcement fire.
+        view_name: Which tab the selection is on. Given, the announcement
+            says it - "Tab bar, tab, Applications", the place at the
+            neutral tone, what it is a little lower, which one a little
+            higher. Left out, it says "Tab bar" as it always did, so a
+            caller that does not know its tabs is unchanged.
+        index, count: Where that tab is among the others, 1-based.
     """
     try:
         from src.accessibility.messages import announce_tab_bar, show_tab_bar_tip
-        announce_tab_bar()
+        announce_tab_bar(view_name, index, count)
         if schedule_tip:
             show_tab_bar_tip(delay=tip_delay)
     except Exception:

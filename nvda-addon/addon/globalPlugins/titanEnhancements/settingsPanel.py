@@ -45,6 +45,16 @@ def build():
                 _('Let a Titan announcement replace NVDA\'s own report of '
                   'that control'), 'replaceFocus')
             # Translators: a setting in the Titan enhancements panel.
+            self.pitchedFocusBox = check(
+                _('Read Titan\'s controls the way Titan Access does: the '
+                  'name, then the control type a little lower, then the '
+                  'state a little higher'), 'pitchedFocus')
+            # Translators: a setting in the Titan enhancements panel.
+            self.earconsBox = check(
+                _('Play Titan\'s own cursor sounds on every control, outside '
+                  'Titan\'s own windows (they already play their own)'),
+                'earcons', default=False)
+            # Translators: a setting in the Titan enhancements panel.
             self.positionBox = check(
                 _('Place the voice where Titan says the control is'),
                 'position')
@@ -130,6 +140,8 @@ def build():
                 'braille': self.brailleBox.GetValue(),
                 'standDownForTitanAccess': self.standDownBox.GetValue(),
                 'announceConnection': self.announceConnectionBox.GetValue(),
+                'pitchedFocus': self.pitchedFocusBox.GetValue(),
+                'earcons': self.earconsBox.GetValue(),
                 'letTitanDrive': self.driveBox.GetValue(),
                 'letTitanPressKeys': self.pressKeysBox.GetValue(),
             })

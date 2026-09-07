@@ -35,6 +35,7 @@ from . import commands
 from . import compat
 from . import configSpec
 from . import dialogs
+from . import earcons
 from . import focus
 from . import gestures
 from . import i18n
@@ -92,6 +93,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             # dialog kind on its very first call, and a filter registered
             # after that would miss it.
             interject.start()
+            # Whether the voice can be placed by the audio session is a COM
+            # walk; it is worked out now, on a thread, so the first
+            # capability question Titan asks does not wait for it.
+            try:
+                panner.PANNER.probe_session()
+            except Exception:                        # noqa: BLE001
+                pass
             link.start()
             self._start_watching()
 
@@ -104,6 +112,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         would outlive the add-on that did it.
         """
         self._watching.set()
+        try:
+            earcons.stop()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             interject.stop()
         except Exception:                            # noqa: BLE001
@@ -150,6 +162,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 continue
             self._connected = now
             if now:
+                # Who Titan is, asked at once. Everything that behaves
+                # differently inside Titan's own windows needs this, and
+                # waiting to be told meant waiting for Titan to speak.
+                try:
+                    link.LINK.introduce()
+                except Exception:                    # noqa: BLE001
+                    pass
                 # Titan is there: ask it what it can do, so a Titan with
                 # something installed since last time is bindable without
                 # either program being restarted. On its own worker; the

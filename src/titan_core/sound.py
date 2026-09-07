@@ -848,6 +848,74 @@ def default_theme_fallback_allowed():
         return False
 
 
+#: Where the screen reader's own cursor earcons live when the user's theme
+#: has not got them. They belong to the READER rather than to a theme -
+#: `cursor.ogg`, `listitem.ogg`, `edge.ogg` and the rest are the set Titan
+#: Access ships and has always played - so a theme may override them and
+#: nothing has to.
+READER_SFX = ('data', 'components', 'titan access', 'sfx')
+
+
+def reader_sound_path(name):
+    """One of the reader's cursor earcons, the user's theme winning.
+
+    `sfx/<theme>/reader/<name>` first, exactly as every other feature's own
+    set is resolved, and then the set Titan Access ships. A reader add-on
+    asking for one of these means the cue Titan's own reader plays for that
+    event, and should hear it whichever theme is chosen.
+    """
+    import os
+    plain = str(name or '').replace('\\', '/').split('/')[-1]
+    if not plain:
+        return None
+    themed = feature_sound_path('reader', plain, allow_default=True)
+    if themed:
+        return themed
+    try:
+        from src.platform_utils import get_base_path
+        base = get_base_path()
+    except Exception:
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__),
+                                            '..', '..'))
+    candidate = os.path.join(base, *READER_SFX, plain)
+    return candidate if os.path.exists(candidate) else None
+
+
+def play_reader_sound(name, pan=None, pitch=1.0):
+    """Play one of the reader's cursor earcons, optionally pitched.
+
+    The pitch is what makes a list item say WHERE in the list it is - Titan
+    Access maps the top of a list to 1.5 and the bottom to 0.7 - and it is
+    only available on the 3D path, because a `pygame` channel has no rate
+    control. Without it the cue still plays, at its own pitch, which is a
+    cue that says less rather than no cue at all.
+    """
+    path = reader_sound_path(name)
+    if not path:
+        return False
+    started = _start_sound_file(path, pan=pan)
+    if not started:
+        return False
+    try:
+        ratio = float(pitch or 1.0)
+    except (TypeError, ValueError):
+        ratio = 1.0
+    if abs(ratio - 1.0) > 1e-3 and started[0] == 'spatial':
+        setter = globals().get('_spatial_set_pitch')
+        if setter is None:
+            try:
+                from src.titan_core import spatial_audio
+                setter = getattr(spatial_audio, 'set_pitch', None)
+            except Exception:
+                setter = None
+        if setter is not None:
+            try:
+                setter(started[1], ratio)
+            except Exception:
+                pass
+    return True
+
+
 def feature_sound_path(subdir, name, allow_default=None):
     """Where one of a FEATURE's own sounds is: `sfx/<theme>/<subdir>/<name>`.
 

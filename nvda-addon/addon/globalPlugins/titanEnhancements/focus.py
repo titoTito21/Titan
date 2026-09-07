@@ -37,6 +37,7 @@ _replace_until = 0.0
 _standing_down = False
 _titan_pid = 0
 _suppressed = 0
+_titan_spoke = 0.0
 
 
 # --------------------------------------------------------------------------- #
@@ -117,6 +118,41 @@ def suppressed():
 
 
 # --------------------------------------------------------------------------- #
+# Whether Titan is coordinating with us at all
+# --------------------------------------------------------------------------- #
+def note_titan_spoke():
+    """Titan has announced something through this channel."""
+    global _titan_spoke
+    with _LOCK:
+        _titan_spoke = time.time()
+
+
+def spoke_at():
+    with _LOCK:
+        return _titan_spoke
+
+
+def titan_coordinates():
+    """Whether Titan is announcing THROUGH US rather than past us.
+
+    This decides whether the add-on may stand in for NVDA's own report of a
+    control, and the reason it has to be asked is a regression this add-on
+    caused: reading every control in Titan in three tones also replaced the
+    tab bar's report - and what made that row a TAB BAR was said by Titan,
+    through `accessible_output3`, which this add-on never sees. The user
+    heard the tab bar announcement disappear.
+
+    A Titan whose `messages.py` predates the reader channel announces that
+    way and never calls in here at all, so "has Titan ever announced
+    through this channel" tells the two apart exactly. Until it has, NVDA's
+    own reporting is left alone: taking it over to add three tones, and
+    losing a sentence in the process, is not a trade worth making.
+    """
+    with _LOCK:
+        return bool(_titan_spoke)
+
+
+# --------------------------------------------------------------------------- #
 # Muting, across NVDA's two spellings of it
 # --------------------------------------------------------------------------- #
 def _get_mode():
@@ -163,17 +199,34 @@ def _off_value(kind):
     return getattr(speech, 'speechMode_off', None)
 
 
+def can_mute():
+    """Whether this NVDA's speech can really be turned off and back.
+
+    Asked, not assumed. A mute that quietly does nothing is the worst
+    possible outcome for anything that stands in for NVDA's own report:
+    NVDA reads the control, we read it again, and the user hears everything
+    twice with no clue why.
+    """
+    kind, _previous = _get_mode()
+    return kind is not None and _off_value(kind) is not None
+
+
 class muted:
     """Speech off for the length of a ``with`` block, then back as it was.
 
     Restoring what was THERE rather than setting 'talk' is the point: a user
     who has NVDA in beeps mode, or has muted speech deliberately, must not
     have it turned on again by a Titan announcement.
+
+    ``worked`` says whether it really happened, because a caller that was
+    going to speak in NVDA's place needs to know that NVDA has been kept
+    quiet before it does.
     """
 
     def __init__(self):
         self._kind = None
         self._previous = None
+        self.worked = False
 
     def __enter__(self):
         kind, previous = _get_mode()
@@ -182,6 +235,7 @@ class muted:
             return self
         self._kind, self._previous = kind, previous
         _set_mode(kind, off)
+        self.worked = True
         return self
 
     def __exit__(self, *_exception):
@@ -191,16 +245,150 @@ class muted:
         return False
 
 
+#: How many focus reports were read in Titan Access's three tones instead
+#: of NVDA's one. Shown by the status command, because "it is not doing it"
+#: and "it is doing it and you cannot hear the difference" are different
+#: problems.
+_pitched = 0
+
+
+def pitched():
+    return _pitched
+
+
 def handle_gain_focus(obj, next_handler):
     """The global plugin's ``event_gainFocus``, factored out to be testable.
 
-    True when the report was muted.
+    Three outcomes, and the order matters.
+
+    1. Titan has just SAID what this event would say (``replaces_focus``):
+       the report is muted and nothing replaces it.
+    2. Otherwise, inside Titan's own windows, the control is read the way
+       Titan's own reader reads one - the name, then the type lower, then
+       the state higher, in one utterance. NVDA's own report is muted and
+       ours takes its place.
+    3. Everywhere else NVDA is the reader and is left entirely alone. That
+       line is deliberate: NVDA's reporting outside Titan knows about
+       tables, landmarks, browse mode and a hundred things this does not,
+       and replacing it wholesale to gain three tones would be a trade
+       nobody asked for.
+
+    Returns 'replaced', 'pitched' or None.
     """
-    global _suppressed
-    if not is_titan_object(obj) or not take_mark():
+    global _suppressed, _pitched
+    if not is_titan_object(obj):
+        # Outside Titan, NVDA is the reader and is left alone - but Titan's
+        # own cursor cues can still be played over it, which is where they
+        # belong: Titan's own windows already make their own sounds.
+        _cue(obj)
         next_handler()
-        return False
-    _suppressed += 1
+        return None
+    if take_mark():
+        _suppressed += 1
+        with muted():
+            next_handler()
+        return 'replaced'
+    if not _pitched_wanted() or not titan_coordinates():
+        next_handler()
+        return None
+    if not can_mute():
+        # Speaking in NVDA's place without being able to keep it quiet is
+        # every control announced twice. Better one tone than two voices.
+        next_handler()
+        return None
+    from . import elements
+    segments = elements.describe(obj)
+    if not segments or not elements.can_pitch():
+        next_handler()
+        return None
+    # Muted rather than skipped, for the reason this whole module exists:
+    # `event_gainFocus` also moves the review cursor, updates braille and
+    # lets the object cache itself, and none of that should be lost to
+    # change how one sentence sounds.
     with muted():
         next_handler()
-    return True
+    _say_unless_titan_does(elements.sequence(segments))
+    _pitched += 1
+    return 'pitched'
+
+
+#: Reading a control is IMMEDIATE. There is no delay here and there must
+#: not be one.
+#:
+#: Titan announces some controls itself - the tab bar says "Tab bar, tab,
+#: Applications, 1 of 6", which is three things the row's own text does not
+#: carry - and either it or the focus event can land first. Waiting a beat
+#: to find out which was tried and was the wrong trade: it put that delay
+#: in front of EVERY control, and a reader that answers a moment late is a
+#: reader that feels broken, which is a worse fault than the one it fixed.
+#:
+#: The race is settled the way a screen reader settles every other race
+#: instead: whoever speaks second and means to interrupt, wins. Titan's
+#: announcement carries `interrupt`, so it cancels this and is heard; and
+#: an announcement that arrives FIRST leaves a mark, which is checked
+#: before a word of this is spoken. What that costs when Titan is second is
+#: the first syllable of a row name, which is what every screen reader
+#: sounds like when something more important arrives.
+PITCH_DELAY_MS = 0
+
+_pending_read = [0]
+
+
+def cancel_pending_read():
+    """Titan has spoken: whatever this was about to read is not wanted."""
+    _pending_read[0] += 1
+
+
+def _say_unless_titan_does(sequence):
+    """Read the control, unless Titan has already said something about it."""
+    marker = _pending_read[0] = _pending_read[0] + 1
+    since = spoke_at()
+
+    def now_or_never():
+        if _pending_read[0] != marker:
+            return                       # a newer focus has overtaken this
+        if spoke_at() != since or take_mark():
+            # Titan spoke about this focus first. Its sentence carries what
+            # the row's own text cannot, so it wins, and the mark is
+            # consumed here rather than eating the NEXT control's report.
+            global _suppressed
+            _suppressed += 1
+            return
+        _speak(sequence)
+
+    if PITCH_DELAY_MS <= 0:
+        now_or_never()
+        return
+    try:
+        import core
+        core.callLater(PITCH_DELAY_MS, now_or_never)
+    except Exception:                                # noqa: BLE001
+        now_or_never()
+
+
+def _cue(obj):
+    try:
+        from . import earcons
+        earcons.announce(obj)
+    except Exception:                                # noqa: BLE001
+        pass
+
+
+def _pitched_wanted():
+    from . import configSpec
+    return bool(configSpec.read().get('pitchedFocus', True))
+
+
+def _speak(sequence):
+    speech = compat.speech
+    if speech is None or not sequence:
+        return
+    try:
+        from . import interject
+        interject.mine()
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        speech.speak(sequence)
+    except Exception:                                # noqa: BLE001
+        pass

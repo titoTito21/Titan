@@ -79,6 +79,24 @@ def status():
         lines.append(_('Titan Access is the reader, so this add-on is silent.'))
     lines.append(_('Focus reports replaced by Titan: {count}.')
                  .format(count=focus.suppressed()))
+    # "It is not doing it" and "it is doing it and I cannot hear the
+    # difference" are different problems, and only a count tells them apart.
+    from . import elements
+    if not focus.titan_coordinates():
+        lines.append(_('This Titan announces through accessible_output3 '
+                       'rather than through this add-on, so its controls '
+                       'are read by NVDA as usual. Restart Titan to get the '
+                       'three-tone reading.'))
+    elif not elements.can_pitch():
+        lines.append(_('This NVDA cannot change the pitch mid-sentence, so '
+                       'controls are read in one tone.'))
+    else:
+        lines.append(_('Controls read in three tones: {count}.')
+                     .format(count=focus.pitched()))
+    from . import earcons
+    if earcons.wanted():
+        lines.append(_('Cursor sounds played: {count}.')
+                     .format(count=earcons.played()))
     # Where the rest of Titan is: not in this add-on's own eight gestures
     # but in NVDA's Input Gestures dialog, which is the one place somebody
     # would look for a key to bind and the last place they would expect to

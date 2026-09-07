@@ -5556,6 +5556,142 @@ Live: `reader.status` lists `segments`, and "Zapisz / przycisk / zaznaczone"
 is spoken as three tones in one breath with `"notes": []` - nothing folded
 away.
 
+#### The tones, and the regression that proved they were not enough
+
+Reported, in order: "NVDA still does not behave like Titan Access, tones";
+then "the pitches are all the same, and they should not be"; then "the tab
+bar, announcing that it is a tab, used to work". All three were real, and
+two of them were mine.
+
+- **A control is read in three tones, inside Titan** (`elements.py`,
+  `focus.handle_gain_focus`). The name at the neutral tone, the control type
+  a little lower, the state a little higher - Titan Access's own numbers and
+  its own order, and its own list of states, so "focusable" and "focused"
+  are never said. NVDA's own report is MUTED rather than skipped, which is
+  the same care the rest of `focus.py` takes: the review cursor, braille and
+  the object cache all still happen. Only inside Titan's own windows -
+  outside them NVDA is the reader and knows about tables, landmarks and
+  browse mode, and replacing that wholesale to gain three tones is a trade
+  nobody asked for. Live: "Przeglądarka internetowa" / "element listy" /
+  "zaznaczony", in NVDA's own words.
+- **The pitch has to be CONVERTED, and was not.** Titan says -10..10; NVDA's
+  `PitchCommand` offsets its own 0..100 setting. `prosody` has known that
+  since it was written (`SCALE = 5`) and `elements.sequence` handed the raw
+  number over, so -4 was a four-point change on a hundred-point scale: the
+  parts were pitched, correctly, and nobody could hear it. `interject` had
+  the same bug for the dialog kind. There is now one place that converts and
+  a test that fails if either stops using it.
+- **`can_pitch()` asks the SYNTHESIZER**, not only NVDA. A driver that does
+  not declare `PitchCommand` has it dropped silently, and the three parts
+  then come out at one tone with nothing saying why - so where it cannot,
+  NVDA's own report is left alone rather than replaced by a flat copy of it.
+- **The tab bar regression was mine, and the fix is more than putting it
+  back.** Replacing NVDA's report on every control in Titan meant the tab
+  bar row was read as a row - and the thing that made it a tab bar was said
+  by Titan, through a channel this NVDA never saw. Measured live, and that
+  is what settled it: `three_tones: 24, replaced: 0` - the mark that says
+  "Titan has already announced this" had never once arrived.
+- **So arriving on the tab bar now says WHICH tab**, which is what it should
+  always have said: "Tab bar" at the neutral tone, "tab" a little lower,
+  "Applications, 1 of 4" a little higher. Saying "Tab bar" and stopping left
+  the one thing the user needs next - where they are - to the announcement
+  that only fires when the tab CHANGES, so arriving said less than moving.
+  `Message` carries written-out `parts` for it, because this announcement's
+  shape is its own rather than "name, control type, state".
+- **A speech log, because "the announcement is gone" is a report with no
+  evidence in it.** `interject._filter` sees every utterance, so it writes
+  down the last dozen and whether this add-on asked for them; they come back
+  in `reading.spoken`. Three different things wear that sentence - it was
+  never sent, it was sent and cancelled, it was said and then said over -
+  and only the log tells them apart. The Elten renderer needed exactly this
+  and for exactly this reason.
+
+**Titan's own process must be restarted** for any of the Titan-side work to
+take effect: `messages.py`, `reader_channel.py` and `bridge_api.py` are all
+imported once at startup, so a Titan that was running before the change goes
+on announcing the old way - which is measurable from the add-on
+(`reading.replaced` stays at 0) and is worth checking first when the two
+halves seem not to agree.
+
+#### The order the two halves speak in, which is not fixed
+
+"Still nothing", then "instead of the tab bar message it says Applications,
+1 of 6, list item, selected", then "the drag and drop used to say
+Applications, at position 1". One cause, and it took the two logs together
+to see it.
+
+Titan really was sending the right thing - the add-on's `heard` log has
+`rf=True seg=3 "Pasek kart, zakładka, Aplikacje, 1 z 6"` - and the mark it
+carries had never once been consumed (`replaced: 0` against `three_tones`
+climbing). **The focus event arrives BEFORE the announcement.** Titan
+announces around the moment the selection moves and either can land first:
+when the announcement is first it leaves a mark and the add-on stands down,
+and when the focus event is first there is no mark yet, nothing in the
+object says Titan is about to speak, and reading the row then reads it
+INSTEAD of what Titan was about to say.
+
+- **Waiting a beat to find out which was the wrong trade.** It was tried -
+  60 ms before every control - and reported at once as NVDA being less
+  responsive, which it was: a delay in front of EVERY control, to settle a
+  race that happens on a handful of them. A reader that answers a moment
+  late feels broken, and that is a worse fault than the one it fixed.
+- **The race is settled the way a reader settles every other one**: an
+  announcement that arrives FIRST leaves a mark, which is checked before a
+  word is spoken, and one that arrives SECOND carries `interrupt` and
+  cancels the read. `PITCH_DELAY_MS` is 0 and must stay 0. What that costs
+  when Titan is second is the first syllable of a row name, which is what
+  every screen reader sounds like when something more important arrives.
+- **A dragged card is ONE utterance in two tones**, not two announcements.
+  It was two - the name, then "at position 2" queued behind it - and
+  everything in this module has learned by now that two announcements about
+  one arrow key is how one of them goes missing.
+- **`capabilities()` must answer instantly, and had stopped.** Working out
+  whether NVDA's audio session can be panned is a COM walk of every session
+  on the machine, and it had been put inside the ONE call Titan makes to
+  decide what it may send - with two and a half seconds of patience and a
+  twenty-second memory of the answer. A slow first call made Titan cache an
+  EMPTY capability set: no position, no tones, nothing marked as replacing
+  a focus report. The probe runs on a thread of its own now and is warmed
+  at startup.
+- **An answer of nothing is no longer kept at all**
+  (`EMPTY_CAPABILITY_SECONDS = 0`). A reader that has just started answers
+  nothing, and remembering that like a real answer costs twenty seconds of
+  flat text.
+- **A mute that quietly does nothing is worse than not muting**, so
+  `can_mute()` is asked before anything stands in for NVDA's report, and
+  where it cannot the report is left alone.
+- **Two logs, because one is never enough.** `reading.heard` is what Titan
+  ASKED for; `reading.spoken` is what NVDA said, tagged with whether this
+  add-on asked for it. "The announcement is gone" is three different faults
+  - never sent, sent and cancelled, said and then said over - and only the
+  pair tells them apart. Both come back from `nvda.settings`.
+
+#### Titan's own cursor sounds, for the rest of the machine
+
+`earcons.py`, off by default. Titan Access plays a sound for every element
+the focus reaches, and it says three things before a word is spoken: what it
+is (`cursor.ogg` for something you can act on, `cursor_static.ogg` for
+something you can only read, `caninteract.ogg` for a pane you can enter),
+where it is (panned to the middle of the control), and for a row where in
+the list it is - the tone falling from 1.5 at the top to 0.7 at the bottom,
+with `edge.ogg` at the first and last.
+
+- **Not inside Titan's own windows.** Titan already plays its own navigation
+  sounds there and a second set on top is clutter - Titan Access suppresses
+  its cues in exactly the same place, for exactly the same reason. So this
+  is for everywhere else: NVDA reading the rest of the machine, with Titan's
+  sounds.
+- **Titan plays them**, because Titan owns the mixer, the theme and the 3D
+  positioning. `sounds.play` takes a `reader/` name and a `pitch`, and
+  `sound.reader_sound_path` resolves the user's theme first
+  (`sfx/<theme>/reader/`) and then the set Titan Access ships - the same
+  rule every other feature's own sounds follow. The pitch is only available
+  on the 3D path, because a pygame channel has no rate control; without it
+  the cue still plays, which is a cue that says less rather than no cue.
+- **One thread, one slot, newest wins.** A focus event is not rare - holding
+  an arrow down produces them faster than a round trip - so a cue that has
+  been overtaken is dropped rather than played late.
+
 #### Anybody can write one of these
 
 `data/docu/programming_guide/client_api_guide_{en,pl}.md`. The NVDA add-on

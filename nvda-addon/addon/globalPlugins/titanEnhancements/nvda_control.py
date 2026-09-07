@@ -199,6 +199,41 @@ def review(where='line', direction='current', **_kw):
     return {'moved': bool(step), 'unit': str(where)}
 
 
+def describe(**_kw):
+    """What the reader would SAY about the focused control, in parts.
+
+    The name, the control type and each state, each with the tone it is
+    said at - Titan Access's own shape. Reading rather than acting, so it
+    needs no switch.
+
+    It is here because "what would you say about this?" is a different
+    question from "what is on the screen" (:mod:`context`), and it is the
+    one to ask when the answer sounds wrong: it says which part is which,
+    which is exactly what cannot be heard when they are all one tone.
+    """
+    from . import context
+    from . import elements
+    from . import focus
+
+    def gather():
+        if compat.api is None:
+            return {'available': False,
+                    'why': 'this NVDA does not expose its api module'}
+        obj = compat.api.getFocusObject()
+        parts = elements.describe(obj)
+        return {
+            'available': True,
+            'segments': [[text, pitch] for text, pitch in parts],
+            'line': ', '.join(text for text, _pitch in parts),
+            'can_pitch': elements.can_pitch(),
+            'in_titan': focus.is_titan_object(obj),
+        }
+    try:
+        return context._on_main(gather)
+    except Exception as error:                       # noqa: BLE001
+        return {'available': False, 'why': str(error)}
+
+
 def read_focus(**_kw):
     """Say the focused control again - NVDA's own report of it."""
     _guard()
@@ -337,11 +372,56 @@ def settings(**_kw):
             absent.append('{}: {}'.format(name, refusal))
         except Exception as error:                   # noqa: BLE001
             absent.append('{}: {}'.format(name, error))
+    # What the reader is DOING, beside what it is set to. "It is not doing
+    # it" and "it is doing it and I cannot hear the difference" are
+    # different problems, and only a count tells them apart - from Titan as
+    # well as from the status gesture.
+    from . import earcons
+    from . import elements
+    from . import focus
     answer = {'settings': out, 'synth': _synth_section(),
-              'may_change': _allowed(), 'may_press_keys': _allowed('keys')}
+              'may_change': _allowed(), 'may_press_keys': _allowed('keys'),
+              'reading': {
+                  'can_pitch': elements.can_pitch(),
+                  'three_tones': focus.pitched(),
+                  'replaced': focus.suppressed(),
+                  'cursor_sounds': earcons.played(),
+                  'titan_pid': focus.titan_pid(),
+                  'titan_coordinates': focus.titan_coordinates(),
+                  'can_mute': focus.can_mute(),
+                  'heard': _heard_log(),
+                  'spoken': _spoken_log(),
+              }}
     if absent:
         answer['absent'] = absent
     return answer
+
+
+def _heard_log():
+    """The last few announcements Titan made, newest last."""
+    from . import channel
+    import time as _time
+    now = _time.time()
+    out = []
+    for row in list(channel.CHANNEL.heard):
+        entry = dict(row)
+        entry['ago'] = round(now - entry.pop('at', now), 2)
+        out.append(entry)
+    return out
+
+
+def _spoken_log():
+    """The last few things NVDA really said, newest last.
+
+    Read this when something "is not announced any more": it says whether
+    the sentence was never sent, was sent and cancelled, or was said and
+    then said over.
+    """
+    from . import interject
+    import time as _time
+    now = _time.time()
+    return [{'ago': round(now - when, 2), 'by': who, 'said': words}
+            for when, who, words in interject.spoken_log()]
 
 
 def setting(name='', value=None, **_kw):
@@ -513,6 +593,7 @@ def handlers():
     return {
         'context': _wrap(_context),
         'window': _wrap(_window),
+        'describe': _wrap(describe),
         'speak': _wrap(speak),
         'stop': _wrap(stop),
         'say_all': _wrap(say_all),

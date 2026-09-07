@@ -631,25 +631,429 @@ class ThePlaceIsAskedOfBOTHLayers(unittest.TestCase):
         self.panner.PANNER._session_capable = True
         self.assertEqual(self.panner.PANNER.why_not(), '')
 
-    def test_the_session_is_asked_once(self):
+    def test_the_session_is_asked_once_and_never_on_the_path(self):
+        """It is a COM walk, and `capabilities` must answer instantly.
+
+        Titan waits two and a half seconds for that answer and used to keep
+        an empty one for twenty; a slow first call there is what made every
+        control be announced twice.
+        """
+        import threading
+        import time
         self.panner.PANNER._session_capable = None
+        self.panner.PANNER._session_probing = False
         asked = []
+        started = threading.Event()
+        release = threading.Event()
         original = self.panner._own_session
-        self.panner._own_session = lambda: asked.append(1)
+
+        def slow():
+            asked.append(1)
+            started.set()
+            release.wait(2.0)
+            return None
+        self.panner._own_session = slow
         try:
-            self.panner.PANNER._session_can()
-            self.panner.PANNER._session_can()
+            began = time.time()
+            for _ in range(3):
+                self.panner.PANNER._session_can()
+            took = time.time() - began
+            self.assertLess(took, 0.5, 'asking must not wait for the walk')
+            self.assertTrue(started.wait(2.0), 'it must happen, on a thread')
+            self.assertEqual(len(asked), 1, 'and only once')
         finally:
+            release.set()
+            time.sleep(0.15)
             self.panner._own_session = original
-        self.assertEqual(len(asked), 1,
-                         'reading every audio session on the machine is a '
-                         'COM walk, not something to do per announcement')
+            self.panner.PANNER._session_probing = False
 
     def test_a_tone_does_not_stand_in_for_a_position_that_is_applied(self):
         from titanEnhancements import prosody
         self.panner.PANNER._session_capable = True
         sequence, notes = prosody.build({'text': 'left', 'position': -1.0})
         self.assertNotIn('tone', ' '.join(notes).lower())
+
+
+class AControlInThreeTones(unittest.TestCase):
+    """Titan Access's shape, rebuilt: name 0, control type -4, state +4."""
+
+    class Obj:
+        def __init__(self, **kw):
+            self.name = kw.get('name', '')
+            self.role = kw.get('role')
+            self.states = kw.get('states', ())
+            self._value = kw.get('value', '')
+            self.description = kw.get('description', '')
+            self.positionInfo = kw.get('position', {})
+
+        @property
+        def value(self):
+            return self._value
+
+    def setUp(self):
+        from titanEnhancements import elements
+        self.elements = elements
+
+    def test_the_pitches_are_titan_accesss_own(self):
+        self.assertEqual((self.elements.NAME_PITCH, self.elements.ROLE_PITCH,
+                          self.elements.STATE_PITCH), (0, -4, 4),
+                         "titan_access/accessible.py's constants; the two "
+                         "readers must not disagree about what a control "
+                         "sounds like")
+
+    def test_the_order_is_name_then_type_then_state(self):
+        class Role:
+            displayString = 'button'
+
+        class State:
+            displayString = 'pressed'
+        parts = self.elements.describe(self.Obj(name='Save', role=Role(),
+                                                states=()))
+        self.assertEqual(parts[0], ('Save', 0))
+        self.assertEqual(parts[1], ('button', -4))
+
+    def test_a_field_says_its_name_and_what_is_in_it(self):
+        parts = self.elements.describe(self.Obj(name='Address',
+                                                value='titosoft.com'))
+        self.assertEqual(parts[0], ('Address, titosoft.com', 0))
+
+    def test_a_value_that_repeats_the_name_is_not_said_twice(self):
+        parts = self.elements.describe(self.Obj(name='Save', value='Save'))
+        self.assertEqual(parts[0], ('Save', 0))
+
+    def test_focus_is_implied_and_never_said(self):
+        # The live reading said "zaznaczalne, mozliwy fokus, ma fokus" for
+        # every single control - noise on everything the reader reports.
+        self.assertNotIn('FOCUSED', self.elements.STATE_ORDER)
+        self.assertNotIn('FOCUSABLE', self.elements.STATE_ORDER)
+
+    def test_the_states_are_titan_accesss_list_in_its_order(self):
+        self.assertEqual(self.elements.STATE_ORDER[:3],
+                         ('SELECTED', 'CHECKED', 'HALFCHECKED'))
+
+    def test_a_place_in_a_list_is_said_at_the_neutral_tone(self):
+        parts = self.elements.describe(self.Obj(
+            name='Notes', position={'indexInGroup': 3,
+                                    'similarItemsInGroup': 10}))
+        self.assertEqual(parts[-1][1], 0)
+        self.assertIn('3', parts[-1][0])
+        self.assertIn('10', parts[-1][0])
+
+    def test_a_description_that_repeats_the_name_is_dropped(self):
+        parts = self.elements.describe(self.Obj(name='Save',
+                                                description='Save'))
+        self.assertEqual(len(parts), 1)
+
+    def test_nothing_describes_to_nothing(self):
+        self.assertEqual(self.elements.describe(None), [])
+
+    def test_it_never_raises_however_odd_the_object(self):
+        class Awkward:
+            @property
+            def name(self):
+                raise RuntimeError('no')
+        self.assertEqual(self.elements.describe(Awkward()), [])
+
+    def test_with_no_pitch_command_it_is_one_flat_line(self):
+        # This NVDA-less test IS the no-PitchCommand case.
+        self.assertFalse(self.elements.can_pitch())
+        out = self.elements.sequence([('Save', 0), ('button', -4)])
+        self.assertEqual(out, ['Save, button'])
+
+    def test_the_pitch_is_converted_onto_nvdas_scale(self):
+        """The bug the user heard as "all one tone".
+
+        Titan says -10..10; NVDA's PitchCommand offsets its own 0..100
+        setting. Handed -4 unchanged, that is a four-point change on a
+        hundred-point scale - the parts are pitched, correctly, and nobody
+        can hear it. `prosody.SCALE` is the one place that knows.
+        """
+        from titanEnhancements import prosody
+        self.assertEqual(prosody._offset(self.elements.ROLE_PITCH), -20)
+        self.assertEqual(prosody._offset(self.elements.STATE_PITCH), 20)
+
+    def test_the_sequence_really_uses_the_converted_number(self):
+        import inspect
+        source = inspect.getsource(self.elements.sequence)
+        self.assertIn('prosody._offset(pitch)', source)
+        self.assertNotIn('offset=int(pitch)', source,
+                         'a raw Titan pitch on NVDA\'s scale is inaudible')
+
+    def test_a_synth_that_cannot_pitch_is_not_pretended_to(self):
+        # NVDA drops an unsupported command silently, so the parts would
+        # come out at one tone with nothing saying why.
+        import inspect
+        source = inspect.getsource(self.elements.can_pitch)
+        self.assertIn('supportedCommands', source)
+
+    def test_an_empty_description_makes_no_utterance(self):
+        self.assertEqual(self.elements.sequence([]), [])
+
+
+class WhichReportTheUserHears(unittest.TestCase):
+    """Three outcomes, and the line drawn at Titan's own windows."""
+
+    def setUp(self):
+        from titanEnhancements import focus
+        self.focus = focus
+        focus.set_titan_pid(4242)
+        # This Titan announces through the channel; the test below covers
+        # the one that does not.
+        focus.note_titan_spoke()
+        was = focus._titan_spoke
+
+        def restore():
+            focus.set_titan_pid(0)
+            focus._titan_spoke = was
+        self.addCleanup(restore)
+        self.called = []
+
+    def _obj(self, pid=4242):
+        class Obj:
+            processID = pid
+            name = 'Save'
+            role = None
+            states = ()
+            value = ''
+            description = ''
+            positionInfo = {}
+        return Obj()
+
+    def test_outside_titan_nvda_is_left_entirely_alone(self):
+        answer = self.focus.handle_gain_focus(self._obj(pid=99),
+                                              lambda: self.called.append(1))
+        self.assertIsNone(answer)
+        self.assertEqual(self.called, [1])
+
+    def test_a_titan_announcement_replaces_the_report(self):
+        import time
+        self.focus.replace_next(time.time() + 5)
+        answer = self.focus.handle_gain_focus(self._obj(),
+                                              lambda: self.called.append(1))
+        self.assertEqual(answer, 'replaced')
+        self.assertEqual(self.called, [1], 'muted, never skipped')
+
+    def test_the_switch_is_what_decides(self):
+        from titanEnhancements import configSpec
+        original = configSpec.read
+        configSpec.read = lambda: dict(
+            {n: True for n in configSpec.SPEC}, pitchedFocus=False)
+        try:
+            answer = self.focus.handle_gain_focus(
+                self._obj(), lambda: self.called.append(1))
+        finally:
+            configSpec.read = original
+        self.assertIsNone(answer)
+
+    def _watch_speech(self):
+        from titanEnhancements import focus
+        said = []
+        original = focus._speak
+        focus._speak = said.append
+        self.addCleanup(lambda: setattr(focus, '_speak', original))
+        return said
+
+    def test_titans_own_announcement_wins_even_when_it_arrives_second(self):
+        """The tab bar, pinned.
+
+        Titan announces "Tab bar, tab, Applications, 1 of 6" around the
+        moment the focus moves, and when the focus event lands FIRST there
+        is no mark yet and nothing in the object says Titan is about to
+        speak. Reading the row then reads it INSTEAD of the announcement -
+        which is exactly what the user heard, measured live as
+        `three_tones` climbing while `replaced` stayed at 0.
+
+        With no NVDA here the wait runs inline, so this drives the two
+        halves by hand: arm the read, let Titan speak, then let it fire.
+        """
+        from titanEnhancements import focus
+        said = self._watch_speech()
+        scheduled = []
+        original = focus.core if hasattr(focus, 'core') else None
+
+        # Capture what would have been run after the wait.
+        import titanEnhancements.focus as f
+        real = f._say_unless_titan_does
+
+        def arm(sequence):
+            marker = f._pending_read[0] = f._pending_read[0] + 1
+            since = f.spoke_at()
+
+            def later():
+                if f._pending_read[0] != marker:
+                    return
+                if f.spoke_at() != since or f.take_mark():
+                    return
+                f._speak(sequence)
+            scheduled.append(later)
+        arm(['Applications, 1 of 6'])
+        focus.note_titan_spoke()          # Titan's announcement lands now
+        scheduled[0]()
+        self.assertEqual(said, [],
+                         "Titan's sentence carries what the row's own text "
+                         "cannot, so it wins")
+        self.assertIs(real, f._say_unless_titan_does)
+
+    def test_a_control_titan_says_nothing_about_is_still_read(self):
+        from titanEnhancements import focus
+        said = self._watch_speech()
+        focus.note_titan_spoke()          # some earlier, unrelated sentence
+        focus._say_unless_titan_does(['Notes, list item'])
+        self.assertEqual(said, [['Notes, list item']],
+                         'nothing overtook it, so it is read')
+
+    def test_a_newer_focus_cancels_the_one_before_it(self):
+        from titanEnhancements import focus
+        said = self._watch_speech()
+        focus.note_titan_spoke()
+        marker = focus._pending_read[0]
+        focus._pending_read[0] = marker + 99
+        focus._say_unless_titan_does(['second'])
+        self.assertEqual(said, [['second']])
+
+    def test_a_control_is_read_with_no_delay_at_all(self):
+        """A reader that answers a moment late is a reader that feels broken.
+
+        Waiting a beat to see whether Titan was about to announce was tried
+        and reported at once as NVDA being less responsive: the delay was in
+        front of EVERY control, to settle a race that happens on a handful
+        of them.
+        """
+        from titanEnhancements import focus
+        self.assertEqual(focus.PITCH_DELAY_MS, 0)
+
+    def test_an_announcement_drops_a_read_that_has_not_happened(self):
+        from titanEnhancements import channel, focus
+        said = self._watch_speech()
+        before = focus._pending_read[0]
+        channel.CHANNEL.announce(text='Pasek kart')
+        self.assertNotEqual(focus._pending_read[0], before,
+                            'a read Titan has overtaken is not wanted')
+        self.assertEqual(said, [])
+
+    def test_a_titan_that_speaks_PAST_us_is_left_entirely_alone(self):
+        """The regression, pinned.
+
+        A Titan whose messages.py predates the reader channel announces
+        through accessible_output3 - which this add-on never sees. Standing
+        in for NVDA's report there loses whatever Titan said, and what the
+        user heard was the tab bar announcement disappear.
+        """
+        self.focus._titan_spoke = 0.0
+        answer = self.focus.handle_gain_focus(self._obj(),
+                                              lambda: self.called.append(1))
+        self.assertIsNone(answer)
+        self.assertEqual(self.called, [1],
+                         "NVDA's own report must still happen")
+
+    def test_one_announcement_through_the_channel_is_what_unlocks_it(self):
+        from titanEnhancements import channel
+        self.focus._titan_spoke = 0.0
+        self.assertFalse(self.focus.titan_coordinates())
+        channel.CHANNEL.announce(text='anything')
+        self.assertTrue(self.focus.titan_coordinates())
+
+    def test_without_a_pitch_command_nvdas_own_report_stands(self):
+        # Replacing NVDA's report to say the same thing in one tone would
+        # be a loss, not a gain.
+        from titanEnhancements import elements
+        self.assertFalse(elements.can_pitch())
+        answer = self.focus.handle_gain_focus(self._obj(),
+                                              lambda: self.called.append(1))
+        self.assertIsNone(answer)
+        self.assertEqual(self.called, [1])
+
+
+class TitansOwnCursorSounds(unittest.TestCase):
+    """Titan Access's cue rules, including the one that reads backwards."""
+
+    class Role:
+        def __init__(self, name):
+            self.name = name
+
+    class Obj:
+        def __init__(self, role, position=None, pid=99):
+            self.role = role
+            self.positionInfo = position or {}
+            self.processID = pid
+            self.location = (0, 0, 100, 20)
+
+    def setUp(self):
+        from titanEnhancements import earcons
+        self.earcons = earcons
+
+    def test_something_you_can_act_on_gets_the_cursor_cue(self):
+        cues = self.earcons.cues_for(self.Obj(self.Role('BUTTON')))
+        self.assertEqual(cues[0][0], self.earcons.SND_CURSOR)
+
+    def test_something_you_can_only_read_gets_the_static_one(self):
+        cues = self.earcons.cues_for(self.Obj(self.Role('STATICTEXT')))
+        self.assertEqual(cues[0][0], self.earcons.SND_CURSOR_STATIC)
+
+    def test_a_row_gets_the_list_cue(self):
+        cues = self.earcons.cues_for(self.Obj(
+            self.Role('LISTITEM'),
+            {'indexInGroup': 5, 'similarItemsInGroup': 9}))
+        self.assertEqual(cues[0][0], self.earcons.SND_LIST_ITEM)
+        self.assertEqual(len(cues), 1, 'the middle of a list has no edge')
+
+    def test_the_top_of_a_list_is_high_and_the_bottom_low(self):
+        top = self.earcons.list_pitch(1, 10)
+        bottom = self.earcons.list_pitch(10, 10)
+        self.assertAlmostEqual(top, 1.5)
+        self.assertAlmostEqual(bottom, 0.7)
+        self.assertGreater(top, bottom, 'the list is heard as its shape')
+
+    def test_a_list_of_one_is_not_a_division_by_zero(self):
+        self.assertTrue(0.5 < self.earcons.list_pitch(1, 1) < 1.6)
+        self.assertTrue(0.5 < self.earcons.list_pitch(0, 0) < 1.6)
+
+    def test_both_ends_of_a_list_say_so(self):
+        for index in (1, 9):
+            cues = self.earcons.cues_for(self.Obj(
+                self.Role('LISTITEM'),
+                {'indexInGroup': index, 'similarItemsInGroup': 9}))
+            self.assertEqual(cues[-1][0], self.earcons.SND_EDGE, index)
+
+    def test_a_container_stepped_into_says_you_can_enter_it(self):
+        cues = self.earcons.cues_for(self.Obj(self.Role('PANE')),
+                                     for_navigation=True)
+        self.assertEqual(cues[0][0], self.earcons.SND_CAN_INTERACT)
+        # ...and not when the focus merely landed there.
+        cues = self.earcons.cues_for(self.Obj(self.Role('PANE')))
+        self.assertEqual(cues[0][0], self.earcons.SND_CURSOR_STATIC)
+
+    def test_titans_own_windows_are_left_alone(self):
+        # Titan already plays its own navigation sounds there, and a second
+        # set on top is clutter. Titan Access suppresses its cues in exactly
+        # the same place.
+        from titanEnhancements import configSpec, focus
+        original = configSpec.read
+        configSpec.read = lambda: dict({n: True for n in configSpec.SPEC},
+                                       earcons=True)
+        focus.set_titan_pid(4242)
+        try:
+            self.assertFalse(self.earcons.announce(
+                self.Obj(self.Role('BUTTON'), pid=4242)))
+        finally:
+            configSpec.read = original
+            focus.set_titan_pid(0)
+
+    def test_it_is_off_until_it_is_switched_on(self):
+        from titanEnhancements import configSpec
+        self.assertIn('default=False', configSpec.SPEC['earcons'])
+        self.assertFalse(self.earcons.wanted())
+        self.assertFalse(self.earcons.announce(self.Obj(self.Role('BUTTON'))))
+
+    def test_nothing_describes_to_no_cue(self):
+        self.assertEqual(self.earcons.cues_for(None), [])
+
+    def test_the_names_are_titan_accesss_own(self):
+        for name in (self.earcons.SND_CURSOR, self.earcons.SND_CURSOR_STATIC,
+                     self.earcons.SND_LIST_ITEM, self.earcons.SND_EDGE,
+                     self.earcons.SND_CAN_INTERACT):
+            self.assertTrue(name.endswith('.ogg'), name)
+        self.assertEqual(self.earcons.SND_LIST_ITEM, 'listitem.ogg')
 
 
 class TitanAccessHabitsInNvda(unittest.TestCase):
@@ -700,6 +1104,12 @@ class TitanAccessHabitsInNvda(unittest.TestCase):
         self.assertEqual(interject.KIND_PITCH, -4,
                          "Titan Access's _REGION_PITCH; the two must match "
                          "or one desktop has two voices for one word")
+
+    def test_and_that_pitch_is_converted_before_nvda_sees_it(self):
+        import inspect
+        from titanEnhancements import interject
+        source = inspect.getsource(interject._pitched)
+        self.assertIn('prosody._offset(offset)', source)
 
     def test_a_state_goes_after_it(self):
         self.interject.state_suffix(text='checked')

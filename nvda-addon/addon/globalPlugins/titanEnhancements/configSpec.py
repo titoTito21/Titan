@@ -31,6 +31,16 @@ SPEC = {
     # other direction when it asks whether an external client may drive it.
     'letTitanDrive': 'boolean(default=True)',
     'letTitanPressKeys': 'boolean(default=False)',
+    # Reading a control the way Titan's own reader reads one: the name, the
+    # control type a little lower, the state a little higher. Only inside
+    # Titan's own windows - outside them NVDA is the reader and knows far
+    # more about what it is looking at than this does.
+    'pitchedFocus': 'boolean(default=True)',
+    # Titan's own cursor cues on every focus change, everywhere EXCEPT
+    # Titan's own windows (which already play their own). Off by default: it
+    # changes what the whole machine sounds like, which is not a decision to
+    # make for somebody, and it needs Titan running.
+    'earcons': 'boolean(default=False)',
 }
 
 

@@ -265,6 +265,28 @@ class ChoosingTheReader(unittest.TestCase):
         asked = [call for call in self._peer.calls if call[0] == 'capabilities']
         self.assertEqual(len(asked), 1)
 
+    def test_an_answer_of_nothing_is_not_kept_like_a_real_one(self):
+        """A reader that was slow for one call must not cost twenty seconds.
+
+        Measured live: one slow COM call on the reader's side made Titan
+        cache an EMPTY capability set, and for the next twenty seconds it
+        sent flat text with no position, no tones and nothing marked as
+        replacing the reader's own report - so NVDA read every control and
+        the add-on read it again on top.
+        """
+        self._peer = FakePeer(capabilities={})
+        for _ in range(3):
+            reader_channel.channel()
+        asked = [c for c in self._peer.calls if c[0] == 'capabilities']
+        self.assertEqual(len(asked), 3, 'nothing is worth asking again')
+
+    def test_a_real_answer_is_kept(self):
+        self._peer = FakePeer()
+        for _ in range(4):
+            reader_channel.channel()
+        asked = [c for c in self._peer.calls if c[0] == 'capabilities']
+        self.assertEqual(len(asked), 1)
+
     def test_titan_never_waits_on_a_reader(self):
         self._peer = FakePeer()
         channel = reader_channel.channel()
@@ -305,6 +327,60 @@ class TheAnnouncementsThatUsedToBeSilent(unittest.TestCase):
             messages.announce_view_switched('Applications', 0, 0)
         self.assertEqual(recorder.said[0].sentence(),
                          in_place('Applications', role=messages._('tab')))
+
+    def test_the_tab_bar_still_says_it_is_the_tab_bar(self):
+        """Pinned, because breaking it is exactly what happened once.
+
+        Everything else about the tab bar can change; that arriving on it
+        says so must not.
+        """
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_tab_bar()
+        self.assertEqual(len(recorder.said), 1)
+        self.assertIn(messages._("Tab bar"), recorder.said[0].sentence())
+
+    def test_arriving_on_the_tab_bar_says_which_tab(self):
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_tab_bar('Applications', 1, 4)
+        line = recorder.said[0].sentence()
+        self.assertIn(messages._("Tab bar"), line)
+        self.assertIn('Applications', line)
+        self.assertIn(messages._("tab"), line)
+
+    def test_and_says_it_in_three_tones(self):
+        # The place at the neutral tone, what it is lower, which one higher
+        # - Titan Access's own shape.
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_tab_bar('Applications', 1, 4)
+        parts = recorder.said[0].segments()
+        self.assertEqual(len(parts), 3)
+        self.assertEqual(parts[0][1], reader_channel.NAME_PITCH)
+        self.assertEqual(parts[1][1], reader_channel.ROLE_PITCH)
+        self.assertEqual(parts[2][1], reader_channel.STATE_PITCH)
+        self.assertIn('Applications', parts[2][0])
+
+    def test_a_caller_that_does_not_know_its_tabs_is_unchanged(self):
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_tab_bar()
+        self.assertEqual(len(recorder.said[0].segments()), 1)
+
+    def test_it_replaces_the_readers_own_read_of_the_row(self):
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_tab_bar('Applications', 1, 4)
+        self.assertTrue(recorder.said[0].replaces_focus)
+
+    def test_written_out_parts_survive_to_a_reader_that_takes_them(self):
+        message = reader_channel.Message(
+            'x', parts=[('Tab bar', 0), ('tab', -4), ('Applications', 4)])
+        payload = message.for_addon(Recorder(segments=True))
+        self.assertEqual(payload['segments'],
+                         [['Tab bar', 0], ['tab', -4], ['Applications', 4]])
+        self.assertEqual(payload['text'], 'Tab bar, tab, Applications')
 
     def test_a_shell_group_reaches_every_reader(self):
         for capabilities in ({'text': True}, {'replaces_focus': True}):
@@ -356,11 +432,24 @@ class TheAnnouncementsThatUsedToBeSilent(unittest.TestCase):
         recorder = Recorder(replaces_focus=True, pitch=True)
         with Swap(self, recorder):
             self.assertTrue(messages.announce_drag_move('Applications', 2))
-        self.assertEqual(len(recorder.said), 2)
-        self.assertEqual(recorder.said[0].pitch, messages.DRAG_NAME_PITCH)
-        self.assertTrue(recorder.said[0].interrupt)
-        # The second half must not cancel the first.
-        self.assertFalse(recorder.said[1].interrupt)
+        # ONE utterance: two announcements about one arrow key is how one
+        # of them goes missing.
+        self.assertEqual(len(recorder.said), 1)
+        parts = recorder.said[0].segments()
+        self.assertEqual(len(parts), 2)
+        self.assertEqual(parts[0][0], 'Applications')
+        self.assertEqual(parts[0][1], messages.DRAG_NAME_PITCH)
+        self.assertIn('2', parts[1][0])
+        self.assertEqual(parts[1][1], 0)
+        self.assertTrue(recorder.said[0].replaces_focus)
+
+    def test_the_dragged_card_still_says_its_name_and_where_it_went(self):
+        recorder = Recorder(replaces_focus=True)
+        with Swap(self, recorder):
+            messages.announce_drag_move('Applications', 2)
+        line = recorder.said[0].sentence()
+        self.assertIn('Applications', line)
+        self.assertIn('2', line)
 
     def test_a_dragged_card_says_nothing_to_a_reader_reading_the_row_itself(self):
         recorder = Recorder(text=True)

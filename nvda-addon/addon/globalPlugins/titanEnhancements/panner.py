@@ -175,6 +175,7 @@ class Panner:
         self._panned_session = None
         self._timer = None
         self._session_capable = None
+        self._session_probing = False
         self.enabled = True
 
     # ------------------------------------------------------------- placing
@@ -303,27 +304,53 @@ class Panner:
     def _session_can(self):
         """Whether NVDA's own audio session has two channels to move between.
 
-        Asked rather than assumed, and remembered: it is a COM walk of every
-        audio session on the machine, which is not something to do on the
-        announcement path or once per capability question.
+        **Never blocks, and that is not an optimisation.** Finding out is a
+        COM walk of every audio session on the machine, and this is reached
+        from `capabilities()` - the one call Titan makes to decide what it
+        may send, with a two-and-a-half second patience and a twenty-second
+        memory of the answer. A first call that took longer than that made
+        Titan cache an EMPTY capability set: no position, no pitch, and
+        nothing marked as replacing a focus report, so NVDA read every
+        control and the add-on read it again on top. Everything twice, from
+        one slow COM call inside a question that had to be instant.
+
+        So the answer is whatever has been worked out already, and working
+        it out happens on a thread of its own. Until it comes back the
+        answer is "no", which costs a tone on the first control after
+        NVDA starts and nothing else.
         """
         with _LOCK:
             cached = self._session_capable
+            probing = self._session_probing
         if cached is not None:
             return cached
-        answer = False
-        session = _own_session()
-        if session is not None:
-            volume = _session_channel_volume(session)
-            if volume is not None:
-                try:
-                    answer = int(volume.GetChannelCount()) == 2
-                except Exception as error:           # noqa: BLE001
-                    _note(f'the audio session would not say how many '
-                          f'channels it has: {error}')
+        if not probing:
+            self.probe_session()
+        return False
+
+    def probe_session(self):
+        """Work out whether the audio session can be panned, off the path."""
         with _LOCK:
-            self._session_capable = answer
-        return answer
+            if self._session_probing or self._session_capable is not None:
+                return
+            self._session_probing = True
+
+        def look():
+            answer = False
+            try:
+                session = _own_session()
+                if session is not None:
+                    volume = _session_channel_volume(session)
+                    if volume is not None:
+                        answer = int(volume.GetChannelCount()) == 2
+            except Exception as error:               # noqa: BLE001
+                _note(f'the audio session would not say how many channels '
+                      f'it has: {error}')
+            with _LOCK:
+                self._session_capable = answer
+                self._session_probing = False
+        threading.Thread(target=look, name='TitanPannerProbe',
+                         daemon=True).start()
 
     def why_not(self):
         """Why the voice cannot be placed, in one sentence, before trying.

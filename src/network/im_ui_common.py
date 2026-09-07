@@ -56,7 +56,7 @@ except Exception as _exc:  # pragma: no cover - only on a broken install
     def speak_notification(text, notification_type='info', play_sound_effect=True):
         print(f"[Titan IM UI] {text}")
 
-    def announce_tab_bar():
+    def announce_tab_bar(view_name='', index=None, count=None):
         try:
             play_sound('ui/tapbar.ogg')
         except Exception:
@@ -407,7 +407,13 @@ class TabbedListFrame(wx.Frame):
     # ------------------------------------------------------------- feedback
     def emit_focus_feedback(self, index: int) -> None:
         if self.is_tab_bar_row(index):
-            announce_tab_bar()
+            # WHICH tab, not only that this is the bar. Arriving on the bar
+            # used to say "Tab bar" and stop, so the one thing the user
+            # needs next - where they are - was left to the announcement
+            # that fires when the tab CHANGES.
+            announce_tab_bar(self.tab_label(self.current_tab),
+                             self.tab_index(self.current_tab) + 1,
+                             len(self.tabs))
             self._last_focus_idx = index
             return
 

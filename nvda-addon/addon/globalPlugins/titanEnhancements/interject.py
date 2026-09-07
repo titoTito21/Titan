@@ -70,6 +70,32 @@ _suffix = None            # (text, when)
 _registered = False
 _applied = 0
 
+#: The last few things NVDA actually said, and who asked for them. "The
+#: announcement is gone" is a report with no evidence in it, and there are
+#: three different things it can mean - it was never sent, it was sent and
+#: something cancelled it, or it was said and something else was said over
+#: the top. Only a log of what was really spoken tells them apart. This is
+#: the same answer the Elten renderer arrived at, for the same reason.
+LOG_KEEP = 12
+_log = []
+_ours = 0.0
+
+
+def mine():
+    """Mark the next utterance as this add-on's own."""
+    global _ours
+    _ours = time.time()
+
+
+def spoken_log():
+    with _LOCK:
+        return list(_log)
+
+
+def last_spoken_at():
+    with _LOCK:
+        return _log[-1][0] if _log else 0.0
+
 
 def _fresh(armed):
     return armed is not None and (time.time() - armed[1]) < WINDOW
@@ -144,6 +170,10 @@ def _filter(speechSequence=None, **_kwargs):
     global _applied
     sequence = list(speechSequence or [])
     try:
+        _remember(sequence)
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
         with _LOCK:
             prefix = _prefix if _fresh(_prefix) else None
             suffix = _suffix if _fresh(_suffix) else None
@@ -167,12 +197,34 @@ def _filter(speechSequence=None, **_kwargs):
     return sequence
 
 
+def _remember(sequence):
+    """Write down what is about to be said, and whether we asked for it."""
+    global _ours
+    words = ' '.join(part for part in sequence
+                     if isinstance(part, str) and part.strip()).strip()
+    if not words:
+        return
+    now = time.time()
+    with _LOCK:
+        ours = bool(_ours and (now - _ours) < 0.5)
+        _ours = 0.0
+        _log.append((now, 'addon' if ours else 'nvda', words[:120]))
+        del _log[:-LOG_KEEP]
+
+
 def _pitched(word, offset):
-    """One word at its own tone, with the tone put back afterwards."""
+    """One word at its own tone, with the tone put back afterwards.
+
+    The offset is Titan's -10..10 and NVDA's is its own 0..100 setting, so
+    it is converted rather than passed through - handed over unchanged, -4
+    is a four-point change on a hundred-point scale and the word comes out
+    at the same tone as everything else.
+    """
     if not offset or compat.PitchCommand is None:
         return [word]
+    from . import prosody
     try:
-        return [compat.PitchCommand(offset=int(offset)), word,
+        return [compat.PitchCommand(offset=prosody._offset(offset)), word,
                 compat.PitchCommand(offset=0)]
     except Exception:                                # noqa: BLE001
         return [word]

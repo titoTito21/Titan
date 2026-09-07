@@ -382,6 +382,15 @@ def _reader_announce(text, **detail):
         return False
 
 
+def _reader_parts(parts, **detail):
+    """Say one thing whose parts and tones are written out here."""
+    try:
+        from src.accessibility import reader_channel
+        return reader_channel.announce_parts(parts, **detail)
+    except Exception:
+        return False
+
+
 #: What Titan Access calls each kind, by its key in that component's own
 #: catalogue. Asked of it rather than translated again here, so the word a
 #: user hears for a question is the SAME word in both readers - two
@@ -496,22 +505,41 @@ def speak_sr_only(text, interrupt=True):
         pass
 
 
-def announce_tab_bar():
-    """Play the tab-bar focus sound and announce "Tab bar" to the SR.
+def announce_tab_bar(view_name='', index=None, count=None):
+    """Play the tab-bar focus sound and say where the keyboard has landed.
 
-    Sound is always played (sighted users still benefit from the earcon);
-    the spoken "Tab bar" marker is emitted only when a real screen reader
-    is active so the platform-TTS fallback never says it.
+    "Tab bar" alone says the user has arrived somewhere and not WHERE - the
+    tab they are on is the whole of what they need next, and it was left to
+    a separate announcement that only fires when the tab CHANGES. Arriving
+    on the bar therefore said less than moving along it.
+
+    So it is one announcement in three parts, in Titan Access's own tones:
+    the place at the neutral tone, what kind of thing they are on a little
+    lower, and which one a little higher - "Tab bar, tab, Applications".
+    A reader that cannot pitch parts hears exactly the same words in one
+    tone.
+
+    The sound is always played (sighted users still benefit from the
+    earcon); the spoken part goes only to a reader, as it always has.
     """
     try:
         play_sound('ui/tapbar.ogg')
     except Exception:
         pass
+    from src.accessibility import reader_channel
+    name_pitch, role_pitch, state_pitch = reader_channel._pitches()
+    parts = [(_("Tab bar"), name_pitch)]
+    if view_name:
+        parts.append((_("tab"), role_pitch))
+        head = str(view_name)
+        if index is not None and count:
+            head = _("{}, {} of {}").format(head, index, count)
+        parts.append((head, state_pitch))
     # Whichever reader is listening.  Titan Access and a reader whose add-on
     # is on the bus both replace their own read of the underlying row with
     # this (``replaces_focus``), so the marker is said once rather than
     # racing the row; anything else simply hears the words.
-    _reader_announce(_("Tab bar"), interrupt=True, replaces_focus=True)
+    return _reader_parts(parts, interrupt=True, replaces_focus=True)
 
 
 def announce_view_switched(view_name, idx, total):
@@ -660,21 +688,19 @@ def announce_drag_move(name, position):
     ]
     if _ta_announce_segments(segments, interrupt=True):
         return True
-    # A reader whose add-on is on the bus takes a pitch, but for the whole
-    # utterance rather than per segment - so the two tones become two
-    # announcements, the second queued behind the first.  It is offered only
-    # to a reader that can suppress its own read of the row, or this would
-    # be the third thing said about one arrow key.
+    # ONE utterance in two tones, not two announcements.  Sending them
+    # separately made the second queue behind the first and put a second
+    # thing in flight for one arrow key - and everything in this module has
+    # learned by now that two announcements about one event is how one of
+    # them goes missing.  It is offered only to a reader that can suppress
+    # its own read of the row, or this would be said as well as it rather
+    # than instead of it.
     channel = _channel()
-    if not (channel.can('replaces_focus') and channel.can('pitch')):
+    if not channel.can('replaces_focus'):
         return False
-    said = channel.say(_message(name, pitch=DRAG_NAME_PITCH,
-                                interrupt=True, replaces_focus=True))
-    if not said:
-        return False
-    channel.say(_message(_("at position {}").format(position),
-                         interrupt=False))
-    return True
+    return channel.say(_message(
+        ', '.join(text for text, _pitch in segments),
+        parts=segments, interrupt=True, replaces_focus=True))
 
 
 _checklist_announce_timer = None

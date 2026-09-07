@@ -89,6 +89,16 @@ READER_CLIENTS = ('nvda',)
 #: changing their mind and long enough not to be a round trip per sentence.
 CAPABILITY_SECONDS = 20.0
 
+#: An answer of NOTHING is not kept at all. A reader that has just started -
+#: or that was slow for one call - answers nothing, and remembering that
+#: like a real answer means Titan spends the next twenty seconds sending
+#: flat text with no position, no tones and nothing marked as replacing the
+#: reader's own report. Measured: exactly that, from one slow COM call on
+#: the reader's side, and what the user heard was every control announced
+#: twice. Asking again costs one call on a connection that is not answering
+#: properly yet, which is the moment it is worth paying for.
+EMPTY_CAPABILITY_SECONDS = 0.0
+
 #: A reader that has not answered in this long is treated as gone. Titan
 #: must never wait on speech: the interface is what the user is holding.
 CALL_TIMEOUT = 2.5
@@ -261,7 +271,7 @@ class Message:
     def __init__(self, text, position=0.0, pitch=0, rate=0, volume=0,
                  elevation=0.0, role='', states=(), index=None, count=None,
                  braille=None, interrupt=True, replaces_focus=False,
-                 language='', spelling=False):
+                 language='', spelling=False, parts=None):
         self.text = str(text or '')
         self.position = float(position or 0.0)
         self.elevation = float(elevation or 0.0)
@@ -277,9 +287,19 @@ class Message:
         self.replaces_focus = bool(replaces_focus)
         self.language = str(language or '')
         self.spelling = bool(spelling)
+        #: The parts and their tones, written out by the caller, for an
+        #: announcement whose shape is not "name, control type, state" -
+        #: the tab bar says "Tab bar", then the word tab lower, then which
+        #: tab higher, and that is three parts in an order of its own.
+        self.parts = [(str(text or ''), int(pitch or 0))
+                      for text, pitch in (parts or [])
+                      if str(text or '').strip()] or None
 
     def sentence(self):
         """Everything, folded into one line - for a channel that takes text.
+
+        Parts the caller wrote out are joined in the order they were given;
+        everything else is Titan's own wording, below.
 
         The order and the wording are Titan's own, not a new invention:
         "Applications, 1 of 4, tab" is what the tab bar has always said,
@@ -287,6 +307,8 @@ class Message:
         msgid the tab bar has always used, so no catalogue has to gain a
         string for a reader to keep the sentence it already had.
         """
+        if self.parts:
+            return ', '.join(text for text, _pitch in self.parts)
         head = self.text
         if self.index is not None and self.count:
             head = _('{}, {} of {}').format(self.text, self.index, self.count)
@@ -308,6 +330,8 @@ class Message:
         A channel that cannot pitch parts separately flattens this back to
         `sentence()`, which is the same words.
         """
+        if self.parts:
+            return list(self.parts)
         name_pitch, role_pitch, state_pitch = _pitches()
         head = self.text
         if self.index is not None and self.count:
@@ -422,7 +446,10 @@ def _capabilities_of(peer):
     with _LOCK:
         same = (_cache['peer'] == peer.addon_id
                 and _cache['joined'] == getattr(peer, 'joined_at', 0.0))
-        fresh = same and (now - _cache['asked']) < CAPABILITY_SECONDS
+        # An answer of nothing is not an answer, and is not kept like one.
+        keep = (CAPABILITY_SECONDS if _cache['capabilities']
+                else EMPTY_CAPABILITY_SECONDS)
+        fresh = same and (now - _cache['asked']) < keep
         if fresh:
             return dict(_cache['capabilities'])
         first_time = not same
@@ -475,6 +502,20 @@ def channel():
 def can(what):
     """Whether the reader that is listening can take ``what``."""
     return channel().can(what)
+
+
+def announce_parts(parts, **detail):
+    """Say one thing whose parts and tones the caller has written out.
+
+    For an announcement whose shape is its own rather than "name, control
+    type, state": the tab bar is "Tab bar", then the word tab a little
+    lower, then which tab a little higher.
+    """
+    parts = list(parts or [])
+    if not parts:
+        return False
+    text = ', '.join(str(piece) for piece, _pitch in parts)
+    return channel().say(Message(text, parts=parts, **detail))
 
 
 def announce(text, **detail):

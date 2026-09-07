@@ -100,6 +100,32 @@ class Link:
     def connected(self):
         return titan_actions.is_connected()
 
+    def introduce(self):
+        """Ask Titan who it is, rather than waiting to be told.
+
+        `attach` is Titan introducing itself, and Titan only does that the
+        first time it ANNOUNCES something - which on a desktop where nobody
+        has pressed anything is never. Everything that behaves differently
+        inside Titan's own windows was therefore switched off until Titan
+        happened to speak. Asking costs one call at connection.
+        """
+        ok, data = self.bridge('hello', timeout=CALL_TIMEOUT)
+        if not ok or not isinstance(data, dict):
+            return False
+        from . import focus
+        pid = data.get('pid')
+        if pid:
+            with self._lock:
+                self.pid = focus.set_titan_pid(pid)
+                self.attached = True
+                self.language = str(data.get('language') or '')
+                try:
+                    self.api = int(data.get('api') or 0)
+                except (TypeError, ValueError):
+                    pass
+                self.attached_at = time.time()
+        return bool(pid)
+
     def bridge(self, call, timeout=CALL_TIMEOUT, **args):
         """One typed call into Titan. Returns (ok, data_or_error).
 
@@ -222,6 +248,11 @@ DECLARED = [
     {'name': 'window',
      'summary': "The window NVDA is reading, with its handle - which is not "
                 "always the window Windows calls the foreground.",
+     'params': {}},
+    {'name': 'describe',
+     'summary': "What the reader would say about the focused control, in "
+                "parts: the name, the control type and each state, each "
+                "with the tone it is said at.",
      'params': {}},
     {'name': 'speak',
      'summary': "Read something out in NVDA's own voice, optionally from a "

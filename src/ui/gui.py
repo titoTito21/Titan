@@ -2336,7 +2336,13 @@ class TitanApp(wx.Frame):
         """
         try:
             from src.accessibility.messages import announce_tab_bar
-            announce_tab_bar()
+            # WHICH tab, not only that this is the bar. The window already
+            # works this out for the row's own text; saying "Tab bar" and
+            # stopping left the user to press an arrow to find out where
+            # they were.
+            short, idx, total = self._get_tab_bar_announcement()
+            announce_tab_bar(short, idx + 1 if total else None,
+                             total or None)
         except Exception as e:
             print(f"[GUI] announce_tab_bar error: {e}")
 

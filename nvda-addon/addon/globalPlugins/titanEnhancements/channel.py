@@ -60,7 +60,14 @@ def _priority(announcement):
 class Channel:
     """Titan's announcements, in NVDA."""
 
+    #: The last few announcements Titan made, as they arrived. The speech
+    #: log says what NVDA said; this says what it was ASKED to say, and the
+    #: two together are what tell "Titan never sent it" from "it was sent
+    #: and something ate it".
+    HEARD_KEEP = 10
+
     def __init__(self):
+        self.heard = []
         self.enabled = True
         self.braille_enabled = True
         # `prosody.build` took two of these and nothing passed them, and
@@ -78,7 +85,30 @@ class Channel:
 
     # ------------------------------------------------------------ announce
     def announce(self, **announcement):
-        """The one call Titan makes. Answers what was and was not applied."""
+        """The one call Titan makes. Answers what was and was not applied.
+
+        The FIRST line notes that Titan is talking through this channel at
+        all, before any of the reasons this call might do nothing. That is
+        deliberate: it is what tells a Titan that coordinates with the
+        add-on from one whose `messages.py` predates the channel and
+        announces past it through `accessible_output3`, and it is true the
+        moment Titan calls - whether or not the user has the announcements
+        switched off, and whether or not there was anything to say.
+        """
+        focus.note_titan_spoke()
+        focus.cancel_pending_read()
+        try:
+            self.heard.append({
+                'at': time.time(),
+                'text': str(announcement.get('text') or '')[:90],
+                'replaces_focus': bool(announcement.get('replaces_focus')),
+                'segments': len(announcement.get('segments') or []),
+                'position': announcement.get('position', 0),
+                'pitch': announcement.get('pitch', 0),
+            })
+            del self.heard[:-self.HEARD_KEEP]
+        except Exception:                            # noqa: BLE001
+            pass
         if not self.enabled:
             return {'spoken': False, 'reason': 'the channel is switched off'}
         if focus.standing_down():
