@@ -112,6 +112,27 @@ def main():
                 continue            # not one of ours
             if const not in constants[holder]:
                 problems.append((name, holder, f'{holder}::{const}'))
+    # **And no bare top-level constant.** Elten loads every application
+    # into a namespace of its own - a `Ruby::Box`, or a `Module.new`
+    # under `EltenPrograms` - so a constant assigned at column 0 here is
+    # set on THIS add-on's namespace and on nothing else: another
+    # application never sees it, and the one place it does work is the
+    # one place nobody needed it. `Titan = EltenAPI::Titan` was written
+    # and shipped as exactly that mistake. What crosses is a constant put
+    # INSIDE a shared module (`module EltenAPI`), because that module is
+    # the same object in every namespace.
+    for name in sorted(os.listdir(BRIDGE)):
+        if not name.endswith('.rb') or name == 'install.rb':
+            continue
+        text = open(os.path.join(BRIDGE, name), encoding='utf-8',
+                    errors='replace').read()
+        for match in re.finditer(r'^([A-Z][\w:]*)\s*=[^=~]', text, re.M):
+            problems.append((
+                name, 'top level',
+                "%s = ... is set on this add-on's own namespace and is "
+                "invisible to every other Elten application; put it inside "
+                "a shared module instead" % match.group(1)))
+
     if not problems:
         print('every method the bridge hands over is defined')
         return 0

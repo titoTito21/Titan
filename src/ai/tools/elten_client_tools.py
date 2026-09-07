@@ -61,6 +61,16 @@ def elten_client_api(name="", **_):
     return client.elten_client_api(name=name)
 
 
+def elten_client_eapi_calls(**_):
+    """What of Elten's own API is reachable from here."""
+    return client.elten_client_eapi_calls()
+
+
+def elten_client_eapi(call="", args="", **_):
+    """One call into the API of the Elten in front of the user."""
+    return client.elten_client_eapi(call=call, args=args)
+
+
 def get_elten_client_tools():
     from src.ai.agent_tools import _tool
     return [
@@ -110,6 +120,34 @@ def get_elten_client_tools():
                                    'description': "A function, a class, or "
                                                   "Class#method."}},
               required=['name']),
+        _tool('elten_client_eapi_calls',
+              "What of ELTEN's own API the TCE bridge offers, and which of "
+              "those act in the user's name rather than only reading. Ask "
+              "this before elten_client_eapi rather than guessing a call "
+              "name - a name that is not in the bridge's table does not "
+              "exist and cannot be reached by spelling it differently.",
+              elten_client_eapi_calls),
+        _tool('elten_client_eapi',
+              "Call Elten's own API inside the client the user is sitting "
+              "in front of: their account, what the client itself is doing, "
+              "one of its settings, what is installed in it, or say "
+              "something out loud in it. A DIFFERENT question from elten_* , "
+              "which asks the EltenLink server - this asks the running "
+              "program, so it is true with the network gone and it is about "
+              "the Elten actually in front of them. It needs the user's "
+              "wider consent in the bridge, which is asked separately from "
+              "the one that shares notifications, so a refusal here is an "
+              "answer and not an error.",
+              elten_client_eapi, risk='confirm', always_confirm=True,
+              properties={'call': {'type': 'string',
+                                   'description': "The call, as "
+                                                  "elten_client_eapi_calls "
+                                                  "lists it."},
+                          'args': {'type': 'string',
+                                   'description': "Its arguments as a JSON "
+                                                  "object, when it takes "
+                                                  "any."}},
+              required=['call']),
         _tool('elten_client_press',
               "Press a key in Elten, as the person sitting there would - "
               "'down', 'enter', 'ctrl+s'; several separated by commas are "

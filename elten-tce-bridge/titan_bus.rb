@@ -67,14 +67,22 @@ class TitanBus
   DEFAULT_TIMEOUT = 30.0
 
   # What an action answered. `question` is Titan asking for something it
-  # needs before it can run - a pending result, not a failure.
-  Answer = Struct.new(:ok, :text, :question, :addons) do
+  # needs before it can run - a pending result, not a failure. `consent`
+  # is the other kind of not-yet: Titan is asking the person sitting at
+  # TCE whether this bridge may control it, and until they answer it may
+  # only READ. That is not a failure of the call and must not be reported
+  # as one - the sentence Titan sends says what to do about it.
+  Answer = Struct.new(:ok, :text, :question, :addons, :consent) do
     def ok?
       ok == true
     end
 
     def pending?
       question != nil
+    end
+
+    def needs_consent?
+      consent.to_s != ""
     end
 
     def to_s
@@ -326,7 +334,8 @@ class TitanBus
       return Answer.new(message["ok"] == true, "", nil, message["addons"] || [])
     end
     text = message["ok"] == true ? message["result"].to_s : message["error"].to_s
-    Answer.new(message["ok"] == true, text, message["question"], nil)
+    Answer.new(message["ok"] == true, text, message["question"], nil,
+               message["consent"])
   end
 
   # Reads until the answer to `id` arrives. Titan only speaks when spoken to

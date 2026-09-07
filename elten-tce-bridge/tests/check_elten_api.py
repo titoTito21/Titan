@@ -276,6 +276,43 @@ def once_only(sources):
     return set()
 
 
+def builder_methods(sources):
+    """Every method Elten's extension builder really has.
+
+    An extension declares everything it contributes inside ONE block, and
+    a method that is not there raises `NoMethodError` in the middle of
+    that block - which does not mean one thing is missing, it means the
+    whole declaration is abandoned and the extension never starts. This
+    add-on has already paid for that once with a second `extension.tick`.
+    So the names it calls are checked against the Builder itself.
+    """
+    for name in (os.path.join('..', 'eapi', 'extensions.rb'),
+                 'extensions.rb', os.path.join('eapi', 'extensions.rb'),
+                 os.path.join('..', '..', 'eapi', 'extensions.rb'),
+                 os.path.join('..', '..', '..', 'eapi', 'extensions.rb')):
+        path = os.path.join(sources, name)
+        if not os.path.isfile(path):
+            continue
+        text = open(path, encoding='utf-8', errors='replace').read()
+        # **Found by what it DOES, not by what it is called.** The class
+        # the extension block is given is `Definition` in this Elten and
+        # was not always; what identifies it in any of them is that it is
+        # the class defining `main_tab` and `tick`. Matched on a name
+        # instead, a rename would make this check silently pass on an
+        # empty set - which is the failure it exists to prevent, one
+        # level up.
+        for match in re.finditer(r'^(\s*)class\s+(\w+)', text, re.M):
+            indent, start = match.group(1), match.end()
+            after = re.search(r'^%sclass\s+\w|^%send\b' % (indent, indent),
+                              text[start:], re.M)
+            body = text[start:start + after.start()] if after else text[start:]
+            names = set(re.findall(r'^\s*def\s+([a-z_]\w*[?!]?)', body, re.M))
+            if 'main_tab' in names and 'tick' in names:
+                return names
+        return set()
+    return set()
+
+
 def base_events(sources):
     """What every control fires, wherever it is defined."""
     found = set()
@@ -359,6 +396,31 @@ def main():
     # marshaller stopped being drained, every question that needs Elten's
     # own thread waited out its timeout, and the bus dropped the
     # connection. Nothing about that says "you declared two ticks".
+    # **Every `extension.<name>` is a method the Builder really has.**
+    # A name that is not there raises inside the declaration block, and
+    # an extension whose declaration raised has not declared a broken
+    # widget - it has declared nothing at all.
+    builder = builder_methods(sources)
+    if builder:
+        for name in sorted(os.listdir(BRIDGE)):
+            if not name.endswith('.rb'):
+                continue
+            text = open(os.path.join(BRIDGE, name), encoding='utf-8',
+                        errors='replace').read()
+            # The `?` is part of the name: without it `respond_to?`
+            # arrives here as `respond_to`, which the Builder has not got.
+            for called in set(re.findall(r'\bextension\.([a-z_]\w*[?!]?)',
+                                         text)):
+                # `respond_to?` is the add-on asking first, which is the
+                # right thing to do about a method a newer Elten has.
+                if called in builder or called == 'respond_to?':
+                    continue
+                problems.append((
+                    name, 'extension.%s' % called, "Elten's extension builder",
+                    "has no '%s' - a name that is not there raises inside "
+                    "the declaration and the whole extension never starts"
+                    % called))
+
     single = once_only(sources)
     for path in bridge_files():
         text = open(path, encoding='utf-8', errors='replace').read()

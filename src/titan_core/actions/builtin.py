@@ -439,6 +439,12 @@ def _add_ai_questions(addons):
 
 
 
+def _add_client_consent(addons):
+    """What a program outside Titan may do to it, seen and taken back."""
+    from src.titan_core.client_consent import get_client_consent_actions
+    _extend(addons, 'titan', get_client_consent_actions())
+
+
 def _add_bridge(addons):
     """The bridge's own doorway: one action for a whole typed surface.
 
@@ -679,4 +685,8 @@ def build():
         _add_bridge(addons)
     except Exception as e:
         print(f"[actions] The bridge doorway is unavailable: {e}")
+    try:
+        _add_client_consent(addons)
+    except Exception as e:
+        print(f"[actions] External-client consent is unavailable: {e}")
     return addons

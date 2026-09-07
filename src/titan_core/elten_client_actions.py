@@ -149,6 +149,30 @@ def elten_client_status(**_):
                             _age_line(entry) if entry is not None else '')
 
 
+#: What to say instead of "nothing is waiting".
+#:
+#: **The failure mode of a privacy switch is a lie.** With sharing off
+#: the report carries an empty list, and every describer below reads an
+#: empty list as "Elten has no notifications waiting" - which is not a
+#: refusal, it is a false answer to the question that was asked, and the
+#: user would act on it. A refusal is worse than an answer and infinitely
+#: better than a wrong one.
+NOT_SHARED = ("Elten is not sharing its notifications with Titan's AI. "
+              "That is a switch of its own in the TCE bridge's settings, "
+              "separate from the desktop notifications, which are "
+              "unaffected. Nothing here says whether anything is waiting.")
+
+
+def _not_shared(state):
+    """Has the bridge said, in so many words, that it is not sharing?
+
+    Only an explicit False. A bridge older than the switch does not send
+    the field at all, and reading its silence as a refusal would replace
+    every answer it CAN give with one it never made.
+    """
+    return isinstance(state, dict) and state.get('shared_with_ai') is False
+
+
 def _describe_status(state, age, live=False):
     """`live` means Elten answered this itself, just now - so it must not
     be prefaced with "this is what it last said", which is what the
@@ -173,10 +197,19 @@ def _describe_status(state, age, live=False):
         lines.append(f"Elten {version}"
                      + (f", in {language}" if language else '') + '.')
     waiting = state.get('notifications')
-    if isinstance(waiting, list):
+    if _not_shared(state):
+        lines.append(NOT_SHARED)
+    elif isinstance(waiting, list):
         lines.append(f"{len(waiting)} notification(s) waiting in Elten.")
     elif isinstance(waiting, int):
         lines.append(f"{waiting} notification(s) waiting in Elten.")
+    # **Why there were none is as much an answer as how many.** Nobody
+    # signed in, a client with no notification service, and nothing
+    # actually waiting are three different things that all arrive as an
+    # empty list - and only one of them is Elten working correctly.
+    why = str(state.get('why') or '').strip()
+    if why and not waiting:
+        lines.append(f'{why}.')
     if age:
         lines[-1] = lines[-1] + age
     return '\n'.join(lines)
@@ -188,18 +221,24 @@ def elten_client_notifications(**_):
     if answered and isinstance(live, str):
         return live
     if answered and isinstance(live, dict):
-        return _describe_notifications(live.get('notifications'), '')
+        return _describe_notifications(live.get('notifications'), '',
+                                       live.get('why'))
     entry = _latest()
     if entry is None:
         return ("Elten has not reported anything yet. It reports a few "
                 "seconds after it starts, and only while it is running.")
     state = entry.get('state') or {}
-    return _describe_notifications(state.get('notifications'), _age_line(entry))
+    if _not_shared(state):
+        return NOT_SHARED
+    return _describe_notifications(state.get('notifications'),
+                                   _age_line(entry), state.get('why'))
 
 
-def _describe_notifications(rows, age):
+def _describe_notifications(rows, age, why=''):
     if not isinstance(rows, list) or not rows:
-        return "Elten has no notifications waiting" + age + "."
+        said = str(why or '').strip()
+        return (f'{said}{age}.' if said
+                else "Elten has no notifications waiting" + age + ".")
     lines = [f"{len(rows)} notification(s) in Elten{age}:"]
     for row in rows[:40]:
         if not isinstance(row, dict):
@@ -222,6 +261,8 @@ def elten_client_news(**_):
     if entry is None:
         return "Elten has not reported anything yet."
     state = entry.get('state') or {}
+    if _not_shared(state):
+        return NOT_SHARED
     return _describe_news(state.get('news'), _age_line(entry))
 
 
@@ -516,6 +557,55 @@ def _signature(parameters):
     return ', '.join(written)
 
 
+def elten_client_eapi_calls(**_):
+    """What of Elten's own API is reachable from here."""
+    answered, value = _ask('eapi_calls')
+    if not answered:
+        return _needs_elten()
+    if isinstance(value, str):
+        return value
+    rows = (value or {}).get('calls') or []
+    if not rows:
+        return "Elten's API is not reachable from here."
+    lines = ["Elten's own API, as this bridge offers it:"]
+    for row in rows:
+        note = ''
+        if row.get('writes'):
+            note = (' - acts in your name'
+                    if row.get('allowed')
+                    else ' - acts in your name, and is switched off')
+        lines.append('- %s%s' % (row.get('name', ''), note))
+    return '\n'.join(lines)
+
+
+def elten_client_eapi(call='', args='', **_):
+    """One call into the API of the Elten the user is sitting in front of.
+
+    **A different question from `elten_*`**, which asks the EltenLink
+    SERVER with the credentials Titan saved: this asks the running
+    CLIENT, so it answers about the program in front of the user and
+    costs no network at all. What it may reach is a table inside the
+    bridge and never a name resolved from this side - a caller cannot
+    name a Ruby method by spelling it.
+    """
+    wanted = str(call or '').strip()
+    if not wanted:
+        return "Say which call. 'elten_client eapi_calls' lists them."
+    payload = {'call': wanted}
+    if args not in (None, '', {}):
+        payload['args'] = args if isinstance(args, str) else json.dumps(args)
+    answered, value = _ask_with('eapi', payload)
+    if not answered:
+        return _needs_elten()
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return "Elten answered nothing."
+    if value.get('error'):
+        return str(value['error'])
+    return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+
+
 def elten_client_report(**_):
     """Everything the bridge last said, as JSON - for a caller that wants
     the numbers rather than the sentence."""
@@ -580,6 +670,26 @@ def get_elten_client_actions():
          {'name': {'type': 'string', 'required': True,
                    'description': "A function, a class, or Class#method."}},
          'auto', elten_client_api),
+        ('eapi_calls',
+         "What of ELTEN's own API this bridge offers, and which of those "
+         "act in the user's name rather than only reading. Ask this "
+         "before eapi rather than guessing a call name.", {},
+         'auto', elten_client_eapi_calls),
+        ('eapi',
+         "Call Elten's own API in the client the user is sitting in front "
+         "of: their account, the client's own state, one of its settings, "
+         "what is installed in it, what it says out loud. A DIFFERENT "
+         "question from the elten_* actions, which ask the EltenLink "
+         "server - this asks the running program, so it is true offline "
+         "and about the Elten actually in front of them. It needs the "
+         "user's wider consent in the bridge, asked separately from the "
+         "one that shares notifications.",
+         {'call': {'type': 'string', 'required': True,
+                   'description': "The call, as eapi_calls lists it."},
+          'args': {'type': 'string',
+                   'description': "Its arguments as a JSON object, when "
+                                  "it takes any."}},
+         'confirm', elten_client_eapi),
         ('press_key',
          "Press a key in Elten, as the person sitting there would - "
          "'down', 'enter', 'ctrl+s'. Several are separated by commas and "

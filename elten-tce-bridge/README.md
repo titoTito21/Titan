@@ -542,6 +542,75 @@ registering, speaking and stopping.
   would have to hold the user's credentials. This design deliberately does
   not.
 
+## For an Elten application author: `EltenAPI::Titan`
+
+Everything above is a screen somebody opens. This is the other half -
+Titan as something **your own `.eltenapp` can call**, the way it calls
+anything else in `EltenAPI`. The precondition is the one this whole
+add-on already declares: TCE has to be running.
+
+```ruby
+return if !EltenAPI::Titan.available?
+
+# Any action any TCE add-on offers - Titan's own subsystems included.
+EltenAPI::Titan.action("tnotes", "create_note", "title" => "Ideas")
+
+# A TCE application, opened as an Elten screen, from one line. It blocks
+# while the user works it, exactly as Form#wait does.
+EltenAPI::Titan.application("Notes")
+
+# A Titan Script: checked by TCE before it runs, and what comes back is
+# what the script's own `return` handed over.
+answer = EltenAPI::Titan.script(<<~TCS)
+  ask who = "Your name?"
+  say "Hello, {{who}}"
+  return upper(who)
+TCS
+alert(answer.value) if answer.ok?
+```
+
+**Why `EltenAPI::Titan` and never a bare `Titan`.** Elten loads every
+application into a namespace of its own - a `Ruby::Box`, or a
+`Module.new` under `EltenPrograms` - so a top-level constant assigned by
+this add-on is set on THIS add-on's namespace and on nothing else. What
+does cross is `EltenAPI` itself: it is the same module OBJECT in every
+namespace (`BoxBackend#expose_host_constants` copies the reference, and
+reopening `module EltenAPI` finds that object rather than making a second
+one), so what this add-on adds to it is what every application sees,
+whichever of them Elten loaded first. It is how `EltenAPI::LiveSessions`
+and `EltenAPI::Tasks` are reached too.
+
+**Nothing raises.** An application reaching for a Titan that is not
+running is the ordinary case, not the exceptional one - and a
+`NoMethodError` inside somebody else's `rescue Exception` becomes a
+feature quietly not working rather than an error anybody sees. Every call
+answers a `Result`: `ok?`, `value`, `error`, and `needs_consent?`.
+
+**`needs_consent?` is not a failure.** Reading TCE and controlling it are
+different permissions, and TCE's own user decides: they are asked once,
+in Titan, when this bridge connects. Until they answer, reading works and
+changing anything does not. Say so and offer the read-only path; do not
+retry it as though the call had failed.
+
+**Nothing waits on Elten's own thread.** Every call goes through
+`TitanUI.ask`, which runs it on a worker while Elten carries on pumping.
+
+| Call | What it answers |
+| --- | --- |
+| `available?` | Is TCE there. Cheap - a flag, no pipe. Safe on a frame. |
+| `may_control?` | Whether this bridge may change TCE, asked of TCE. |
+| `action(addon, name, args)` | Any TCE action. `addons` and `actions(addon)` say which. |
+| `call(name, args)` | The typed doorway - JSON in, JSON out, one shape. |
+| `script(source)` | Run a Titan Script. `check(source)` reviews without running. |
+| `language` / `vocabulary` | The Titan Script reference, and what a script may call. |
+| `macros` / `run_macro` / `save_macro` | The user's own macros. |
+| `application(name)` / `applications` | A TCE application, as an Elten screen. |
+| `speak(text)` | Titan's own voice, on Titan's machine - not Elten's. |
+| `notify(text)` | Into Titan's notification centre. |
+
+`titan_script_ui.rb` is `script` with a screen in front of it, for
+somebody writing one by hand rather than composing one in code.
+
 ## The files
 
 | File | What it is |
@@ -560,5 +629,8 @@ registering, speaking and stopping.
 | `titan_shell.rb` | The Titan desktop, taskbar, notification area and Start menu |
 | `titan_areas.rb` | The computer, the windows, the media, the voices, everything else |
 | `titan_actions.rb` | One add-on's own actions, behind the context-menu key |
+| `eapi_titan.rb` | `EltenAPI::Titan` - Titan as part of the API an application is written against |
+| `titan_script_ui.rb` | Writing one Titan Script here, and running it |
+| `elten_widget.rb` | TCE on Elten's own main screen (`extension.main_tab`) |
 | `locale/pl.mo` | The Polish catalogue |
 | `tests/` | The stand-in Elten, the stand-in Titan, and the checks |

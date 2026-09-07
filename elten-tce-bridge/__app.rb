@@ -62,6 +62,7 @@ require_relative "elten_news"
 require_relative "elten_screen"
 require_relative "elten_keys"
 require_relative "elten_api"
+require_relative "elten_eapi"
 require_relative "elten_link"
 require_relative "titan_components"
 require_relative "titan_macros"
@@ -71,6 +72,13 @@ require_relative "titan_ai"
 require_relative "titan_shell"
 require_relative "titan_areas"
 require_relative "titan_console"
+# Titan as part of the API an Elten application is written against, and
+# the screen for writing one script by hand. Required last: both reach
+# the bus and the API object, and neither is touched until something
+# calls into it.
+require_relative "eapi_titan"
+require_relative "titan_script_ui"
+require_relative "elten_widget"
 
 class ProgramTCEBridge < Program
   class << self
@@ -81,6 +89,42 @@ class ProgramTCEBridge < Program
       @bus ||= TitanBus.new
     end
 
+    # ------------------------------------------------- the permissions
+    # Which of them are on now, as the multiple-choice list wants them.
+    def granted_permissions
+      out = []
+      out << "share_data" if TitanConsent.granted?
+      out << "share_with_ai" if TitanPrefs.share_with_ai?
+      out << "share_everything" if TitanConsent.full_granted?
+      out << "allow_keys" if TitanPrefs.allow_keys?
+      out << "allow_writes" if TitanPrefs.allow_writes?
+      out
+    end
+
+    # **A tick that does nothing is a tick that lies.** Every one of the
+    # other four is meaningless without the first - the code already
+    # requires it - so unticking "know that Elten is running" takes them
+    # with it rather than leaving four ticks on that grant nothing. The
+    # user is told, because silently changing what somebody just chose is
+    # worse than the tidy list it produces.
+    def set_permissions(values)
+      chosen = Array(values).map { |value| value.to_s }
+      base = chosen.include?("share_data")
+      dependent = %w[share_with_ai share_everything allow_keys allow_writes]
+      dropped = base ? [] : dependent.select { |name| chosen.include?(name) }
+      update_json("settings.json", :default => {}) do |state|
+        state[TitanConsent::KEY] = base
+        state[TitanConsent::FULL_KEY] = base && chosen.include?("share_everything")
+        state["share_with_ai"] = base && chosen.include?("share_with_ai")
+        state["allow_keys"] = base && chosen.include?("allow_keys")
+        state["allow_writes"] = base && chosen.include?("allow_writes")
+      end
+      if !dropped.empty?
+        alert(_("Titan may no longer be told anything about Elten, so the other permissions were switched off with it."))
+      end
+      true
+    end
+
     def activate
       # **What Titan may ask of US, declared before the connection is
       # made** - the names travel in the hello, so a bus started first
@@ -88,6 +132,7 @@ class ProgramTCEBridge < Program
       bus.serve(EltenNews.handlers.merge(EltenScreen.handlers)
                                    .merge(EltenKeys.handlers)
                                    .merge(EltenApi.handlers)
+                                   .merge(EltenEapi.handlers)
                                    .merge(EltenLinkRelay.handlers))
       bus.start
       TitanSpeechOutput.start(bus)
@@ -127,6 +172,13 @@ class ProgramTCEBridge < Program
         extension.tick(:interval => 0.1) do
           EltenMain.pump
         end
+
+        # **TCE on Elten's own main screen.** One more section beside
+        # Notifications, Quick actions and the Feed, holding a real
+        # ListBox: whether TCE is there, its applications, and its AI.
+        # Declared here because a main tab belongs to the extension, and
+        # this is the one place this add-on declares one.
+        EltenWidget.declare(extension)
 
         # And the slow half on Elten's own scheduler, which is what it is
         # for: this posts a question to the bus and says whatever the last
@@ -177,6 +229,25 @@ class ProgramTCEBridge < Program
             }
           )
 
+          # **Changing it puts the tab up or takes it down at once.**
+          # `visible:` is cached against the UI revision, so without
+          # `refresh_ui!` the answer would not be re-read until something
+          # else happened to invalidate it.
+          settings.boolean(
+            "widget",
+            :label => _("Show TCE on Elten's main screen"),
+            :get => proc { TitanPrefs.widget? },
+            :set => proc { |value|
+              update_json("settings.json", :default => {}) do |state|
+                state["widget"] = (value == true)
+              end
+              Programs::Extensions.refresh_ui rescue nil
+            }
+          )
+
+
+
+
           settings.boolean(
             "speak_answers",
             :label => _("Read the AI's answer out loud"),
@@ -195,32 +266,43 @@ class ProgramTCEBridge < Program
           # settings window rebuilt in Elten's controls
           # (`titan_settings.rb`), so it is Titan's own save with
           # everything that hangs off it.
+
+          # **The permissions are ONE list, not five checkboxes scattered
+          # among the behaviour switches.**
+          #
+          # They were written one at a time as each was needed, which is
+          # how a settings screen becomes a wall: twelve boxes in a row,
+          # five of them about what Titan is allowed to do and seven
+          # about how it behaves, with nothing saying which is which. A
+          # multiple-choice list is what Elten has for exactly this - the
+          # reader says how many are ticked and which one it is on, and
+          # the whole permission picture is one control the user can read
+          # in one pass.
+          #
+          # **Ordered least to most**, and each named by what it lets
+          # Titan DO rather than by the word "share": "Share Elten's data
+          # with TCE" does not tell anybody whether that includes their
+          # private messages, and it did include them.
+          settings.multi_choice(
+            "permissions",
+            :label => _("What Titan may do with Elten"),
+            :choices => [
+              [_("Know that Elten is running, and tell me what arrives here"), "share_data"],
+              [_("Let Titan's AI read what those notifications say"), "share_with_ai"],
+              [_("Let Titan's AI and its actions use the rest of Elten's data"), "share_everything"],
+              [_("Let Titan press keys in Elten"), "allow_keys"],
+              [_("Let Titan act in Elten in my name"), "allow_writes"],
+            ],
+            :get => proc { granted_permissions },
+            :set => proc { |values| set_permissions(values) }
+          )
+
           settings.action(
             "tce_settings",
             :label => _("TCE settings...")
           ) { TitanSettings.new(bus).open }
 
-          settings.boolean(
-            "share_data",
-            :label => _("Share Elten's data with TCE"),
-            :get => proc { TitanConsent.granted? },
-            :set => proc { |value|
-              update_json("settings.json", :default => {}) do |state|
-                state[TitanConsent::KEY] = (value == true)
-              end
-            }
-          )
 
-          settings.boolean(
-            "allow_keys",
-            :label => _("Let TCE press keys in Elten"),
-            :get => proc { TitanPrefs.allow_keys? },
-            :set => proc { |value|
-              update_json("settings.json", :default => {}) do |state|
-                state["allow_keys"] = (value == true)
-              end
-            }
-          )
 
           settings.boolean(
             "elten_notifications",

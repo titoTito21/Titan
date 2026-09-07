@@ -22,9 +22,16 @@ class TitanAPI
   # What this add-on was written against. Titan answers with its own.
   WANTED = 1
 
-  Answer = Struct.new(:ok, :data, :error) do
+  Answer = Struct.new(:ok, :data, :error, :consent) do
     def ok?
       ok == true
+    end
+
+    # Titan is asking its own user whether this bridge may control it.
+    # A different thing from a call that failed: reading still works, and
+    # what is needed is an answer over there, not a retry over here.
+    def needs_consent?
+      consent.to_s != ""
     end
 
     def [](key)
@@ -47,7 +54,7 @@ class TitanAPI
       # An action that is not there is the ONE thing a too-old Titan can be
       # missing, and it is worth saying which it is.
       @missing = true if answer.text.to_s.include?("has no action")
-      return Answer.new(false, nil, answer.text.to_s)
+      return Answer.new(false, nil, answer.text.to_s, answer.consent)
     end
     payload = JSON.parse(answer.text) rescue nil
     return Answer.new(false, nil, _("TCE answered something unreadable.")) if !payload.is_a?(Hash)

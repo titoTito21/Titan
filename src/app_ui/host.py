@@ -59,6 +59,12 @@ class Application(object):
         #: to find out what an application still needs, rather than
         #: reading its source and guessing.
         self.unknown = []
+        #: What the application has SAID and nobody has been told yet.
+        #: An announcement is an event, not part of the screen - "Note
+        #: saved!" is true once - so it is delivered once, to whoever
+        #: asks next, and never left in the screen to be read again on
+        #: every refresh.
+        self.spoken = []
         self.ready = False
         self.started = threading.Event()
         self.ended = threading.Event()
@@ -182,11 +188,50 @@ class Application(object):
             self.refused = list(message.get('refused') or self.refused)
             self.changed.set()
         elif what == 'said':
-            self._note('app', str(message.get('text') or ''))
+            self._said(message)
         elif what == 'gone':
             self.status = 'finished'
             self.started.set()
             self.ended.set()
+
+    #: More than a screenful of unread announcements means nobody is
+    #: listening; the newest are the ones worth keeping.
+    MAX_SPOKEN = 24
+
+    def _said(self, message):
+        """Something the application announced.
+
+        **Not `changed`.** An announcement and the screen that follows it
+        are microseconds apart - the application says "Note saved!" and
+        returns - and releasing the wait on the first would answer the
+        caller with the sentence attached to the screen from BEFORE the
+        press. So this only queues; `tell` goes on waiting for the screen,
+        and the sentence is delivered with it.
+        """
+        text = str(message.get('text') or '').strip()
+        if not text:
+            return
+        self._note('app', text)
+        entry = {'text': text}
+        for name, cast in (('position', float), ('pitch', int),
+                           ('interrupt', bool)):
+            if name in message:
+                try:
+                    entry[name] = cast(message[name])
+                except (TypeError, ValueError):
+                    pass
+        self.spoken.append(entry)
+        del self.spoken[:-self.MAX_SPOKEN]
+
+    def take_spoken(self):
+        """What has been said since this was last asked, and clear it.
+
+        Delivered even when the application did NOT answer in time: an
+        announcement that arrived is one the user should hear, whether or
+        not the screen behind it has caught up.
+        """
+        held, self.spoken = self.spoken, []
+        return held
 
     def _read_log(self):
         try:

@@ -2252,6 +2252,17 @@ from . import _submodules as _submodules_module   # noqa: E402
 import sys as _sys                                # noqa: E402
 _submodules_module.install(_sys.modules[__name__])
 
+# **What the application SAYS goes on the wire, not into a TTS engine
+# built inside its own subprocess.** Every one of Titan's applications
+# announces what it has just done, and every one of them reaches speech
+# through `src.titan_core.tce_speech` or `accessible_output3` - which
+# under this shim would speak on the machine Titan is on rather than
+# where the interface is, and would spend seconds building an engine on
+# the loop's own thread to do it. Installed here rather than inside
+# `_submodules` because it claims names outside `wx`.
+from . import _speech as _speech_module           # noqa: E402
+_speech_module.install(_sys.modules[__name__])
+
 # **The wire opens at import, not at `wx.App()`.** Everything an
 # application refuses it usually refuses at its very first line -
 # `import wx.html2` is the browser's - and an application that then never

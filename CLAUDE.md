@@ -4497,6 +4497,355 @@ nothing in Titan knows it exists.
   no amount of care makes "somebody else's program, rendered by us" as
   sure as the program's own window.
 
+#### What the application SAYS is said where the interface is
+
+Reported as "saving a note says Titan is working and does nothing, and
+only after pressing Escape twice does TITAN say the note was saved" -
+two symptoms, one fault, and it was in neither the loop nor the
+renderer.
+
+Every one of Titan's applications announces what it has just done -
+"Note saved!", "Folder created!", "Note deleted!", "Settings saved!" -
+and every one of them reaches speech the same way: `from
+src.titan_core.tce_speech import speak`, falling back to
+`accessible_output3` when that is missing. Under the shim both halves of
+that are wrong twice over:
+
+- **It is spoken in the wrong place.** The application is a subprocess of
+  Titan's and the person it is talking to is in Elten - possibly at
+  another computer. Nothing carried the sentence to them, and `said` was
+  already on the wire and read by nobody: `host.py` put it in the log.
+- **It is spoken at ruinous cost, on the loop's own thread.**
+  `tce_speech.speak` builds a whole `StereoSpeech` on its FIRST call -
+  the SAPI voices enumerated over COM, every Titan TTS engine loaded,
+  the speech subprocess bridge probed with a `subprocess.run` - inside
+  the application's subprocess, from the button handler. The shim sends
+  the screen when it is about to wait, so all of that is time in which
+  the interface hears nothing: the client waited out its whole patience
+  and said the application had not answered. And because every one of
+  these announcements is the FIRST speech its application makes, every
+  one of them paid the full price - which is exactly why only the
+  actions that announce something were slow.
+
+So `src/app_ui/shim/wx/_speech.py` answers those two doorways and what
+the application says becomes one line on the wire (`said`, with its
+position, pitch and whether it interrupts). It costs microseconds, it
+cannot block, and the sentence arrives where the interface is.
+
+- **The boundary is those two NAMES, not "anything that might make a
+  noise".** Each application's SAPI / `say` / `spd-say` fallback is
+  reached only when both are missing, and answering both means they
+  never are - so there is nothing left to guess at. `get_reader_engine`
+  answers None, which is what it already promises when the engine cannot
+  be loaded and what every caller of it handles; everything that SETS a
+  rate, a voice or an engine is remembered and answered rather than
+  acted on, because which voice the words come out in belongs to
+  whoever is rendering the interface.
+- **Delivered once, and not through the screen.** An announcement is an
+  event - "Note saved!" is true once - so `host.take_spoken()` hands it
+  over and clears it. Left in the screen it would be read out again on
+  every refresh. It is delivered even when the application did NOT
+  answer in time: a sentence that arrived is one the user should hear
+  whether or not the screen behind it has caught up.
+- **`said` does not release `tell`.** The announcement and the screen
+  that follows it are microseconds apart - the application says it and
+  returns - so releasing the wait on the first would answer the caller
+  with the sentence attached to the screen from BEFORE the press.
+- **It goes out of both doorways.** `app.press` / `set` / `key` /
+  `screen` / `open` carry `said`; the prose actions put it FIRST, ahead
+  of the screen, because it is the news and the screen is only the
+  state - and the screen behind a save usually looks exactly as it did
+  before, so a caller handed only the screen is told nothing at all
+  about what happened.
+- **In Elten it is `alert`, which waits, not `speak`, which does not.**
+  The form is rebuilt straight after and announces whatever the focus
+  lands on; a sentence merely started would be wiped by that. Waiting
+  for it is what makes it heard, and it is Elten's own idiom for saying
+  one thing.
+- Tests: `WhatTheApplicationSAYS` and
+  `AnAnnouncementReachesWhoeverIsRenderingIt` in `tests/test_app_ui.py`
+  (82 in the file). The second saves a real note through the real shim,
+  into a home folder of its own so the user's own notes are untouched.
+
+### An external client may read Titan; controlling it is asked for
+
+`src/titan_core/client_consent.py`. Titan already says out loud when an
+external client arrives on the Action Bus - the Elten TCE bridge is one,
+and deliberately only the first - because nothing else on this desktop
+would tell the user that another program had taken hold of it. What it
+never did is ask whether it may ACT.
+
+**The line is the one this repository has already drawn once.** The TCE
+bridge's own `press_key` is off by default and asked for separately from
+reading Elten's screen, for a reason that applies just as well in this
+direction: reading tells somebody what is there, and Enter in a
+messenger sends the message.
+
+- **Reading is always served.** `bridge_api.READ_ONLY` names it - what is
+  installed, what a screen holds, what a setting is, what the AI
+  remembers - so a client that has not been allowed to control Titan can
+  still show it whole, which is what a bridge is for. `app.open` is
+  deliberately not on that list (it starts a process) and neither is
+  `speech.say` (it takes the user's own voice).
+- **`titan.bridge` is one action carrying a whole surface**, so the CALL
+  inside it decides, not the action's name. Everything else - an add-on
+  told to do something, a sequence, a request that cannot be read - is
+  driving.
+- **Only an external client is ever asked about.** An add-on reaching
+  another add-on is Titan's own machinery and there is deliberately no
+  permission wall between add-ons; putting one here would break the
+  thing the Action API exists for.
+- **The question rides along with the arrival**, not with the first
+  action. Titan is already telling the user the client is there, so this
+  is the moment to ask - and by the time it acts, the answer is in.
+  Asked at the first action instead, the first action of every session
+  would fail while a dialog the user had not noticed waited for them.
+- **Nobody to ask is not a yes.** `run_on_gui` falls back to calling its
+  function on the CALLING thread when wx has no running application -
+  right for an add-on's handler and catastrophic here: a
+  `wx.MessageDialog` raised with no Titan behind it answered by itself,
+  and a `yes` was written that no person had given. Caught by a test run
+  doing it. `on_screen()` asks whether the main loop is RUNNING, which is
+  the only state in which a modal is something somebody can see and
+  press.
+- **The dialog is not spoken.** A reader reads a dialog it has just been
+  given, and this goes up in the same breath as the arrival
+  announcement: saying it here as well means two announcements at once,
+  and the second erases the first. The question CUE is played, which is
+  what tells somebody a dialog is there at all.
+- The id is whatever connected, which is not Titan's to trust, so it is
+  cleaned before it becomes a settings key - the file is `key=value` a
+  line at a time.
+- Seen and taken back: `titan.external_clients`, `titan.allow_client`,
+  `titan.forget_client`. A permission the user cannot find again is not
+  one they gave.
+- **The surface says what it is**: `capabilities` answers which calls
+  exist, which only read, and which need the yes. A doorway nobody can
+  enumerate is a doorway a client guesses at, and every guess this
+  bridge has cost was of that shape.
+- The refusal crosses the wire as `consent`, so a client can tell "Titan
+  is asking its user" from "the call failed" - `answer.needs_consent?`
+  in the bridge - and must not retry it as though it were the second.
+- Tests: `ReadingAndDrivingAreDifferentPermissions` in
+  `tests/test_action_bus_client.py` (22 in the file).
+
+### Titan Script, as part of the API an Elten application is written against
+
+`elten-tce-bridge/eapi_titan.rb` is `EltenAPI::Titan`. Everything else in
+that add-on is a SCREEN - somebody opens the TCE bridge and works Titan
+inside it. This is Titan as something an `.eltenapp` can CALL, the way it
+calls anything else in `EltenAPI`.
+
+```ruby
+EltenAPI::Titan.available?
+EltenAPI::Titan.action("tnotes", "create_note", "title" => "Ideas")
+EltenAPI::Titan.script('say "hello"' + "\n" + 'return now("%H:%M")')
+```
+
+**Titan Script is the interesting half.** Elten applications are Ruby and
+Titan actions are a flat list of calls; the thing that is neither - and
+that Titan already has, checked, translated and documented - is a small
+language whose statements ARE those actions, with variables, conditions,
+forms, sounds and a voice. So an Elten application composes one, Titan
+checks it before it runs, and hands back what it answered.
+
+- **`macros.run_script` is what made that possible.** Everything else in
+  the macro manager acts on a macro the user already HAS - `run_macro`
+  takes a name, `create_macro` writes a file into the manager - which is
+  right for the user's own macros and wrong for a caller composing a
+  script for one job: saving one first would leave the user's list full
+  of things nobody wrote. It is checked before it runs and the problems
+  are the answer when it fails, because a caller that is a program needs
+  to be told which line rather than shown a dialog.
+- **What `return` handed back is the answer.** `run_tcs_text` swallowed
+  it - the transcript says "stopped", which is the right thing to tell
+  somebody who ran a macro and the wrong thing to hand an application
+  that asked Titan a question. It takes an optional `answer` dict now;
+  a caller that does not pass one sees exactly what it always saw.
+- Nothing in `EltenAPI::Titan` raises (an application reaching for a
+  Titan that is not running is the ordinary case), nothing waits on
+  Elten's own thread (`TitanUI.ask` runs it on a worker), and whether
+  this bridge may CHANGE Titan is asked of Titan rather than remembered
+  here - the user can take that answer back at any moment.
+- **Reachable from ANY Elten application, and `EltenAPI::Titan` is why.**
+  Elten loads every application into a namespace of its own - a
+  `Ruby::Box`, or a `Module.new` under `EltenPrograms` - so a bare
+  top-level `Titan = EltenAPI::Titan` (which this shipped, briefly) is
+  set on the ADD-ON's namespace and on nothing else: invisible to every
+  other application, and working only in the one place nobody needed it.
+  What does cross is `EltenAPI` itself, because
+  `BoxBackend#expose_host_constants` copies the module REFERENCE into
+  each namespace and reopening `module EltenAPI` finds that same object -
+  so what this adds to it is what every application sees, whichever
+  Elten loaded first. `tests/check_own_methods.py` fails on any bare
+  top-level constant now, proved by putting that one back.
+- **A TCE application, opened from one line.** `Titan.application(name)`
+  runs the same rendered screen the areas list opens and blocks while
+  the user works it, as `Form#wait` does; `Titan.applications` is the
+  list to choose from, named in the user's own language because that is
+  the name TCE matches on.
+- The audience is not hypothetical and not new: this add-on's manifest
+  already says it needs Titan running, so anybody who installed it has
+  accepted that precondition. What was missing was reaching it from
+  CODE rather than through this add-on's own menus - and a way for an
+  application author to find out it exists, which is what the
+  `EltenAPI::Titan` section of `elten-tce-bridge/README.md` is.
+- `titan_script_ui.rb` is the same capability with a screen in front of
+  it: a scratchpad, run now, kept as a macro only if it turns out to be
+  worth keeping. Offered in the areas list beside Macros.
+
+### TCE on Elten's own main screen
+
+`elten-tce-bridge/elten_widget.rb`. Everything else this add-on has is
+behind opening it. What was missing is what a widget is for - TCE being
+THERE, on the screen Elten opens on, without anybody having gone
+looking.
+
+Elten's extension API has exactly this and it is what an application
+like a weather one uses: `extension.main_tab(key, label:) { |context| }`
+contributes one more section to the main screen beside Notifications,
+Quick actions and the Feed, and the block returns a CONTROL. So the
+widget is an ordinary `ListBox` - Elten's reader already knows how to
+read one, the arrows walk it and Enter presses it, with none of that
+written here.
+
+- **Built once and kept.** `build_control` is called on EVERY frame the
+  tab has the focus, and `context.current_control` is what was returned
+  last time precisely so it can be handed straight back; `context.state`
+  is a hash that persists per contribution. A control rebuilt per frame
+  is a control whose cursor never moves - and `options=` clears the list
+  and puts it back, so even refreshing the text moves the cursor, which
+  is why it happens only when the text has really changed.
+- **Nothing asks Titan on a frame.** The status line is
+  `bus.connected?`, a flag this add-on already keeps. Asking Titan how
+  it is takes a call, so that happens when the user presses the row.
+- **Pressing a row opens the screen that already exists** - the same
+  `TitanApps` and `TitanAI` the areas list opens. Elten's own quick
+  actions call their block straight out of the main scene's update, so
+  opening a screen from here is Elten's own pattern.
+- **`main_tab` is asked for before it is used.** An extension declares
+  everything inside ONE block and an exception anywhere in it abandons
+  the WHOLE declaration - the tick, the news and the marshaller with it,
+  which this add-on has already paid for once with a second
+  `extension.tick`. `main_tab` arrived in Elten after the version the
+  manifest asks for, so `respond_to?` is what makes the widget the only
+  thing missing on an older client rather than the add-on.
+- **The tab was not there because the add-on installed in Elten was the
+  old one.** `install.rb` copies the source into
+  `%APPDATA%/elten/apps/src/tce_bridge`, and nothing in the repository
+  reaches Elten until it runs - so a new file is written, tested,
+  checked, and completely absent from the running client. Worth
+  remembering before looking for the bug anywhere else.
+- **Checked against Elten's real weather application**, unpacked from
+  `Weather.eltenapp`: it declares `extension.main_tab` exactly this way,
+  in `activate`, with `label:` and `visible:` as lambdas. Two of its
+  details are adopted here - `quiet: true` (a list announces itself when
+  it is built, and building one is not the user arriving at it) and
+  `control.is_a?(ListBox)` rather than a nil check, because what comes
+  back is whatever was returned last time.
+- **It can be switched off** (`TitanPrefs.widget?`, on by default), as
+  Weather's own is: a widget nobody can take off their home screen is
+  rude. Changing it calls `Programs::Extensions.refresh_ui`, or
+  `visible:` stays cached against the UI revision and the tab would not
+  go until something else invalidated it.
+- `tests/check_elten_api.py` now reads Elten's own
+  `src/eapi/extensions.rb` and fails on any `extension.<name>` the
+  builder has not got - found by which class defines `main_tab` and
+  `tick` rather than by its name, because matching a name that was
+  renamed would make the check pass on an empty set, which is the
+  failure it exists to prevent.
+
+### Elten's own API, and the two questions before it
+
+Reported as: Titan's AI and Titan's actions should reach the Elten API,
+since the bridge is installed over there and the user agreed to it.
+
+`elten-tce-bridge/elten_eapi.rb` is that, and it is the mirror of
+`eapi_titan.rb`. Titan already had `elten_tools.py`, but that talks to
+the **EltenLink server** with saved credentials: it can answer "what is
+in my inbox" and nothing at all about the Elten the user is sitting in
+front of. The bridge is inside that client, so it can.
+
+- **The table IS the security boundary**, which is the rule this
+  repository already applies to the same problem in the mirror
+  direction: `eltenkit/eltenlink.py` reaches EltenLink through an
+  explicit list and never `getattr` on a name the caller supplied. There
+  is no way here to name a Ruby method, a constant, a file or an object -
+  a call is in `CALLS` or it does not exist. What is in it is
+  deliberately about the CLIENT (the account, what the client is doing,
+  one setting, what is installed, saying something out loud): anything
+  the server can answer, Titan already asks the server for, and a second
+  implementation is a second thing to be wrong.
+- **Everything that would PUBLISH is absent rather than present and
+  refused.** An action Titan offers and cannot perform is worse than one
+  it does not offer.
+- **Three gates, three different questions.** The consent is Elten's data
+  leaving Elten; writing acts in the user's name on a network other
+  people are on; and all of it runs on Elten's own thread through
+  `EltenMain.call`, never on the bus worker.
+
+**And a second consent, because "the necessary data" and "all of it" are
+not the same question.** The first asks about what the bridge needs to be
+a bridge - who is signed in, what arrived, what is on the screen. The
+second asks whether Titan's AI and actions may reach Elten's API for
+whatever they are asked about. Rolling them into one would be taking the
+second answer by asking the first, so `TitanConsent::FULL_KEY` is its own
+question, never implied, never asked before the first has been, and
+refusing it leaves everything above it working. A refusal says WHICH of
+the two is missing - answering "Elten has not given permission" to
+somebody who granted the first sends them to check a setting that is
+already on, which is a fault this add-on has already fixed once.
+
+**Telling the user is not the same as telling a model.** A notification
+pushed into Titan's notification centre stays on the user's machine: it
+makes a sound, a reader says it, it goes in the Titan buffer - the same
+path tReminder's take, through `show_notification`. A notification READ
+BACK, by Perun or Melitele answering "have I anything waiting in Elten",
+is the text of somebody's private message put into a prompt and sent to a
+model provider. That is a third switch (`share_with_ai`), and it reaches
+the pushed SNAPSHOT as well as the live handlers - Titan answers its AI
+out of the last report when Elten is not replying, so a switch that gated
+only the handlers would be half a switch with the texts already over
+there.
+
+**Off by default.** It was written the other way round, on the grounds
+that answering "have I anything waiting in Elten" is what the assistant's
+Elten tools are FOR - which is true and is not a reason: a default is who
+bears the cost of not having thought about it, and here that cost is
+somebody's private messages at a third party. What is still answered with
+it off is that Elten is running and who is signed in, which is what makes
+the bridge answerable at all and is not somebody's correspondence; the
+line is drawn there rather than at the words, because "five unread
+private messages" is a fact about the user's day and a switch that let
+the counts through while stopping the texts would be two answers to one
+question.
+
+**And the failure mode of a privacy switch is a lie.** With sharing off
+the report carries an empty list, which every describer read as "Elten
+has no notifications waiting" - not a refusal but a FALSE answer to the
+question that was asked, and one the user would act on. `shared_with_ai`
+travels with the report and `_not_shared()` reads it, on an explicit
+False only: a bridge older than the switch does not send the field, and
+reading its silence as a refusal would replace every answer it can give
+with one it never made.
+
+- **A client reporting about ITSELF is not a client driving Titan**
+  (`bridge_api.SELF_REPORT`). `notifications.add` and `client.report` are
+  the whole of what the bridge does unprompted, and putting them behind
+  the drive consent would stop the most useful thing it does until a
+  dialog was answered - while answering a question about something else.
+  It is a nuisance vector, which is why the client's arrival is announced
+  out loud, why the notification names the program it came from, and why
+  Elten's own end has its own switch.
+- Two faults caught by reading Elten's source rather than shipping:
+  a method called `speak` here would have **shadowed Elten's own
+  top-level helper** for everything in the class and recursed into itself
+  with a String where a Hash belonged, and `speech_stop!` does not exist -
+  Elten's signature is `speak(text, stop: true, ...)`, so the interrupt
+  is an argument and there is nothing to stop separately.
+- Titan side: `elten_client.eapi` / `eapi_calls` as actions, and the same
+  two as assistant tools, so Perun and Melitele have them.
+
 ### The same menus in all three interfaces
 
 `src/ui/program_menu.py` names what the menu bar can do, once. The graphical

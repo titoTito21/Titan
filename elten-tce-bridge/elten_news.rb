@@ -101,13 +101,22 @@ class EltenNews
     REPORT_EVERY = 60.0
 
     def report(current)
+      # **The switch has to reach the SNAPSHOT too.** Titan keeps the
+      # last report and answers its AI out of it when Elten is not
+      # replying live, so a switch that only gated the live handlers
+      # would be half a switch: the texts would already be over there.
+      # What is still sent is that Elten is running and who is signed in,
+      # which is what makes "is Elten open" answerable at all and is not
+      # somebody's private message.
+      shared = TitanPrefs.share_with_ai?
       state = {"user" => signed_in_as, "name" => full_name,
                "moderator" => moderator?, "language" => elten_language,
                "version" => elten_version,
-               "notifications" => current.map do |item|
+               "shared_with_ai" => shared,
+               "notifications" => shared ? current.map do |item|
                  {"text" => item[:text], "cat" => item[:cat]}
-               end,
-               "news" => counts_by_kind(current)}
+               end : [],
+               "news" => shared ? counts_by_kind(current) : {}}
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       digest = state.inspect
       return if digest == @reported && now - @reported_at.to_f < REPORT_EVERY
@@ -179,27 +188,48 @@ class EltenNews
       "answer is in its own settings."
     end
 
+    # **The line is "Elten is running and who is signed in" against
+    # "what has arrived".** The first is what makes the bridge answerable
+    # at all and is not somebody's correspondence; the second is, texts
+    # and counts alike - "you have five unread private messages" is a
+    # fact about the user's day, and a switch that let it through while
+    # stopping the words would be two answers to one question.
     def answer_status
       return refusal if !TitanConsent.granted?
-      current = read_notifications
+      shared = TitanPrefs.share_with_ai?
+      current = shared ? read_notifications : nil
       {"running" => true, "user" => signed_in_as, "name" => full_name,
        "moderator" => moderator?, "language" => elten_language,
        "version" => elten_version,
-       "notifications" => (current || []).size}
+       "shared_with_ai" => shared,
+       "why" => shared ? why_empty : "",
+       "notifications" => shared ? (current || []).size : nil}
     end
 
     def answer_notifications
       return refusal if !TitanConsent.granted?
+      return ai_refusal if !TitanPrefs.share_with_ai?
       current = read_notifications
-      return {"notifications" => []} if current == nil
-      {"notifications" => current.map do |item|
+      return {"notifications" => [], "why" => why_empty} if current == nil
+      {"why" => why_empty, "notifications" => current.map do |item|
         {"text" => item[:text], "cat" => item[:cat]}
       end}
     end
 
     def answer_news
       return refusal if !TitanConsent.granted?
+      return ai_refusal if !TitanPrefs.share_with_ai?
       {"news" => counts_by_kind(read_notifications || [])}
+    end
+
+    # **Said as its own thing, never as the consent being missing.**
+    # Somebody who granted the consent and switched THIS off would
+    # otherwise be told to go and answer a question they had already
+    # answered - the same fault this add-on fixed once for a timeout.
+    def ai_refusal
+      "Elten's notifications are not being shared with Titan's AI. The " \
+      "TCE bridge has its own switch for that, separate from the desktop " \
+      "notifications, which are unaffected."
     end
 
     def signed_in_as
@@ -218,10 +248,36 @@ class EltenNews
 
     # [{id:, text:, cat:}] out of Elten's own service, or nil when this
     # Elten has no such service - an older client, or one signed out.
+    # **Why there were none is as much an answer as how many.**
+    #
+    # "Reading Elten's notifications does not work" is a report with
+    # nothing in it, and every one of the causes looks identical from
+    # Titan: an empty list, said as "no notifications waiting". They are
+    # completely different things - nobody is signed in, the service has
+    # not started, the client is older than this call, or there genuinely
+    # is nothing - and only one of them is a fault. So the reason is
+    # recorded and travels with the answer.
+    def why_empty
+      @why_empty.to_s
+    end
+
     def read_notifications
-      return nil if !defined?(EltenAPI::NotificationService)
+      if !defined?(EltenAPI::NotificationService)
+        @why_empty = "this Elten has no notification service"
+        return nil
+      end
+      if defined?(Session) && Session.respond_to?(:logged?) && !Session.logged?
+        # `active_notifications` answers [] for a session it does not
+        # recognise, which is indistinguishable from "nothing waiting".
+        @why_empty = "nobody is signed in to Elten"
+        return nil
+      end
       rows = EltenAPI::NotificationService.active_notifications
-      return nil if !rows.is_a?(Array)
+      if !rows.is_a?(Array)
+        @why_empty = "Elten's notification service answered nothing"
+        return nil
+      end
+      @why_empty = rows.empty? ? "Elten has nothing waiting" : ""
       rows.map do |row|
         text = value_of(row, :alert)
         text = value_of(row, :notification) if text.to_s.strip == ""

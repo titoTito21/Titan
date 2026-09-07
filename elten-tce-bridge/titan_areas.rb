@@ -34,6 +34,7 @@ class TitanAreas
       when "addons"   then addons_screen
       when "shell_view" then TitanShell.new(@bus).open
       when "macros_view" then TitanMacros.new(@bus).open
+      when "script_view" then TitanScriptUI.new(@bus).open
       when "cling_view"  then TitanCling.new(@bus).open
       when "apps_view"   then TitanApps.new(@bus, TitanAPI.new(@bus)).open
       when "ai_view"     then TitanAI.new(@bus).open
@@ -63,6 +64,11 @@ class TitanAreas
     # DO - writing a macro, playing a Klango application, asking the AI -
     # rather than functions they call.
     list.push(["macros_view", _("Macros")]) if addon("macros") != nil
+    # A script written for one job and run now, which is a different thing
+    # from the user's saved macros - and the same capability an Elten
+    # application reaches through `EltenAPI::Titan.script`, with a screen
+    # in front of it.
+    list.push(["script_view", _("Titan Script")]) if addon("macros") != nil
     list.push(["cling_view", _("Cling (Klango applications)")]) if addon("cling") != nil
     # TCE's own applications, described rather than drawn - the same
     # programs Titan runs in a window, here as Elten screens.

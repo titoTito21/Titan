@@ -741,6 +741,7 @@ class TitanApps
     # Older TCEs do not say; not saying is not the same as saying no.
     @answered = answer.data.is_a?(Hash) && answer.data.key?("answered") ?
                 answer["answered"] == true : nil
+    announce(answer)
     before = fingerprint(@screen, ignore)
     @screen = answer["screen"]
     if !@screen.is_a?(Hash)
@@ -750,6 +751,40 @@ class TitanApps
     end
     @moved = true if fingerprint(@screen, ignore) != before
     true
+  end
+
+  # **What the application ANNOUNCED is said here, in Elten's voice.**
+  #
+  # Every TCE application announces what it has just done - "Note
+  # saved!", "Folder created!", "Note deleted!" - and that sentence is
+  # usually the whole result of pressing the button: the screen behind it
+  # often looks exactly as it did before, so a user handed only the
+  # screen is told nothing at all about what happened.
+  #
+  # It used to be spoken by a TTS engine built inside the application's
+  # own subprocess on the machine TCE is on, which is not where the
+  # person reading this is - and building that engine took seconds on the
+  # loop's own thread, which is what made saving a note answer "the
+  # application has not answered yet" and then, much later, say the note
+  # was saved in TITAN's voice. Titan puts the sentence on the wire now
+  # and it arrives here as `said`.
+  #
+  # **`alert`, which waits, not `speak`, which does not.** The form is
+  # rebuilt straight after this and announces whatever the focus lands
+  # on; a sentence merely started would be wiped by that and the news
+  # would be lost. Waiting for it is what makes it heard - and it is
+  # Elten's own idiom for saying one thing (`alert(text)` is `speak` plus
+  # the wait).
+  def announce(answer)
+    said = answer.data.is_a?(Hash) ? answer["said"] : nil
+    return if !said.is_a?(Array) || said.empty?
+    lines = said.map { |one| one.is_a?(Hash) ? one["text"].to_s : one.to_s }
+    lines = lines.map { |line| line.strip }.reject(&:empty?)
+    return if lines.empty?
+    TitanApps.note("the application said: %s" % lines.join(" "))
+    alert(lines.join(". "))
+  rescue Exception
+    nil
   end
 
   # **Escape is the application's first.** A TCE window answers it - a

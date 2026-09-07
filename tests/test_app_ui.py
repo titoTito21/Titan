@@ -982,6 +982,151 @@ class NothingHereKnowsAboutElten(unittest.TestCase):
         json.dumps(application.screen)
 
 
+class WhatTheApplicationSAYS(unittest.TestCase):
+    """"Note saved!" is the whole result of pressing Save.
+
+    Every one of Titan's applications announces what it has just done,
+    and every one of them reaches speech the same way - `tce_speech`, or
+    `accessible_output3` when that is missing. Under this shim both of
+    those were wrong twice over: the sentence was spoken on the machine
+    Titan is on rather than where the interface is, and `tce_speech`
+    builds a whole `StereoSpeech` on its first call - inside the
+    application's subprocess, on the loop's own thread - so the client
+    waited out its whole patience and was told the application had not
+    answered. Every one of these announcements is the FIRST speech its
+    application makes, which is exactly why only the actions that
+    announce something were slow.
+    """
+
+    def ask(self, source):
+        import subprocess
+        shim = os.path.join(TITAN, 'src', 'app_ui', 'shim')
+        code = 'import sys\nsys.path.insert(0, r"%s")\n%s' % (shim, source)
+        answer = subprocess.run([sys.executable, '-c', code],
+                                capture_output=True, text=True, timeout=60,
+                                cwd=TITAN)
+        self.assertEqual(answer.returncode, 0,
+                         'the shim raised:\n%s' % answer.stderr[-1500:])
+        return answer.stdout.strip()
+
+    def test_no_tts_engine_is_built_inside_the_application(self):
+        """The doorway an application really uses, answered by the shim.
+
+        Asked in a subprocess, because that is where the shim lives: this
+        runner has the real `src.titan_core` imported already.
+        """
+        where = self.ask('import wx\n'
+                         'import src.titan_core.tce_speech as t\n'
+                         'print(t.speak.__module__)')
+        self.assertNotIn('titan_core', where,
+                         'the real tce_speech answered, which builds a '
+                         'StereoSpeech inside the application')
+
+    def test_the_engine_titan_access_asks_for_is_never_built_here(self):
+        """`get_reader_engine` is the one that must not be built in a
+        subprocess, and None is what it already promises when it cannot
+        be - every caller handles that."""
+        self.assertEqual(self.ask(
+            'import wx\n'
+            'from src.titan_core.tce_speech import get_reader_engine\n'
+            'print(get_reader_engine())'), 'None')
+
+    def test_the_other_doorway_is_answered_too(self):
+        """An application falls back to `accessible_output3` only when
+        `tce_speech` is missing - and answering both is what keeps its
+        SAPI / say / spd-say fallback out of reach."""
+        self.assertEqual(self.ask(
+            'import wx\n'
+            'import accessible_output3.outputs.auto as ao3\n'
+            'print(ao3.Auto().is_active())'), 'True')
+
+    def test_speaking_puts_a_line_on_the_wire_and_does_not_block(self):
+        """It costs a wire write, so a handler that announces something
+        returns at once."""
+        said = self.ask(
+            'import os\n'
+            'os.environ["TITAN_APP_UI"] = "1"\n'
+            'import wx\n'
+            'from src.titan_core.tce_speech import speak\n'
+            'import time\n'
+            'start = time.time()\n'
+            'speak("Note saved!")\n'
+            'assert time.time() - start < 1.0, "it blocked"\n')
+        self.assertIn('"said"', said)
+        self.assertIn('Note saved!', said)
+
+
+class AnAnnouncementReachesWhoeverIsRenderingIt(unittest.TestCase):
+    """Driven end to end on tNotes, into a home folder of its own so the
+    user's real notes are not touched."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.home = tempfile.mkdtemp(prefix='titan-app-ui-')
+        cls.before = {name: os.environ.get(name)
+                      for name in ('USERPROFILE', 'HOME')}
+        os.environ['USERPROFILE'] = cls.home
+        os.environ['HOME'] = cls.home
+
+    @classmethod
+    def tearDownClass(cls):
+        for name, value in cls.before.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        shutil.rmtree(cls.home, ignore_errors=True)
+
+    def setUp(self):
+        self.app = opened(NOTES, 'tNotes')
+
+    def tearDown(self):
+        self.app.stop()
+
+    def _save_a_note(self):
+        button = control(self.app.screen, 'button', 'No')   # New / Nowa
+        self.assertIsNotNone(button)
+        self.app.tell('press', control=button['id'])
+        field = control(self.app.screen, 'text')
+        self.app.tell('set', control=field['id'], value='Bridge test')
+        self.app.tell('press', control=control(self.app.screen,
+                                               'button', 'OK')['id'])
+        save = control(self.app.screen, 'button', 'Sav') or \
+            control(self.app.screen, 'button', 'Zapisz')
+        self.assertIsNotNone(save, 'the note dialog has no Save button')
+        self.app.take_spoken()          # anything said on the way here
+        return self.app.tell('press', control=save['id'])
+
+    def test_saving_a_note_says_so_where_the_interface_is(self):
+        answered = self._save_a_note()
+        said = [entry['text'] for entry in self.app.take_spoken()]
+        self.assertTrue(said, 'the application announced nothing at all')
+        self.assertTrue(answered,
+                        'the press was not answered, which is what building '
+                        'a TTS engine inside the application used to cost')
+
+    def test_it_is_delivered_once(self):
+        """An announcement is an event, not part of the screen. Left in
+        the screen it would be read out again on every refresh."""
+        self._save_a_note()
+        self.assertTrue(self.app.take_spoken())
+        self.assertEqual(self.app.take_spoken(), [])
+
+    def test_the_typed_doorway_carries_it(self):
+        """`app.press` is what a program rebuilding the interface calls,
+        and the announcement is usually the whole answer - the screen
+        behind it often looks exactly as it did before."""
+        from src.titan_core import bridge_api
+
+        class Held(object):
+            application = None
+        Held.application = self.app
+        self._save_a_note()
+        answer = bridge_api._app_ui_answer(Held, True)
+        self.assertTrue(answer['said'])
+        self.assertIn('text', answer['said'][0])
+
+
 class WhatCOUNTSAsTheScreenChanging(unittest.TestCase):
     """A renderer rebuilds its form when the screen has moved, so what
     counts as "moved" decides whether anything the user does is ever

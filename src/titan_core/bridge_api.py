@@ -730,11 +730,35 @@ def _app_ui_open(args):
             # client that could not tell them apart would present a
             # mirror as though it were the application.
             'mirror': bool(getattr(session.application, 'mirrored', False)),
+            'said': _spoken(session),
             'refused': session.application.refused}
 
 
 def _app_ui_screen(args):
-    return {'screen': _app_ui_session(args).application.screen}
+    held = _app_ui_session(args)
+    return {'screen': held.application.screen,
+            'said': _spoken(held)}
+
+
+def _spoken(held):
+    """What the application announced, on its way to whoever renders it.
+
+    **An application's own speech is not something Titan should be
+    saying.** Every TCE application announces what it has just done -
+    "Note saved!", "Folder created!" - and when its interface is
+    somewhere else, so is the person being told. The shim puts those
+    sentences on the wire instead of building a TTS engine inside the
+    application's subprocess, and this is where they leave Titan: a
+    client renders them in its own voice, where the user is.
+
+    Delivered once. An announcement is an event and not part of the
+    screen, so leaving it in the screen would have it read out again on
+    every refresh.
+    """
+    try:
+        return held.application.take_spoken()
+    except AttributeError:               # a mirrored window says nothing
+        return []
 
 
 #: Said when the application has not answered in time. Silence and "the
@@ -743,7 +767,8 @@ def _app_ui_screen(args):
 #: is an application still busy, or stuck, with the interface showing a
 #: screen that is no longer true.
 def _app_ui_answer(held, answered):
-    return {'screen': held.application.screen, 'answered': bool(answered)}
+    return {'screen': held.application.screen, 'answered': bool(answered),
+            'said': _spoken(held)}
 
 
 def _app_ui_press(args):
@@ -796,8 +821,86 @@ def _whole(value):
         return -1
 
 
+#: **What a client may do without being allowed to.** Reading is one
+#: permission and driving is another, and the line is the one this
+#: repository already drew for the TCE bridge's own `press_key`: reading
+#: tells somebody what is there, and Enter in a messenger sends the
+#: message. Everything here only READS - what is installed, what a screen
+#: holds, what a setting is, what the AI remembers - so a client that has
+#: not been allowed to control Titan can still show it whole, which is
+#: what a bridge is for.
+#:
+#: A call that is not on this list changes something and needs the user's
+#: yes, asked once when the client arrives (`src/titan_core/
+#: client_consent.py`). `app.open` is deliberately NOT here: it starts a
+#: process. Neither is `speech.say`: it takes the user's own voice.
+READ_ONLY = frozenset((
+    'hello', 'capabilities',
+    'apps.list', 'games.list', 'im.modules', 'views.list',
+    'statusbar.read', 'menu.list', 'components.list',
+    'widgets.list', 'widgets.read',
+    'buffers.list', 'buffers.read',
+    'notifications.list',
+    'settings.screen',
+    'speech.speaking',
+    'ai.available', 'ai.history',
+    'addons.list', 'addons.actions',
+    'macros.list', 'cling.list',
+    'window.state',
+    'app.list', 'app.screen', 'app.sessions', 'app.log',
+))
+
+
+#: **A client telling Titan about ITSELF is not a client driving Titan.**
+#: These two are the whole of what the bridge in Elten does unprompted: a
+#: message arrived over there, and here is what that client currently is.
+#: They reach `show_notification`, so a message from Elten behaves exactly
+#: like one of Titan's own or one of tReminder's - the sound, the reader,
+#: the Titan category of the buffer system - which is the point of having
+#: a bridge at all.
+#:
+#: Putting them behind the drive consent would mean the most useful thing
+#: the bridge does stops until a dialog is answered, and it would be
+#: answering the wrong question: what the user is asked about is another
+#: program taking hold of Titan, and news about that program is not that.
+#: It is a nuisance vector - a client can put text in the notification
+#: centre and have it read out - which is why the client's ARRIVAL is
+#: announced out loud, why the notification says which program it came
+#: from, and why Elten's own end has its own switch for it.
+SELF_REPORT = frozenset(('notifications.add', 'client.report'))
+
+
+def drives(call):
+    """Whether this call would CHANGE Titan rather than read it."""
+    name = str(call or '')
+    return name not in READ_ONLY and name not in SELF_REPORT
+
+
+def _capabilities(_args):
+    """Everything a client may ask for, so it need not find out by failing.
+
+    **A doorway nobody can enumerate is a doorway a client guesses at**,
+    and every guess this bridge has cost was of that shape - a call name
+    that was nearly right, an argument spelled the way another add-on
+    spells it. So the surface says what it is: which calls exist, which
+    of them only read, and where the two permissions part.
+    """
+    from src.titan_core import client_consent
+    return {
+        'api': API_VERSION,
+        'calls': sorted(CALLS),
+        'read_only': sorted(READ_ONLY),
+        'self_report': sorted(SELF_REPORT),
+        'consent': {
+            'needed_for': sorted(name for name in CALLS if drives(name)),
+            'clients': client_consent.clients(),
+        },
+    }
+
+
 CALLS = {
     'hello': _hello,
+    'capabilities': _capabilities,
     'apps.list': _apps,
     'apps.open': _open_app,
     'games.list': _games,

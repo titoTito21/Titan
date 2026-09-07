@@ -21,6 +21,9 @@ module TitanPrefs
     "elten_notifications" => true,
     "allow_keys" => false,
     "render_apps" => false,
+    "widget" => true,
+    "allow_writes" => false,
+    "share_with_ai" => false,
   }.freeze
 
   class << self
@@ -57,6 +60,47 @@ module TitanPrefs
 
     def tce_sounds?
       get("tce_sounds") == true
+    end
+
+    # **A widget you cannot take off your home screen is rude.** On by
+    # default because somebody who installed this add-on wants TCE where
+    # they can see it, and off is one checkbox away - which is exactly
+    # what Elten's own weather widget does (`visible: -> { enabled? }`).
+    def widget?
+      get("widget") == true
+    end
+
+    # **Reading Elten and ACTING in Elten are different questions**, the
+    # same split as `allow_keys?` and for the same reason: what Titan
+    # does through this acts in the user's own name, in a program other
+    # people can see the results of. Off by default, and not implied by
+    # either consent.
+    def allow_writes?
+      get("allow_writes") == true
+    end
+
+    # **Telling the user is not the same as telling a model.**
+    #
+    # A notification pushed into Titan's notification centre stays on the
+    # user's own machine: it makes a sound, a screen reader says it, it
+    # goes in the Titan buffer. A notification READ BACK - by Perun or
+    # Melitele answering "have I anything waiting in Elten" - is the text
+    # of somebody's private message put into a prompt and sent to a model
+    # provider. That is Elten's data leaving the machine entirely, which
+    # the first question did not cover and the desktop notification does
+    # not need.
+    #
+    # **Off by default.** It was written the other way round, on the
+    # grounds that answering that question is what the assistant's Elten
+    # tools are FOR - which is true and is not a reason: a default is who
+    # bears the cost of not having thought about it, and here that cost
+    # is somebody's private messages at a third party. Being useful is
+    # worth one switch; it is not worth spending a privacy answer nobody
+    # gave. Off leaves the notifications themselves working exactly as
+    # they were - the sound, the reader, the notification centre - and
+    # leaves Titan able to say that Elten is running and who is signed in.
+    def share_with_ai?
+      get("share_with_ai") == true
     end
 
     def elten_notifications?

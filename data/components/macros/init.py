@@ -5386,13 +5386,20 @@ def _tcs_announce_problems(problems, announce):
             len(problems) - 1))
 
 
-def run_tcs_text(text, announce=True, base_dir='', title=''):
+def run_tcs_text(text, announce=True, base_dir='', title='', answer=None):
     """(ok, transcript). Runs a script that is already in memory.
 
     ``base_dir`` is the folder the script came from: the sounds and helper
     scripts it names by bare filename are looked for there. ``title`` is the
     macro's own name, which any window it puts up carries unless the script
     titles that window itself.
+
+    ``answer`` is a dict this fills in with what ``return`` handed back.
+    **A caller that is a program wants the value, and the transcript is not
+    it**: `return "x is 5"` reaches the transcript as the word "stopped",
+    which is the right thing to say to somebody who ran a macro and the
+    wrong thing to hand an Elten application that asked Titan a question.
+    A caller that does not pass one sees exactly what it always saw.
     """
     _tcs_running.title = str(title or '')
     program, errors = _ai_parse(text)
@@ -5424,7 +5431,11 @@ def run_tcs_text(text, announce=True, base_dir='', title=''):
     try:
         try:
             _ai_execute(program['body'], variables, transcript, budget)
-        except _AIStop:
+        except _AIStop as stop:
+            # 'return x' says what the script hands back, the way a called
+            # script's does; 'stop' says nothing at all.
+            if answer is not None and stop.value is not None:
+                answer['returned'] = stop.value
             transcript.append("stopped")
         except TCSError as e:
             transcript.append(e.describe())
@@ -6711,6 +6722,55 @@ def action_macro_actions(addon=""):
             + "\n".join(lines))
 
 
+def action_run_script(script="", title="", check="", **_arguments):
+    """Run a Titan Script somebody else composed, without saving it first.
+
+    **The piece that makes Titan Script something another program can
+    write.** Everything else here acts on a macro the user already has -
+    `run_macro` takes a name, `create_macro` writes a file into the macro
+    manager - which is right for the user's own macros and wrong for a
+    caller composing a script for one job: an Elten application, an
+    external client, an add-on that wants three Titan actions in order
+    with a value carried between them. Saving one first would leave the
+    user's macro list full of things nobody wrote.
+
+    **Checked before it runs, and the check is the answer when it
+    fails.** A script that names an action that is not there stops
+    halfway through with the earlier half already done; the check knows
+    that before anything happens, and a caller that is a program rather
+    than a person needs to be told which line rather than shown a
+    dialog - so nothing is announced and the problems come back as the
+    result.
+
+    It runs HERE, on the caller's thread, rather than on a thread of its
+    own: a caller asking for a script wants what it answered, and the
+    transcript is that answer. A script the user launches from the macro
+    manager still goes through `run_tcs`, which is what a shortcut needs.
+    """
+    text = str(script or '')
+    if not text.strip():
+        return needs('script', "What should the script say? Pass the Titan "
+                               "Script itself, not the name of a macro - "
+                               "run_macro is for one that is saved.")
+    if not _ai_given(check) or _ai_truth(check):
+        problems = check_tcs(text)
+        if problems:
+            return fails(_("The script would not run:") + "\n"
+                         + "\n".join(f"- {problem}" for problem in problems[:12]))
+    answer = {}
+    ok, transcript = run_tcs_text(text, announce=False,
+                                  title=str(title or ''), answer=answer)
+    said = "\n".join(str(line) for line in transcript if str(line).strip())
+    if not ok:
+        return fails(said or _("The script stopped."))
+    # **What `return` handed back is the answer, when there is one.** A
+    # caller composing a script is asking a question; the transcript is
+    # what a person who ran a macro wants to hear about it.
+    if 'returned' in answer:
+        return str(answer['returned'])
+    return said or _("The script finished.")
+
+
 def action_check_macro(script="", name="", use_ai=""):
     """Review a Titan Script: what would not run, and what looks wrong."""
     text = str(script or '')
@@ -6992,6 +7052,23 @@ TITAN_ACTIONS = [
                                          "script comes back for you to show "
                                          "the user first."}},
      'risk': 'confirm', 'run': action_fix_macro},
+    {'name': 'run_script',
+     'summary': "Run a Titan Script that is not saved as a macro - the "
+                "script text itself. For a caller composing one for a single "
+                "job: an add-on, an external client, an Elten application. "
+                "It is checked first and the problems are the answer if it "
+                "would not run; what comes back otherwise is what the script "
+                "said. Use run_macro for one the user has saved.",
+     'params': {'script': {'type': 'string', 'required': True,
+                           'description': "The Titan Script itself."},
+                'title': {'type': 'string',
+                          'description': "What to call any window the script "
+                                         "puts up, unless it titles its own."},
+                'check': {'type': 'boolean',
+                          'description': "Check it before running it. On by "
+                                         "default; turn it off only for a "
+                                         "script already checked."}},
+     'risk': 'confirm', 'run': action_run_script},
     {'name': 'reload',
      'summary': "Re-read the macros folder so a macro written or changed from "
                 "outside the macro manager appears in the user's list.",

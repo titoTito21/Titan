@@ -76,7 +76,7 @@ def app_ui_press(session='', control='', **_arguments):
     if held is None:
         return "There is no application open with that session."
     held.application.tell('press', control=_number(control))
-    return app_ui_screen(session=session)
+    return _with_what_it_said(held, app_ui_screen(session=session))
 
 
 def app_ui_set(session='', control='', value='', **_arguments):
@@ -85,7 +85,7 @@ def app_ui_set(session='', control='', value='', **_arguments):
     if held is None:
         return "There is no application open with that session."
     held.application.tell('set', control=_number(control), value=value)
-    return app_ui_screen(session=session)
+    return _with_what_it_said(held, app_ui_screen(session=session))
 
 
 def app_ui_key(session='', key='', **_arguments):
@@ -94,7 +94,27 @@ def app_ui_key(session='', key='', **_arguments):
     if held is None:
         return "There is no application open with that session."
     held.application.tell('key', key=str(key or ''))
-    return app_ui_screen(session=session)
+    return _with_what_it_said(held, app_ui_screen(session=session))
+
+
+def _with_what_it_said(held, screen_text):
+    """The announcement first, then the screen.
+
+    **What the application ANNOUNCED is usually the answer.** "Note
+    saved!", "Folder created!", "Note deleted!" is the whole result of
+    pressing the button, and the screen behind it often looks exactly as
+    it did before - so a caller handed only the screen is told nothing at
+    all about what happened. It goes first because it is the news; the
+    screen is the state.
+    """
+    try:
+        said = held.application.take_spoken()
+    except AttributeError:               # a mirrored window says nothing
+        return screen_text
+    lines = [entry.get('text', '') for entry in said if entry.get('text')]
+    if not lines:
+        return screen_text
+    return '\n'.join(lines + ['', screen_text])
 
 
 def app_ui_close(session='', **_arguments):

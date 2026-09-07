@@ -210,6 +210,12 @@ def _serve_request(peer, message):
     try:
         from src.titan_core.actions import dispatch
         kind = message.get('type')
+        refused = _not_allowed_to_drive(peer, message)
+        if refused:
+            peer.io.write_line({'type': 'call_result', 'id': request_id,
+                                'ok': False, 'error': refused,
+                                'consent': 'needed'})
+            return
         if kind == 'list':
             peer.io.write_line({'type': 'list_result', 'id': request_id,
                                 'ok': True, 'addons': dispatch.list_addons()})
@@ -240,6 +246,67 @@ def _serve_request(peer, message):
     except Exception as e:
         peer.io.write_line({'type': 'call_result', 'id': request_id,
                             'ok': False, 'error': f'{type(e).__name__}: {e}'})
+
+
+def _label_of(peer):
+    """What to call this client to the user. Its own words, then its id."""
+    return str(getattr(peer, 'label', '') or getattr(peer, 'addon_id', '')
+               or 'a program')
+
+
+def _not_allowed_to_drive(peer, message):
+    """Why this request may not be served, or '' when it may.
+
+    **Only an external client is ever asked about.** An add-on reaching
+    another add-on is Titan's own machinery - a component driving a
+    widget, an application driving a component - and there is
+    deliberately no permission wall between add-ons; putting one here
+    would break the thing the Action API exists for. A CLIENT is another
+    program on the machine taking hold of this desktop, which is a
+    different question and the one the user gets to answer.
+
+    **Reading is always served.** `titan.bridge` is one action carrying a
+    whole surface, and most of that surface only reads - so the CALL
+    inside it is what decides, not the action's name. A client that has
+    not been allowed to control Titan can still show it whole.
+    """
+    if not _is_external_client(peer):
+        return ''
+    if message.get('type') == 'list':
+        return ''
+    try:
+        from src.titan_core import client_consent
+        if client_consent.known(peer.addon_id) is True:
+            return ''
+        if not _would_drive(message):
+            return ''
+        label = _label_of(peer)
+        if client_consent.may_drive(peer.addon_id, label):
+            return ''
+        return client_consent.refusal(peer.addon_id, label)
+    except Exception as e:                       # noqa: BLE001
+        # A consent layer that cannot be reached must not become a wall:
+        # the announcement above is what the user actually relies on.
+        _log(f"consent could not be checked: {e}")
+        return ''
+
+
+def _would_drive(message):
+    """Whether this request would CHANGE Titan rather than read it."""
+    if message.get('type') == 'sequence':
+        return True
+    if str(message.get('addon') or '') != 'titan' or \
+            str(message.get('action') or '') != 'bridge':
+        return True
+    try:
+        from src.titan_core import bridge_api
+        request = (message.get('args') or {}).get('request')
+        payload = json.loads(request) if isinstance(request, str) else request
+        if not isinstance(payload, dict):
+            return True
+        return bridge_api.drives(payload.get('call'))
+    except Exception:
+        return True
 
 
 # --------------------------------------------------------------------------- #
@@ -295,6 +362,20 @@ def _announce_client(peer, joined):
         return
     _announced[key] = now
     _announced.pop((peer.addon_id, not bool(joined)), None)
+
+    # **The question rides along with the arrival.** Titan is already
+    # telling the user that another program has taken hold of it, so this
+    # is the moment to ask whether it may act - and by the time it does,
+    # the answer is in. Asked at its first action instead, the first
+    # action of every session would fail while a dialog the user had not
+    # noticed waited for them. Never blocks: `ask` puts the question on a
+    # thread of its own and answers nothing here.
+    if joined:
+        try:
+            from src.titan_core import client_consent
+            client_consent.ask(peer.addon_id, _label_of(peer))
+        except Exception as e:                   # noqa: BLE001
+            _log(f"could not ask about '{peer.addon_id}': {e}")
 
     def say():
         try:
