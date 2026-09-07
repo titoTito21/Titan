@@ -5268,6 +5268,316 @@ provider. Example: `data/macros/screen_reader_demo/`.
   `tests/test_titan_access_actions.py` (run them directly - `tests/` has no
   `__init__.py`).
 
+### The reader that is listening, whichever one it is
+
+`src/accessibility/reader_channel.py`. Titan says things with structure.
+"Applications, 1 of 4, tab" is a name, a place in a list and a role; a
+control on the left of the taskbar is spoken from the left; a mole on the
+far row of a Cling board is lower and quieter. Titan Access is given all of
+that, and everything else was given a string through `accessible_output3`,
+because the NVDA controller protocol carries text and nothing else.
+
+**Worse than a string: silence.** Every `announce_*` in
+`src/accessibility/messages.py` asked one question - "is Titan Access the
+reader?" - and `announce_view_switched` answered it by saying nothing at
+all, because NVDA reads the list row itself and Titan's sentence would be a
+second, worse copy of it. The duplicate was avoided and the three things
+the sentence adds - which tab, where in the bar, that it IS a tab - were
+lost with it.
+
+The module replaces that question with a better one: **what can the reader
+that is listening actually take?** Three channels answer it -
+`TitanAccessChannel` (in-process), `AddonChannel` (a reader whose add-on has
+joined the Action Bus; `READER_CLIENTS` is a list, so a second reader's
+add-on works unchanged) and `PlainChannel` (`accessible_output3`: text, and
+whether to interrupt). `announce(text, **detail)` says what Titan MEANS and
+the channel folds away what cannot be carried.
+
+- **A capability that lies is worse than one that is absent.**
+  `TitanAccessChannel` claims exactly what `host_bridge.announce` carries -
+  text, pitch, queue, and that this stands in place of the reader's own
+  next focus announcement - and deliberately NOT `role` or `index`. Titan
+  Access knows far more than that about a control (it reads the UIA tree
+  itself, and `push_focus` / `role_label` / `state_suffix` exist for the
+  toolkits it cannot see) but those describe the thing about to be FOCUSED,
+  which is a different statement from "say this". Claiming a role and then
+  folding it into the sentence anyway would make the caller hand one over
+  believing the reader would word it in the user's own verbosity settings.
+- **`replaces_focus` is what decides silence.** An announcement that would
+  duplicate the row is offered only to a reader that can be told to
+  suppress its own report once. So `announce_view_switched` is still silent
+  on a plain `accessible_output3` reader - as it always was, and for the
+  same good reason - and is now SAID to Titan Access and to a reader add-on.
+- **The wording is Titan's own and no catalogue gained a string.**
+  `Message.sentence()` joins the place in the list to the name through the
+  same msgid the tab bar has always used (`"{}, {} of {}"`), so a reader
+  that takes the pieces apart gets them apart and one that does not hears
+  "Applications, 1 of 4, tab" exactly as before.
+- Tests: `tests/test_reader_channel.py` (31; nothing speaks, opens a window
+  or reaches the bus).
+
+#### The NVDA add-on: `nvda-addon/`
+
+The other end of that channel, and rather more. It joins Titan's Action Bus
+as a CLIENT with the library Titan ships for the purpose
+(`titan_actions.py`, vendored and kept byte-identical by a test), so it
+costs nothing when Titan is not running and Titan announces out loud that
+another program has taken hold of it.
+
+- **Position is applied to whichever synthesizer the user has**
+  (`panner.py`), by setting the per-channel volume of the stream underneath
+  it. Where the NVDA has no `WavePlayer.setVolume` there is nothing below
+  the synth to pan, and the add-on says so and marks the position with a
+  tone (`BeepCommand`) instead of panning nothing quietly.
+- **Nothing that touches NVDA happens on the bus thread.** Every handler
+  marshals through `queueHandler` and returns at once - Titan is waiting on
+  a pipe, and an announcement that blocked until it had been spoken would
+  make Titan's interface wait for speech, which is the thing Titan spent a
+  lot of work not doing. `link.py` passes a `marshal` that just calls the
+  function, because `serve()` would otherwise detect wxPython (NVDA has it)
+  and wait up to thirty seconds for NVDA's main thread on every call.
+- **Every optional part of NVDA is reached through `compat.py`**, which
+  answers None rather than raising and records why (`missing()`). Nothing
+  there is a version test: an alpha build carries a year that has not
+  happened. That is also what makes the whole add-on importable, and
+  therefore testable, with nothing but a stub for `globalPluginHandler`.
+- **Every Titan action is an NVDA script** (`gestures.py`). Eight gestures
+  is not the number of things Titan can do - it is somewhere over two
+  hundred, and one more the day the user installs an add-on. So each
+  becomes a script on the plugin instance, which is what NVDA's **Input
+  Gestures** dialog walks (`dir()` for `script_*`), grouped one category per
+  Titan add-on. Three things make that work rather than nearly work: a
+  script name is derived from the add-on and the action and from nothing
+  else (NVDA remembers a binding by the NAME, so a label - which is
+  translated - or a position in a list would lose it); the catalogue is
+  cached in NVDA's own configuration so the scripts exist before Titan
+  does, and a bound key pressed with Titan off says Titan is not running,
+  which is an answer; and an action that needs a parameter ASKS for it,
+  because Titan's action layer has three outcomes and binding a key to
+  "create a note" would otherwise be binding a key to a refusal.
+- **The Titan menu is NVDA+shift+t** (`menu.py`) - the assistant, AI OCR,
+  the macros and every action of every add-on, grouped. It is a real
+  `wx.Menu`: NVDA announces it as a menu, counts it, follows the arrows
+  into a submenu and closes on Escape, with none of that written here. A
+  switch on it is a real check item rather than "(on)" written into a
+  label. Same rule the Titan shell and the Elten bridge each arrived at
+  independently.
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (53). Build with
+  `python nvda-addon/build.py`, which refuses a manifest NVDA could not
+  read or a module `__init__.py` imports and the zip has not got - the two
+  ways to ship an add-on that installs and is then simply absent.
+
+#### Found by running it against a live NVDA
+
+The suites passed and the add-on was broken. Every one of these was found by
+installing it into the NVDA the user actually reads with, restarting it,
+joining Titan's bus and calling the thing - and none of them by reading the
+code.
+
+- **`channel.capabilities()` read `panner.report()`, which is on the PANNER
+  and not on the module.** It is the ONE call Titan makes to decide what it
+  may send, so when it raised, Titan cached an empty answer: no position, no
+  pitch, and nothing marked as replacing a focus report - which put
+  `announce_view_switched` back to silence. One `AttributeError` in NVDA's
+  log, and every symptom looked like a panner that did not work. A test now
+  calls every handler Titan may call and fails if one raises, and the add-on
+  has a sweep that checks every `module.attribute` it reads off one of its
+  own modules.
+- **Nothing ever sent a position.** `Message.position` existed from the
+  first line of the channel and no caller filled it in, so the whole
+  positioned-speech feature had nothing to place. `announce_shell_group`
+  takes one now - `a11y.screen_position(control)`, the same -1 .. 1 the
+  focus cue is panned by - so the group name is spoken from where the group
+  is. A field that nothing writes is not a feature.
+- **`capabilities` asked the stream layer and not the session layer.**
+  eSpeak - NVDA's default synthesizer - produces ONE channel, so its stream
+  cannot be panned; `place()` has always fallen back to NVDA's own audio
+  session, which does not care how many channels the synth makes. But
+  `report()` only knew about the stream, so on the commonest setup there is
+  the reader said "the voice cannot be placed", Titan believed it and sent
+  nothing. Measured live: with `can_place()` asking both,
+  `reader.status` went from ten capabilities to eleven and NVDA speaks from
+  the left, the centre and the right with `"notes": []` - nothing dropped.
+- **`report()` said "cannot" and could not say why**, because the reasons
+  are recorded by `_note` only while something is being PLACED, and nothing
+  had been. `why_not()` works it out before anything is tried, which is what
+  the settings page and `reader.status` show.
+- **Three switches on the settings page did nothing.** `prosody.build` took
+  `allow_pan` and `allow_marker` and nothing passed them, and there was no
+  `allow_prosody` at all. And `capabilities` reported what the MACHINE can
+  do rather than what the user has allowed - so a position was sent to a
+  reader whose user had turned positioning off, and quietly dropped.
+- **Two NVDA settings did not exist and one was not a setting.**
+  `sayCapForCapitals` and `beepForCapitals` are not in this NVDA, and
+  `presentation/progressBarUpdates` is a SECTION - handing a caller a
+  branch of the configuration is an answer that cannot be serialised at
+  all, so the call never came back and took the other eleven settings down
+  with it on a four-second timeout. Which keys exist is a question about
+  the NVDA that is running, not about the number on it, so `_store_of` asks
+  the configuration and a name it has not got is left out of the list with
+  a reason.
+- **The first call after NVDA starts is slower than every call after it.**
+  Warm, the context answers in 0.06 s; the first one took over two seconds
+  and came back as "NVDA was busy", which reads as a broken bridge rather
+  than as a reader that has only just got up. `MAIN_THREAD_WAIT` is four
+  seconds, inside Titan's own six.
+- **A test left a permission behind in the user's real settings.** Joining
+  the bus as a client is what makes Titan remember an answer under that id,
+  and the test that proves anybody can write a client invented one and left
+  it there. It forgets it now. Found by reading the settings file after a
+  run.
+
+Measured at the end, live: **53 add-ons and 508 actions** reachable from
+NVDA, `reader.context` answering "In application explorer, window
+'FolderView'. The focus is on 'NVDA', a element listy, ... 7 of 19" - NVDA's
+own words, in the user's own language - and the dialog tones, the placed
+voice and the state suffix all heard.
+
+#### Titan Access's habits, in NVDA
+
+`interject.py`. Titan's own reader does three things to what it is about to
+say, and Titan has always told it: the KIND of dialog about to appear
+(`dialog_kind`, because a skinned dialog's icon is not reliably detectable
+and a confirmation the user cannot tell from a notice is one they will
+answer wrongly), a STATE to add to the control just read (`state_suffix`),
+and a replacement for the control-type word (`role_label`). Only Titan
+Access ever heard any of it: `shutdown_question.py` imported
+`titan_access.host_bridge` directly, so on NVDA the one dialog in Titan that
+asks before something irreversible sounded like every other dialog.
+
+- **It is NVDA's own filter, not speech over the top.**
+  `speech.extensions.filter_speechSequence` is where NVDA lets an add-on
+  change what is about to be spoken, so the kind word is part of the SAME
+  utterance as the dialog's own report and cannot be cut off by it. Speaking
+  it separately is what the `accessible_output3` path had to do, and it is
+  why that needed a 500 ms delay and still lost races.
+- **A tone per kind**, through `tones.beep`, which needs no synthesizer and
+  works with speech off entirely - which for a confirmation dialog is the
+  case worth covering. The kind word is said a little lower, as Titan Access
+  says it, because it is ABOUT the dialog rather than part of it.
+- **`role_label` is refused rather than guessed.** Replacing the
+  control-type word means finding it inside a sequence NVDA has already
+  built, in the user's own language, among the name and the states - and
+  getting that wrong renames the control instead of retyping it. It answers
+  no, and Titan folds the role into its own sentence, which is what a
+  capability answering no is for.
+- Everything armed is one shot and lives two seconds: Titan arms it and then
+  shows the dialog, which is milliseconds later; an arming that outlived
+  that would attach itself to whatever the user did next.
+- `announce_dialog_kind` / `announce_state_suffix` in
+  `src/accessibility/messages.py` are the one way in, so the caller says
+  what it means and the channel decides which reader can take it.
+
+#### Titan's subsystems know what the reader is looking at
+
+The channel runs both ways, and this is the half that makes Titan's own
+subsystems contextual.
+
+- **NVDA knows which window it is reading and Titan cannot work it out.**
+  On a machine being read, the foreground window and the window the user is
+  working in differ constantly - a menu is up, a tooltip has the
+  foreground, the reader has followed them into a dialog. `context.py`
+  answers the focused control by name, role and state, its place in its
+  list, what is selected, where the review cursor is and whether NVDA is in
+  browse mode. It is read on NVDA's own thread (every property is a call
+  into UIA) with a deadline, and it is the ONE place in the add-on that
+  waits.
+- **AI OCR reads THAT window.** `recognizer.read_screen` has always taken
+  an `hwnd`; nothing had ever been in a position to give it one, so
+  `ocr_read_window` / `ocr_ask` now take one and the add-on passes what
+  NVDA is in. Left out, whatever is in front is read, as before.
+- **The assistant is asked about what the user is on.** The question
+  carries the context sentence, so "what is this?" is answerable at all.
+- **Titan's AI, macros and Titan Scripts can reach the reader**
+  (`src/titan_core/reader_client_actions.py`, the `reader` provider):
+  `reader.context`, `reader.window`, `reader.say` (in the READER's voice,
+  not Titan's - one voice saying everything is what the user set up),
+  `reader.review`, `reader.say_all`, `reader.mode` (anything about to type
+  into a web page needs focus mode first), `reader.settings` /
+  `reader.setting`, `reader.synths` / `reader.voices`, and `reader.press`.
+  It exists beside the `nvda` add-on the bus builds by itself because an
+  assistant needs ONE name that means the same thing on every machine, and
+  an honest sentence when there is no reader at all.
+- **Reading the reader and driving it are different permissions**, which is
+  the rule Titan already applies in the other direction when it asks
+  whether an external client may act on it. `context` is always served;
+  changing NVDA is one switch (on); pressing NVDA's own gestures is a
+  second (off) - a gesture is whatever the user bound it to, and in a
+  document a bound key can delete something.
+- **The table IS the boundary.** A setting Titan asks for is in
+  `nvda_control.SETTINGS` or it does not exist; a review unit is in
+  `REVIEW` or it does not exist. There is no path from a name that arrived
+  over the pipe to an attribute of NVDA's. And a refusal crosses the wire
+  as an ANSWER carrying the switch to turn on - not as a call that failed,
+  which is reported as "the reader did not respond" and sends the user
+  nowhere.
+- **The protocol is a READER's, not NVDA's.** Nothing served is called
+  `nvda_something`: a second reader's add-on implementing the same table
+  works with no change on Titan's side, and a test fails on any name that
+  breaks that.
+
+#### The three parts at three pitches, as Titan Access says them
+
+Reported as: the Titan Access behaviours - a different tone for the control
+NAME and the control TYPE, and the kind of dialog - should be there too, at
+least inside Titan. They were not, and the numbers are not a matter of taste:
+Titan Access reads an element as **name at 0, control type at -4, state at
++4** (`titan_access/accessible.py`), which is how somebody working by ear
+tells "Save, button" from a list item called "Save button".
+
+- **`Message.segments()`** is that shape, and it is the ORDER `sentence()`
+  already had rather than Titan Access's own - the tab bar has always said
+  "Applications, 1 of 4, tab" and this must not reword it - with the tones
+  added. The constants are read out of the component where it is installed
+  (`_pitches()`) and mirrored here for the machines where it is not, which
+  is exactly what `accessible.py` does itself, and says so.
+- **Titan Access hears its own form again**: `TitanAccessChannel.say` uses
+  `announce_segments` when there is more than one part, which is the call
+  that has always existed for this and which the channel was not using.
+- **NVDA speaks the parts in ONE utterance**, each with its own
+  `PitchCommand` and the pitch put back at the end, so no part can be cut
+  off by the part after it. `capabilities['segments']` is false where there
+  is no `PitchCommand`, and Titan then sends the flat sentence instead of a
+  shape nothing acts on.
+- **The dialog kind is Titan Access's, to the number and to the order.**
+  The word is said at **-4** (`_REGION_PITCH`, not the -15 first written
+  here), and a **warning leads with the type word** and then the title while
+  every other kind reads the title first and the word after it
+  (`_DIALOG_KIND_TYPE_FIRST`) - for the reason a warning exists: you should
+  know it is one before you know what it is about.
+- **The word itself is Titan's, not the add-on's.** It comes from Titan
+  Access's own catalogue (`dialog.question` -> "Pytanie") so that a user
+  hears the SAME word whichever reader they are using; Titan's own
+  translation is the floor for a machine without that component, and an
+  add-on told no word at all still says the kind in English rather than
+  nothing.
+
+Live: `reader.status` lists `segments`, and "Zapisz / przycisk / zaznaczone"
+is spoken as three tones in one breath with `"notes": []` - nothing folded
+away.
+
+#### Anybody can write one of these
+
+`data/docu/programming_guide/client_api_guide_{en,pl}.md`. The NVDA add-on
+and the Elten bridge are the two clients that exist and **neither is a
+privileged case**: `registry._merge_bus` builds a real Titan add-on out of
+any bus client that declares what it offers, so its actions are in
+`titan.list_actions`, offered to the assistant and the agent, callable from
+a Titan Script and from every other add-on - with no code written on
+Titan's side. Proved end to end rather than asserted:
+`tests/test_action_bus_client.py`'s `AnybodyCanWriteOneOfThese` joins a real
+client over a real pipe and runs its action through the real registry.
+
+- **Declare less than you serve.** Everything in `handlers` is callable by
+  name; only what is in `actions` becomes visible. The NVDA add-on serves
+  `announce`, `attach` and `stand_down` - the channel's own plumbing, which
+  Titan's reader layer calls directly - and declares none of them, because
+  nobody should be offered them as things to do.
+- The guide is the rules as well as the API, and every one of them is
+  something this repository got wrong once: never make Titan wait, a table
+  is the boundary, a refusal is an answer, say WHICH of the four reasons it
+  was, degrade rather than disappear.
+
 ### Titan Action API: any part of Titan calling into any add-on
 
 `src/titan_core/actions/` is how one piece of Titan asks another to do

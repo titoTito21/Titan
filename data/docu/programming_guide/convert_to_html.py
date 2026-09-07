@@ -429,6 +429,7 @@ def generate_navigation(files, current_file, language='pl'):
         'settings_interface_guide_pl.md': 'Interfejsy ustawień',
         'cling_guide_pl.md': 'Aplikacje Cling (Klango)',
         'action_api_guide_pl.md': 'Action API',
+        'client_api_guide_pl.md': 'Klienci Titana (własny program)',
     }
 
     guides_en = {
@@ -445,6 +446,7 @@ def generate_navigation(files, current_file, language='pl'):
         'settings_interface_guide_en.md': 'Settings Interfaces',
         'cling_guide_en.md': 'Cling Applications (Klango)',
         'action_api_guide_en.md': 'Action API',
+        'client_api_guide_en.md': 'Titan clients (your own program)',
     }
 
     guides = guides_pl if language == 'pl' else guides_en
@@ -516,6 +518,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'shell_addon_guide_pl.md': ('Dodatki powłoki', 'Dokładaj do pulpitu, paska zadań, menu Start i przeglądarki plików - albo zastąp menu Start własnym'),
         'settings_interface_guide_pl.md': ('Interfejsy ustawień', 'Zastąp okno ustawień Titana własnym - stroną HTML, konsolą, czymkolwiek'),
         'action_api_guide_pl.md': ('Action API', 'Jak jedna część Titana prosi drugą o zrobienie czegoś - i jak Twój dodatek udostępnia swoje funkcje'),
+        'client_api_guide_pl.md': ('Klienci Titana (własny program)', 'Jak dołączyć własny program do Titana jak równy z równym - tak, jak robi to dodatek do NVDA i most eltenowy'),
     }
 
     guides_en = {
@@ -531,6 +534,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'shell_addon_guide_en.md': ('Shell Add-ons', 'Add to the desktop, taskbar, Start menu and file browser - or replace the Start menu with your own'),
         'settings_interface_guide_en.md': ('Settings Interfaces', "Replace Titan's settings window with your own - an HTML page, a console, anything"),
         'action_api_guide_en.md': ('Action API', 'How one part of Titan asks another to do something - and how your add-on offers its own functions'),
+        'client_api_guide_en.md': ('Titan clients (your own program)', 'How your own program joins Titan as an equal - the way the NVDA add-on and the Elten bridge do'),
     }
 
     guides = guides_pl if language == 'pl' else guides_en

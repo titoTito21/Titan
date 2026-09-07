@@ -76,7 +76,24 @@ def _find_element(screen, name):
 # --------------------------------------------------------------------------- #
 # Reading
 # --------------------------------------------------------------------------- #
-def ocr_read_window(scope="window", question="", **_):
+def _window_asked_for(hwnd):
+    """The window a caller named, or 0 for whatever is in front.
+
+    A caller that KNOWS which window is meant is not guessing, and the one
+    that knows best is a screen reader: on a machine being read, the
+    foreground window and the window the user is working in differ
+    constantly - a menu is up, a tooltip has taken the foreground, the
+    reader has followed them into a dialog. `read_screen` has always taken
+    an hwnd; nothing had ever been in a position to give it one.
+    """
+    try:
+        number = int(hwnd or 0)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
+
+
+def ocr_read_window(scope="window", question="", hwnd=0, **_):
     """Photograph the focused window and read it into structured text."""
     blocked = _enabled()
     if blocked:
@@ -97,7 +114,7 @@ def ocr_read_window(scope="window", question="", **_):
     try:
         screen = recognizer.read_screen(
             scope=scope or 'window', previous=previous,
-            question=question or '')
+            question=question or '', hwnd=_window_asked_for(hwnd))
     except Exception as e:
         return f"Could not read the screen: {e}"
     _remember(screen)
@@ -111,11 +128,11 @@ def ocr_read_window(scope="window", question="", **_):
     return "\n".join(lines)
 
 
-def ocr_ask(question, scope="window", **_):
+def ocr_ask(question, scope="window", hwnd=0, **_):
     """Read the screen with one question in mind."""
     if not str(question).strip():
         return "Say what to look for on the screen."
-    return ocr_read_window(scope=scope, question=question)
+    return ocr_read_window(scope=scope, question=question, hwnd=hwnd)
 
 
 def ocr_last_reading(**_):
@@ -222,13 +239,21 @@ def get_ocr_tools():
               "when read_focused_window or list_elements comes back empty or "
               "useless.", ocr_read_window, risk='confirm',
               properties={'scope': dict(S, description="'window' (default) or 'screen'."),
-                          'question': dict(S, description="Optional: what to look for.")}),
+                          'question': dict(S, description="Optional: what to look for."),
+                          'hwnd': dict(S, description="Optional: the window to "
+                                       "read, when the caller knows which one "
+                                       "is meant. A screen reader does; "
+                                       "left out, whatever is in front is "
+                                       "read.")}),
         _tool('ocr_ask',
               "Ask one question about what is on the screen right now ('is "
               "there a Skip button?', 'what does the error say?'). Reads the "
               "screen with that question in mind.", ocr_ask, risk='confirm',
               properties={'question': dict(S, description="The question."),
-                          'scope': dict(S, description="'window' (default) or 'screen'.")},
+                          'scope': dict(S, description="'window' (default) or 'screen'."),
+                          'hwnd': dict(S, description="Optional: the window to "
+                                       "read, when the caller knows which "
+                                       "one is meant.")},
               required=['question']),
         _tool('ocr_last_reading',
               "The last AI OCR reading again, without reading the screen "

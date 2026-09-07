@@ -330,5 +330,138 @@ class EltensNotificationsAreNotSharedByDefault(unittest.TestCase):
                          "model provider by default")
 
 
+class AnybodyCanWriteOneOfThese(unittest.TestCase):
+    """The client API is universal, and this is what that has to MEAN.
+
+    The NVDA add-on and the Elten TCE bridge are the two that exist, and
+    neither of them is special: a client says what it offers when it joins,
+    and Titan builds a real add-on out of that - so its actions are in
+    `titan.list_actions`, reachable from the assistant, from a macro, from a
+    Titan Script and from any other add-on, with no code written on Titan's
+    side. A third developer writing a bridge to something nobody here has
+    heard of gets exactly what those two get.
+
+    This runs the whole of it - a real pipe, a real client in this process,
+    the real registry - because the claim is about what somebody else's
+    program experiences, and a stand-in for the bus would be a test of the
+    stand-in.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from src.titan_core import titan_actions
+        cls.titan_actions = titan_actions
+        # A client really joining is really announced - out loud, on a
+        # thread of its own. This class is about the registry and not about
+        # that, and a suite must not speak: so the announcement is held for
+        # its duration, which also stops it landing in the recorder the
+        # class after this one installs.
+        cls._announce = bus._announce_client
+        bus._announce_client = lambda *_a, **_k: None
+        bus.start()
+        time.sleep(0.4)
+        cls.calls = []
+
+        def weather(city='Warsaw', **_):
+            cls.calls.append(city)
+            return f"It is raining in {city}."
+
+        titan_actions.serve(
+            {'weather': weather, 'private_plumbing': lambda **_: 'internal'},
+            id='somebody_elses_program', label="Somebody else's program",
+            kind='client',
+            actions=[{'name': 'weather',
+                      'summary': 'What the weather is doing.',
+                      'params': {'city': {'type': 'string',
+                                          'description': 'Which city.'}}}])
+        for _ in range(60):
+            time.sleep(0.1)
+            if bus.get_peer('somebody_elses_program') is not None:
+                break
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.titan_actions.stop()
+        finally:
+            bus.stop()
+            # The accept loop answers a departure on its own thread; let it
+            # finish before anything else patches what it would say.
+            time.sleep(0.3)
+            bus._announce_client = cls._announce
+            bus._announced.clear()
+            # A test must not leave a permission behind in the user's own
+            # settings. Joining as a client is what makes Titan remember an
+            # answer under that id, so the id this test invented is
+            # forgotten again - found by reading the real settings file
+            # after a run and seeing it there.
+            #
+            # Through the RUNNING Titan first, and only then by writing the
+            # file. A real Titan holds the settings in memory and writes the
+            # whole dictionary back when anything is saved, so a second
+            # process editing the file underneath it has its edit undone at
+            # the next save - which is what put the entry back the first
+            # time this was tried.
+            try:
+                cls._forget('somebody_elses_program')
+            except Exception:
+                pass
+
+    @staticmethod
+    def _forget(client_id):
+        from src.titan_core import titan_actions
+        if titan_actions.is_connected():
+            answer = titan_actions.call('titan', 'forget_client',
+                                        client=client_id, timeout=5)
+            if getattr(answer, 'ok', False):
+                return
+        from src.titan_core import client_consent
+        client_consent.forget(client_id)
+
+    def setUp(self):
+        if bus.get_peer('somebody_elses_program') is None:
+            self.skipTest('the bus did not come up on this machine')
+
+    def _addon(self):
+        from src.titan_core.actions import dispatch
+        for addon in dispatch.list_addons():
+            if addon['id'] == 'somebody_elses_program':
+                return addon
+        return None
+
+    def test_it_becomes_an_addon_with_no_code_on_titans_side(self):
+        addon = self._addon()
+        self.assertIsNotNone(addon, 'a client that declares actions must '
+                                    'appear in the registry')
+        self.assertEqual(addon['label'], "Somebody else's program")
+        self.assertEqual(addon['source'], 'bus')
+
+    def test_only_what_it_declared_is_offered(self):
+        # It SERVES two handlers and declares one. The other is its own
+        # plumbing and must not be offered to the user or to a model.
+        self.assertEqual(self._addon()['actions'], ['weather'])
+
+    def test_what_it_declared_can_be_run(self):
+        from src.titan_core.actions import dispatch
+        result = dispatch.run('somebody_elses_program', 'weather',
+                              city='Krakow')
+        self.assertTrue(result.ok, result.text)
+        self.assertIn('Krakow', result.text)
+        self.assertIn('Krakow', self.calls)
+
+    def test_its_parameters_survive_the_journey(self):
+        from src.titan_core.actions import dispatch
+        actions = dispatch.list_actions('somebody_elses_program')
+        self.assertEqual(len(actions), 1)
+        self.assertIn('city', actions[0].params)
+        self.assertEqual(actions[0].summary, 'What the weather is doing.')
+
+    def test_a_client_is_still_announced_as_one(self):
+        peer = bus.get_peer('somebody_elses_program')
+        self.assertTrue(bus._is_external_client(peer),
+                        'a program that drives Titan is announced whether or '
+                        'not it also serves actions of its own')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

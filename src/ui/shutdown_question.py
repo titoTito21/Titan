@@ -19,12 +19,15 @@ def show_shutdown_dialog():
         apply_skin_to_window(dialog)
     except Exception:
         pass
-    # Tell Titan Access this is a question dialog so it reads it as a question
-    # (with the question earcon + lower-tone "Pytanie"), independent of the skin
-    # or whether the reader can detect the icon. No-op when the reader is off.
+    # Tell the READER this is a question dialog, so it reads it as one -
+    # with the question earcon and the word said a little lower - however
+    # the dialog is skinned and whether or not the icon can be detected.
+    # Titan Access hears it through its own bridge and NVDA through its
+    # add-on; a reader that can do neither simply reads the dialog, which
+    # is what happened for every reader but Titan Access until now.
     try:
-        from titan_access.host_bridge import dialog_kind as _ta_dialog_kind
-        _ta_dialog_kind("question")
+        from src.accessibility.messages import announce_dialog_kind
+        announce_dialog_kind("question")
     except Exception:
         pass
     result = dialog.ShowModal()

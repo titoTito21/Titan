@@ -78,7 +78,7 @@ _TOOL_PROVIDERS = (
 )
 
 BUILTIN_IDS = (tuple(entry[0] for entry in _TOOL_PROVIDERS)
-               + ('gamepad', 'shell', 'elten_client'))
+               + ('gamepad', 'shell', 'elten_client', 'reader'))
 
 # The actions that are actually DONE BY A MODEL - the ones that send something
 # to an AI provider. Only these need Titan's AI features switched on, and
@@ -261,6 +261,48 @@ def _gamepad_addon():
             prepared[pname] = {'type': pspec.get('type', 'string'),
                                'description': pspec.get('description', ''),
                                'required': bool(pspec.get('required'))}
+        action = ActionSpec(name=name, summary=summary, params=prepared,
+                            risk=risk, mode='any', addon=addon)
+        action.run = run
+        addon.actions.append(action)
+    return addon
+
+
+def _reader_addon():
+    """The screen reader the user is actually using.
+
+    A reader's own Titan add-on already becomes an add-on by itself - any
+    bus client that declares what it offers does, which is what lets
+    somebody write a bridge with no code on this side. So this is not how
+    the reader is REACHED; it is how it is NAMED.
+
+    An assistant reasoning about "read this out in the reader's voice" needs
+    one name that means the same thing on every machine. Without this it
+    would be `nvda.speak` here and something else on the next machine, and
+    nothing at all - rather than a sentence saying why - on a machine with
+    no reader running. `reader.*` is that name, and it answers honestly when
+    there is nobody behind it.
+    """
+    from src.titan_core.reader_client_actions import get_reader_client_actions
+    addon = AddonActions(kind='builtin', addon_id='reader',
+                         name='reader', path='',
+                         label="The screen reader",
+                         description="The screen reader the user is reading "
+                                     "this machine with: what it can see on "
+                                     "the screen right now, and - behind its "
+                                     "own switches - its voice, its review "
+                                     "cursor and its settings.",
+                         transport='inproc')
+    addon.source = 'builtin'
+    addon.builtin = True
+    for name, summary, params, risk, run in get_reader_client_actions():
+        prepared = {}
+        for pname, pspec in params.items():
+            prepared[pname] = {'type': pspec.get('type', 'string'),
+                               'description': pspec.get('description', ''),
+                               'required': bool(pspec.get('required'))}
+            if pspec.get('enum'):
+                prepared[pname]['enum'] = list(pspec['enum'])
         action = ActionSpec(name=name, summary=summary, params=prepared,
                             risk=risk, mode='any', addon=addon)
         action.run = run
@@ -645,6 +687,10 @@ def build():
         addons.append(_elten_client_addon())
     except Exception as e:
         print(f"[actions] Built-in 'elten_client' unavailable: {e}")
+    try:
+        addons.append(_reader_addon())
+    except Exception as e:
+        print(f"[actions] Built-in 'reader' unavailable: {e}")
     try:
         addons.append(_app_ui_addon())
     except Exception as e:

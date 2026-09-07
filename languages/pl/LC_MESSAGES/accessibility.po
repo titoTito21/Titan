@@ -175,3 +175,18 @@ msgstr "Klawisze Fn wyłączone"
 #~ msgid "status bar item"
 #~ msgstr "element paska stanu"
 
+#: src/accessibility/messages.py
+# The kind of dialog about to appear, said in front of (or after) its own
+# title. Titan Access's catalogue is used where that component is
+# installed, so these are the floor rather than the usual answer.
+msgid "Question"
+msgstr "Pytanie"
+
+msgid "Information"
+msgstr "Informacja"
+
+msgid "Warning"
+msgstr "Uwaga!"
+
+msgid "Error"
+msgstr "Blad"

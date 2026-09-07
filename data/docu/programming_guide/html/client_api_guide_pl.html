@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jak napisać klienta Titana - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_en.html">English version</a></li>
+<li><a href="component_creation_guide_pl.html">Tworzenie komponentów</a></li>
+<li><a href="widget_creation_guide_pl.html">Tworzenie widgetów</a></li>
+<li><a href="statusbar_applet_guide_pl.html">Aplety paska statusu</a></li>
+<li><a href="titanim_module_guide_pl.html">Moduły Titan IM</a></li>
+<li><a href="app_creation_guide_pl.html">Tworzenie aplikacji</a></li>
+<li><a href="game_creation_guide_pl.html">Tworzenie gier</a></li>
+<li><a href="launcher_creation_guide_pl.html">Tworzenie launcherów</a></li>
+<li><a href="tts_engine_guide_pl.html">Silniki TTS (TitanTTS)</a></li>
+<li><a href="gamepad_mode_guide_pl.html">Tryby gamepada</a></li>
+<li><a href="shell_addon_guide_pl.html">Dodatki powłoki</a></li>
+<li><a href="settings_interface_guide_pl.html">Interfejsy ustawień</a></li>
+<li><a href="cling_guide_pl.html">Aplikacje Cling (Klango)</a></li>
+<li><a href="action_api_guide_pl.html">Action API</a></li>
+<li><a href="client_api_guide_pl.html" class="active">Klienci Titana (własny program)</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Jak napisać klienta Titana</h1>
+            </div>
+            <h1>Jak napisać klienta Titana</h1>
+
+<h2>Po co to jest</h2>
+
+<p>Titan ma jedenaście rodzajów dodatków i każdy z nich mieszka wewnątrz
+Titana: w katalogu <code>data/</code>, znajdowany przy starcie, uruchamiany w procesie
+Titana albo przez niego. Ten przewodnik jest o dwunastej rzeczy, która
+dodatkiem w ogóle nie jest - **o Twoim własnym programie, którego Titan nie
+uruchomił i którym nie zarządza, dołączającym do Titana jak równy z
+równym.**</p>
+
+<p>Dwa takie już istnieją i żaden z nich nie jest wyjątkiem:</p>
+
+<li><strong>Dodatek do NVDA</strong> (<code>nvda-addon/</code>) mieszka wewnątrz NVDA. Titan mówi do</li>
+  niego z pozycją, wysokością głosu i rolą; ten odpowiada, co jest teraz na
+  ekranie, i udostępnia akcje Titana jako polecenia NVDA.
+<li><strong>Most eltenowy</strong> (<code>elten-tce-bridge/</code>) mieszka wewnątrz klienta</li>
+  EltenLink. Zgłasza, co Elten trzyma, renderuje aplikacje Titana w
+  interfejsie Eltena i pozwala AI Titana sięgnąć do API Eltena.
+
+<p>Wszystko, co robi którykolwiek z nich, może zrobić Twój program - **bez ani
+jednej linijki dopisanej do Titana**. O to właśnie tu chodzi: te dwa to
+przykłady, nie przypadki uprzywilejowane.</p>
+
+<h2>Kształt całości</h2>
+
+<p>Jest jedna rura, <code>\\.\pipe\TitanActions</code>, i jest dwukierunkowa. Przez nią:</p>
+
+<li><strong>Ty wołasz Titana</strong> - jedna typowana powierzchnia JSON (<code>titan.bridge</code>)</li>
+  plus każda akcja każdego dodatku, jaki Titan ma;
+<li><strong>Titan woła Ciebie</strong> - te handlery, które zadeklarowałeś przy dołączaniu.</li>
+
+<p>Potrzebujesz jednego pliku: <code>src/titan_core/titan_actions.py</code>. Skopiuj go
+obok swojego kodu. Nie importuje nic z Titana ani nic spoza biblioteki
+standardowej - dokładnie po to, żeby dało się go wstawić do aplikacji wx, do
+launchera w Tk, do skryptu konsolowego albo do cudzego programu.</p>
+
+<pre><code class="language-python">from titan_actions import serve, call, call_sequence, list_addons, is_connected</code></pre>
+
+<h2>Dołączanie</h2>
+
+<pre><code class="language-python">def pogoda(miasto=&#x27;Warszawa&#x27;, **_):
+    &quot;&quot;&quot;Jaka jest pogoda.&quot;&quot;&quot;
+    return f&quot;W mieście {miasto} pada.&quot;
+
+
+serve({&#x27;pogoda&#x27;: pogoda},
+      id=&#x27;mojprogram&#x27;,                # stałe: tak Titan Cię nazywa
+      label=&#x27;Mój program&#x27;,            # to widzi człowiek
+      kind=&#x27;client&#x27;)                  # patrz &quot;Dodatek czy klient?&quot; niżej</code></pre>
+
+<p><code>serve</code> wraca <strong>natychmiast</strong>, niezależnie od tego, czy Titan działa, a
+wątek demona po cichu próbuje dalej. Program, który czeka, aż Titan się
+pojawi, to program, który nie wystartuje na maszynie bez Titana.</p>
+
+<h3>Dodatek czy klient?</h3>
+
+<p><code>kind=&#x27;client&#x27;</code> mówi: <em>to inny program przejmuje kontrolę nad Titanem</em> - i
+zmienia dwie rzeczy:</p>
+
+<li><strong>Titan powie o tym na głos</strong>, gdy dołączasz i gdy wychodzisz. Nic innego</li>
+  na tym pulpicie nie powiadomiłoby niewidomego użytkownika, że podłączył
+  się do niego jakiś program.
+<li><strong>Wszystko, co ZMIENIA Titana, jest za zgodą użytkownika</strong> - pytaną raz,</li>
+  zapamiętaną pod Twoim id i odwoływalną (<code>titan.external_clients</code>,
+  <code>titan.allow_client</code>, <code>titan.forget_client</code>). Czytanie Titana jest
+  serwowane zawsze, więc klient, który tylko pokazuje Titana, działa, zanim
+  na cokolwiek padnie odpowiedź.
+
+<p>Któregoś z rodzajów dodatku (<code>app</code>, <code>game</code>, <code>component</code>, ...) użyj tylko
+wtedy, gdy Twój program naprawdę jest dodatkiem Titana, uruchomionym przez
+Titana.</p>
+
+<h2>Bycie wołanym: co deklarujesz, a co tylko serwujesz</h2>
+
+<p>Handlery przekazane do <code>serve</code> to jest to, co Titan <strong>może</strong> zawołać. Lista
+<code>actions</code> to jest to, co Titanowi <strong>powiedziano</strong>, że oferujesz:</p>
+
+<pre><code class="language-python">serve(handlers,
+      id=&#x27;mojprogram&#x27;, label=&#x27;Mój program&#x27;, kind=&#x27;client&#x27;,
+      actions=[
+          {&#x27;name&#x27;: &#x27;pogoda&#x27;,
+           &#x27;summary&#x27;: &#x27;Jaka jest pogoda.&#x27;,
+           &#x27;params&#x27;: {&#x27;miasto&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;, &#x27;required&#x27;: True,
+                                 &#x27;description&#x27;: &#x27;Które miasto.&#x27;}}},
+          {&#x27;name&#x27;: &#x27;wyslij_raport&#x27;,
+           &#x27;summary&#x27;: &#x27;Wysyła dzisiejszy raport do zespołu.&#x27;,
+           &#x27;params&#x27;: {}, &#x27;risk&#x27;: &#x27;always_confirm&#x27;},
+      ])</code></pre>
+
+<p>Pomiń <code>actions</code>, a zostanie wywnioskowana z sygnatur i docstringów Twoich
+handlerów - to wystarczy, żeby działało. Wypisz ją, a dostaniesz trzy
+rzeczy, które mają znaczenie:</p>
+
+<li><strong>Opis, który czyta człowiek.</strong> To on jest pokazywany asystentowi, to go</li>
+  przegląda autor makra i to on stoi obok akcji wszędzie.
+<li><strong>Typowane parametry</strong>, żeby Titan mógł porządnie dopytać o brakujący,</li>
+  zamiast żeby Twój handler dostał nic i się wywrócił.
+<li><strong>Poziom ryzyka</strong> - <code>auto</code>, <code>confirm</code>, <code>always_confirm</code> - żeby coś, czego</li>
+  nie da się cofnąć, było potwierdzone, zanim AI zrobi to z własnej
+  inicjatywy.
+
+<p><strong>Deklaruj mniej, niż serwujesz.</strong> Widoczne staje się tylko to, co
+zadeklarowane - i tylko to da się osiągnąć przez warstwę akcji
+(<code>titan.list_actions</code>, asystent, makro, inny dodatek). Handler
+niezadeklarowany nadal jest SERWOWANY - własne podsystemy Titana wołają go
+po nazwie przez szynę - ale wołający idący publiczną warstwą akcji usłyszy,
+że takiej akcji nie ma. I dobrze: właśnie dzięki temu dodatek do NVDA
+serwuje <code>announce</code>, <code>attach</code> i <code>stand_down</code> - własną hydraulikę kanału,
+którą warstwa czytnika w Titanie woła wprost - nie pokazując ich nikomu
+jako rzeczy do zrobienia.</p>
+
+<h3>Co daje deklaracja</h3>
+
+<p>Titan buduje z niej <strong>prawdziwy dodatek</strong>
+(<code>src/titan_core/actions/registry.py</code>, <code>_merge_bus</code>). Od tej chwili Twoje
+akcje są:</p>
+
+<li>w <code>titan.list_actions</code> i w Action API dla każdego innego dodatku;</li>
+<li>oferowane asystentowi AI i agentowi jako rzeczy, które mogą zrobić;</li>
+<li>wołalne ze <strong>Skryptu Titana</strong> (<code>mojprogram.pogoda miasto=&quot;Kraków&quot;</code>);</li>
+<li>uruchamialne z menedżera makr, z powłoki i z każdego innego klienta.</li>
+
+<p>Nic z tego nie wymagało linijki kodu w Titanie. Twój dodatek pojawia się,
+gdy Twój program działa, i znika, gdy się kończy, a jego <code>source</code> to <code>bus</code>.</p>
+
+<h3>Odpowiadanie</h3>
+
+<p>Zwróć napis, a to właśnie usłyszy wołający. Zwróć cokolwiek innego, a
+zostanie to zserializowane do JSON-a - czyli tego, czego chce program po
+drugiej stronie. Wyjścia są trzy, nie dwa - patrz "Dopytywanie o to, czego
+potrzebujesz".</p>
+
+<p>Twój handler jest wołany nazwanymi argumentami, które Titan przysyła, a
+<strong>argumenty, których nie deklaruje, są odrzucane</strong> - więc dodanie parametru
+później nigdy nie psuje starszego handlera.</p>
+
+<h2>Wołanie Titana</h2>
+
+<h3>Powierzchnia typowana</h3>
+
+<pre><code class="language-python">import json
+answer = call(&#x27;titan&#x27;, &#x27;bridge&#x27;, request=json.dumps(
+    {&#x27;call&#x27;: &#x27;macros.list&#x27;, &#x27;args&#x27;: {}}))
+data = json.loads(str(answer))[&#x27;data&#x27;]</code></pre>
+
+<p><code>titan.bridge</code> odpowiada <strong>JSON-em w jednym kształcie</strong> - `{"ok": ...,
+"data": ...}` - i to jest to, czego powinien używać program. Jest druga
+droga do tych samych rzeczy: akcje odpowiadają prozą, w języku
+użytkownika, bo są pisane dla modelu i dla makr. Nie parsuj jej. Każdy
+prawdziwy błąd, na jaki wpadł most eltenowy, był dokładnie tym: cała linia
+<code>- Voice demo (ctrl+alt+v) [tcs]</code> oddana jako <em>nazwa</em> makra.</p>
+
+<p>Powierzchnia pokrywa to, czego potrzebuje klient pokazujący Titana:
+<code>apps.list</code>, <code>apps.open</code>, <code>games.<em></code>, <code>im.</em></code>, <code>macros.list</code>, <code>cling.list</code>,
+<code>settings.<em></code>, <code>widgets.</em></code>, <code>buffers.<em></code>, <code>notifications.</em></code>, <code>speech.*</code>,
+<code>ai.ask</code>, <code>sounds.play</code>, <code>window.state</code>, <code>app.*</code> (aplikacje Titana z
+interfejsem jako danymi) oraz <code>addons.list</code> / <code>addons.actions</code> /
+<code>addons.run</code> na wszystko, na co nikt nie napisał osobnego wywołania. Zapytaj
+o <code>capabilities</code>, żeby dostać listę, którą ten Titan naprawdę ma, zamiast
+zgadywać.</p>
+
+<h3>Cudza akcja</h3>
+
+<pre><code class="language-python">call(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=r&#x27;C:\notatki\dzis.txt&#x27;)
+call_sequence([{&#x27;addon&#x27;: &#x27;tnotes&#x27;, &#x27;action&#x27;: &#x27;create_note&#x27;,
+                &#x27;args&#x27;: {&#x27;title&#x27;: &#x27;Pomysły&#x27;}},
+               {&#x27;addon&#x27;: &#x27;titan&#x27;, &#x27;action&#x27;: &#x27;speak&#x27;,
+                &#x27;args&#x27;: {&#x27;text&#x27;: &#x27;Zapisane: {{1}}&#x27;}}])</code></pre>
+
+<p><code>list_addons()</code> mówi, co jest. Między dodatkami celowo **nie ma ściany
+uprawnień**: klient, któremu pozwolono sterować Titanem, sięga do
+wszystkiego - bo o to właśnie chodzi, żeby nic nie musiało wozić ze sobą
+własnego edytora, przeglądarki, menedżera plików ani pobieraczki.</p>
+
+<h2>Dopytywanie o to, czego potrzebujesz</h2>
+
+<p>Akcja ma trzy wyjścia, nie dwa. Poza "zrobione" i "nie dało się" może
+powiedzieć, że <strong>najpierw musi się czegoś dowiedzieć</strong>:</p>
+
+<pre><code class="language-python">from titan_actions import needs, fails
+
+def wyslij_raport(odbiorca=&#x27;&#x27;, **_):
+    if not odbiorca:
+        return needs(&#x27;odbiorca&#x27;, &#x27;Kto ma dostać raport?&#x27;,
+                     options=[&#x27;zespół&#x27;, &#x27;tylko ja&#x27;])
+    ...
+    return f&quot;Wysłane do: {odbiorca}.&quot;</code></pre>
+
+<p>Wołający pyta wtedy użytkownika i woła jeszcze raz z odpowiedzią. Bez tego
+klawisz przypisany do "wyślij raport" jest klawiszem przypisanym do
+odmowy. <strong>Wymagany parametr, którego nie podano, sam staje się pytaniem</strong>,
+zbudowanym z jego <code>description</code> - więc porządne zadeklarowanie parametrów
+daje Ci większość tego za darmo.</p>
+
+<h2>Mówienie Titanowi o własnym programie</h2>
+
+<p>Istnieją dwa wywołania na kierunek, którego nikt inny nie obsłuży - wieści z
+wnętrza programu, w którym jesteś:</p>
+
+<li><code>notifications.add</code> wkłada coś tam, gdzie trafiają własne powiadomienia</li>
+  Titana: do centrum powiadomień, do bufora Titana, z dźwiękiem
+  powiadomienia. Nazwij w nim swój program; użytkownik ma wiedzieć, skąd to
+  jest.
+<li><code>client.report</code> parkuje migawkę stanu Twojego programu, którą Titan</li>
+  trzyma i z której potrafi odpowiadać, gdy Ciebie już nie ma - mówiąc przy
+  tym, <em>ile ma lat</em>, żeby nieświeża odpowiedź była widocznie nieświeża.
+
+<p>Oba są serwowane bez zgody na sterowanie, bo program zgłaszający coś o sobie
+nie jest programem sterującym Titanem. Nie używaj ich do niczego innego.</p>
+
+<h2>Zasady nie do negocjacji</h2>
+
+<p>To nie jest kwestia stylu. Każda z nich to coś, co w tym repozytorium raz
+zrobiono źle i naprawiono.</p>
+
+<p><strong>Nigdy nie każ Titanowi czekać.</strong> Twój handler jest wołany, gdy Titan wisi
+na drugim końcu rury, często z obsługi fokusu albo z wątku interfejsu. Zrób
+robotę na własnym wątku i wróć; odpowiedz tym, co wiesz, a nie tym, czego za
+chwilę się dowiesz. Jeśli musisz przejść na własny wątek interfejsu, podaj
+<code>marshal=</code>; jeśli Twoje handlery już to robią same, podaj <code>marshal</code>, który
+po prostu woła funkcję - inaczej każde wywołanie czeka na Twoją pętlę
+komunikatów.</p>
+
+<p><strong>Granicą jest tablica.</strong> Jeśli Titan może nazwać coś, a Ty rozwiązujesz to
+przez <code>getattr</code>, to cokolwiek jest po drugiej stronie tej rury, sięgnie
+wszędzie w Twoim procesie. Wypisz wywołania w słowniku. Nazwa, której tam
+nie ma, nie istnieje.</p>
+
+<p><strong>Odmowa jest odpowiedzią.</strong> Kiedy czegoś nie zrobisz - przełącznik
+wyłączony, użytkownik odmówił, funkcji nie ma - powiedz to zdaniem, na które
+użytkownik może zareagować. Odmowa, która przychodzi jako błąd transportu,
+jest raportowana jako "program nie odpowiedział", co nie jest ani prawdą,
+ani czymś, co da się naprawić.</p>
+
+<p><strong>Powiedz, który z powodów to był.</strong> "Nie działa", "odmówił", "nie
+odpowiedział na czas" i "ta wersja nie ma tego wywołania" to cztery różne
+rzeczy i z każdą użytkownik robi co innego. Wysłanie kogoś do sprawdzenia
+ustawienia, które już jest włączone, jest gorsze niż nic.</p>
+
+<p><strong>Degraduj, nie znikaj.</strong> Pytaj, co druga strona potrafi, zamiast zakładać;
+pomijaj to, czego nie ma, i mów dlaczego. Funkcja po cichu nieobecna jest
+nie do odróżnienia od zepsutej - a dla użytkownika, który nie widzi ekranu,
+ta różnica to cała różnica między "spróbuję inaczej" a "to jest zepsute".</p>
+
+<p><strong>Żadnych emoji, niczego wymyślonego.</strong> Tekst Titana widziany przez
+użytkownika jest po angielsku, tłumaczony przez gettext i nigdy nie zawiera
+emoji. Kontrolka, która nie ma nazwy, nie ma nazwy: powiedz to, zamiast
+zmyślać.</p>
+
+<h2>Dwa gotowe przykłady</h2>
+
+<li><code>nvda-addon/addon/globalPlugins/titanEnhancements/link.py</code> - dołączanie,</li>
+  deklarowanie mniej, niż się serwuje, i kanał dwukierunkowy, w którym Titan
+  woła Ciebie znacznie częściej niż Ty jego.
+<li><code>elten-tce-bridge/titan_bus.rb</code> - ten sam protokół w Rubym, w programie</li>
+  napisanym przez kogoś innego, ze zgodą użytkownika pytaną również po tamtej
+  stronie.
+
+<p>Do żadnego z nich nie sięga nic w Titanie, co znałoby jego nazwę.</p>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

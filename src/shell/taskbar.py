@@ -35,7 +35,7 @@ from src.system import key_state
 from src.shell.a11y import (ROLE_BUTTON, ROLE_LISTITEM, ROLE_TOOLBAR,
                             SHELL_NAME, STATE_FOCUSABLE, STATE_FOCUSED,
                             STATE_PRESSED, edge_cue, name_control,
-                            shell_setting)
+                            screen_position, shell_setting)
 from src.shell.controls import (IconTextControl, ShellControl, TextControl,
                                 bitmap_from_icon_handle)
 from src.shell.quick_launch import (QuickLaunchButton, quick_launch_folder,
@@ -1553,7 +1553,10 @@ class TaskbarFrame(wx.Frame):
         if control is None:
             return False
         try:
-            announce_group(group_label(group))
+            # Where the group is, in the same -1 .. 1 the focus cue is
+            # panned by, so the spoken group name and the click that
+            # follows it come from the same place on the bar.
+            announce_group(group_label(group), screen_position(control))
         except Exception:
             pass
         try:

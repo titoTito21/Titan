@@ -1,0 +1,84 @@
+<h1>Titan enhancements</h1>
+
+<p>Makes NVDA a first-class citizen of the Titan desktop. Titan does not have
+to be running: with no Titan this add-on does nothing at all and costs
+nothing.</p>
+
+<h2>What it does</h2>
+
+<h3>Titan's announcements arrive with their structure intact</h3>
+
+<p>Titan's interface is built to be heard. A control on the left of the shell's
+taskbar sounds on the left; a row of a Cling board is lower and quieter the
+further away it is; an announcement carries a role, a state and a place in a
+list. Titan's own reader gets all of that, and NVDA used to get a flat string
+through the NVDA controller - or, worse, nothing at all, because Titan
+deliberately stayed silent rather than say a second, worse copy of what NVDA
+was about to read anyway.</p>
+
+<p>With this add-on the position, the pitch, the rate and the volume are
+applied to <em>whichever synthesizer you are using</em> (by setting the
+per-channel volume of the stream underneath it), and an announcement that
+Titan marks as replacing a control's report suppresses NVDA's own report once
+instead of racing it. A Titan voice is offered as one more synthesizer, but is
+never required.</p>
+
+<h3>Titan's subsystems know what you are looking at</h3>
+
+<p>NVDA knows which window it is reading, which control has the focus, what
+its role and state are, what is selected and where the review cursor is.
+Titan cannot work any of that out, because Titan is not the reader. So the
+channel runs both ways: AI OCR reads the window <em>NVDA</em> is in rather
+than whatever Windows calls the foreground, and a question put to Titan's
+assistant carries what you are actually on.</p>
+
+<h3>Titan's subsystems become NVDA commands</h3>
+
+<p>Everything Titan can do - its AI OCR, its assistant, its macros, and every
+action of every add-on installed in it - is offered to NVDA as a script of its
+own. They are in NVDA's own <strong>Input Gestures</strong> dialog, grouped
+per Titan add-on, so you bind whichever you use to whatever you like: a key, a
+touch gesture, a braille display button. NVDA remembers the binding in your
+own profile, and it survives Titan not running - a key pressed then says so.</p>
+
+<h3>Titan's AI can reach NVDA</h3>
+
+<p>Behind switches of your own, Titan's assistant, agent, macros and Titan
+Scripts can speak in NVDA's voice, stop it, move its review cursor, change its
+rate or its synthesizer, and put it into browse or focus mode. Reading NVDA is
+always served; changing it is one switch; pressing NVDA's own commands is a
+second switch, off by default - a gesture is whatever you bound it to, and in
+a document a bound key can delete something.</p>
+
+<h2>Commands</h2>
+
+<table>
+<tr><th>Gesture</th><th>What it does</th></tr>
+<tr><td>NVDA+shift+t</td><td>The Titan menu: everything Titan can do</td></tr>
+<tr><td>NVDA+alt+t</td><td>Whether Titan is connected and what it can send</td></tr>
+<tr><td>NVDA+alt+i</td><td>Ask Titan's AI assistant a question</td></tr>
+<tr><td>NVDA+alt+shift+i</td><td>Tell Titan's AI to do something, and let it act</td></tr>
+<tr><td>NVDA+alt+o</td><td>Read the current window with Titan's AI OCR</td></tr>
+<tr><td>NVDA+alt+q</td><td>Ask Titan's AI a question about the current window</td></tr>
+<tr><td>NVDA+alt+shift+o</td><td>Put Titan's AI OCR overlay over the current window</td></tr>
+<tr><td>NVDA+alt+m</td><td>Run one of Titan's macros</td></tr>
+<tr><td>NVDA+alt+a</td><td>Run anything Titan or one of its add-ons can do</td></tr>
+<tr><td>NVDA+alt+p</td><td>Positioned speech for Titan on and off</td></tr>
+<tr><td>NVDA+alt+n</td><td>Titan's own announcements on and off</td></tr>
+</table>
+
+<p>Everything else - and every Titan action - is unbound and waiting for you in
+Input Gestures, under the Titan categories.</p>
+
+<h2>Settings</h2>
+
+<p>NVDA Settings, Titan. Kept in NVDA rather than in Titan on purpose: they are
+answers about how NVDA should behave, they must be readable when Titan is not
+running, and uninstalling Titan should not leave your reader configured by a
+program that is gone.</p>
+
+<h2>Requirements</h2>
+
+<p>Windows, NVDA 2023.3 or newer, and Titan. Positioned speech needs an NVDA
+whose audio layer can set the volume of one channel of a stream; where it
+cannot, the add-on says so and marks the position with a tone instead.</p>

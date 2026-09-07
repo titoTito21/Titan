@@ -335,6 +335,122 @@ def _ta_state_suffix(text):
         return False
 
 
+# --- Whichever reader is listening ---------------------------------------
+# The helpers above ask one question - "is Titan Access the reader?" - and
+# answer it in the worst possible way when it is not: they stay silent, or
+# they fall back to a flat string.  ``src.accessibility.reader_channel`` asks
+# a better one: what can the reader that is listening actually TAKE?  A
+# reader whose add-on has joined the Action Bus (the one in ``nvda-addon/``
+# is the first) takes the position, the pitch, the role and the place in the
+# list, and says so; everything else folds back into the sentence.
+
+
+def _channel():
+    """The reader Titan is talking to, or a channel that takes nothing."""
+    try:
+        from src.accessibility import reader_channel
+        return reader_channel.channel()
+    except Exception:
+        class _Nothing:
+            name = 'none'
+
+            def can(self, _what):
+                return False
+
+            def say(self, _message):
+                return False
+        return _Nothing()
+
+
+def _message(text, **detail):
+    """One thing Titan means, before a channel decides how much survives.
+
+    A caller builds one of these only when it wants to ask the channel
+    something first - whether the role can travel as a field, say.  The
+    ordinary case is :func:`_reader_announce`.
+    """
+    from src.accessibility import reader_channel
+    return reader_channel.Message(text, **detail)
+
+
+def _reader_announce(text, **detail):
+    """Say one structured thing to whichever reader is listening."""
+    try:
+        from src.accessibility import reader_channel
+        return reader_channel.announce(text, **detail)
+    except Exception:
+        return False
+
+
+#: What Titan Access calls each kind, by its key in that component's own
+#: catalogue. Asked of it rather than translated again here, so the word a
+#: user hears for a question is the SAME word in both readers - two
+#: vocabularies for one desktop is worse than one that is only in English.
+_DIALOG_KIND_KEY = {
+    'question': 'dialog.question',
+    'information': 'dialog.information',
+    'warning': 'dialog.warning',
+    'error': 'dialog.error',
+}
+
+
+def _dialog_kind_label(kind):
+    """The word for a dialog kind, in the user's own language.
+
+    Titan Access's catalogue first, because that is the word its users
+    already know. Titan's own translation is the floor, for a machine where
+    that component is not installed.
+    """
+    key = _DIALOG_KIND_KEY.get(str(kind or '').strip().lower())
+    if key:
+        try:
+            from titan_access.localization import L
+            word = str(L(key) or '')
+            if word and word != key:
+                return word
+        except Exception:
+            pass
+    return {'question': _("Question"), 'information': _("Information"),
+            'warning': _("Warning"), 'error': _("Error")}.get(
+                str(kind or '').strip().lower(), '')
+
+
+def announce_dialog_kind(kind):
+    """Say what kind of dialog is about to appear - to any reader.
+
+    A skinned dialog's icon is not reliably detectable, so a confirmation
+    and a notice read the same; Titan knows which it is putting up and says
+    so. Titan Access has always been told (it plays the question earcon and
+    says the word a little lower); every other reader was not, so the one
+    dialog in Titan that asks the user to confirm something irreversible
+    sounded exactly like one that does not.
+
+    Returns True when a reader took it. Nothing is spoken by Titan itself:
+    the reader is about to read the dialog, and this is a word put in front
+    of that rather than a second announcement racing it.
+    """
+    try:
+        from src.accessibility import reader_channel
+        return bool(reader_channel.channel().dialog_kind(
+            kind, label=_dialog_kind_label(kind)))
+    except Exception:
+        return False
+
+
+def announce_state_suffix(text):
+    """Add a state to whatever the reader reads next.
+
+    For a state that is Titan's own and that the platform cannot report.
+    Where the reader cannot take it, the caller's own delayed fallback is
+    still the right answer - which is why this says whether it was taken.
+    """
+    try:
+        from src.accessibility import reader_channel
+        return bool(reader_channel.channel().state_suffix(text))
+    except Exception:
+        return False
+
+
 def is_titan_access_running():
     """True when the in-process Titan Access reader is active."""
     try:
@@ -391,21 +507,25 @@ def announce_tab_bar():
         play_sound('ui/tapbar.ogg')
     except Exception:
         pass
-    # Prefer the in-process Titan Access reader (immediate, and it suppresses its
-    # own duplicate read of the underlying list row); otherwise fall back to the
-    # external-SR path.
-    if not _ta_announce(_("Tab bar"), interrupt=True):
-        speak_sr_only(_("Tab bar"), interrupt=True)
+    # Whichever reader is listening.  Titan Access and a reader whose add-on
+    # is on the bus both replace their own read of the underlying row with
+    # this (``replaces_focus``), so the marker is said once rather than
+    # racing the row; anything else simply hears the words.
+    _reader_announce(_("Tab bar"), interrupt=True, replaces_focus=True)
 
 
 def announce_view_switched(view_name, idx, total):
     """Announce the view reached by cycling the tab bar (Left/Right arrows).
 
     Spoken as "<view>, <n> of <total>, <tab>" — e.g. "Applications, 1 of 4,
-    tab". Routed to Titan Access so it replaces the reader's own read of the
-    list row (which would otherwise say only the row text). When Titan Access
-    is not the active reader this stays silent on purpose: the row text itself
-    is read by whatever SR is running, so speaking here would duplicate it.
+    tab". The row text alone is what a reader would say by itself, and the
+    three things this adds — which tab, where in the bar, that it IS a tab —
+    are exactly what is lost. So it is said only to a reader that can put it
+    IN PLACE of its own report of the row (``replaces_focus``): Titan
+    Access, or a reader whose add-on is on the bus. A reader reached through
+    ``accessible_output3`` alone cannot be told to suppress anything, so it
+    stays silent there, as it always has — the alternative is the row read
+    twice.
 
     ``idx`` is 0-based.
     """
@@ -413,13 +533,20 @@ def announce_view_switched(view_name, idx, total):
         play_sound('ui/switch_list.ogg')
     except Exception:
         pass
-    if total and total > 0:
-        phrase = _("{}, {} of {}").format(view_name, idx + 1, total)
-    else:
-        phrase = view_name or _("Tab bar")
-    # Append the control-type word ("tab" / pl "zakładka") at the end.
-    phrase = "{}, {}".format(phrase, _("tab"))
-    _ta_announce(phrase, interrupt=True)
+    channel = _channel()
+    if not channel.can('replaces_focus'):
+        return False
+    # The pieces, not the sentence.  A reader that takes a role and a place
+    # in a list as FIELDS words them in its user's own verbosity settings;
+    # one that does not gets them folded back in, in Titan's own wording -
+    # "Applications, 1 of 4, tab" either way.  Which of the two happens is
+    # the channel's business and deliberately not this function's.
+    return channel.say(_message(
+        view_name or _("Tab bar"),
+        role=_("tab"),
+        index=(idx + 1) if (total and total > 0) else None,
+        count=total if (total and total > 0) else None,
+        interrupt=True, replaces_focus=True))
 
 
 # --- The Titan shell's taskbar groups ------------------------------------
@@ -447,32 +574,42 @@ def announce_search_results(count, label=None):
         text = _("No results")
     if label:
         text = "{}, {}".format(label, text)
+    # Not a focus replacement: nothing is being focused.  Every reader that
+    # is listening should hear it, and one reached through
+    # ``accessible_output3`` alone hears it as the words.
     if _ta_speak(text, interrupt=True):
         return True
-    if not is_screen_reader_running():
-        return False
-    speak_sr_only(text, interrupt=True)
-    return True
+    return _reader_announce(text, interrupt=True)
 
 
-def announce_shell_group(label):
+def announce_shell_group(label, position=0.0):
     """Say which group of the taskbar the keyboard has just entered.
 
     "Dock", "Open windows", "System tray" - said once, when Tab (or one of
     the Windows shortcuts) arrives in the group, and not when the arrows
     move inside it.  Returns True when something said it.
+
+    `position` is where that group IS across the screen, -1 .. 1 - the same
+    number the focus cue is panned by, so the Start button is heard from
+    the left and the clock from the right.  A reader that can place its
+    voice is given it; one that cannot drops it, and the NVDA add-on then
+    marks the place with a tone instead.
+
+    This is the announcement that made the channel's `position` field mean
+    anything.  The field was there from the start and NO CALLER EVER FILLED
+    IT IN, which is what "there is no positioned speech" was: not a panner
+    that did not work, but a panner that was never given a place to put the
+    voice.
     """
     if not label:
         return False
-    # Titan Access first: `announce` replaces the reader's own next focus
-    # announcement, so the label is spoken and the control read after it
-    # rather than the two racing each other.
-    if _ta_announce(label, interrupt=True):
-        return True
-    if not is_screen_reader_running():
-        return False
-    speak_sr_only(label, interrupt=True)
-    return True
+    # `replaces_focus` is what stops the two racing: the reader says the
+    # group and then reads the control it has landed on, rather than
+    # cancelling one with the other.  A reader that cannot be told to
+    # suppress anything still hears the group name, which is the whole of
+    # what this says - there is nothing here to duplicate.
+    return _reader_announce(label, interrupt=True, replaces_focus=True,
+                            position=position)
 
 
 # There is deliberately NO "announce this window" helper here.  A window
@@ -498,12 +635,7 @@ def announce_shell_location(name, count):
     if not name:
         return False
     text = _("{name}, {count} items").format(name=name, count=int(count or 0))
-    if _ta_announce(text, interrupt=True):
-        return True
-    if not is_screen_reader_running():
-        return False
-    speak_sr_only(text, interrupt=True)
-    return True
+    return _reader_announce(text, interrupt=True, replaces_focus=True)
 
 
 # --- Drag-and-drop announcement ------------------------------------------
@@ -526,7 +658,23 @@ def announce_drag_move(name, position):
         (name, DRAG_NAME_PITCH),
         (_("at position {}").format(position), 0),
     ]
-    return _ta_announce_segments(segments, interrupt=True)
+    if _ta_announce_segments(segments, interrupt=True):
+        return True
+    # A reader whose add-on is on the bus takes a pitch, but for the whole
+    # utterance rather than per segment - so the two tones become two
+    # announcements, the second queued behind the first.  It is offered only
+    # to a reader that can suppress its own read of the row, or this would
+    # be the third thing said about one arrow key.
+    channel = _channel()
+    if not (channel.can('replaces_focus') and channel.can('pitch')):
+        return False
+    said = channel.say(_message(name, pitch=DRAG_NAME_PITCH,
+                                interrupt=True, replaces_focus=True))
+    if not said:
+        return False
+    channel.say(_message(_("at position {}").format(position),
+                         interrupt=False))
+    return True
 
 
 _checklist_announce_timer = None
@@ -615,10 +763,12 @@ def announce_checklist_item_navigation(checked, delay_ms=500, speak=True):
     if not speak:
         return
     message = _("checked") if checked else _("unchecked")
-    # Arrowing onto a row fires a focus change, so let Titan Access append the
-    # state to the item name it is about to read; only fall back to the delayed
-    # AO3 path when Titan Access is not the active reader.
-    if not _ta_state_suffix(message):
+    # Arrowing onto a row fires a focus change, so let the READER append the
+    # state to the item name it is about to read - Titan Access through its
+    # own bridge, NVDA through its speech filter, so in both the state is
+    # part of the same utterance as the name and cannot be cut off by it.
+    # Only a reader that can do neither gets the delayed AO3 path.
+    if not announce_state_suffix(message):
         _speak_checklist_state_after(checked, delay_ms)
 
 

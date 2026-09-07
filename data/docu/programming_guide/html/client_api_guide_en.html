@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Writing a Titan client - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
+<li><a href="shell_addon_guide_en.html">Shell Add-ons</a></li>
+<li><a href="settings_interface_guide_en.html">Settings Interfaces</a></li>
+<li><a href="cling_guide_en.html">Cling Applications (Klango)</a></li>
+<li><a href="action_api_guide_en.html">Action API</a></li>
+<li><a href="client_api_guide_en.html" class="active">Titan clients (your own program)</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Writing a Titan client</h1>
+            </div>
+            <h1>Writing a Titan client</h1>
+
+<h2>What this is for</h2>
+
+<p>Titan has eleven kinds of add-on, and every one of them lives inside Titan:
+in its <code>data/</code> directory, discovered at startup, running in Titan's own
+process or launched by it. This guide is about the twelfth thing, which is
+not an add-on at all - **a program of your own, that Titan did not start and
+does not manage, joining Titan as an equal.**</p>
+
+<p>Two of them exist already and neither is special:</p>
+
+<li><strong>The NVDA add-on</strong> (<code>nvda-addon/</code>) lives inside NVDA. Titan announces</li>
+  into it with a position, a pitch and a role; it answers what is on the
+  screen right now, and offers Titan's own actions as NVDA commands.
+<li><strong>The Elten bridge</strong> (<code>elten-tce-bridge/</code>) lives inside EltenLink's</li>
+  client. It reports what Elten is holding, renders Titan's applications
+  inside Elten's own interface, and lets Titan's AI reach Elten's API.
+
+<p>Everything either of those does, your program can do, with **no code added
+to Titan**. That is the point of this guide: the two that exist are worked
+examples, not privileged cases.</p>
+
+<h2>The shape of it</h2>
+
+<p>There is one pipe, <code>\\.\pipe\TitanActions</code>, and it is bidirectional. Over it:</p>
+
+<li><strong>you call Titan</strong> - one typed JSON surface (<code>titan.bridge</code>) plus every</li>
+  action of every add-on Titan has;
+<li><strong>Titan calls you</strong> - the handlers you declared when you joined.</li>
+
+<p>You need one file: <code>src/titan_core/titan_actions.py</code>. Copy it next to your
+own code. It imports nothing from Titan and nothing outside the standard
+library, precisely so that it can be vendored into a wx application, a Tk
+launcher, a console script or somebody else's program.</p>
+
+<pre><code class="language-python">from titan_actions import serve, call, call_sequence, list_addons, is_connected</code></pre>
+
+<h2>Joining</h2>
+
+<pre><code class="language-python">def weather(city=&#x27;Warsaw&#x27;, **_):
+    &quot;&quot;&quot;What the weather is doing.&quot;&quot;&quot;
+    return f&quot;It is raining in {city}.&quot;
+
+
+serve({&#x27;weather&#x27;: weather},
+      id=&#x27;myprogram&#x27;,                 # stable: it is how Titan names you
+      label=&#x27;My program&#x27;,             # what a person is shown
+      kind=&#x27;client&#x27;)                  # see &quot;Add-on or client?&quot; below</code></pre>
+
+<p><code>serve</code> returns <strong>at once</strong>, whether or not Titan is running, and a daemon
+thread keeps trying quietly. A program that waits for Titan to be there is a
+program that will not start on a machine where Titan is not installed.</p>
+
+<h3>Add-on or client?</h3>
+
+<p><code>kind=&#x27;client&#x27;</code> says <em>this is another program taking hold of Titan</em>, and it
+changes two things:</p>
+
+<li><strong>Titan says so out loud</strong> when you join and when you leave. Nothing else</li>
+  on the desktop would tell a blind user that another program had connected
+  to it.
+<li><strong>Anything that would CHANGE Titan is behind the user's consent</strong>, asked</li>
+  once, remembered under your id, and revocable
+  (<code>titan.external_clients</code>, <code>titan.allow_client</code>, <code>titan.forget_client</code>).
+  Reading Titan is always served, so a client that only shows Titan works
+  before any question is answered.
+
+<p>Use one of the add-on kinds (<code>app</code>, <code>game</code>, <code>component</code>, ...) only when your
+program really is a Titan add-on that Titan launched.</p>
+
+<h2>Being called: what you declare, and what you merely serve</h2>
+
+<p>The handlers you pass to <code>serve</code> are what Titan <strong>can</strong> call. The <code>actions</code>
+list is what Titan is <strong>told</strong> you offer:</p>
+
+<pre><code class="language-python">serve(handlers,
+      id=&#x27;myprogram&#x27;, label=&#x27;My program&#x27;, kind=&#x27;client&#x27;,
+      actions=[
+          {&#x27;name&#x27;: &#x27;weather&#x27;,
+           &#x27;summary&#x27;: &#x27;What the weather is doing.&#x27;,
+           &#x27;params&#x27;: {&#x27;city&#x27;: {&#x27;type&#x27;: &#x27;string&#x27;, &#x27;required&#x27;: True,
+                               &#x27;description&#x27;: &#x27;Which city.&#x27;}}},
+          {&#x27;name&#x27;: &#x27;send_report&#x27;,
+           &#x27;summary&#x27;: &#x27;Send today\&#x27;s report to the team.&#x27;,
+           &#x27;params&#x27;: {}, &#x27;risk&#x27;: &#x27;always_confirm&#x27;},
+      ])</code></pre>
+
+<p>Leave <code>actions</code> out and it is derived from your handlers' signatures and
+docstrings, which is enough to work. Write it out and you get three things
+that matter:</p>
+
+<li><strong>A summary a person reads.</strong> It is what the assistant is shown, what a</li>
+  macro author browses, and what appears beside the action everywhere.
+<li><strong>Typed parameters</strong>, so Titan can ask for a missing one properly instead</li>
+  of your handler receiving nothing and failing.
+<li><strong>A risk level</strong> - <code>auto</code>, <code>confirm</code>, <code>always_confirm</code> - so something that</li>
+  cannot be taken back is confirmed before an AI does it on its own
+  initiative.
+
+<p><strong>Declare less than you serve.</strong> Only what you declare becomes visible, and
+only what you declare can be reached through the action layer
+(<code>titan.list_actions</code>, the assistant, a macro, another add-on). An
+undeclared handler is still SERVED - Titan's own subsystems call one by name
+over the bus - but a caller going through the public action layer is told
+the action does not exist. That is the right way round, and it is what lets
+the NVDA add-on serve <code>announce</code>, <code>attach</code> and <code>stand_down</code> - the channel's
+own plumbing, which Titan's reader layer calls directly - while offering
+none of them to anybody as things to do.</p>
+
+<h3>What you get for declaring</h3>
+
+<p>Titan builds a <strong>real add-on</strong> out of your declaration
+(<code>src/titan_core/actions/registry.py</code>, <code>_merge_bus</code>). From that moment your
+actions are:</p>
+
+<li>in <code>titan.list_actions</code> and in the Action API for every other add-on;</li>
+<li>offered to the AI assistant and the agent as things they can do;</li>
+<li>callable from a <strong>Titan Script</strong> (<code>myprogram.weather city=&quot;Krakow&quot;</code>);</li>
+<li>runnable from the macro manager, the shell, and any other client.</li>
+
+<p>None of that needed a line of code in Titan. Your add-on appears while your
+program is running and disappears when it exits, with <code>source</code> reported as
+<code>bus</code>.</p>
+
+<h3>Answering</h3>
+
+<p>Return a string and it is what the caller is told. Return anything else and
+it is serialised as JSON, which is what a program on the other end wants.
+Three outcomes exist, not two - see "Asking for what you need" below.</p>
+
+<p>Your handler is called with the named arguments Titan sends, and **arguments
+it does not declare are dropped**, so adding a parameter later never breaks
+an older handler.</p>
+
+<h2>Calling Titan</h2>
+
+<h3>The typed surface</h3>
+
+<pre><code class="language-python">import json
+answer = call(&#x27;titan&#x27;, &#x27;bridge&#x27;, request=json.dumps(
+    {&#x27;call&#x27;: &#x27;macros.list&#x27;, &#x27;args&#x27;: {}}))
+data = json.loads(str(answer))[&#x27;data&#x27;]</code></pre>
+
+<p><code>titan.bridge</code> answers <strong>JSON in one shape</strong> - <code>{&quot;ok&quot;: ..., &quot;data&quot;: ...}</code> -
+and it is what a program should use. There is a second way to reach the same
+things: actions answer prose, in the user's own language, because they are
+written for a model and for macros. Do not parse that. Every live bug the
+Elten bridge hit was exactly that: the whole line `- Voice demo (ctrl+alt+v)
+[tcs]` handed back as a macro's <em>name</em>.</p>
+
+<p>The surface covers what a client showing Titan needs: <code>apps.list</code>,
+<code>apps.open</code>, <code>games.<em></code>, <code>im.</em></code>, <code>macros.list</code>, <code>cling.list</code>, <code>settings.*</code>,
+<code>widgets.<em></code>, <code>buffers.</em></code>, <code>notifications.<em></code>, <code>speech.</em></code>, <code>ai.ask</code>,
+<code>sounds.play</code>, <code>window.state</code>, <code>app.*</code> (Titan's applications with their
+interface as data), and <code>addons.list</code> / <code>addons.actions</code> / <code>addons.run</code> for
+everything nobody has written a call for. Ask <code>capabilities</code> for the list
+this Titan really has, rather than guessing.</p>
+
+<h3>Somebody else's action</h3>
+
+<pre><code class="language-python">call(&#x27;tedit&#x27;, &#x27;open_file&#x27;, path=r&#x27;C:\notes\today.txt&#x27;)
+call_sequence([{&#x27;addon&#x27;: &#x27;tnotes&#x27;, &#x27;action&#x27;: &#x27;create_note&#x27;,
+                &#x27;args&#x27;: {&#x27;title&#x27;: &#x27;Ideas&#x27;}},
+               {&#x27;addon&#x27;: &#x27;titan&#x27;, &#x27;action&#x27;: &#x27;speak&#x27;,
+                &#x27;args&#x27;: {&#x27;text&#x27;: &#x27;Written: {{1}}&#x27;}}])</code></pre>
+
+<p><code>list_addons()</code> is what there is. There is deliberately **no permission wall
+between add-ons**: a client that has been allowed to drive Titan reaches
+everything, because the whole point is that nothing has to ship its own
+editor, browser, file manager or downloader.</p>
+
+<h2>Asking for what you need</h2>
+
+<p>An action has three outcomes, not two. Besides "done" and "could not", it
+can say <strong>it needs to know something first</strong>:</p>
+
+<pre><code class="language-python">from titan_actions import needs, fails
+
+def send_report(recipient=&#x27;&#x27;, **_):
+    if not recipient:
+        return needs(&#x27;recipient&#x27;, &#x27;Who should get the report?&#x27;,
+                     options=[&#x27;the team&#x27;, &#x27;just me&#x27;])
+    ...
+    return f&quot;Sent to {recipient}.&quot;</code></pre>
+
+<p>A caller then asks the user and calls again with the answer. Without this, a
+key bound to "send the report" is a key bound to a refusal. A **required
+parameter that was not supplied becomes a question automatically**, built
+from its <code>description</code>, so declaring your parameters properly gets you most
+of this for free.</p>
+
+<h2>Telling Titan about your own program</h2>
+
+<p>Two calls exist for the direction nobody else can serve - news from inside
+the program you are in:</p>
+
+<li><code>notifications.add</code> puts something where Titan's own notifications go: the</li>
+  notification centre, the Titan buffer, the notification sound. Name your
+  program in it; the user should know where it came from.
+<li><code>client.report</code> parks a snapshot of your program's state, which Titan</li>
+  keeps and can answer questions from when you are no longer running - and
+  it says <em>how old</em> the answer is, so a stale one is visibly stale.
+
+<p>Both are served without the drive consent, because a program reporting about
+itself is not a program driving Titan. Do not use them for anything else.</p>
+
+<h2>Rules that are not negotiable</h2>
+
+<p>These are not style. Every one of them is something this repository got
+wrong once and fixed.</p>
+
+<p><strong>Never make Titan wait.</strong> Your handler is called with Titan on the other
+end of a pipe, often from a focus handler or an interface thread. Do the
+work on a thread of your own and return; answer with what you know, not with
+what you are about to find out. If you must marshal onto your own interface
+thread, pass <code>marshal=</code>; if your handlers already do that themselves, pass a
+<code>marshal</code> that just calls the function, or every call waits for your
+message loop.</p>
+
+<p><strong>A table is the boundary.</strong> If Titan can name something and you resolve it
+with <code>getattr</code>, whatever is on the other end of that pipe can reach anything
+in your process. Write the calls down in a dict. A name that is not in it
+does not exist.</p>
+
+<p><strong>A refusal is an answer.</strong> When you will not do something - a switch is
+off, the user said no, the feature is missing - say so in a sentence the
+user could act on. A refusal that arrives as a transport error is reported
+as "the program did not respond", which is neither true nor actionable.</p>
+
+<p><strong>Say which of the reasons it was.</strong> "Not running", "refused", "did not
+answer in time" and "this version does not have that call" are four
+different things and the user does something different about each. Telling
+somebody to check a setting that is already on is worse than saying nothing.</p>
+
+<p><strong>Degrade, never disappear.</strong> Ask what the other side can do rather than
+assuming; skip what it has not got and say why. A feature that is quietly
+absent is indistinguishable from one that is broken - and for a user who
+cannot see the screen, that distinction is the whole difference between
+"try something else" and "this is faulty".</p>
+
+<p><strong>Nothing an emoji, nothing invented.</strong> Titan's user-facing text is English,
+translated with gettext, and never carries emoji. A control that has no name
+has no name: say so rather than inventing one.</p>
+
+<h2>Two worked examples</h2>
+
+<li><code>nvda-addon/addon/globalPlugins/titanEnhancements/link.py</code> - joining,</li>
+  declaring less than you serve, and a bidirectional channel where Titan
+  calls you far more often than you call Titan.
+<li><code>elten-tce-bridge/titan_bus.rb</code> - the same protocol in Ruby, in a program</li>
+  written by somebody else, with the user's consent asked on that side too.
+
+<p>Neither of them is reached by anything in Titan that knows its name.</p>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

@@ -156,3 +156,6 @@ sfx/*/
 sfx/windows xp theme/
 sfx/windows 9x theme/
 
+
+# The built NVDA add-on: a zip of nvda-addon/addon, rebuilt by build.py.
+*.nvda-addon
