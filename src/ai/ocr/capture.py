@@ -190,11 +190,41 @@ def _fingerprint(rgb) -> str:
 
 
 def capture_screen() -> Capture:
-    """The whole primary monitor."""
-    from src.ai.agent_tools import _capture_primary_screen
+    """The whole primary monitor.
+
+    Copying the desktop is tried first because it is cheap and it is what
+    works for everything that draws through Windows. When it comes back
+    blank the display is being driven by something that does not - a game
+    that has taken the screen outright - and the compositor is asked for
+    the frame instead (:mod:`duplication`). That is the only route that
+    can see such a program at all.
+    """
+    from src.ai.agent_tools import _capture_primary_screen, _looks_blank
     rgb, screen_w, screen_h = _capture_primary_screen()
+    if not _looks_blank(rgb):
+        return _prepare(rgb, (0, 0), 'screen', title='',
+                        screen_size=(screen_w, screen_h))
+    composed, where, size = _from_the_compositor()
+    if composed is not None:
+        return _prepare(composed, where, 'screen', title='',
+                        screen_size=size or (screen_w, screen_h))
     return _prepare(rgb, (0, 0), 'screen', title='',
                     screen_size=(screen_w, screen_h))
+
+
+def _from_the_compositor():
+    """One frame from the Desktop Duplication API. ``(None, why, None)``.
+
+    In a child process, always: the API is COM, its reference counting is
+    unforgiving, and the two programs that call this are a screen reader
+    and a blind user's desktop. Neither is worth a corrupted heap for a
+    screenshot.
+    """
+    try:
+        from src.ai.ocr import duplication
+    except Exception as error:
+        return None, str(error), None
+    return duplication.grab_elsewhere()
 
 
 def capture_window(hwnd: int = 0) -> Optional[Capture]:
@@ -262,8 +292,32 @@ def capture_window(hwnd: int = 0) -> Optional[Capture]:
         return _prepare(rgb, (left, top), 'window', title=title, hwnd=hwnd,
                         screen_size=screen_size)
 
+    def _from_compositor():
+        # A window that draws through neither GDI nor the desktop - a
+        # full-screen game - is only visible to the compositor. Its frame
+        # is the whole screen, so what is wanted is cut out of it.
+        composed, where, size = _from_the_compositor()
+        if composed is None or not size:
+            return None
+        scale_x = size[0] / float(screen_size[0] or size[0])
+        scale_y = size[1] / float(screen_size[1] or size[1])
+        # The compositor answers in real pixels and the window rectangle is
+        # in the coordinates Windows gives a program that is not
+        # DPI-aware, so one has to be put into the other or the crop lands
+        # somewhere else entirely.
+        crop_left = max(0, int((left - where[0]) * scale_x))
+        crop_top = max(0, int((top - where[1]) * scale_y))
+        crop_right = min(size[0], int((right - where[0]) * scale_x))
+        crop_bottom = min(size[1], int((bottom - where[1]) * scale_y))
+        if crop_right - crop_left < 8 or crop_bottom - crop_top < 8:
+            return _prepare(composed, where, 'window', title=title,
+                            hwnd=hwnd, screen_size=screen_size)
+        piece = composed[crop_top:crop_bottom, crop_left:crop_right]
+        return _prepare(piece, (left, top), 'window', title=title,
+                        hwnd=hwnd, screen_size=screen_size)
+
     routes = (_from_desktop, _from_window) if in_front else (_from_window, _from_desktop)
-    for route in routes:
+    for route in routes + (_from_compositor,):
         shot = route()
         if shot is not None:
             return shot

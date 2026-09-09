@@ -56,6 +56,10 @@ class Link:
         self.api = 0
         self.last_error = ''
         self.attached_at = 0.0
+        #: Set the first time Titan refuses because its own user has not
+        #: answered the question yet. Read by the status command, so "it
+        #: does nothing" has an answer that is not "it is broken".
+        self.needs_consent = False
         self._lock = threading.RLock()
 
     # ------------------------------------------------------ Titan calls us
@@ -83,11 +87,16 @@ class Link:
                 'capabilities': channel.CHANNEL.capabilities()}
 
     def detach(self, **_):
-        from . import focus, panner
+        from . import focus, panner, semantics
         with self._lock:
             self.attached = False
         focus.set_titan_pid(0)
         panner.PANNER.restore()
+        # Which process was which is only true while that Titan was
+        # running: a pid is reused, and reading somebody else's window as
+        # though it were the file manager is worse than reading it plainly.
+        semantics.forget()
+        semantics.forget_titles()
         return {'attached': False}
 
     def status(self, **_):
@@ -148,11 +157,23 @@ class Link:
             # A refusal because the user has not said yes is a different
             # thing from a call that failed, and telling the two apart is
             # what stops this add-on retrying something the user declined.
-            if 'consent' in text.lower() or 'permission' in text.lower():
-                return False, _('Titan has not been told this add-on may '
-                                'control it. Answer the question Titan asked '
-                                'when NVDA connected, or allow it in Titan\'s '
-                                'settings.')
+            #
+            # **Asked of the wire, never of the wording.** It used to look
+            # for the words "consent" or "permission" in the answer - and
+            # Titan writes that sentence in ITS user's own language, so on
+            # a Polish Titan the test matched nothing and a refusal read
+            # like a broken bridge. Titan marks it (`'consent': 'needed'`)
+            # and the client now carries the mark.
+            if getattr(result, 'needs_consent', False):
+                self.needs_consent = True
+                # Titan's own sentence is kept: it is in the user's
+                # language and it names the one thing that changes the
+                # answer, which a translation of ours would not.
+                return False, text or _('Titan has not been told this '
+                                        'add-on may control it. Answer the '
+                                        'question Titan asked when NVDA '
+                                        'connected, or allow it in Titan\'s '
+                                        'settings.')
             return False, text
         try:
             payload = json.loads(str(result))
@@ -165,6 +186,7 @@ class Link:
                                 'not have {call}.').format(call=call)
             return False, error
         with self._lock:
+            self.needs_consent = False
             try:
                 self.api = int(payload.get('api') or 0)
             except (TypeError, ValueError):
@@ -222,7 +244,111 @@ def handlers():
     # has always done both and only its own reader ever heard them.
     served['dialog_kind'] = interject.dialog_kind
     served['state_suffix'] = interject.state_suffix
+    # A live region, pushed. A program that KNOWS it has news says so,
+    # which is the half no amount of watching a screen can do for itself.
+    from . import live as live_regions
+    served['live'] = live_regions.pushed
+    # **What is actually switched on, and what has actually happened.**
+    # "The dialog kinds are not read" is a report with no evidence in it,
+    # and there are half a dozen different reasons it can be true: the
+    # switch, the speech filter that was never registered, a speech mode
+    # that cannot be muted, a Titan that is not there to play the sound.
+    # Each is a different thing to do about it, and none of them is
+    # visible from outside.
+    served['diagnostics'] = diagnostics
+    served['switch'] = switch
     return served
+
+
+def switch(name='', value=None, **_):
+    """Read or set one of THIS ADD-ON's switches, while NVDA is running.
+
+    **A switch can only be set from inside NVDA**, which is not obvious and
+    cost an hour: writing one into `nvda.ini` by hand does nothing, because
+    NVDA validates the file against the configuration spec at load time and
+    an add-on's spec is not registered until the add-on starts. The key is
+    simply deleted. So the only ways in are the settings panel and this.
+
+    Changing the reader is the same permission Titan already asks for
+    (`letTitanDrive`); reading what is set is always answered, because it
+    is the user's own screen reader described to their own desktop.
+    """
+    from . import configSpec
+    values = configSpec.read()
+    wanted = str(name or '').strip()
+    if not wanted:
+        return {'switches': values}
+    if wanted not in configSpec.SPEC:
+        return {'ok': False, 'why': "there is no switch called '%s'" % wanted,
+                'switches': sorted(configSpec.SPEC)}
+    if value is None:
+        return {'ok': True, 'name': wanted, 'value': bool(values.get(wanted))}
+    if not values.get('letTitanDrive', True):
+        return {'ok': False, 'why': 'Titan has not been allowed to change '
+                                    'NVDA; the switch is in NVDA\'s '
+                                    'settings, under Titan enhancements'}
+    if isinstance(value, str):
+        value = value.strip().lower() in ('1', 'true', 'yes', 'on')
+    values[wanted] = bool(value)
+    configSpec.write(values)
+    configSpec.apply()
+    return {'ok': True, 'name': wanted, 'value': bool(value)}
+
+
+def diagnostics(**_):
+    """Everything about this add-on's state, as data. Never raises."""
+    found = {}
+
+    def ask(name, get):
+        try:
+            found[name] = get()
+        except Exception as error:                   # noqa: BLE001
+            found[name] = 'failed: %s' % error
+
+    from . import compat
+    ask('nvda_missing', compat.missing)
+    ask('speech_extensions', lambda: compat.speechExtensions is not None)
+    ask('speech', lambda: compat.speech is not None)
+    ask('tones', lambda: compat.tones is not None)
+    ask('ui', lambda: compat.ui is not None)
+
+    from . import focus
+    ask('can_mute', focus.can_mute)
+    ask('titan_pid', focus.titan_pid)
+    ask('standing_down', focus.standing_down)
+    ask('counts', lambda: {'pitched': focus.pitched(),
+                           'replaced': focus.suppressed(),
+                           'semantic': focus.semantic(),
+                           'windows': focus.windows(),
+                           'pictures': focus.pictures(),
+                           'labelled': focus.labelled()})
+
+    from . import interject
+    ask('interject_registered', interject.registered)
+    ask('interject_applied', interject.applied)
+    ask('spoken_log', lambda: [line[1][:60] for line in
+                               interject.spoken_log()[-6:]])
+
+    for name in ('dialog_kind', 'live', 'surface', 'smart', 'trackpad',
+                 'states', 'semantics', 'ancestry'):
+        def get(name=name):
+            # **Relative, because the package is not called what it is
+            # called.** Inside NVDA this is `globalPlugins.
+            # titanEnhancements`, and asking for the top-level name gets
+            # "No module named 'titanEnhancements'" - a diagnostic that
+            # fails to diagnose, which is worse than none.
+            import importlib
+            module = importlib.import_module('.' + name, __package__)
+            reporter = getattr(module, 'report', None) or \
+                getattr(module, 'timing', None)
+            return reporter() if callable(reporter) else 'no report'
+        ask(name, get)
+
+    from . import configSpec
+    ask('settings', configSpec.read)
+    from . import readerModules
+    ask('modules', lambda: len(readerModules.load()))
+    return found
 
 
 #: What Titan is TOLD this add-on offers, which is deliberately less than
@@ -270,6 +396,32 @@ DECLARED = [
                                             "at -4, a state at +4, which "
                                             "is Titan Access's own shape."}}},
     {'name': 'stop', 'summary': "Stop NVDA speaking.", 'params': {}},
+    {'name': 'switch',
+     'summary': "Read or set one of the add-on's own switches while NVDA is "
+                "running - which is the only way there is: a switch written "
+                "into nvda.ini by hand is deleted, because NVDA validates "
+                "the file before an add-on has registered what its switches "
+                "are. With no name, answers all of them.",
+     'params': {'name': dict(_STRING), 'value': {'type': 'boolean'}}},
+    {'name': 'diagnostics',
+     'summary': "What this add-on has switched on and what it has actually "
+                "done: whether NVDA's speech filter registered, whether its "
+                "speech can be muted, how many controls were read each way, "
+                "and every layer's own report. Reading it is how 'the "
+                "dialog kinds are not read' becomes a reason.",
+     'params': {}},
+    {'name': 'live',
+     'summary': "Say that something changed while the user was looking "
+                "somewhere else - a status line, a message that arrived. "
+                "Said without moving the focus, and never twice in a row.",
+     'params': {'text': dict(_STRING, required=True),
+                'politeness': dict(_STRING,
+                                   description="polite waits for whatever "
+                                               "is being said; assertive "
+                                               "interrupts it"),
+                'source': dict(_STRING,
+                               description="What it is about, said in "
+                                           "front of it.")}},
     {'name': 'dialog_kind',
      'summary': "Say what kind of dialog is about to appear - question, "
                 "warning, error - with its own tone, in front of NVDA's own "

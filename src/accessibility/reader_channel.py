@@ -214,6 +214,12 @@ class AddonChannel(Channel):
         self._capabilities = dict(capabilities or {})
 
     def can(self, what):
+        # 'announce' is the one capability whose ABSENCE means yes: a
+        # reader add-on written before the key existed answers everything
+        # it can do and never mentions it, and reading that silence as a
+        # refusal would take the whole channel away from it.
+        if what == 'announce' and 'announce' not in self._capabilities:
+            return True
         return bool(self._capabilities.get(what))
 
     def capabilities(self):
@@ -221,6 +227,12 @@ class AddonChannel(Channel):
 
     def say(self, message):
         from src.titan_core.actions import bus
+        # Asked again here as well as in `channel()`, because a channel
+        # object outlives the question that built it: this one is handed
+        # around and re-used, and a reader whose user switched Titan's
+        # announcements off between the two must not be spoken into.
+        if not self.can('announce'):
+            return False
         payload = message.for_addon(self)
         ok, _answer = bus.invoke(self.addon_id, 'announce', payload,
                                  timeout=CALL_TIMEOUT)
@@ -489,7 +501,17 @@ def channel():
         return TitanAccessChannel()
     peer = _reader_peer()
     if peer is not None:
-        return AddonChannel(peer.addon_id, _capabilities_of(peer))
+        able = _capabilities_of(peer)
+        # **An add-on that says it will not announce is not the channel.**
+        # Its user has switched Titan's announcements off inside the reader,
+        # and what that must mean is "behave as though the add-on were not
+        # installed" - not silence. Answering here rather than at `say` is
+        # what makes it true for the questions asked BEFORE anything is
+        # said: `announce_view_switched` asks `can('replaces_focus')` and
+        # stays quiet when the answer is no, so a channel that claimed it
+        # could and then dropped the sentence lost it in both directions.
+        if able.get('announce', True):
+            return AddonChannel(peer.addon_id, able)
     try:
         from src.accessibility.messages import is_screen_reader_running
         if is_screen_reader_running():

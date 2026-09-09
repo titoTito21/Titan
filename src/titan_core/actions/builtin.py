@@ -97,6 +97,25 @@ _AI_ACTIONS = frozenset({
     'ocr.ask',              # the same, with a question about it
 })
 
+# The actions that must NOT be run on Titan's GUI thread. Every in-process
+# action is marshalled onto it, because a handler may open a window and wx is
+# not thread-safe - and that is right for a handler that returns in
+# milliseconds. These do not: a reading is a screenshot (which on a window that
+# will not render itself means a whole child process) plus a request to a
+# vision provider - seconds of it, and every one of those seconds is a second
+# in which Titan answers no message at all. A screen reader watching a window
+# polls this repeatedly, so Titan was not merely slow: it was "not responding"
+# for as long as the watch lasted, which is what reading a virtual machine's
+# window looked like from the outside.
+#
+# Safe because nothing in the AI OCR pipeline imports wx, and its own docstring
+# says so - it was written to be run on a worker thread, and the Action API was
+# the one caller that never did.
+_NO_GUI_ACTIONS = frozenset({
+    'ocr.read_window',
+    'ocr.ask',
+})
+
 
 # --------------------------------------------------------------------------- #
 # Adapting a tool table into actions
@@ -140,7 +159,10 @@ def _addon_from_tools(addon_id, label, description, tools, prefix):
             # A tool may also say so itself, which is how a new AI-backed one
             # gets this without anybody remembering to edit the list above.
             needs_ai=(f"{addon_id}.{short}" in _AI_ACTIONS
-                      or bool(tool.get('needs_ai'))))
+                      or bool(tool.get('needs_ai'))),
+            # Same shape: the table above, or the tool saying so itself.
+            needs_gui=(f"{addon_id}.{short}" not in _NO_GUI_ACTIONS
+                       and bool(tool.get('needs_gui', True))))
         action.run = tool['run']
         addon.actions.append(action)
     return addon

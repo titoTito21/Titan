@@ -123,12 +123,18 @@ def ask_text(prompt, title, on_answer=None, default=''):
     wx.CallAfter(show)
 
 
-def confirm(prompt, title, on_yes=None):
+def confirm(prompt, title, on_yes=None, on_no=None):
     """Ask a yes/no question. ``on_yes()`` only when the answer is yes.
 
     A real ``wx.MessageDialog`` with YES_NO, so NVDA reads it as the question
     it is and Escape means no - which for a dialog put up by a key the user
     pressed by accident is the only safe default.
+
+    ``on_no`` matters where a refusal is an ANSWER rather than the absence
+    of one: a question the reader asks by itself - "this window shows
+    nothing, shall I read it as a picture?" - must write the no down, or it
+    is asked again the next time that window comes to the front, for ever.
+    Escape counts as no, because it is one.
     """
     gui = _gui()
     wx = _wx()
@@ -142,10 +148,14 @@ def confirm(prompt, title, on_yes=None):
                                       wx.YES_NO | wx.NO_DEFAULT
                                       | wx.ICON_QUESTION)
             try:
-                if dialog.ShowModal() == wx.ID_YES and on_yes is not None:
-                    on_yes()
+                said_yes = dialog.ShowModal() == wx.ID_YES
             finally:
                 dialog.Destroy()
+            if said_yes:
+                if on_yes is not None:
+                    on_yes()
+            elif on_no is not None:
+                on_no()
         finally:
             gui.mainFrame.postPopup()
     wx.CallAfter(show)

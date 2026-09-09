@@ -575,8 +575,19 @@ class ScreenOverlay:
         wx.CallLater(900, self.rescan, True)
 
     # --------------------------------------------------------------- scanning
-    def rescan(self, quiet: bool = False) -> None:
-        """Read the real window again and rebuild every control from it."""
+    def rescan(self, quiet: bool = False, only_if_changed: bool = False) -> None:
+        """Read the real window again and rebuild every control from it.
+
+        ``only_if_changed`` is what a WATCHER wants and what F5 does not. The
+        user pressing F5 means "read it again, really", so a fresh request is
+        the whole point; something watching the window means "tell me when it
+        becomes something else", and there the recogniser's own comparison -
+        answer from the last reading when the picture has not meaningfully
+        changed - is what makes watching affordable at all. It also decides
+        whether the controls are rebuilt: putting the same controls back on an
+        unchanged screen would take the keyboard off whatever the user was on,
+        once a poll, for ever.
+        """
         if self._scanning or self._closing:
             return
         reason = ai_provider.vision_unavailable_reason()
@@ -594,9 +605,10 @@ class ScreenOverlay:
         # controls are invisible lasts milliseconds instead of the whole
         # vision call.
         self._cloak(True)
-        wx.CallLater(60, self._capture_and_read, quiet)
+        wx.CallLater(60, self._capture_and_read, quiet, only_if_changed)
 
-    def _capture_and_read(self, quiet: bool) -> None:
+    def _capture_and_read(self, quiet: bool,
+                          only_if_changed: bool = False) -> None:
         if self._closing:
             return
         shot = None
@@ -607,26 +619,34 @@ class ScreenOverlay:
         finally:
             if not self._user_cloaked:
                 self._cloak(False)
-        self._read(shot, quiet)
+        self._read(shot, quiet, only_if_changed)
 
-    def _read(self, shot, quiet: bool) -> None:
+    def _read(self, shot, quiet: bool, only_if_changed: bool = False) -> None:
         """Hand a picture to the reader and rebuild from what comes back."""
         self._scanning = True
 
         def _done(screen, error):
-            wx.CallAfter(self._read_finished, screen, error, quiet)
+            wx.CallAfter(self._read_finished, screen, error, quiet,
+                         only_if_changed)
 
         if not self.reader.read(_done, scope=self.scope, hwnd=self.target_hwnd,
-                                reuse_previous=False, shot=shot):
+                                reuse_previous=only_if_changed, shot=shot):
             self._scanning = False
 
     def _read_finished(self, screen: Optional[Screen], error: str,
-                       quiet: bool) -> None:
+                       quiet: bool, only_if_changed: bool = False) -> None:
         self._scanning = False
         if self._closing:
             return
         if error:
             speak_notification(error, 'error')
+            return
+        if only_if_changed and screen is not None and \
+                'unchanged' in (screen.warnings or []):
+            # The recogniser answered from the last reading because the
+            # picture is the same one. Rebuilding would put identical controls
+            # back and move the keyboard while doing it.
+            self._pending_focus = ''
             return
         self._rebuild_from(screen, quiet=quiet)
 

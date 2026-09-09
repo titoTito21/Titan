@@ -855,20 +855,36 @@ def default_theme_fallback_allowed():
 #: nothing has to.
 READER_SFX = ('data', 'components', 'titan access', 'sfx')
 
+#: The theme folder those same sounds live in, which is where they are
+#: looked for first and the only place a Titan without the Titan Access
+#: component has them at all.
+SRE_SFX = 'SRE'
+
 
 def reader_sound_path(name):
-    """One of the reader's cursor earcons, the user's theme winning.
+    """One of the reader's own sounds, the user's theme winning.
 
-    `sfx/<theme>/reader/<name>` first, exactly as every other feature's own
-    set is resolved, and then the set Titan Access ships. A reader add-on
-    asking for one of these means the cue Titan's own reader plays for that
-    event, and should hear it whichever theme is chosen.
+    `sfx/<theme>/SRE/<name>` first, exactly as every other feature's own set
+    is resolved. A reader asking for one of these means the sound Titan's
+    own reader makes for that event - a cursor cue, a dialog's kind, a menu
+    opening - and it should hear it in whichever theme the user chose.
+
+    **The set belongs to a THEME, not to Titan Access.** It used to be
+    resolved out of `data/components/titan access/sfx/` alone - and Titan
+    Access is an OPTIONAL component, so on a machine that has not installed
+    it every one of these resolved to nothing and a reader add-on's sounds
+    were simply silent, with nothing saying why. `sfx/<theme>/SRE/` already
+    existed as the place for them and had five; the whole set now ships
+    there in the default theme, so a theme can replace any of them and a
+    Titan with no Titan Access still makes every sound. The component's own
+    copy is still looked at last, so a Titan Access given newer sounds than
+    the theme keeps them.
     """
     import os
     plain = str(name or '').replace('\\', '/').split('/')[-1]
     if not plain:
         return None
-    themed = feature_sound_path('reader', plain, allow_default=True)
+    themed = feature_sound_path(SRE_SFX, plain, allow_default=True)
     if themed:
         return themed
     try:

@@ -557,6 +557,62 @@ def _cling(_args):
 # answering the keyboard - `TitanApp.minimize_to_tray` is those three things
 # together, and `restore_from_tray` is the one way back from it.
 # --------------------------------------------------------------------------- #
+def _processes(_args):
+    """Which process is which part of Titan.
+
+    **The one thing a program looking at a Titan window cannot work out.**
+    A TCE application runs in a subprocess of its own, and from the outside
+    every one of them is an unremarkable wxPython window: the same class,
+    the same roles, a title in the user's own language. So a screen reader
+    - the caller this was written for - had no way to know that the list it
+    is reading is the file manager's, and therefore no way to know that a
+    row of it is a file with a type and a date rather than "list item 3".
+    That is the whole of what an app module buys anywhere else, and it was
+    unavailable here for want of one number.
+
+    Two sources, because neither is complete on its own: an add-on that
+    joined the Action Bus says its own pid, and Titan remembers the pid of
+    every application and game it has STARTED - which is the only way to
+    know about the ones that declare no actions at all.
+
+    Nothing here is a guess. A pid is answered only while that process is
+    really alive, because Windows reuses one the moment a process ends and
+    telling a caller that somebody else's window is tNotes would be worse
+    than telling it nothing.
+    """
+    found = {}
+    try:
+        from src.titan_core.app_manager import launched_processes
+        for entry in launched_processes():
+            found[int(entry['pid'])] = {
+                'pid': int(entry['pid']), 'id': entry.get('id', ''),
+                'label': entry.get('label', ''), 'kind': entry.get('kind', 'app'),
+                'path': entry.get('path', ''), 'source': 'launched'}
+    except Exception:                              # noqa: BLE001
+        pass
+    try:
+        from src.titan_core.actions import bus
+        for peer in bus.list_peers():
+            pid = int(getattr(peer, 'pid', 0) or 0)
+            if pid <= 0:
+                continue
+            # The bus knows the add-on's real id and label, so it wins over
+            # the folder name the launcher had to guess from.
+            found[pid] = {'pid': pid,
+                          'id': str(getattr(peer, 'addon_id', '') or ''),
+                          'label': str(getattr(peer, 'label', '') or ''),
+                          'kind': str(getattr(peer, 'kind', '') or 'app'),
+                          'path': str(getattr(peer, 'path', '') or ''),
+                          'source': 'bus'}
+    except Exception:                              # noqa: BLE001
+        pass
+    import os as _os
+    found[_os.getpid()] = {'pid': _os.getpid(), 'id': 'titan',
+                           'label': 'Titan', 'kind': 'titan', 'path': '',
+                           'source': 'titan'}
+    return {'processes': sorted(found.values(), key=lambda row: row['pid'])}
+
+
 def _window_state(_args):
     def read():
         frame = _main_frame()
@@ -689,7 +745,11 @@ def _play_sound(args):
         # that is played PITCHED: a list item says where in the list it is
         # by its tone. A screen reader's add-on asking for one of these
         # means the cue Titan's own reader plays for that event.
-        if name.lower().startswith('reader/'):
+        # `reader/` is what a reader calls them and `SRE/` is the folder
+        # they live in; both spellings mean the same set, because a client
+        # author reading the theme folder and one reading this docstring
+        # must not each find only half of it.
+        if name.lower().startswith(('reader/', 'sre/')):
             return bool(sound.play_reader_sound(
                 name.split('/', 1)[1],
                 pan=None if pan in (None, '') else float(pan),
@@ -844,6 +904,102 @@ def _whole(value):
     except (TypeError, ValueError):
         return -1
 
+# --------------------------------------------------------------------------- #
+# A window that told a reader nothing, as real controls
+# --------------------------------------------------------------------------- #
+# AI OCR's overlay is the one thing on this desktop that turns a picture of a
+# window into an INTERFACE: every control it read becomes a real wx control, at
+# the coordinates of the real one, parented into the target's own window - so a
+# screen reader reads them the way it reads any program's, with Tab, the arrows
+# and Enter, and nothing in the reader has to know about any of it. That is
+# what somebody means by "as if a scripter had scripted the application".
+#
+# The actions (`ocr.show_overlay` and the rest) answer PROSE, because they also
+# answer a model. A client rebuilding an interface must not read a sentence to
+# find out whether the overlay went up - this repository has paid for that
+# mistake in every direction it can be made - so the same thing is here in one
+# shape, with real booleans and real numbers.
+def _ocr_overlay(_args):
+    """What is on the window: `{open, window, title, controls, surfaces,
+    hidden}`. `open` false is the honest answer for every reason at once."""
+    try:
+        from src.ai.ocr import overlay
+    except Exception as error:
+        raise ValueError(f'AI OCR is not available: {error}')
+    current = overlay.get_overlay()
+    if current is None:
+        return {'open': False}
+    screen = getattr(current, 'screen', None)
+    return {
+        'open': True,
+        'window': _whole(getattr(current, 'target_hwnd', 0)),
+        'title': str(getattr(current, 'target_title', '') or ''),
+        'controls': len(getattr(screen, 'elements', []) or []),
+        'surfaces': len(getattr(current, 'surfaces', []) or []),
+        'hidden': bool(getattr(current, 'hidden', False)),
+    }
+
+
+def _ocr_overlay_show(args):
+    """Put the last reading on its window as real controls.
+
+    `read` (default true) takes a fresh reading first, which is nearly always
+    what a caller wants: an overlay built from a reading taken some time ago
+    is a set of controls that were true then. `hwnd` says which window, for a
+    caller that knows - a screen reader does.
+    """
+    from src.titan_core import actions
+    if args.get('read', True):
+        result = actions.run('ocr', 'read_window',
+                             hwnd=str(_whole(args.get('hwnd', 0))))
+        if not result.ok:
+            raise ValueError(result.text)
+        # A refusal arrives as a success with prose in it, so the reading is
+        # checked by SHAPE - `elements_as_lines` writes `[Region]` headings and
+        # a refusal is one paragraph with none.
+        if not any(line.lstrip().startswith('[')
+                   for line in str(result.text or '').splitlines()):
+            raise ValueError(str(result.text or '').strip() or
+                             'the window could not be read')
+    result = actions.run('ocr', 'show_overlay')
+    if not result.ok:
+        raise ValueError(result.text)
+    state = _ocr_overlay({})
+    if not state.get('open'):
+        # Every reason ends here: nothing could be placed where it really is
+        # (a reading with no rectangles), or the surface could not be adopted
+        # by that window. The sentence Titan wrote is the one that says which.
+        raise ValueError(str(result.text or '').strip() or
+                         'the overlay could not be put on that window')
+    state['said'] = str(result.text or '').strip()
+    return state
+
+
+def _ocr_overlay_refresh(_args):
+    """Look at the window again; rebuild the controls only if it has changed.
+
+    Costs nothing at a provider when the picture is the same, which is what
+    makes this safe to call on a timer - and it is the overlay that reads,
+    because only the overlay makes itself invisible while the picture is
+    taken.
+    """
+    from src.titan_core import actions
+    result = actions.run('ocr', 'refresh_overlay')
+    if not result.ok:
+        raise ValueError(result.text)
+    state = _ocr_overlay({})
+    state['said'] = str(result.text or '').strip()
+    return state
+
+
+def _ocr_overlay_close(_args):
+    from src.titan_core import actions
+    result = actions.run('ocr', 'close_overlay')
+    if not result.ok:
+        raise ValueError(result.text)
+    return {'open': False, 'said': str(result.text or '').strip()}
+
+
 
 #: **What a client may do without being allowed to.** Reading is one
 #: permission and driving is another, and the line is the one this
@@ -870,8 +1026,9 @@ READ_ONLY = frozenset((
     'ai.available', 'ai.history',
     'addons.list', 'addons.actions',
     'macros.list', 'cling.list',
-    'window.state',
+    'window.state', 'titan.processes',
     'app.list', 'app.screen', 'app.sessions', 'app.log',
+    'ocr.overlay',
 ))
 
 
@@ -964,6 +1121,7 @@ CALLS = {
     'macros.list': _macros,
     'cling.list': _cling,
     'window.state': _window_state,
+    'titan.processes': _processes,
     'notifications.add': _notification_add,
     'notifications.clear': _notification_clear,
     'client.report': _client_report,
@@ -976,6 +1134,10 @@ CALLS = {
     'app.close': _app_ui_close,
     'app.sessions': _app_ui_sessions,
     'app.log': _app_ui_log,
+    'ocr.overlay': _ocr_overlay,
+    'ocr.overlay_show': _ocr_overlay_show,
+    'ocr.overlay_refresh': _ocr_overlay_refresh,
+    'ocr.overlay_close': _ocr_overlay_close,
 }
 
 

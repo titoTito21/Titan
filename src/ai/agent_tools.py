@@ -648,10 +648,14 @@ def delete_path(path, **_):
 # Tool registry
 # --------------------------------------------------------------------------- #
 def _tool(name, description, run, risk='auto', properties=None, required=None,
-          always_confirm=False):
+          always_confirm=False, needs_gui=True):
     return {
         'name': name, 'description': description, 'run': run, 'risk': risk,
         'always_confirm': always_confirm,
+        # False is a promise that this tool touches no wx, so the Action API
+        # may run it on the caller's own thread rather than holding Titan's
+        # message loop for however long it takes. See actions/inproc.py.
+        'needs_gui': needs_gui,
         'parameters': {
             'type': 'object',
             'properties': properties or {},

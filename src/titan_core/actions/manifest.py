@@ -89,8 +89,20 @@ class ActionSpec:
 
     def __init__(self, name, summary='', params=None, risk='auto', mode='any',
                  promote=False, handler='', addon=None, timeout=0,
-                 launch=None, needs_ai=False):
+                 launch=None, needs_ai=False, needs_gui=True):
         self.name = name
+        # Does this handler need Titan's GUI THREAD? Nearly every one does -
+        # it opens a window, reads a control, changes a setting the settings
+        # window is holding - and wx is not thread-safe, which is why
+        # `inproc.call` marshals onto it. But an action that touches no wx and
+        # takes SECONDS is the opposite case: marshalled onto the GUI thread it
+        # stops Titan's message loop for its whole duration, and Windows paints
+        # "Titan is not responding" over a program that is working perfectly.
+        # Declaring False is a promise about the handler - no wx, no window,
+        # nothing that reads a live control - and it is what lets a reading of
+        # the screen, which is a screenshot plus a request to a provider, run
+        # where it was always meant to: on the caller's own thread.
+        self.needs_gui = bool(needs_gui)
         # Is this action *done by a model*? Such an action cannot work with
         # Titan's AI features switched off, and the honest answer then is to say
         # so rather than to fail somewhere inside a provider - see
@@ -300,7 +312,10 @@ def _parse_action(raw, addon, warn):
         risk=risk, mode=mode, promote=bool(raw.get('promote')),
         handler=handler, addon=addon, timeout=timeout,
         launch=None if launch is None else bool(launch),
-        needs_ai=bool(raw.get('needs_ai')))
+        needs_ai=bool(raw.get('needs_ai')),
+        # Absent means yes: the GUI thread is the safe answer, and an author
+        # who has not thought about it must not be opted out of it.
+        needs_gui=bool(raw.get('needs_gui', True)))
 
 
 def parse_manifest(data, kind, name, path, default_transport='inproc',

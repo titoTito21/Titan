@@ -74,15 +74,23 @@ _sweeping = False
 # --------------------------------------------------------------------------- #
 _UNSAFE = re.compile(r'[^0-9a-zA-Z]+')
 
+def script_name(addon, action, key=''):
+    """The name NVDA remembers a binding by. Stable, or the binding is lost.
 
-def script_name(addon, action):
-    """The name NVDA remembers a binding by. Stable, or the binding is lost."""
-    return 'titan_{}_{}'.format(_UNSAFE.sub('_', str(addon or '')).strip('_'),
-                                _UNSAFE.sub('_', str(action or '')).strip('_'))
+    ``key`` is what tells one row from another when the ACTION is the same.
+    Every Titan macro is `macros.run_macro` with a different name, and a user
+    who has bound five of them to five keys must get five scripts - one per
+    macro - or the last one built would answer all five bindings.
+    """
+    parts = ['titan', _UNSAFE.sub('_', str(addon or '')).strip('_'),
+             _UNSAFE.sub('_', str(action or '')).strip('_')]
+    if key:
+        parts.append(_UNSAFE.sub('_', str(key)).strip('_'))
+    return '_'.join(part for part in parts if part)
 
 
-def attribute_name(addon, action):
-    return 'script_' + script_name(addon, action)
+def attribute_name(addon, action, key=''):
+    return 'script_' + script_name(addon, action, key)
 
 
 # --------------------------------------------------------------------------- #
@@ -151,7 +159,10 @@ def _merge_summaries(rows, addon_id, described):
             by_name[str(action['name'])] = action
     changed = False
     for row in rows:
-        if row['addon'] != addon_id:
+        if row['addon'] != addon_id or row.get('key'):
+            # A row that carries its own arguments carries its own words
+            # too: every macro row is the same ACTION, so the action's
+            # summary would name all of them "run a macro".
             continue
         action = by_name.get(row['action'])
         if action is None:
@@ -167,6 +178,64 @@ def _merge_summaries(rows, addon_id, described):
                         'risk': risk, 'needs_ai': needs_ai})
             changed = True
     return changed
+
+
+# --------------------------------------------------------------------------- #
+# One key, one macro
+# --------------------------------------------------------------------------- #
+#: **This is what a Leasey script is, on this desktop.**
+#:
+#: Every Titan ACTION is already a bindable NVDA script, which is most of a
+#: hot-key manager - but "run a macro" is one action taking the macro's name,
+#: so binding it gets the user a key that asks WHICH macro. That is not a
+#: macro on a key; it is a menu on a key.
+#:
+#: A macro is where the user's own work lives. Titan Script is a real little
+#: language whose statements are Titan's own actions - it can speak, place a
+#: sound, put a form up, read a setting, drive another program - and it is
+#: checked before it is saved. So the useful thing is not another scripting
+#: language in the reader: it is that every script the user has ALREADY
+#: written gets a key of its own, in NVDA's own Input Gestures dialog, under
+#: its own name.
+#:
+#: The name is what the binding is remembered by, so renaming a macro loses
+#: its key. That is honest and there is no way round it: NVDA remembers a
+#: gesture by the script's name, and a macro has nothing else stable to be
+#: named after.
+MAX_MACROS = 200
+
+
+def macro_rows():
+    """One row per macro the user has. ``[]`` when Titan has none.
+
+    Read through the typed doorway (`macros.list` answers JSON) rather than
+    out of the prose action, because the prose one answers a LINE - "- Voice
+    demo (ctrl+alt+v) [tcs]" - and this repository has already had a bridge
+    read a macro's name out of one of those and get the whole line.
+    """
+    ok, data = LINK.bridge('macros.list')
+    if not ok or not isinstance(data, dict):
+        return []
+    rows = []
+    for macro in (data.get('macros') or [])[:MAX_MACROS]:
+        if not isinstance(macro, dict):
+            continue
+        name = str(macro.get('name') or '').strip()
+        if not name:
+            continue
+        summary = str(macro.get('description') or '').strip()
+        shortcut = str(macro.get('shortcut') or macro.get('hotkey') or '')
+        if not summary:
+            summary = (_('the macro "{name}", with its own key in Titan: {key}')
+                       .format(name=name, key=shortcut) if shortcut
+                       else _('the macro "{name}"').format(name=name))
+        rows.append({
+            'addon': 'macros', 'label': _('Titan macros'),
+            'action': 'run_macro', 'key': name, 'summary': summary,
+            # The one parameter it would otherwise stop and ask for.
+            'arguments': {'name': name},
+            'risk': 'auto', 'params': [], 'needs_ai': False})
+    return rows
 
 
 # --------------------------------------------------------------------------- #
@@ -227,15 +296,25 @@ def _ask_each(questions, gathered, then):
 
 def run(row):
     """One action, with whatever it needs asked for. Never on the main thread."""
+    # What the ROW already answers. A macro's gesture is the macro add-on's
+    # own run action with that macro's name filled in, so the parameter that
+    # would otherwise be asked for is not missing at all - and asking "which
+    # macro?" after the user has pressed the key they bound to one macro is
+    # the whole point of binding it thrown away.
+    fixed = dict(row.get('arguments') or {})
+
     def go(arguments):
+        given = dict(fixed)
+        given.update(arguments or {})
+
         def work():
-            _run_and_answer(row, arguments, depth=0)
+            _run_and_answer(row, given, depth=0)
         threading.Thread(target=work, name='TitanAction', daemon=True).start()
 
     missing = [{'name': p['name'],
                 'prompt': p.get('description') or p['name'],
                 'options': p.get('enum') or p.get('options') or []}
-               for p in _needed(row)]
+               for p in _needed(row) if p['name'] not in fixed]
     _confirm(row, lambda: _ask_each(missing, {}, go))
 
 
@@ -283,11 +362,17 @@ def _run_and_answer(row, arguments, depth):
 def _build_script(row):
     """One NVDA script for one Titan action.
 
-    A plain function rather than a method: it is set on the plugin INSTANCE,
-    and Python binds only what it finds on the class, so NVDA calls this with
-    the gesture as its one argument.
+    **It goes on the plugin\'s CLASS, so it takes ``self``.** That is not a
+    style choice and it was the whole feature being broken: NVDA\'s Input
+    Gestures dialog does not list what ``dir(plugin)`` shows. Its
+    ``_AllGestureMappingsRetriever.addObj`` walks ``obj.__class__.__mro__``
+    and reads ``cls.__dict__`` - so a script set on the INSTANCE runs
+    perfectly once a gesture is bound to it and can never be FOUND to bind
+    one, which is every Titan action invisible in the one dialog this whole
+    module exists to put them in. Read out of the running NVDA\'s own
+    ``inputCore``, not guessed.
     """
-    def titan_action_script(_gesture):
+    def titan_action_script(_self, _gesture=None):
         if not LINK.connected():
             dialogs.report(_('Titan is not running.'))
             return
@@ -304,13 +389,29 @@ def _build_script(row):
     # group per add-on, so a user looking for "the notes" finds every one of
     # its actions together rather than two hundred rows under "Titan".
     titan_action_script.__doc__ = what
-    titan_action_script.__name__ = script_name(row['addon'], row['action'])
+    titan_action_script.__name__ = script_name(row['addon'], row['action'],
+                                               row.get('key', ''))
     titan_action_script.category = _('Titan: {label}').format(label=label)
     return titan_action_script
 
 
+def _host(plugin):
+    """Where a script has to live to be BINDABLE, not merely runnable.
+
+    NVDA finds a script to RUN with ``getattr(obj, 'script_<name>')``, which
+    an instance attribute answers - and it finds a script to OFFER in the
+    Input Gestures dialog by walking ``obj.__class__.__mro__`` and reading
+    each ``cls.__dict__``, which an instance attribute does not appear in at
+    all. Both have to be true, so the class is the only place that works.
+
+    A plugin handed in as an instance therefore contributes its class; a
+    class handed in directly (which is what a test does) is used as it is.
+    """
+    return plugin if isinstance(plugin, type) else type(plugin)
+
+
 def install(plugin, rows=None):
-    """Put a script on ``plugin`` for every action in the catalogue.
+    """Put a script on ``plugin``'s class for every action in the catalogue.
 
     Called again whenever the catalogue changes; anything that has gone is
     removed, so an add-on the user uninstalled does not leave a gesture that
@@ -318,26 +419,47 @@ def install(plugin, rows=None):
     """
     global _installed
     rows = load_catalogue() if rows is None else rows
+    host = _host(plugin)
     wanted = {}
     for row in rows[:MAX_SCRIPTS]:
         try:
-            wanted[attribute_name(row['addon'], row['action'])] = row
+            wanted[attribute_name(row['addon'], row['action'],
+                                  row.get('key', ''))] = row
         except Exception:                            # noqa: BLE001
             continue
     with _LOCK:
         for stale in _installed:
             if stale not in wanted:
+                # Only ever what this module put there: `_installed` is the
+                # record, and the add-on's own dozen scripts are written on
+                # the class by hand and must survive every sweep.
                 try:
-                    delattr(plugin, stale)
+                    delattr(host, stale)
                 except Exception:                    # noqa: BLE001
                     pass
         for name, row in wanted.items():
             try:
-                setattr(plugin, name, _build_script(row))
+                setattr(host, name, _build_script(row))
             except Exception:                        # noqa: BLE001
                 pass
         _installed = list(wanted)
     return len(wanted)
+
+
+def bindable(plugin):
+    """Every Titan action NVDA would really OFFER in Input Gestures.
+
+    Asked the way NVDA asks it - the class chain, each class's own
+    ``__dict__`` - because "the attribute is there" and "the dialog lists
+    it" turned out to be different questions, and only the second one is
+    what the user experiences.
+    """
+    found = set()
+    for cls in getattr(_host(plugin), '__mro__', ()):
+        for name in vars(cls):
+            if name.startswith('script_titan_'):
+                found.add(name)
+    return sorted(found)
 
 
 def refresh(plugin, on_done=None):
@@ -373,7 +495,16 @@ def _sweep(plugin, on_done=None):
     ok, data = LINK.bridge('addons.list')
     if not ok:
         return
+    # The same answer says which PROCESS each add-on is, which is how a
+    # window is recognised as a Titan application's. It costs no call of
+    # its own, and it is refreshed exactly when the catalogue is.
+    try:
+        from . import semantics
+        semantics.note_addons((data or {}).get('addons'))
+    except Exception:                                # noqa: BLE001
+        pass
     rows = catalogue_from_addons((data or {}).get('addons'))
+    rows += macro_rows()
     if not rows:
         return
     # The scripts exist as soon as the names are known: a summary is worth

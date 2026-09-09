@@ -449,10 +449,11 @@ def open_game(game_info):
 
         if file_type == 'exe':
             # Standalone executable
-            _run_executable(exec_file, game_path)
+            _note(_run_executable(exec_file, game_path), game_info)
         elif file_type in ['py', 'pyc', 'cython']:
             # Python files
-            _run_python_file(exec_file, game_path, file_type)
+            _note(_run_python_file(exec_file, game_path, file_type),
+                  game_info)
         else:
             print(f"Unsupported file type: {file_type}")
 
@@ -460,10 +461,26 @@ def open_game(game_info):
     game_thread.start()
 
 
+def _note(pid, game_info):
+    """Remember which process this game is.
+
+    The same registry the applications use, for the same reason and with
+    the same honesty about it: a caller looking at a window has no other
+    way to know it is a Titan game, and a pid is only answered while that
+    process is really alive.
+    """
+    try:
+        from src.titan_core.app_manager import note_process
+        return note_process(pid, game_info, kind='game')
+    except Exception:
+        return False
+
+
 def _run_executable(exec_file, cwd):
     """Run a standalone executable."""
     # Run executable normally - it's responsible for its own console/GUI behavior
-    subprocess.Popen([exec_file], cwd=cwd)
+    proc = subprocess.Popen([exec_file], cwd=cwd)
+    return getattr(proc, 'pid', 0) or 0
 
 
 def _run_python_file(exec_file, game_path, file_type):
@@ -534,7 +551,9 @@ def _run_python_file(exec_file, game_path, file_type):
             popen_kwargs['startupinfo'] = si
             popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
 
-        subprocess.Popen(command, cwd=game_path, env=env, **popen_kwargs)
+        proc = subprocess.Popen(command, cwd=game_path, env=env,
+                                **popen_kwargs)
+        return getattr(proc, 'pid', 0) or 0
     else:
         # Development mode - show console for debugging
         env['PYTHONPATH'] = os.pathsep.join(filter(None, [
@@ -556,4 +575,5 @@ def _run_python_file(exec_file, game_path, file_type):
             command = [python_executable, exec_file]
 
         # Show console window in development mode
-        subprocess.Popen(command, cwd=game_path, env=env)
+        proc = subprocess.Popen(command, cwd=game_path, env=env)
+        return getattr(proc, 'pid', 0) or 0

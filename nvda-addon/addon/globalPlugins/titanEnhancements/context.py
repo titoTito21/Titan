@@ -52,8 +52,23 @@ TEXT_LIMIT = 4000
 
 
 def _on_main(function, timeout=MAIN_THREAD_WAIT):
-    """Run ``function`` on NVDA's thread and bring back what it answered."""
+    """Run ``function`` on NVDA's thread and bring back what it answered.
+
+    **Called FROM that thread, it runs the function then and there.**
+    Queueing it would be a deadlock: the queue is drained by the very
+    thread that is now blocked waiting for the answer, so nothing runs, the
+    wait times out, and the caller is handed nothing at all. That is not
+    theoretical - it is what "there is no window to read" was. A gesture's
+    script runs on the main thread, `commands.watch_surface` asked this for
+    the window the user was in, and four seconds later it was told there
+    was no window.
+
+    Everything else here is unchanged: from a bus thread, or any worker,
+    the work still goes onto NVDA's thread and is waited for.
+    """
     if compat.queueHandler is None:
+        return function()
+    if threading.current_thread() is threading.main_thread():
         return function()
     done = threading.Event()
     box = [None, None]
@@ -271,26 +286,62 @@ def read(text=True, **_):
         return {'reader': 'nvda', 'available': False, 'why': str(error)}
 
 
-def window(**_):
-    """Just the window, for the callers that only want somewhere to point.
+def _root_of(hwnd):
+    """The top-level window a control belongs to.
 
-    AI OCR wants an HWND and nothing else, and asking for the whole context
-    to get one is a UIA walk nobody needed.
+    A focused control's own ``windowHandle`` is the CONTROL - a list, a
+    field - and AI OCR photographs the rectangle of whatever handle it is
+    given, so handing it that one would photograph the list instead of the
+    window the list is in. ``GA_ROOT`` is Windows' own answer to "which
+    window is this really part of".
+    """
+    try:
+        import ctypes
+        root = int(ctypes.windll.user32.GetAncestor(int(hwnd), 2))  # GA_ROOT
+        return root or int(hwnd)
+    except Exception:                                # noqa: BLE001
+        return int(hwnd or 0)
+
+
+def window(**_):
+    """The window the user is really in, for a caller that wants to point.
+
+    **The focus first, the foreground second, and the difference is the
+    whole reason this exists.** On a machine being read the two come apart
+    constantly - a menu is up, a tooltip has taken the foreground, the
+    reader has followed the user into a popup that is owned by something
+    else - and AI OCR is asked for in exactly those places, because they
+    are the windows that draw themselves and expose nothing. Reading "the
+    foreground" there photographs the window BEHIND what the user is
+    working in, which is a reading of the wrong thing that looks like a
+    reading of the right one.
+
+    Both are answered, so a caller that wants the other one has it.
     """
     def gather():
         api = compat.api
         if api is None:
             return {}
-        obj = None
+        focus = foreground = None
         try:
-            obj = api.getForegroundObject()
+            focus = api.getFocusObject()
         except Exception:                            # noqa: BLE001
-            return {}
-        described = describe(obj)
-        return {'hwnd': described.get('hwnd', 0),
-                'title': described.get('name', ''),
-                'app': described.get('app', ''),
-                'process': described.get('process', 0)}
+            focus = None
+        try:
+            foreground = api.getForegroundObject()
+        except Exception:                            # noqa: BLE001
+            foreground = None
+        described = describe(focus) if focus is not None else {}
+        front = describe(foreground) if foreground is not None else {}
+        hwnd = _root_of(described.get('hwnd', 0)) or front.get('hwnd', 0)
+        answer = {'hwnd': int(hwnd or 0),
+                  'title': front.get('name', '') or described.get('window', ''),
+                  'app': described.get('app', '') or front.get('app', ''),
+                  'process': described.get('process', 0)
+                  or front.get('process', 0),
+                  'foreground': int(front.get('hwnd', 0) or 0),
+                  'focus': int(described.get('hwnd', 0) or 0)}
+        return answer
     try:
         return _on_main(gather)
     except Exception:                                # noqa: BLE001

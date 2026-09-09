@@ -1,0 +1,48 @@
+=== after down === three_tones=182 replaced=20
+ heard:
+    94.61 'Makra, na pozycji 4'
+    94.31 'Makra, na pozycji 4'
+    93.13 'Pasek kart, zakładka, Makra, 4 z 6'
+    91.73 'Pasek kart, zakładka, Makra, 4 z 6'
+    81.67 'Pasek kart, zakładka, Makra, 4 z 6'
+ spoken:
+    15.6 nvda 'y'
+    14.48 nvda 'Pakiet aplikacji Titan'
+    14.48 addon 'Pakiet aplikacji Titan, okno'
+    14.47 nvda 'lista'
+    14.47 nvda 'testowe makro'
+    14.47 addon 'testowe makro, element listy, zaznaczony'
+    11.76 nvda 'Demonstracja glosu (licz do dziesieciu)'
+    11.76 addon 'Demonstracja glosu (licz do dziesieciu), element listy, zaznaczony'
+=== after home (tab bar row) === three_tones=182 replaced=21
+ heard:
+    95.52 'Makra, na pozycji 4'
+    94.34 'Pasek kart, zakładka, Makra, 4 z 6'
+    92.94 'Pasek kart, zakładka, Makra, 4 z 6'
+    82.88 'Pasek kart, zakładka, Makra, 4 z 6'
+    1.2 'Pasek kart, zakładka, Makra, 4 z 6'
+ spoken:
+    15.69 addon 'Pakiet aplikacji Titan, okno'
+    15.68 nvda 'lista'
+    15.68 nvda 'testowe makro'
+    15.68 addon 'testowe makro, element listy, zaznaczony'
+    12.97 nvda 'Demonstracja glosu (licz do dziesieciu)'
+    12.97 addon 'Demonstracja glosu (licz do dziesieciu), element listy, zaznaczony'
+    1.19 nvda 'Pasek kart, zakładka, Makra, 4 z 6'
+    1.19 nvda 'Makra, 4 z 6'
+=== after right (switch view) === three_tones=182 replaced=22
+ heard:
+    95.55 'Pasek kart, zakładka, Makra, 4 z 6'
+    94.15 'Pasek kart, zakładka, Makra, 4 z 6'
+    84.09 'Pasek kart, zakładka, Makra, 4 z 6'
+    2.41 'Pasek kart, zakładka, Makra, 4 z 6'
+    1.17 'Aplikacje Elten API, 5 z 6, zakładka'
+ spoken:
+    16.89 addon 'testowe makro, element listy, zaznaczony'
+    14.18 nvda 'Demonstracja glosu (licz do dziesieciu)'
+    14.18 addon 'Demonstracja glosu (licz do dziesieciu), element listy, zaznaczony'
+    2.4 nvda 'Pasek kart, zakładka, Makra, 4 z 6'
+    2.4 nvda 'Makra, 4 z 6'
+    1.13 nvda 'Aplikacje Elten API, 5 z 6, zakładka'
+    1.12 nvda 'lista'
+    1.12 nvda 'Aplikacje Elten API, 5 z 6'

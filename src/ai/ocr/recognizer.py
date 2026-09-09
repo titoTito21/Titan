@@ -111,10 +111,11 @@ def read_screen(scope: str = 'window', previous: Optional[model_mod.Screen] = No
         raise RecognitionError("The screen could not be captured.")
     if shot.blank:
         raise RecognitionError(
-            "The capture came back empty. This usually means the program is "
-            "running in exclusive full-screen mode, which cannot be "
-            "photographed. Switch it to windowed or borderless mode and try "
-            "again.")
+            "The capture came back empty. Copying the desktop and asking "
+            "the compositor for a frame both produced nothing, which "
+            "usually means the display is protected (a video with digital "
+            "rights management, or a secure prompt) rather than merely "
+            "full-screen.")
 
     if previous is not None and previous.capture is not None and not question:
         if shot.looks_like(previous.capture):

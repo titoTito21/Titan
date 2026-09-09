@@ -27,6 +27,16 @@ import threading
 _last = {'screen': None, 'hwnd': 0}
 _lock = threading.Lock()
 
+#: One reading at a time. Until `ocr.read_window` declared `needs_gui: false`
+#: this was true by accident - every in-process action was marshalled onto the
+#: GUI thread, so two callers could not overlap. Now that a reading runs where
+#: the caller is, two of them can: a screen reader watching a window and the
+#: assistant being asked what is on it, both taking a picture of the same
+#: screen and both spending a request to answer one question. Waiting is right
+#: rather than dropping - the caller asked, and the second reading is a moment
+#: away.
+_reading = threading.Lock()
+
 
 def _remember(screen):
     with _lock:
@@ -109,15 +119,16 @@ def ocr_read_window(scope="window", question="", hwnd=0, **_):
             return reason
     except Exception:
         pass
-    with _lock:
-        previous = _last['screen']
-    try:
-        screen = recognizer.read_screen(
-            scope=scope or 'window', previous=previous,
-            question=question or '', hwnd=_window_asked_for(hwnd))
-    except Exception as e:
-        return f"Could not read the screen: {e}"
-    _remember(screen)
+    with _reading:
+        with _lock:
+            previous = _last['screen']
+        try:
+            screen = recognizer.read_screen(
+                scope=scope or 'window', previous=previous,
+                question=question or '', hwnd=_window_asked_for(hwnd))
+        except Exception as e:
+            return f"Could not read the screen: {e}"
+        _remember(screen)
     lines = model_mod.elements_as_lines(screen)
     if screen.warnings:
         lines.append('')
@@ -228,6 +239,94 @@ def ocr_show_overlay(**_):
             "user can Tab through. Escape removes it.")
 
 
+# --------------------------------------------------------------------------- #
+# Keeping it there
+# --------------------------------------------------------------------------- #
+# The overlay is the honest end of this feature: a window that told a screen
+# reader nothing becomes real, native controls, in the real window, at the real
+# coordinates - which is what a reader was already able to read, and what an
+# app module written by hand would have produced. Everything below is so that
+# something OUTSIDE Titan can keep it true: put it up, ask it to look again
+# when the screen has become something else, ask what it is showing, take it
+# away. Without those, an overlay could be raised and never maintained, which
+# for a menu that moves is a set of controls that is right once.
+def _overlay_now():
+    """The open overlay, or (None, sentence)."""
+    try:
+        from src.ai.ocr import overlay
+    except Exception as e:
+        return None, f"The AI OCR overlay is not available: {e}"
+    try:
+        current = overlay.get_overlay()
+    except Exception as e:
+        return None, f"The AI OCR overlay is not available: {e}"
+    if current is None:
+        return None, ("There is no overlay on the screen. Put one up with "
+                      "ocr_show_overlay first.")
+    return current, ''
+
+
+def ocr_refresh_overlay(**_):
+    """Look at the window again and rebuild the overlay if it has changed.
+
+    This is what a WATCHER calls, and it is deliberately not the same as the
+    user pressing F5. F5 means "read it again, really"; this means "tell me
+    when it has become something else", so the recogniser is allowed to answer
+    from its last reading when the picture is the same - which is what makes
+    watching a window affordable - and an unchanged screen rebuilds nothing
+    and moves nobody's keyboard.
+
+    It also has to be the OVERLAY that reads rather than ocr_read_window: only
+    the overlay knows to make itself invisible while the picture is taken, and
+    a reading of a window with our own controls sitting on it is a reading of
+    our own controls.
+    """
+    from src.titan_core.actions.inproc import run_on_gui
+    current, error = _overlay_now()
+    if error:
+        return error
+    value, failure = run_on_gui(
+        lambda: current.rescan(quiet=True, only_if_changed=True))
+    if failure:
+        return f"Could not read the window again: {failure}"
+    # The reading itself runs on the overlay's own worker, so this says what
+    # was started rather than what was found - the controls change under the
+    # user, which is the point.
+    return "Looking at the window again; the controls will follow it."
+
+
+def ocr_overlay_status(**_):
+    """What the overlay is showing, and on which window."""
+    current, error = _overlay_now()
+    if error:
+        return error
+    try:
+        title = str(getattr(current, 'target_title', '') or '')
+        count = len(getattr(current, 'surfaces', []) or [])
+        elements = len(getattr(getattr(current, 'screen', None), 'elements',
+                               []) or [])
+        hidden = bool(getattr(current, 'hidden', False))
+    except Exception as e:
+        return f"Could not read the overlay: {e}"
+    where = f" on '{title}'" if title else ''
+    state = ' It is put away at the moment.' if hidden else ''
+    return (f"An overlay{where}: {elements} controls across {count} "
+            f"surfaces.{state}")
+
+
+def ocr_close_overlay(**_):
+    """Take the overlay off the window."""
+    from src.titan_core.actions.inproc import run_on_gui
+    try:
+        from src.ai.ocr import overlay
+    except Exception as e:
+        return f"The AI OCR overlay is not available: {e}"
+    if overlay.get_overlay() is None:
+        return "There is no overlay on the screen."
+    run_on_gui(overlay.close_overlay)
+    return "The overlay is off the window."
+
+
 def get_ocr_tools():
     from src.ai.agent_tools import _tool
     S = {'type': 'string'}
@@ -237,7 +336,7 @@ def get_ocr_tools():
               "installer, an app that exposes nothing. Takes a picture and "
               "returns its controls and text as structured lines. Use this "
               "when read_focused_window or list_elements comes back empty or "
-              "useless.", ocr_read_window, risk='confirm',
+              "useless.", ocr_read_window, risk='confirm', needs_gui=False,
               properties={'scope': dict(S, description="'window' (default) or 'screen'."),
                           'question': dict(S, description="Optional: what to look for."),
                           'hwnd': dict(S, description="Optional: the window to "
@@ -248,7 +347,7 @@ def get_ocr_tools():
         _tool('ocr_ask',
               "Ask one question about what is on the screen right now ('is "
               "there a Skip button?', 'what does the error say?'). Reads the "
-              "screen with that question in mind.", ocr_ask, risk='confirm',
+              "screen with that question in mind.", ocr_ask, risk='confirm', needs_gui=False,
               properties={'question': dict(S, description="The question."),
                           'scope': dict(S, description="'window' (default) or 'screen'."),
                           'hwnd': dict(S, description="Optional: the window to "
@@ -257,7 +356,7 @@ def get_ocr_tools():
               required=['question']),
         _tool('ocr_last_reading',
               "The last AI OCR reading again, without reading the screen "
-              "afresh.", ocr_last_reading),
+              "afresh.", ocr_last_reading, needs_gui=False),
         _tool('ocr_press',
               "Press a control AI OCR has read, by its name.", ocr_press,
               risk='confirm',
@@ -283,4 +382,15 @@ def get_ocr_tools():
               "window as real accessible controls they can Tab through. Use "
               "this when the user should take over.", ocr_show_overlay,
               risk='confirm'),
+        _tool('ocr_refresh_overlay',
+              "Look at the window under the overlay again and rebuild its "
+              "controls if it has become something else. Costs nothing when "
+              "the screen has not changed, so it is what to call repeatedly "
+              "while watching a window.", ocr_refresh_overlay),
+        _tool('ocr_overlay_status',
+              "Whether there is an overlay on a window, on which one, and how "
+              "many controls it is showing.", ocr_overlay_status,
+              needs_gui=False),
+        _tool('ocr_close_overlay',
+              "Take the overlay off the window.", ocr_close_overlay),
     ]

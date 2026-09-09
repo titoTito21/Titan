@@ -39,6 +39,12 @@ NAME_PITCH = 0
 ROLE_PITCH = -4
 STATE_PITCH = 4
 
+#: What is read when the table cannot be asked - outside NVDA, or before
+#: the store has been opened. The order this add-on has always used, which
+#: is Titan Access's own and NVDA's: the name, then what it is, then its
+#: state.
+PARTS_FALLBACK = ('name', 'kind', 'state', 'value', 'description', 'place')
+
 #: The states Titan Access says, in the order it says them. Names as NVDA's
 #: `controlTypes.State` spells them; anything this NVDA has not got is
 #: skipped rather than being an error, because the set moves between
@@ -90,6 +96,17 @@ def _name_of(obj):
     if value and value != name:
         return f'{name}, {value}' if name else value
     return name
+
+
+def _unavailable(obj):
+    """Whether this control is there and cannot be used."""
+    state = _state('UNAVAILABLE')
+    if state is None:
+        return False
+    try:
+        return state in (obj.states or ())
+    except Exception:                                # noqa: BLE001
+        return False
 
 
 def _states_of(obj):
@@ -160,26 +177,115 @@ def describe(obj):
     """
     if obj is None:
         return []
+    # Which Titan add-on's window this is, if any - worked out once and used
+    # twice, because asking it is a lookup and an unbound name here would
+    # silently cost the status-bar wording below.
+    _application = None
     try:
-        segments = []
-        name = _name_of(obj)
-        if name:
-            segments.append((name, NAME_PITCH))
-        role = context.role_name(getattr(obj, 'role', None))
-        if role:
-            segments.append((role, ROLE_PITCH))
-        for state in _states_of(obj):
-            segments.append((state, STATE_PITCH))
+        # **What a Titan application says its own row is.** A row of the
+        # file manager's list is a file or a folder, with a date and a
+        # type beside it, and NVDA reading it as "list item" throws all of
+        # that away. The application knows; Titan knows which process the
+        # application is; so this is asked before anything is guessed.
+        from . import semantics
+        known, _application = semantics.describe(obj)
+        if known:
+            return known
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        # **Every part is worked out, and the ORDER is the user's.**
+        #
+        # "Checked, check box" and "check box, checked" are the same three
+        # facts in two orders, and which is right is a matter of what
+        # somebody is used to - JAWS, NVDA, Window-Eyes and Titan Access do
+        # not agree, and neither do two users of any one of them. So this
+        # builds a part at a time into a table and `classes.parts_read()`
+        # says which of them are wanted and in what order. A part that is
+        # switched off is not built at all, so an unwanted one costs
+        # nothing rather than being made and thrown away.
+        made = {}
+
+        def part(name, build):
+            if name in wanted and name not in made:
+                try:
+                    made[name] = build() or []
+                except Exception:                    # noqa: BLE001
+                    made[name] = []
+
         try:
-            description = str(obj.description or '').strip()
+            from . import classes
+            wanted = classes.parts_read()
         except Exception:                            # noqa: BLE001
-            description = ''
-        if description and description != name:
-            segments.append((description, NAME_PITCH))
-        for extra in _position_of(obj):
-            segments.append((extra, NAME_PITCH))
-        if not segments and role:
-            segments.append((role, NAME_PITCH))
+            wanted = list(PARTS_FALLBACK)
+
+        name = _name_of(obj)
+
+        def _the_name():
+            # Emacspeak's own case, and the clearest one for saying a class
+            # with the VOICE: a control that cannot be used is heard as
+            # unusable before the word arrives, and in a menu of twenty
+            # items that is twenty times the word is not needed.
+            return [(name, 'disabled' if _unavailable(obj) else NAME_PITCH)] \
+                if name else []
+
+        def _the_kind():
+            role = context.role_name(getattr(obj, 'role', None))
+            try:
+                # **What TITAN calls this control**, where Titan calls it
+                # something NVDA's role name cannot know - a slot of the
+                # status bar arrives as a list item, because that is what
+                # Titan's status bar is built out of. Titan Access has
+                # always said "status bar item" there, and a user moving
+                # between the two readers must not have to learn two
+                # vocabularies for one desktop.
+                from . import tce
+                role = tce.role_word(obj, _application, role)
+            except Exception:                        # noqa: BLE001
+                pass
+            return [(role, ROLE_PITCH)] if role else []
+
+        def _the_state():
+            return [(state, STATE_PITCH) for state in _states_of(obj)]
+
+        def _the_value():
+            try:
+                value = str(obj.value or '').strip()
+            except Exception:                        # noqa: BLE001
+                return []
+            # NVDA folds a control's value into what it reads as the name
+            # for some controls, and saying it twice is worse than not
+            # saying it at all.
+            return [(value, NAME_PITCH)] if value and value != name else []
+
+        def _the_description():
+            try:
+                described = str(obj.description or '').strip()
+            except Exception:                        # noqa: BLE001
+                return []
+            return [(described, NAME_PITCH)] if described and \
+                described != name else []
+
+        def _the_place():
+            return [(extra, 'place') for extra in _position_of(obj)]
+
+        part('name', _the_name)
+        part('kind', _the_kind)
+        part('state', _the_state)
+        part('value', _the_value)
+        part('description', _the_description)
+        part('place', _the_place)
+
+        segments = []
+        for chosen in wanted:
+            segments.extend(made.get(chosen) or [])
+        if not segments:
+            # Something has to be said. A control with no name, and whose
+            # every other part the user has switched off, would otherwise
+            # be read as silence - which is a reader that has stopped
+            # working, not a reader obeying a preference.
+            segments = made.get('kind') or _the_kind()
+            segments = [(text, NAME_PITCH) for text, _pitch in segments]
         return segments
     except Exception:                                # noqa: BLE001
         return []
@@ -202,18 +308,15 @@ def sequence(segments):
     """
     if not segments:
         return []
-    from . import prosody
-    if not can_pitch():
-        return [', '.join(text for text, _pitch in segments)]
-    out = []
-    for index, (text, pitch) in enumerate(segments):
-        out.append(compat.PitchCommand(offset=prosody._offset(pitch)))
-        # NVDA puts a space between the parts of a sequence itself, so the
-        # separator is a bare comma - "text, " gives ",  " and a reader that
-        # announces punctuation says the gap.
-        out.append(text if index == len(segments) - 1 else text + ',')
-    out.append(compat.PitchCommand(offset=0))
-    return out
+    from . import voices
+    if not can_pitch() and not voices.can_hear_the_difference():
+        return [', '.join(str(text) for text, _voice in segments)]
+    # One builder for every part of this add-on that speaks. A segment
+    # carries either a bare pitch (Titan's own -10..10, which is what
+    # arrives over the wire) or the NAME of a semantic class - a folder, a
+    # detail, a disabled control - which is a whole voice rather than one
+    # dial. `voices.voice_of` reads both, so nothing had to be respelled.
+    return voices.sequence(segments)
 
 
 def can_pitch():

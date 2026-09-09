@@ -237,10 +237,12 @@ def open_application(app_info, file_path=None):
             if file_type == 'exe':
                 # Standalone executable - run directly
                 console = app_info.get('console', 'false').lower() == 'true'
-                _run_executable(exec_file, app_path, console=console)
+                note_process(_run_executable(exec_file, app_path,
+                                             console=console), app_info)
             elif file_type in ['py', 'pyc', 'cython']:
                 # Python files - run with python interpreter
-                _run_python_file(exec_file, app_path, file_type, file_path)
+                note_process(_run_python_file(exec_file, app_path, file_type,
+                                              file_path), app_info)
             else:
                 play_error_sound()
                 wx.CallAfter(wx.MessageBox, _('Unsupported file type: {}').format(file_type), _("Error"), wx.OK | wx.ICON_ERROR)
@@ -255,8 +257,97 @@ def open_application(app_info, file_path=None):
     app_thread.start()
 
 
+# --------------------------------------------------------------------------- #
+# Which process is which application
+#
+# **A TCE application runs in a subprocess of its own, and until now nothing
+# wrote down which.** From the outside every one of them is an unremarkable
+# wxPython window - the same class, the same roles - so anything looking at
+# a window from another program (a screen reader is the obvious one, and the
+# reason this exists) had no way to tell tNotes from any other program on
+# the machine, and therefore no way to know what a row of its list MEANS.
+#
+# The Action Bus already answers this for the five applications that join it;
+# these are the rest - the ones with no actions of their own, the games, an
+# application somebody wrote yesterday - and they are the ones that need it
+# most, because nothing else knows about them at all.
+#
+# It is only ever a hint: a pid is reused by Windows the moment a process
+# ends, so an entry is answered only while that process is really alive.
+# --------------------------------------------------------------------------- #
+_LAUNCHED = {}                    # pid -> {'id', 'label', 'path', 'kind'}
+_LAUNCHED_LOCK = threading.RLock()
+
+
+def note_process(pid, app_info, kind='app'):
+    """Remember that this process is that application. Never raises."""
+    try:
+        pid = int(pid or 0)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0 or not isinstance(app_info, dict):
+        return False
+    path = str(app_info.get('path') or '')
+    identity = str(app_info.get('shortname') or
+                   os.path.basename(path.rstrip('\\/')) or '')
+    label = str(app_info.get('name') or app_info.get('name_en') or
+                app_info.get('name_pl') or identity)
+    with _LAUNCHED_LOCK:
+        _LAUNCHED[pid] = {'id': identity, 'label': label, 'path': path,
+                          'kind': kind}
+    return True
+
+
+def _alive(pid):
+    """Whether that process is still there.
+
+    Asked rather than assumed, because a pid is reused: answering a dead
+    one would tell a caller that somebody else's window is this
+    application's, which is worse than answering nothing.
+    """
+    if sys.platform != 'win32':
+        try:
+            os.kill(pid, 0)
+            return True
+        except Exception:
+            return False
+    try:
+        import ctypes
+        SYNCHRONIZE = 0x00100000
+        handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+        if not handle:
+            return False
+        # WAIT_TIMEOUT (258) means it is still running; 0 means it has ended
+        # and the handle is signalled.
+        still = ctypes.windll.kernel32.WaitForSingleObject(handle, 0) != 0
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return bool(still)
+    except Exception:
+        return False
+
+
+def launched_processes():
+    """[{pid, id, label, path, kind}, ...] for the ones still running."""
+    with _LAUNCHED_LOCK:
+        known = dict(_LAUNCHED)
+    out = []
+    gone = []
+    for pid, info in known.items():
+        if _alive(pid):
+            entry = dict(info)
+            entry['pid'] = pid
+            out.append(entry)
+        else:
+            gone.append(pid)
+    if gone:
+        with _LAUNCHED_LOCK:
+            for pid in gone:
+                _LAUNCHED.pop(pid, None)
+    return out
+
+
 def _run_executable(exec_file, cwd, console=False):
-    """Run a standalone executable."""
+    """Run a standalone executable. Answers its pid, or 0."""
     startupinfo = None
     creationflags = 0
 
@@ -266,7 +357,9 @@ def _run_executable(exec_file, cwd, console=False):
         startupinfo.wShowWindow = subprocess.SW_HIDE
         creationflags = subprocess.CREATE_NO_WINDOW
 
-    subprocess.Popen([exec_file], cwd=cwd, startupinfo=startupinfo, creationflags=creationflags)
+    proc = subprocess.Popen([exec_file], cwd=cwd, startupinfo=startupinfo,
+                            creationflags=creationflags)
+    return getattr(proc, 'pid', 0) or 0
 
 
 def _run_python_file(exec_file, app_path, file_type, file_path=None):
@@ -358,10 +451,12 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
             popen_kwargs['startupinfo'] = si
             popen_kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
 
+        started = 0
         try:
             proc = subprocess.Popen(command, cwd=app_path, env=env,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    **popen_kwargs)
+            started = getattr(proc, 'pid', 0) or 0
             # Don't wait, but log if there's immediate error
             import threading
             def log_output():
@@ -379,6 +474,7 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
             threading.Thread(target=log_output, daemon=True).start()
         except Exception as e:
             _debug_log(f"ERROR starting process: {e}")
+        return started
     else:
         # Development mode - run normally with visible console for debugging
         env['PYTHONPATH'] = os.pathsep.join(filter(None, [
@@ -408,4 +504,5 @@ def _run_python_file(exec_file, app_path, file_type, file_path=None):
                 command.append(file_path)
 
         # In development mode, show console window so we can see errors
-        subprocess.Popen(command, cwd=app_path, env=env)
+        proc = subprocess.Popen(command, cwd=app_path, env=env)
+        return getattr(proc, 'pid', 0) or 0

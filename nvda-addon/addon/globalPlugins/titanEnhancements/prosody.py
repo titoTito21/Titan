@@ -162,8 +162,20 @@ def build(announcement, synth=None, allow_pan=True, allow_marker=True,
         sequence.append(compat.CharacterModeCommand(True))
 
     # ------------------------------------------------------------ position
+    # **How a place is carried is the user's answer, not this module's.**
+    # Panning is exact where a synthesizer feeds a stereo stream and is
+    # NVDA's whole audio session everywhere else - put back on a timer, so a
+    # long line snaps back inside itself, which is the cutting a user hears.
+    # A pitch belongs to the utterance. See `panner.position_way`.
     placed = False
-    if allow_pan and abs(position) > 1e-6 and compat.CallbackCommand is not None:
+    if allow_pan and abs(position) > 1e-6 and panner.may_pitch() \
+            and _supported(synth, compat.PitchCommand):
+        tone = panner.pitch_for_position(position)
+        if tone:
+            sequence.append(compat.PitchCommand(offset=int(round(tone * SCALE))))
+            placed = True
+    if allow_pan and abs(position) > 1e-6 and panner.may_pan() \
+            and compat.CallbackCommand is not None:
         # The callback is what makes the timing right, and it is also what
         # makes the restore certain: it is queued in the same sequence, so a
         # sequence that is spoken at all always ends with the pan undone.
@@ -213,6 +225,101 @@ def build(announcement, synth=None, allow_pan=True, allow_marker=True,
 def _can_pan_now(synth):
     """Whether the voice itself can be moved, right now, by either layer."""
     return panner.PANNER.can_place()
+
+
+def pitch_sequence(sequence, offset, synth=None):
+    """The whole utterance a little higher or lower, and back afterwards.
+
+    A ROW is not placed left and right - it is placed up and down. Where a
+    control is on the screen says something about the control; where a row
+    is on the screen says the same thing about every row in the list, which
+    is nothing, and what the reader actually wants to know is how far down
+    the list it is. Titan Access has always said that with the tone of the
+    row's cue; this is the same thing said with the voice.
+    """
+    sequence = list(sequence or [])
+    if not sequence or compat.PitchCommand is None:
+        return sequence
+    try:
+        offset = float(offset or 0)
+    except (TypeError, ValueError):
+        return sequence
+    if abs(offset) < 0.5:
+        return sequence
+    if synth is None:
+        synth = panner.current_synth()
+    if not _supported(synth, compat.PitchCommand):
+        return sequence
+    # The tone is put back at the end for the same reason the pan is: an
+    # utterance that changed a setting and did not restore it leaves the
+    # reader speaking that way for everything after it.
+    return ([compat.PitchCommand(offset=_offset(offset))] + sequence
+            + [compat.PitchCommand(offset=0)])
+
+
+def place_sequence(sequence, position, synth=None, allow_pan=True,
+                   allow_marker=True):
+    """Wrap an already-built sequence so it is SPOKEN from ``position``.
+
+    The same two commands ``build`` uses, offered on their own because the
+    add-on speaks in two places and only one of them was placed: an
+    announcement Titan sent, and a control this add-on reads itself in
+    Titan Access's three tones. The second is most of what a user of Titan
+    actually hears, and it went out dead centre however carefully
+    positioned speech was switched on - which is "positioning does not
+    work", exactly as reported.
+
+    The pan is applied by a ``CallbackCommand`` inside the sequence rather
+    than before it is queued, so it stands while THIS fragment is audible
+    and is undone by a second callback at the end - which is also what
+    makes the restore certain, since a sequence that is spoken at all ends
+    with it.
+
+    Returns (sequence, notes).
+    """
+    notes = []
+    sequence = list(sequence or [])
+    if not sequence:
+        return sequence, notes
+    try:
+        position = float(position)
+    except (TypeError, ValueError):
+        return sequence, notes
+    if abs(position) <= 1e-6:
+        return sequence, notes
+    if synth is None:
+        synth = panner.current_synth()
+
+    # The user's answer about HOW a place is carried applies here too. In
+    # pitch mode this is not a fallback for a machine that cannot pan - it
+    # is what was asked for, so it is tried FIRST and the pan is not tried
+    # at all.
+    if panner.may_pitch() and _supported(synth, compat.PitchCommand):
+        tone = panner.pitch_for_position(position)
+        if tone:
+            sequence = pitch_sequence(sequence, tone, synth=synth)
+            if not panner.may_pan():
+                return sequence, notes
+
+    if allow_pan and panner.may_pan() and compat.CallbackCommand is not None \
+            and _can_pan_now(synth):
+        def _place(_position=position):
+            panner.PANNER.place(_position)
+
+        def _restore():
+            panner.PANNER.restore()
+        sequence.insert(0, compat.CallbackCommand(_place, name='titanPan'))
+        sequence.append(compat.CallbackCommand(_restore, name='titanUnpan'))
+        return sequence, notes
+
+    if allow_marker:
+        marker = position_marker(position)
+        if marker is not None:
+            sequence.insert(0, marker)
+            notes.append(panner.last_problem()
+                         or 'the position is carried by a tone rather than '
+                            'by the voice')
+    return sequence, notes
 
 
 def position_marker(position, hz=MARKER_HZ, milliseconds=MARKER_MS):

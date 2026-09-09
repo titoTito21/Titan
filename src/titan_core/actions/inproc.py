@@ -16,8 +16,14 @@ The owner is found in the order that respects what the add-on author wrote:
 3. a module-level ``TITAN_ACTIONS`` list, which lets a component declare
    actions in Python with real callables and no JSON at all.
 
-The thread is always Titan's GUI thread: an action may open a window, and wx is
-not thread-safe.
+The thread is Titan's GUI thread, because an action may open a window and wx is
+not thread-safe - unless the action has declared ``needs_gui: false``, which is
+a promise that its handler touches no wx at all. That exception exists for one
+shape of action: the ones that take SECONDS. Marshalled onto the GUI thread,
+such a handler stops Titan's message loop for its whole duration, and Windows
+paints "Titan is not responding" over a program that is working perfectly -
+which is what a screen reader watching a window with AI OCR did, once every
+poll, for as long as it watched.
 """
 
 import importlib.util
@@ -250,6 +256,21 @@ def actions_from_module(module, addon):
     return actions
 
 
+def run_here(func):
+    """Run ``func`` on the calling thread, in :func:`run_on_gui`'s shape.
+
+    For an action that has declared it needs no GUI thread. What it buys is
+    not speed: it is that Titan's message loop keeps running while the handler
+    works, which for a handler that takes seconds is the difference between
+    Titan thinking and Windows painting "Titan is not responding" over a
+    program that is working perfectly.
+    """
+    try:
+        return func(), None
+    except Exception as e:                   # noqa: BLE001 - relayed below
+        return None, f"{type(e).__name__}: {e}"
+
+
 def call(addon, action, args):
     """Run an in-process action. Returns (ok, text)."""
     handler = resolve_callable(addon, action)
@@ -257,7 +278,12 @@ def call(addon, action, args):
         return False, (f"'{addon.label}' declares the action '{action.name}' "
                        f"but no handler for it could be found. The add-on may "
                        f"not be loaded, or its entry module is missing.")
-    value, error = run_on_gui(lambda: handler(**args))
+    # The GUI thread unless the action has said otherwise. Reading the screen
+    # with a vision request is what made that necessary: it touches no wx, it
+    # takes seconds, and a watcher polling it held Titan's message loop for
+    # the whole of every poll.
+    on_gui = getattr(action, 'needs_gui', True)
+    value, error = (run_on_gui if on_gui else run_here)(lambda: handler(**args))
     if error:
         return False, error
     return True, value

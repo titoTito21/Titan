@@ -17,7 +17,28 @@ SPEC = {
     'announcements': 'boolean(default=True)',
     'replaceFocus': 'boolean(default=True)',
     'position': 'boolean(default=True)',
+    # HOW a place is carried. Panning is exact where a synthesizer feeds a
+    # stereo WavePlayer and is NVDA's whole audio session everywhere else -
+    # including on eSpeak, its own default and a mono synthesizer - and a
+    # session is not an utterance: it is put back on a timer, so a long line
+    # snaps back in the middle of itself and a restore lands inside the next
+    # one. Reported, correctly, as "it is not smooth, it cuts sometimes".
+    # A pitch belongs to the utterance it is in and every synthesizer that
+    # declares it takes it, so that is the default; panning is still here
+    # for a machine where it really works.
+    'positionAs': "option('pitch', 'pan', 'both', default='pitch')",
+    # Where a control IS, applied to the voice that reads it. Titan sends a
+    # position for the few things whose place it knows and 0 for every
+    # ordinary control, so a panner fed only by Titan's announcements had
+    # nothing to place - "positioned speech is on and nothing moves". The
+    # screen knows where every control is, and NVDA is the thing looking at
+    # the screen; this switch is what applies it inside Titan's windows.
     'positionMarker': 'boolean(default=True)',
+    # The same, for NVDA's own report of every control on the whole
+    # machine. Off by default: it changes how everything the user focuses
+    # anywhere is spoken, which is not a decision to make for somebody -
+    # the same reasoning as the cursor sounds below.
+    'positionEverywhere': 'boolean(default=False)',
     'prosody': 'boolean(default=True)',
     'braille': 'boolean(default=True)',
     'standDownForTitanAccess': 'boolean(default=True)',
@@ -36,6 +57,69 @@ SPEC = {
     # Titan's own windows - outside them NVDA is the reader and knows far
     # more about what it is looking at than this does.
     'pitchedFocus': 'boolean(default=True)',
+    # The same three-tone reading as inside Titan, for EVERY control on
+    # the machine - the name, the control type a little lower, the state a
+    # little higher. Off by default and deliberately so: outside Titan,
+    # NVDA is the reader and knows about tables, landmarks and browse mode,
+    # and standing in for it everywhere to gain three tones is a trade
+    # nobody should make on somebody's behalf. It is here because it is
+    # theirs to make.
+    'pitchedEverywhere': 'boolean(default=False)',
+    # What a control MEANS inside a Titan application - a row of the file
+    # manager's list read as a file or a folder with its own columns,
+    # rather than as "list item 3". This is what a screen reader's app
+    # module buys anywhere else, and Titan is a whole desktop of
+    # applications nobody had written one for.
+    'appSemantics': 'boolean(default=True)',
+    # The same semantics for the rest of Windows: a place NVDA entered in
+    # silence, and a row of any report-mode list read with the columns
+    # beside its name. What a sighted person reads off the layout before a
+    # word arrives, and what nothing on this machine was in a position to
+    # say.
+    #
+    # **It was off, and it is on.** Off was the right answer while this
+    # layer announced the part of the window on every control - which is
+    # the bug a user reported as "dialog OK button, dialog Cancel button".
+    # It no longer announces anything NVDA has already said (see
+    # `ancestry`), so what is left is additions and nothing else: on an
+    # ordinary dialog it now says nothing at all.
+    'windowsSemantics': 'boolean(default=True)',
+    # The reader modules - what an app module buys anywhere else, as data.
+    'readerModules': 'boolean(default=True)',
+    # The kind of a dialog - question, warning, error - anywhere on
+    # Windows, read off the dialog's own icon or the answers it will take.
+    # Titan has always said this for its own dialogs; this is the rest of
+    # the machine, and it needs neither Titan nor Titan Access.
+    'dialogKinds': 'boolean(default=True)',
+    # What a picture IS: an icon, a picture, an animation - instead of the
+    # one word "graphic" for all three.
+    'graphicKinds': 'boolean(default=True)',
+    # Reading an unnamed control with AI, once, and remembering what it
+    # said as its label. OFF: it sends a picture of part of the user's
+    # screen to their AI provider, which is not something to switch on for
+    # somebody.
+    'autoLabel': 'boolean(default=False)',
+    # Something that changed while the focus was somewhere else - a status
+    # bar, a progress, anything a reader module or Titan declares live.
+    'liveRegions': 'boolean(default=True)',
+    # The generic floor under it: the status bar of the window in front.
+    'liveStatusBars': 'boolean(default=True)',
+    # A window that draws its own interface and exposes none of it - a
+    # Unity game's menu - read as a picture, and watched so the highlight
+    # moving is announced. OFF, and for the same reason as autoLabel.
+    'surfaceReading': 'boolean(default=False)',
+    # The hourglass, and a window whose taskbar button is flashing. Two
+    # things a sighted person gets without looking at anything, and that no
+    # reader says.
+    'busyState': 'boolean(default=True)',
+    'attentionState': 'boolean(default=True)',
+    # Said when the keyboard leaves a menu. Every reader announces opening
+    # one; none of them announces closing one.
+    'menuLeaving': 'boolean(default=True)',
+    # A laptop's touchpad driving NVDA's own touch gestures. OFF: it reads
+    # every contact on the pad, and a user who has not asked for gestures
+    # should not have them.
+    'trackpad': 'boolean(default=False)',
     # Titan's own cursor cues on every focus change, everywhere EXCEPT
     # Titan's own windows (which already play their own). Off by default: it
     # changes what the whole machine sounds like, which is not a decision to
@@ -59,29 +143,114 @@ def apply(section=None):
     if not values.get('standDownForTitanAccess', True):
         focus.stand_down(False)
     return values
+#: A setting that is not a yes or a no. Everything here was a switch until
+#: one question turned out to have three answers, and the two places that
+#: read the file forced `bool()` on every value - which would have turned
+#: 'pitch' into True and then written True back over the user's answer. A
+#: spec that is an `option(...)` is read and written as the word it is.
+def _is_choice(spec):
+    return str(spec).strip().startswith('option(')
+
+
+def _choices(spec):
+    """The words an option spec allows, in the order it lists them."""
+    import re
+    inside = str(spec)[len('option('):].rstrip(') ')
+    return [word.strip().strip("'\"")
+            for word in re.split(r",(?![^()]*\))", inside)
+            if word.strip() and not word.strip().startswith('default')]
+
+
+def choices(name):
+    """What a setting may be, or [] when it is an ordinary switch."""
+    spec = SPEC.get(name, '')
+    return _choices(spec) if _is_choice(spec) else []
+
+
+def _default_of(spec):
+    if _is_choice(spec):
+        import re
+        found = re.search(r"default=['\"]([^'\"]*)['\"]", str(spec))
+        allowed = _choices(spec)
+        return found.group(1) if found else (allowed[0] if allowed else '')
+    return str(spec).endswith('default=True)')
+
+
+def defaults():
+    return {name: _default_of(spec) for name, spec in SPEC.items()}
+    return {name: spec.endswith('default=True)')
+            for name, spec in SPEC.items()}
+
+
+#: The answers, and how long they may be believed.
+#:
+#: `read()` is on the FOCUS path - three times per focus event, between the
+#: replace switch, the pitched-reading switch and the cursor sounds - and
+#: it used to build a fresh dictionary out of NVDA's configuration each
+#: time. Titan learned this about its own settings and wrote it down:
+#: reading a file (or a validating ConfigObj) once per paint is invisible
+#: in a settings dialog and ruinous on a path that runs whenever the user
+#: presses an arrow key. The answers are the user's and change only when
+#: they change them, so they are kept and thrown away by `write()`.
+_CACHE = {'values': None, 'at': 0.0}
+
+#: Short enough that a change made in NVDA's settings by any other route
+#: than `write` is picked up while the user is still listening for it.
+CACHE_SECONDS = 2.0
+
+
+def forget():
+    """Throw the kept answers away - the next read asks NVDA again."""
+    _CACHE['values'] = None
+    _CACHE['at'] = 0.0
 
 
 def read():
     """The stored answers, or the defaults when NVDA is not here."""
-    defaults = {name: spec.endswith('default=True)')
-                for name, spec in SPEC.items()}
+    import time
+    kept = _CACHE['values']
+    if kept is not None and (time.time() - _CACHE['at']) < CACHE_SECONDS:
+        return dict(kept)
+    values = defaults()
     try:
         import config
         stored = config.conf[SECTION]
-        return {name: bool(stored[name]) for name in SPEC}
+        for name in SPEC:
+            # **Per key.** Read as one comprehension, a single name this
+            # NVDA's configuration has not got - a setting added by a newer
+            # add-on, a profile written before it existed - raised, and
+            # every answer the user had given fell back to its default at
+            # once. One missing key must cost that key and nothing else.
+            try:
+                values[name] = (str(stored[name]) if _is_choice(SPEC[name])
+                                else bool(stored[name]))
+            except Exception:                        # noqa: BLE001
+                pass
     except Exception:                                # noqa: BLE001
-        return defaults
+        pass
+    _CACHE['values'] = dict(values)
+    _CACHE['at'] = time.time()
+    return values
 
 
 def write(values):
+    written = False
     try:
         import config
         for name in SPEC:
             if name in values:
-                config.conf[SECTION][name] = bool(values[name])
-        return True
+                config.conf[SECTION][name] = (
+                    str(values[name]) if _is_choice(SPEC[name])
+                    else bool(values[name]))
+        written = True
     except Exception:                                # noqa: BLE001
-        return False
+        written = False
+    finally:
+        # Whatever happened, what is kept is no longer what the user
+        # answered: a write that failed must not leave the old answers
+        # looking fresh either.
+        forget()
+    return written
 
 
 def register():

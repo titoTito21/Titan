@@ -82,24 +82,13 @@ def pan_for(obj):
     """Where the control is across the screen, -1 .. 1.
 
     The same mapping Titan Access uses (`pan_for_x`): the middle of the
-    control against the width of the screen.
+    control against the width of the screen. It lives in :mod:`panner` now,
+    because the VOICE is placed by the same number as the cue and two
+    copies of that arithmetic is two things to get out of step.
     """
-    try:
-        left, top, width, height = obj.location
-    except Exception:                                # noqa: BLE001
-        return 0.0
-    if not width:
-        return 0.0
-    try:
-        import api
-        desktop = api.getDesktopObject()
-        screen = desktop.location[2] if desktop is not None else 0
-    except Exception:                                # noqa: BLE001
-        screen = 0
-    if not screen:
-        return 0.0
-    centre = left + width / 2.0
-    return max(-1.0, min(1.0, (centre / float(screen)) * 2.0 - 1.0))
+    from . import panner
+    where = panner.screen_position(obj)
+    return 0.0 if where is None else where
 
 
 def list_pitch(index, count):
@@ -152,6 +141,9 @@ def _pump():
             if not _running:
                 break
             try:
+                # `reader/<name>` is the wire name; the sounds themselves
+                # live in the theme's own `SRE` folder, so a Titan with no
+                # Titan Access component still has every one of them.
                 LINK.bridge('sounds.play', timeout=3.0,
                             name='reader/' + name, pan=pan, pitch=pitch)
                 _played += 1
@@ -179,6 +171,40 @@ def stop():
 
 def played():
     return _played
+
+
+def play_named(name, pan=None, pitch=1.0):
+    """One of the reader's sounds by name, for something that is not a cue.
+
+    The cursor cues are a stream - one per focus change, newest wins,
+    dropped when overtaken - and the switch above them is about exactly
+    that. A dialog's kind, a menu closing, a program that has gone busy are
+    NOT that: each happens once, each is the whole of what is being said,
+    and none of them may be dropped because an arrow key came afterwards.
+    So they queue behind whatever is playing rather than replacing it, and
+    they are not gated on the cursor-cue switch - the feature that asked
+    for the sound has its own.
+
+    The sounds live in `sfx/<theme>/SRE/`, so a user with no Titan Access
+    still has them and a theme can replace any of them. Titan is still
+    needed: it owns the mixer, the theme and the positioning. With no
+    Titan this answers False and the caller says its own words anyway.
+    """
+    name = str(name or '').strip()
+    if not name:
+        return False
+    from .link import LINK
+    if not LINK.connected():
+        return False
+
+    def send():
+        try:
+            LINK.bridge('sounds.play', timeout=3.0, name='reader/' + name,
+                        pan=pan, pitch=pitch)
+        except Exception:                            # noqa: BLE001
+            pass
+    threading.Thread(target=send, name='TitanSound', daemon=True).start()
+    return True
 
 
 def wanted():

@@ -1,0 +1,82 @@
+# Titan enhancements - Polish.
+#
+# Only the strings that have been translated are here. gettext falls back
+# to the English source for anything missing, so a partial catalogue is a
+# partial translation rather than a broken one - which is what makes it
+# worth shipping the few that matter before the rest exist.
+msgid ""
+msgstr ""
+"Project-Id-Version: titanEnhancements\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: pl\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#. Translators: said when an unreadable window has been read as a picture
+#. and its controls can now be walked with Tab and the arrows.
+msgid "Window recognised, Native TCE cursor"
+msgstr "Rozpoznano okno, Native TCE cursor"
+
+#. Translators: said when that stops.
+msgid "Native TCE cursor off"
+msgstr "Native TCE cursor wyłączony"
+
+#. Translators: the kind of a dialog, said with the dialog's own tone.
+msgid "question"
+msgstr "pytanie"
+
+#. Translators: the kind of a dialog.
+msgid "information"
+msgstr "informacja"
+
+#. Translators: the kind of a dialog.
+msgid "warning"
+msgstr "ostrzeżenie"
+
+#. Translators: the kind of a dialog.
+msgid "error"
+msgstr "błąd"
+
+#. Translators: a small picture standing for a command or a state.
+msgid "icon"
+msgstr "ikona"
+
+#. Translators: a picture that is content rather than a command.
+msgid "picture"
+msgstr "obraz"
+
+#. Translators: a picture that is moving.
+msgid "animation"
+msgstr "animacja"
+
+#. Translators: a graph or a diagram.
+msgid "chart"
+msgstr "wykres"
+
+#. Translators: said when the program shows an hourglass.
+msgid "busy"
+msgstr "zajęty"
+
+#. Translators: said when the program has stopped being busy.
+msgid "ready"
+msgstr "gotowe"
+
+#. Translators: said when the keyboard leaves a menu that was open.
+msgid "out of menu"
+msgstr "poza menu"
+
+msgid "Trackpad gestures on."
+msgstr "Gesty gładzika włączone."
+
+msgid "Trackpad gestures off."
+msgstr "Gesty gładzika wyłączone."
+
+msgid "That window has closed."
+msgstr "To okno zostało zamknięte."
+
+msgid "Watching this window."
+msgstr "Obserwuję to okno."
+
+msgid "No longer watching."
+msgstr "Już nie obserwuję."

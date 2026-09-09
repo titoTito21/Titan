@@ -192,7 +192,7 @@ def run_qualified(qualified, args=None):
 # Describing what is there
 # --------------------------------------------------------------------------- #
 def list_addons(kind=''):
-    """[{id, label, kind, transport, running, actions, source}, ...]"""
+    """[{id, label, kind, transport, running, pid, actions, source}, ...]"""
     wanted = (kind or '').strip().lower()
     out = []
     for addon in get_registry().addons:
@@ -206,6 +206,15 @@ def list_addons(kind=''):
             'kind_label': kind_label(addon.kind),
             'transport': addon.transport,
             'running': bool(getattr(addon, 'running', False)),
+            # **Which process this add-on IS.** A TCE application runs in a
+            # subprocess of its own, so a client looking at a window - a
+            # screen reader is the obvious one - has no way to tell that it
+            # is looking at tNotes rather than at any other wxPython
+            # program. The bus already knows (it is in the peer's hello);
+            # it simply was not answered, and without it every semantic a
+            # reader could apply to a Titan application had to be guessed
+            # from a window class every wx program shares.
+            'pid': int(getattr(addon, 'pid', 0) or 0),
             'source': addon.source,
             'description': addon.description,
             'actions': [action.name for action in addon.actions],

@@ -229,24 +229,38 @@ class Channel:
         """
         from . import panner
         report = panner.PANNER.report()
+        # **A channel that is switched off says so.** It used to answer
+        # `announce: True` whatever the switch said, and then drop every
+        # announcement with a reason nobody reads - so a user who turned
+        # Titan's announcements off did not get NVDA's own behaviour back,
+        # they got SILENCE: Titan asks `replaces_focus` before it says the
+        # tab bar or a shell group at all, was told yes, said it into this
+        # channel, and the channel threw it away. Off must mean "behave as
+        # though this add-on were not installed", which is what Titan does
+        # with an answer of no.
+        on = bool(self.enabled)
         return {
-            'announce': True,
-            'braille': compat.braille is not None and self.braille_enabled,
-            'position': bool(report['can_place']
+            'announce': on,
+            'braille': (on and compat.braille is not None
+                        and self.braille_enabled),
+            'position': bool(on and report['can_place']
                              and self.position_enabled
                              and panner.PANNER.enabled),
-            'position_marker': (compat.BeepCommand is not None
+            'position_marker': (on and compat.BeepCommand is not None
                                 and self.marker_enabled),
-            'pitch': compat.PitchCommand is not None and self.prosody_enabled,
-            'rate': compat.RateCommand is not None and self.prosody_enabled,
-            'volume': compat.VolumeCommand is not None and self.prosody_enabled,
-            'queue': True,
-            'replaces_focus': True,
+            'pitch': (on and compat.PitchCommand is not None
+                      and self.prosody_enabled),
+            'rate': (on and compat.RateCommand is not None
+                     and self.prosody_enabled),
+            'volume': (on and compat.VolumeCommand is not None
+                       and self.prosody_enabled),
+            'queue': on,
+            'replaces_focus': on,
             # Whether the three parts can be said at three pitches in ONE
             # utterance. Without PitchCommand they would all be the same
             # tone, and Titan should send the flat sentence instead of a
             # shape nothing acts on.
-            'segments': (compat.PitchCommand is not None
+            'segments': (on and compat.PitchCommand is not None
                          and self.prosody_enabled),
             'synth': report['synth'],
             'channels': report['channels'],

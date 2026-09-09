@@ -5362,7 +5362,7 @@ another program has taken hold of it.
   switch on it is a real check item rather than "(on)" written into a
   label. Same rule the Titan shell and the Elten bridge each arrived at
   independently.
-- Tests: `nvda-addon/tests/test_titan_enhancements.py` (53). Build with
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376). Build with
   `python nvda-addon/build.py`, which refuses a manifest NVDA could not
   read or a module `__init__.py` imports and the zip has not got - the two
   ways to ship an add-on that installs and is then simply absent.
@@ -5691,6 +5691,882 @@ with `edge.ogg` at the first and last.
 - **One thread, one slot, newest wins.** A focus event is not rare - holding
   an arrow down produces them faster than a round trip - so a cue that has
   been overtaken is dropped rather than played late.
+
+#### The action nobody could reach, and the switch that meant silence
+
+Four faults, each found by asking the thing that knows rather than by
+reading the code, and each one a whole feature that was present and
+unreachable.
+
+- **Every Titan action was invisible in the Input Gestures dialog.** The
+  scripts were set on the plugin INSTANCE, on the belief that the dialog
+  walks `dir()`. It does not: `inputCore._AllGestureMappingsRetriever.
+  addObj` walks `obj.__class__.__mro__` and reads each `cls.__dict__` -
+  read out of the running NVDA's own `library.zip`, not guessed - where an
+  instance attribute appears nowhere at all. NVDA RUNS a script with
+  `getattr(obj, 'script_<name>')`, which an instance answers perfectly, so
+  a binding that already existed worked and no new one could ever be MADE.
+  They go on the class now (and therefore take `self`), and
+  `gestures.bindable()` answers what the dialog would really list, because
+  "the attribute is there" and "the dialog offers it" turned out to be
+  different questions and only the second is the one the user has.
+- **"Titan's own announcements: off" meant silence, not NVDA's own
+  behaviour back.** The add-on answered `announce: True` whatever its
+  switch said and then dropped every announcement with a reason nobody
+  reads - and `announce_view_switched` and `announce_shell_group` ask
+  `can('replaces_focus')` BEFORE they say anything and stay quiet when the
+  answer is no. So the sentences were lost in both directions at once,
+  which is worse than not having the add-on installed. `capabilities()` is
+  gated on the switch now and `reader_channel.channel()` falls back to
+  `PlainChannel` when a reader says it will not announce. **Absence of the
+  key still means yes**: a reader add-on written before it existed never
+  mentions it, and reading that silence as a refusal would take the whole
+  channel away from it.
+- **The conversation with the assistant was always empty.** `ai.history`
+  answers `{"enabled": ..., "exchanges": [{"role", "text", ...}]}` - one row
+  per TURN - and this read `history`, with `question`/`answer` on each row.
+  A key nothing writes is a working-looking empty list, so the answer was
+  "Nothing has been asked yet" however much of it there was. Measured
+  against a real Titan before it was believed. The Elten bridge reads the
+  same call and has always read it correctly, which is what settled the
+  spelling.
+- **A refusal was told apart by its WORDING.** Titan marks a call it will
+  not serve until its user answers (`'consent': 'needed'`), Ruby's
+  `needs_consent?` has always carried it, and the PYTHON client dropped it -
+  so every Python client had to look for the words "consent" or
+  "permission" in a sentence Titan writes in ITS user's own language. On a
+  Polish Titan that matched nothing and a refusal read as a broken bridge.
+  `titan_actions.Result` carries `consent` now, Titan's own sentence is
+  kept (it names the one thing that changes the answer), and the status
+  command says so.
+
+#### Positioned speech had nothing to place
+
+Reported as "positioning does not work and I have it switched on" - and it
+did not, for a reason that was never in the panner, which was measured
+correct throughout.
+
+- **Nothing ever asked it to place a control.** Positioned speech was
+  applied only to an announcement Titan SENT, and Titan sends a position
+  for the few things whose place it knows and 0 for every ordinary control.
+  The reading this add-on does ITSELF - the three tones, which is most of
+  what a Titan user hears - was never placed at all. `panner.screen_position`
+  is the one implementation of "where is this control" (the middle of the
+  control against the width of the screen, which is Titan Access's own
+  `pan_for_x`), the cue and the voice both use it, and `None` rather than
+  0.0 is the answer when the rectangle cannot be read: a control whose
+  place is unknown is left where the voice already is, because moving it to
+  the centre is a pan and a restore for no information.
+- **A ROW is placed up and down, not left and right.** Panning a list by
+  where the list happens to sit on the screen says the same thing about
+  every row in it, which is nothing; what a reader wants from a row is how
+  far down the list it is. So a row gets a TONE - the top of the list high,
+  the bottom low - which is exactly what Titan Access's own row cue has
+  always said, in the same size of step this add-on already uses for the
+  control type and the state.
+- **NVDA's own report can be placed too**, everywhere, without taking
+  anything away: where a report is spoken FROM is not what it says, so the
+  words stay NVDA's with its tables, its landmarks and its browse mode.
+  `interject.place_next` arms it for exactly one utterance and the speech
+  filter applies it. Behind its own switch (`positionEverywhere`, off),
+  because it changes how every control on the machine is spoken.
+- The status command says which of the two layers can place the voice, and
+  how many controls really were placed - "it cannot" and "it can and you
+  cannot hear it" are different problems and only a count tells them apart.
+
+#### An app module for a desktop that had none
+
+`semantics.py`, and the reason it is possible at all is one number.
+
+**A TCE application runs in a subprocess of its own**, so from the outside
+tNotes is an unremarkable wxPython window: the same class, the same roles, a
+title in the user's own language. A reader had no way to know that the list
+it is reading is the file manager's, and therefore no way to know that a row
+of it is a file with a type and a date rather than "list item 3" - which is
+the whole of what an app module buys anywhere else. `titan.processes`
+(read-only) answers it: the Action Bus peers, plus every application and
+game Titan has LAUNCHED (`app_manager.note_process` / `launched_processes`,
+`game_manager` the same), plus Titan itself. A pid is answered only while
+that process is really alive, because Windows reuses one the moment a
+process ends and telling a reader that somebody else's window is tNotes
+would be worse than telling it nothing.
+
+- **What a row IS comes from the list itself.** A Titan application's list
+  is a real report-mode `SysListView32` with real column headers, and NVDA
+  can read both (`sysListView32.ListItem._getColumnContent` /
+  `_getColumnHeader`). So the row is read as what its own application says
+  it is, in the user's own language, and a column added tomorrow is read
+  tomorrow. What is written down (`KNOWN`) is only what cannot be read:
+  which column already NAMES the kind of thing a row is (the file manager's
+  "Type"), what to call a row when there is none, and whether the window's
+  title is a PLACE.
+- **The folder you have moved into is said, once.** The file manager titles
+  its window with the folder it is showing, so opening one changes nothing
+  NVDA reports - the focus never left the list, and the user is told the
+  name of a row in a place they were not told they had moved to. Same
+  answer Titan's own shell arrived at for its file browser
+  (`announce_shell_location`).
+- **Not everything Titan knows the pid of is an application.** A component
+  has no window; a CLIENT is another program - the reader itself is one, so
+  NVDA's own pid is in that map. Any of those answers "not an application",
+  or the reader's own dialogs would quietly stop being reported the
+  ordinary way.
+
+#### Voice-lock: the class carried by the voice, not said
+
+`voices.py`. Emacspeak's oldest and best idea, and the one thing Titan
+Access already does a small version of. A reader that has to SAY what
+something is spends a word on it every single time and the word is the same
+length whether or not the listener already knew; a voice of its own is
+heard before a syllable of the content arrives.
+
+- **Three dials, because that is what NVDA really carries** - pitch, rate
+  and volume, as the three speech commands every synthesizer that declares
+  them honours and every synthesizer that does not simply drops. A class
+  whose dials this synth will not take is spoken in the plain voice, which
+  is what it sounded like before; nothing invents a voice a synthesizer has
+  not got.
+- **The numbers are Titan Access's where Titan Access has one** - name 0,
+  what a thing IS at -4, a state at +4 - so the two readers on this desktop
+  do not disagree about what a control sounds like. A folder is slower than
+  a file; a detail beside the name is faster, because it is what the
+  listener skims past; a disabled control is quieter and flatter, which is
+  Emacspeak's own clearest case: in a menu of twenty items it says
+  "unavailable" twenty times for no words at all.
+- **Every dial is put back at the end of the part that used it.** A
+  sequence that changed the rate and did not restore it leaves the reader
+  talking that way for everything after it, which is the failure this could
+  most easily cause and the one thing it must not.
+- **The words are never taken out.** A listener whose synthesizer flattens
+  everything, or who is reading braille, must lose nothing: this only adds
+  a way to hear it sooner.
+
+The same layer is offered for **the rest of Windows** (`windowsSemantics`,
+off by default): which part of the window the keyboard has moved into, said
+once when it changes and IN FRONT of NVDA's own report rather than instead
+of it, and a row of any report-mode list read with the columns beside its
+name. That is what a sighted person reads off the layout before a word
+arrives. Everything else is left to NVDA, which knows about tables,
+landmarks and browse mode and is better at all of them than this is.
+
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376).
+  `nvda-addon/tests/check_live_nvda.py` is the other half - it joins the
+  bus, waits for the add-on, and asks the NVDA that is really running what
+  it can take, what it has really done and how it would read the control
+  the user is on. Every fault in the three sections above was found that
+  way or by reading NVDA's own bytecode, and none of them by reading this
+  add-on's code.
+
+#### AI OCR, and the two answers that look the same
+
+Every one of AI OCR's actions answers with PROSE whether it worked or not -
+"AI OCR is switched off. Turn it on in Settings", "the vision provider has
+no key" - so a refusal shown in a page titled AI OCR reads exactly like a
+window that was read and had that in it. Measured against the real actions
+before it was believed. `_ocr_answer` says a sentence and shows a reading,
+and `_for_a_person` takes off the line written for the MODEL ("Act on this
+with ocr_press...") - which is not a fault in that action: the same one
+answers Titan's own agent, which needs precisely that sentence.
+
+- **It reads the window the user is IN, which is not the foreground.** The
+  add-on's own docstring had always said so and the code asked for
+  `getForegroundObject()`. On a machine being read the two come apart
+  constantly - a menu is up, a tooltip has the foreground, the reader has
+  followed the user into a popup owned by something else - and AI OCR is
+  asked for in exactly those places, because they are the windows that draw
+  themselves and expose nothing. It takes the FOCUS and walks to its
+  top-level window (`GA_ROOT`, because a focused control's own handle is
+  the CONTROL and AI OCR photographs the rectangle of the handle it is
+  given), answers the foreground beside it, and falls back to it.
+- **Reading a window is half of AI OCR; pressing something in it is the
+  other half**, and on a window that exposes nothing it is the only way to
+  press anything at all. `ocr_press`, `ocr_key` and `ocr_again` are on the
+  menu and are commands of their own - `again` because a reading is a
+  request to the user's own provider and re-reading a screen because a page
+  was closed is paying for it twice.
+
+#### Two servers on one pipe name is not an error, it is a split bus
+
+Windows lets any number of processes create instances of the same named
+pipe, and a client is handed whichever instance is free. So a second bus -
+a test harness started while Titan is running, or a forgotten copy of one -
+does not fail: half the add-ons join one and half join the other, and each
+side reports the other's peers as absent. The symptom is "the add-on is not
+there", and nothing in it points at the cause; an hour went into it once,
+chasing a reconnect bug that did not exist. `check_live_nvda.py` connects
+first and refuses to start a bus when something already answers.
+
+#### A layer on the focus path must measure itself
+
+The semantic layer shipped walking eight parents per focus event, and
+`obj.parent` is not a field - it is a call into another process that builds
+a whole NVDAObject. Measured on the machine it went to: the NVDA session
+before it existed froze **zero** times and the session after it froze
+**ten** (`watchdog.waitForFreezeRecovery` in NVDA's log, which is the only
+place it is written down). Two answers, and the second matters more than
+the first:
+
+- **NVDA has already built that chain.** `api.getFocusAncestors()` is the
+  focus's ancestry, cached, for the object this is nearly always asked
+  about; anything else gets one step rather than eight. Live: 0.16 ms
+  average, 9 ms worst.
+- **It times itself and stands down.** Whether this is affordable depends
+  on the program the user is in, which cannot be decided here or measured
+  once - so five passes over 50 ms and the layer stops for the session and
+  says why (`reading.semantic_stopped`). A reader that has stopped
+  answering is not a better reader, and nobody should have to work out from
+  a frozen NVDA which add-on to blame.
+
+**And the freeze that was left was positioned speech.** `Panner.place()`
+falls back to NVDA's own audio session whenever the stream cannot be panned
+- which on eSpeak, NVDA's default and a MONO synthesizer, is always - and
+finding that session is `AudioUtilities.GetAllSessions()`, a COM walk of
+every audio session on the machine. It runs from a `CallbackCommand`, which
+is NVDA's MAIN thread at the moment speech reaches that point: one COM
+enumeration per spoken control. It had never shown up before because
+nothing had ever asked for a position at all, which is the same reason the
+feature looked like it worked. The interface is found once now (the probe
+that already walks the sessions on its own thread keeps what it found), and
+thrown away only when a call is refused - which is what happens when the
+headphones are unplugged mid-sentence.
+
+#### "Dialog, OK button. Dialog, Cancel button."
+
+Reported exactly like that: the word "dialog" in front of every control the
+user tabbed to. Two faults, and the second is the one worth remembering.
+
+**The small one was a cache key.** `semantics.region_change` remembered
+which part of the window it had last announced against `obj.windowHandle` -
+the handle of the FOCUSED CONTROL. In a Win32 dialog every button is its
+own window, so every Tab looked like a different window, the memory never
+matched, and the region was announced again. The test that covered it built
+every control with the same handle, so it could not fail.
+
+**The large one is that NVDA already does this.**
+`NVDAObject.event_focusEntered` is fired on every ancestor the focus has
+newly entered and speaks it - read out of the NVDA the user actually has
+(`NVDAObjects/__init__.pyc`), which reports a menu bar, a popup menu and a
+menu item as a full focus report and everything else except a LIST as a
+"focus entered" one. That is how anybody hears "dialog" once on arriving in
+one, a group's name on tabbing into the group, "toolbar" on reaching the
+toolbar. So the layer was a second copy of a feature that was already
+there, and the only thing it could add was the duplicate.
+
+`ancestry.py` is the replacement, and it is a CONTEXT MODEL rather than a
+cache: it computes the same difference NVDA computes, marks every newly
+entered place with whether NVDA has already spoken it, and hands back only
+the ones NVDA left silent.
+
+- **The identity of a place is the PLACE's** - `(window handle, role,
+  name)` of the ancestor itself, never the focused control's. That is the
+  whole of the first fix and it is why the repetition cannot come back.
+- **What is left after taking the duplicate out** is the part that was
+  really missing: a **LIST**, which NVDA enters in silence deliberately (a
+  list announces itself through the row you land on) - so a window with
+  three lists in it gives no way to tell which one you moved to; and a
+  **pane a reader module has named**, which by definition is not something
+  NVDA can have said. On an ordinary dialog it now says nothing at all.
+- **And that addition must never become a REPLACEMENT**, which is the
+  second thing this shipped wrong. `_windows_reading` decided whether to
+  stand in for NVDA by asking whether the control was a list ITEM - and a
+  list item is not the same thing as a reading of one. NVDA's own settings
+  dialog has a category list whose items have no columns, so the whole
+  reading was the LIST's name, and it was spoken in NVDA's place: the user
+  heard "Settings categories" where the item should have been. The
+  question is now what was actually READ (`focus._only_context`): a
+  reading made only of context is said in FRONT of NVDA's own words, and
+  only a reading carrying the control's own content may take NVDA's place
+  - by which point it is saying strictly more than NVDA would have. Both
+  faults are pinned by tests that fail when the old rule is put back.
+- **Leaving a menu is said, because nobody says it.** Every reader
+  announces a menu opening; none announces one closing, so a user who
+  pressed Escape - or a key the menu did not take - is left guessing
+  whether their next keystroke is a command or a letter. JAWS has said this
+  for twenty years. `LEAVING` is deliberately menus and nothing else:
+  leaving a group or a toolbar is not news.
+  - **Left one menu, or left the MENUS?** The first version said it
+    whenever any menu-shaped place dropped out of the ancestry - which
+    includes closing a SUBmenu, where the user lands back on the parent
+    menu and is still very much in the menus. Announcing "out of menu"
+    there tells them the opposite of what happened. It is said only when
+    nothing menu-shaped is left in the path at all, which is what Escape
+    at the top level does and what choosing an item does.
+- **Two callers, one answer.** The layer that says where you now are and
+  the layer that says the menu has closed both ask per focus event, so
+  `changes()` memoises: whichever asked first would otherwise consume the
+  answer and leave the other with nothing.
+- **It measures itself and stands down**, on the same numbers and for the
+  same reason as the application layer: this runs inside `event_gainFocus`,
+  every step of it is a call into another process, and the first version of
+  the semantic layer froze NVDA ten times in one session.
+
+#### Reader modules: a JAWS app module, as data, in the add-on
+
+`readerModules/`. A JAWS app module is a script file its vendor writes for
+one program. It buys the thing a generic reader cannot have - knowing that
+the third column of THIS list is a file type, that THAT unnamed pane is the
+message body - and it costs the thing that has kept it rare for thirty
+years: it is code, in the reader's own language, that only somebody working
+on the reader can write.
+
+A Titan reader module is the same knowledge as **data**, and every module
+here was written by READING the program. Not one Titan application was
+changed, which is what it has to be for the programs nobody here wrote.
+
+- **It is checkable.** `schema.problems()` refuses a key nothing reads -
+  which is the failure the format exists to prevent: a module whose author
+  wrote `kind` where `kind_column` was wanted loads, matches, and quietly
+  does nothing, and for somebody who cannot see the screen that is
+  indistinguishable from a reader that has stopped working.
+- **It cannot crash the reader.** Nothing here runs on the focus path;
+  there are rules that are looked up.
+- **A module may only ADD, unless it says otherwise.** By default it
+  sharpens what NVDA says - a name for an unnamed pane, a word for what a
+  row IS, a column NVDA never reads - and NVDA's own report still happens.
+  A rule that wants to stand in NVDA's place says `replace`, per rule, so a
+  mistake costs one control's wording rather than the reader.
+- **A user's own is not a lesser kind.** The same mapping as JSON in
+  `%APPDATA%/nvda/titanReaderModules/`, loaded last so theirs wins - the
+  overlay rule Titan's own `data/` already follows.
+- **A Titan application is matched by PROCESS**, which Titan says
+  (`titan.processes`): every wxPython program shares a window class, and a
+  Titan run from source is `python.exe`. Everything else is matched on the
+  executable, the window class or the title.
+- **`kind_column` is a HEADING in a module and was an INDEX in the built-in
+  table**, because a module's author hears the heading and somebody
+  counting columns in the source wrote the index. Both end up as an index.
+  The old `KNOWN` table stays as the floor: a module is data that can be
+  missing or deleted, and the applications Titan ships should be understood
+  by an add-on whose module folder is empty.
+- Shipped: the file manager, tNotes, the download manager, tReminder,
+  tEdit, tWeb, tMedia and the ElevenLabs client - each from its own source,
+  each named in the module's own docstring.
+
+#### The module for a program nobody has written one for, written for you
+
+`draft.py`. Writing an app module has always begun with finding out what a
+program's controls are actually called, which is the same work as using the
+program blind in the first place. The reader has already done that work.
+
+- **Observed** - no AI, no Titan, no network: the executable, the window
+  class, every list with its own column headings, every unnamed pane, and
+  whether the window answers nothing at all. Dull and TRUE, which is the
+  right property for something the reader will act on. A column called Type
+  becomes `kind_column` - the single most useful line a module can carry.
+- **Written** - the observation handed to Titan's AI along with the format,
+  described **out of the schema itself** so a key added later cannot leave
+  the prompt teaching a format that no longer exists. What comes back is
+  checked by `schema.problems()` before it is offered, and an invented key
+  is a rejection rather than a warning.
+- Nothing is written without being asked for and nothing overwrites an
+  existing module.
+
+#### The kind of a dialog, anywhere on Windows
+
+`dialog_kind.py`. Titan Access has always said it for Titan's dialogs - a
+question, a warning, an error - and every other dialog on the machine
+sounded the same.
+
+- **It does not have to be told; it can be read** - and getting there took
+  three attempts, each of which the machine settled rather than an
+  argument.
+  - The first compared icon HANDLES: Windows' four system icons are
+    shared, so `LoadIcon(NULL, IDI_*)` should hand back the same `HICON`
+    the dialog holds. Measured against four real message boxes: false. A
+    message box makes an icon of its own (`0x5a100b85` where the shared one
+    is `0x1002d`), so the comparison matched nothing, every time, and the
+    feature was quietly answering "I cannot tell".
+  - The second hashed the drawn pixels, and also matched nothing.
+  - The third measured HOW different they were, which is what found it: on
+    Windows 10 and 11 a message box does not use the legacy `IDI_*` icons
+    at all - it uses the SHELL's stock icons. The mean difference between
+    what the dialog holds and `SHGetStockIconInfo` is **0.1** per channel,
+    against 4.7 for the nearest other stock icon and 26 to 45 for the
+    legacy ones. So: draw both, compare, and accept the nearest only when
+    it is clearly nearest. An exact hash is the wrong instrument for two
+    renderings of one picture. Live: all four kinds correct, ~5 ms each,
+    and a box with no icon correctly answers nothing.
+  - Both sets are kept as references, because both are true - on different
+    Windows versions and in programs with their own dialog templates - and
+    the icon is looked for at `MessageBox`'s own control id first and then
+    in any static that is an icon at all.
+- **A TASK DIALOG is the modern one, and has no icon control.** `#32770`
+  with everything inside one `DirectUIHWND`, the icon drawn rather than
+  held - but accessibility exposes it as an image named
+  `MainInstructionIcon` with a rectangle, so it is read off the SCREEN and
+  compared the same way, against references drawn on the background colour
+  sampled from the capture's own corner.
+  - **This half is safe by construction rather than verified.** A capture
+    can fail for reasons it cannot see - the dialog covered, a display
+    scaling the coordinates differently - and a failed capture is a square
+    of flat background. Measured deliberately: a flat square scores 49.9
+    against the nearest reference where the threshold to be believed is
+    2.0. So a capture that did not work answers "I cannot tell" rather than
+    the icon that happens to have the most background in it. It has not
+    been seen to answer a task dialog correctly on this machine, because
+    the probe process is DPI-unaware and captures the wrong rectangle;
+    NVDA is not.
+- **Where there is no icon at all there is the dialog's SHAPE.** Yes and No
+  IS a question - those are the answers it will accept; Abort, Retry and
+  Ignore IS a failure being reported. Read off the standard control ids, so
+  it is the same in every language. Deliberately only those two: an error
+  box with a lone OK button called "information" would be worse than
+  silence, which is what an undecided dialog gets.
+- Said once per dialog, from `event_foreground` rather than per focus
+  event - which is the mistake the region layer used to make.
+- **The sound is Titan's own**, not a synthesised tone: `question_dialog.ogg`
+  and its three neighbours, with `tones.beep` as the floor for a machine
+  with no Titan running.
+
+#### The sounds belong to a theme, not to an optional component
+
+Titan Access is an **optional** package. Every one of the reader's sounds
+was resolved out of `data/components/titan access/sfx/` alone, so on a
+machine that had not installed it the NVDA add-on's cursor cues, its dialog
+sounds and its menu sounds were simply silent, with nothing saying why.
+
+`sfx/<theme>/SRE/` already existed as the place for them and had five. The
+whole set of thirty-three now ships there in the default theme, which
+`sound.reader_sound_path` looks at FIRST through `feature_sound_path`; the
+component's own copy is still looked at last, so a Titan Access given newer
+sounds than the theme keeps them. A theme can replace any of them.
+`sounds.play` takes `SRE/` as well as `reader/`, because a client author
+reading the theme folder and one reading the docstring must not each find
+only half of it.
+
+The rule this comes from, and the one every feature added here follows: a
+feature may require **Titan**; none of them may require **Titan Access**.
+
+#### A picture is not "graphic", and a control is not "button"
+
+`graphics.py` and `labels.py`.
+
+- **What can be known is said always and costs nothing**: an icon, a
+  picture, an animation or a chart, from the role, the window class and the
+  size. A reader that says "graphic" for a 16-pixel toolbar icon, a
+  photograph filling the window and something that is still moving has said
+  one word about three different things.
+- **What must be worked out is asked for.** Reading a control with AI sends
+  a picture of part of the user's screen to their provider, so it happens
+  when the user presses the key - or, with the switch on, ONCE for a
+  control that has no name at all, whose answer is remembered as a label
+  and never asked again. A toolbar somebody passes fifty times a day costs
+  one request in its life.
+- **A REFUSAL arrives as a success, and must not be believed.** Titan
+  answers "AI OCR is switched off. Turn it on in Settings" as ordinary
+  prose with the call reported as having worked - so a caller trusting
+  `ok` alone takes that sentence for what the control shows, and this one
+  would then remember it as the control's NAME for ever, and the window
+  watcher would poll it for a highlight until the user gave up. Both tell
+  a reading from a sentence by its SHAPE (`model.elements_as_lines` writes
+  a title, a summary, then `[Region]` blocks; a refusal has none), never by
+  its wording - matching the words breaks the moment Titan says them in
+  another language, which this repository has already paid for once in the
+  other direction.
+- **`ocr_ask` does not answer a question with a sentence** - it reads the
+  whole window with the question in mind and puts the answer in the
+  SUMMARY, which is the second line. Taking the first is taking the
+  window's title, which would have named every control after the window it
+  sits in. Both action signatures were checked against the running Titan
+  (`ocr.read_window(scope, question, hwnd)`, `ocr.ask(question, scope,
+  hwnd)`, both `needs_ai`), because a nearly-right argument name is the
+  bug this bridge keeps producing.
+- **A guessed name does not sound like a real one.** It is spoken in its
+  own voice class, which is the difference between "the button is called
+  Save" and "the button appears to say Save".
+- **What a label is attached to has to survive a restart**, which rules out
+  anything to do with where a window is: the executable, the window class,
+  the control's own dialog id and its automation id. Position is the last
+  resort and is marked weak - a GUESSED label is refused on a weak key,
+  because a toolbar that gains a button moves everything after it and a
+  label that followed position would name the wrong control.
+- The user's own label is never overwritten by a guess.
+
+#### A window that answers nothing, read and watched
+
+`surface.py`. A Unity game draws its menu onto a texture; an installer
+paints its own widgets. The reader lands on it, says the window's title,
+and that is the whole of what it can say for ever.
+
+- Titan's AI OCR already reads a window into structured elements and is
+  already told that "a highlight means selected or focused", so the reading
+  NAMES the item the game has highlighted. This makes that continuous,
+  which is the half that turns a reading into something you can play with.
+- **A request is only spent when the picture changes.** Titan's recogniser
+  answers from the previous reading when the new capture looks alike - but
+  only `if ... not question`. So this never asks a question; it reads the
+  window and finds the highlight in the answer itself.
+- **What counts as a drawn window is deliberately narrow**, because the
+  cost of being wrong is a question put to somebody about a window that
+  was never the point. The first rule was "no NAMED child among the first
+  twelve", which is also true of a window whose named controls come
+  thirteenth, and of a terminal that has not finished starting. It is now:
+  a class that is certainly not a surface (a terminal, a console,
+  Explorer, a dialog, a browser, a packaged app) is refused before
+  anything is measured; a class that is certainly one (Unity, SDL, Godot)
+  is taken; and otherwise the window must have **no accessible children at
+  all**. A window whose children are merely unnamed is an interface this
+  reader is failing to read - a different problem with a different answer.
+  Checked against the machine rather than against a fixture:
+  `nvda-addon/tests/check_real_windows.py` asks the classifier about every
+  window that is really open and fails if an ordinary one is mistaken for
+  a surface. Measured here: 11 windows - three terminals, two browsers,
+  7-Zip, Elten, Battle.net - and none of them mistaken.
+- **The capture half is checked end to end too**, on this machine's own
+  screen and with no AI key: `src/scripts/check_capture.py` photographs
+  every real window through the whole of `capture()`, says which of the
+  three routes answered, and fails on a window that comes back blank.
+- A screen that really does change every poll slows itself down and says
+  so, and a window that closes ends the watch.
+- **It ASKS, in a window that exposes nothing.** Nothing ever started it
+  before - it ran only when the user pressed the key - so a game whose
+  menu is painted onto a texture stayed silent, which is the case the
+  whole feature exists for. `consider()` runs from `event_foreground`,
+  because arriving in a window is the question; asking per control would
+  walk a window's children on every arrow key.
+  - **It asks rather than deciding**, which is the difference between a
+    reader that is useful and one that spends somebody's money and
+    privacy on a guess. A window being unreadable is a good reason to
+    raise the question and no reason at all to answer it. Once per
+    program: yes turns it on for that program and starts, no turns it OFF
+    for that program - which is what stops it ever asking again - and
+    either answer is the per-program switch the Titan menu shows, so it
+    can be changed later without hunting for where it was set.
+  - `dialogs.confirm` grew an `on_no` for exactly this: a refusal here is
+    an ANSWER, not the absence of one, and a no that is not written down
+    is a question asked again for ever.
+- Off until asked for, and it says why - in NVDA's log as well as out
+  loud. Every step can refuse for a different reason and each is a
+  different thing to do about it: the switch, the window, Titan not
+  running, AI OCR's own setting, or a game in exclusive full screen, which
+  Windows cannot photograph at all.
+- **The switch is per PROGRAM** (`perProgram.py`), with the general
+  setting underneath it. Whether it is worth sending pictures of a window
+  to a provider is a different answer in a game whose menu is a texture
+  and in the browser somebody lives in all day, and one switch for the
+  machine cannot say both. Reachable where the question arises - the Titan
+  menu's "In <program>" - rather than in a settings page, which is
+  somewhere else by the time the user gets there. The three that spend
+  something are per-program; how a control is READ is a preference and
+  belongs to the user, not to the window they are in.
+
+#### A full-screen game, photographed
+
+`src/ai/ocr/duplication.py`. AI OCR could not read a full-screen program at
+all, and said so: "the capture came back empty ... which cannot be
+photographed". Both of `capture.py`'s routes fail there for the same reason
+from opposite sides - copying the desktop reads the window Windows draws
+for the desktop, and a game that has taken the display is not drawn there;
+`PrintWindow` asks the window to render itself with GDI, and the game does
+not draw with GDI. What comes back is black, which `_looks_blank` reports
+as empty.
+
+The answer is the **Desktop Duplication API**, which is what screen
+recorders and remote desktops use: the compositor hands over the frame it
+has just composed, whatever produced it. Written with `comtypes`, which
+Titan already depends on, so it adds nothing to install.
+
+Four things had to be got right, and each was wrong first and found by
+running it:
+
+- **A cast between COM interfaces is a wild call.** An `ID3D11Device` is
+  not an `IDXGIDevice` - two interfaces on one object with entirely
+  different vtables - so casting and calling `GetAdapter` jumped to
+  whatever sat at that slot: an access violation at 0x10. It is asked for
+  with `QueryInterface`.
+- **A struct's SIZE moves every field after it.** `DXGI_MODE_DESC` is 28
+  bytes, and reserving 44 for it moved the flag the code reads to choose
+  its route.
+- **`CopyResource` takes a D3D resource, not the DXGI one.**
+  `AcquireNextFrame` hands over an `IDXGIResource`; giving that straight
+  to D3D copies nothing and reports success, which arrives as a frame of
+  pure black - the very thing this exists to stop.
+- **A frame is not a picture until something has been drawn into it.** The
+  first `AcquireNextFrame` after a duplication is made comes back with
+  `AccumulatedFrames` of zero, carrying no desktop update, and its
+  contents are undefined. Measured: acquire 0 accumulated=0 and every
+  pixel 0; acquire 1 accumulated=8 and a real desktop.
+
+**It runs in a child process, and that is a decision rather than caution.**
+Every one of those mistakes was an access violation rather than a wrong
+answer, and after all four were fixed the reference counting still was not
+trustworthy - releasing the resource DXGI hands back for an empty frame
+crashed inside a deallocator, repeatedly. The two programs that call this
+are a screen reader and a blind user's desktop; neither may risk a
+corrupted heap to take a screenshot. So the COM lives in a short-lived
+child (`main.py --capture-frame`, so a packaged Titan re-runs itself),
+which writes one frame and exits. If it crashes it crashes alone. Measured:
+a real 2560x1600 frame in ~700 ms, and nothing COM in the parent at all. A
+capture happens once per reading and the recogniser skips an unchanged
+screen, so that is paid rarely.
+
+The message when it still cannot is now true: both routes produced
+nothing, which means the display is PROTECTED - a video with digital
+rights management, a secure prompt - rather than merely full-screen.
+
+#### A switch cannot be set by writing it into `nvda.ini`
+
+Reported as "I set it to announce the dialog kind, the control kind and the
+animation in Windows, and it does not". Two different things were true.
+
+**The reading of ordinary controls outside Titan was never offered.** The
+three tones - the name, the control type lower, the state higher - applied
+inside Titan's own windows only, deliberately: out there NVDA is the reader
+and knows about tables, landmarks and browse mode, and standing in for it
+everywhere to gain three tones is a trade nobody should make on somebody
+else's behalf. It is `pitchedEverywhere` now, off by default, because it
+was always the user's trade to make and never mine.
+
+**And the switch could not be set the obvious way.** Writing
+`pitchedEverywhere = True` into `nvda.ini` by hand does nothing at all:
+NVDA validates the file against the configuration spec when it loads, an
+add-on's spec is not registered until the add-on starts, and an unknown key
+is simply deleted - measured, the key was gone from the file the moment
+NVDA came up. So the only ways in are the settings panel and, now,
+`nvda.switch` over the bus, which is also what lets Titan offer these
+switches at all.
+
+**Which is why there is a `diagnostics` action.** "The dialog kinds are not
+read" is a report with no evidence in it, and there are half a dozen
+reasons it can be true - the switch, a speech filter that never registered,
+a speech mode that cannot be muted, a Titan that is not there to play the
+sound - each with a different thing to do about it and none of them visible
+from outside. It answers what is switched on and what has actually
+happened, and it is how all of this was settled: a real message box raised
+in front of the running NVDA moved `dialog_kind.icon` from 0 to 1 and
+`interject_applied` from 0 to 1, and tabbing its buttons with
+`pitchedEverywhere` on moved `counts.windows` from 0 to 5.
+
+Two traps of its own, both worth remembering: an action that is SERVED but
+not DECLARED is not callable over the bus (the add-on's own rule, biting
+the hand that wrote it), and inside NVDA this package is
+`globalPlugins.titanEnhancements` - asking for the top-level name gets "No
+module named 'titanEnhancements'", which is a diagnostic that fails to
+diagnose.
+
+#### A feature wired to no event does not exist
+
+Three of them shipped that way. `event_foreground`, `event_nameChange` and
+`event_valueChange` were never added to the global plugin at all - the edit
+meant to add them matched nothing and said nothing - so the dialog kinds,
+the live regions and the automatic window reading were written, tested,
+documented, and called by nobody. From the outside that is
+indistinguishable from a feature that is broken, and it is what "the OCR
+does not work" and "the dialog kinds do nothing" both really were.
+
+`tests/test_titan_enhancements.py`'s `EveryFeatureIsWiredToAnEvent` reads
+the plugin and fails if an event handler is missing or if
+`dialog_kind.announce`, `live.changed`, `surface.consider` or
+`focus.handle_gain_focus` is called by nobody. The wider lesson is about
+the tool rather than the code: a `str.replace` whose anchor does not match
+is a silent no-op, so every one of them is asserted.
+
+#### Smart OCR: a game and an inaccessible application are not one problem
+
+Reading a window aloud is where this started and it is not enough. A
+reading you cannot MOVE through is a wall of text: the user hears
+everything, in the order the model happened to write it, and can act on
+none of it. What makes a window usable is that the keyboard walks it.
+
+But the same answer is wrong for one of the two windows that need this,
+and getting that backwards would break the very thing it was meant to fix:
+
+- **A game already has a keyboard model.** Its menu moves with the arrow
+  keys; what the player cannot do is SEE which item is now highlighted.
+  Taking those keys to drive a cursor of our own would break the game
+  while appearing to help. So a game keeps its keys, and the watcher says
+  what has become highlighted - which is what the model is told to mark
+  ("a highlight means selected or focused") and what `highlight_in` reads
+  out of the reading.
+- **An inaccessible application has no keyboard model that reaches the
+  user at all.** Tab does whatever the program does with it and the reader
+  can say nothing about where it went. There a cursor of ours IS the
+  interface: `smart.py` turns the reading into controls and Tab, Shift+Tab
+  and the up/down arrows walk them exactly as they walk real ones, with
+  Enter pressing the one the cursor is on.
+
+Which of the two a window is: a reader module may simply say
+(`"surface": {"ocr": "game"}`), the user may say per program (and it is
+remembered), and otherwise the window CLASS decides - an engine that
+paints a game is the one thing here that can be recognised outright.
+Whether a program is a game has deliberately no general setting: it is a
+fact about that program, not a preference.
+
+Three things keep the borrowed keys honest:
+
+- **Bound only while a drawn window is really being read**, and removed
+  the moment it is not (`removeGestureBinding`). A reader holding Tab for
+  the whole session would break every other program on the machine.
+- **Left and Right are never taken.** In a game they are how the game's
+  own menu moves.
+- **Any key that turns out not to be ours is passed straight through**
+  with `gesture.send()`, which is the second guard: a binding that
+  outlived its window would otherwise swallow a keystroke and say nothing.
+
+What is pressed is the thing that was READ - `ocr.press` clicks it by the
+name it was read under, so nothing here invents a coordinate - and a
+control is announced in the voice class for something a model saw rather
+than something a program declared, because the user cannot see which it
+is. The cursor survives a re-read: a game re-reads whenever the picture
+changes, and a cursor that jumped back to the top each time would be
+unusable exactly when something is happening.
+
+**Saying yes writes a reader module for that program.** The per-program
+switch would have been enough to make it work again; a module is better
+for the reason the modules exist at all - it is data, it says WHY (this
+program draws its own interface, and which of the two kinds it is), it can
+be corrected, and it can be given to somebody else with the same program.
+A program that already has one keeps it: a module somebody has corrected
+is worth more than anything observed here.
+
+#### The two things a sighted person gets without looking at anything
+
+`states.py`. A program that has stopped answering shows an hourglass; a
+program that wants you flashes on the taskbar. Neither is a control,
+neither is in any accessibility tree, and no screen reader says either.
+
+- **Busy is the mouse cursor**: `GetCursorInfo`, compared against Windows'
+  shared wait and app-starting cursors - the same identity test the dialog
+  icons use. Polled slowly, and only announced once it has lasted long
+  enough to be worth saying, so a program that is busy for a fifth of a
+  second says nothing.
+- **Attention is the shell hook**: `RegisterShellHookWindow` is how the
+  taskbar itself is told, and `HSHELL_FLASH` is Windows saying "this window
+  called FlashWindowEx".
+- **The trap, which Titan has already paid for once:** Windows keeps the
+  ADDRESS of the window procedure, so a ctypes callback Python has
+  collected is freed memory the next message calls into. The callback is
+  held for as long as the window exists and let go only after the window is
+  destroyed. Titan's own shell documents this as its most frequent hard
+  crash; there is no reason to learn it twice.
+
+#### Live regions on the desktop, without polling a rectangle
+
+`live.py`. A status bar that says "connecting", a progress that reaches a
+hundred, a transcript that gains a line - all of it happens with the focus
+somewhere else, and a reader that only ever speaks about the focused
+control never mentions any of it. The web solved this with `aria-live`; the
+desktop never did.
+
+JAWS's answer is Frames: the user draws a rectangle and JAWS POLLS it. This
+does not poll - Windows already sends an event when a control's name or
+value changes, and NVDA already delivers it - so a live region is a RULE,
+and one that never changes costs nothing.
+
+- A **reader module** says which control is live; **Titan** can push one
+  over the bus (`live`), which needs no rule and no event at all; and the
+  **floor** is the status bar of the window the user is actually in.
+- Politeness is NVDA's own priority, not a queue of ours. Nothing is said
+  twice - a status bar rewritten with the same text on a timer is the
+  commonest thing in Windows - and a burst is rate limited, because a
+  progress bar changes hundreds of times and the answer is not to read it
+  hundreds of times.
+
+#### The class manager
+
+`classes.py`, `classManager.py`. `voices.py` was the idea - a semantic class
+carried by the voice instead of spent as a word - and it shipped with the
+numbers chosen here. That is the right default and the wrong last word: how
+much pitch a listener can hear depends on their synthesizer, their rate and
+their hearing, and a dial nobody notices costs a speech command per
+utterance for nothing.
+
+- Every class is listed with what it is FOR, not just its name: "detail"
+  means nothing, "the columns beside a row's name - a date, a size" is
+  something somebody can have an opinion about.
+- **A change is heard before it is kept** - Try speaks the sample as the
+  dials stand, on the synthesizer the user really has, which is the only
+  thing that can answer whether a change is audible.
+- **Only what was CHANGED is stored**, so the defaults can be improved
+  later without overwriting somebody's answers, and "put it back" really
+  does.
+- `voices.voice_of` asks the manager rather than reading its own table: a
+  manager that showed one thing while the reader said another would be
+  worse than not having one.
+
+#### The laptop's touchpad as a touch screen
+
+`trackpad.py`. NVDA has had touch support for years and almost nobody can
+use it: `touchHandler.touchSupported()` wants a touch SCREEN, refuses a
+portable copy and refuses without UI Access. Every Windows laptop made in
+the last decade has a multi-touch surface under the user's hands, and to
+NVDA it is a mouse.
+
+It is not a mouse. A Windows Precision Touchpad is a HID digitizer (usage
+page 0x0D, usage 0x05) reporting every contact's identifier, position and
+tip state through Raw Input. So this reads them, maps the pad onto the
+screen **absolutely** - the top left of the pad is the top left of the
+screen, which is what makes it a touch screen rather than a mouse - and
+hands the contacts to **NVDA's own** `touchTracker.TrackerManager`.
+Everything after that is NVDA's: the same recogniser, the same
+`TouchInputGesture`, the same identifiers (`ts(object):2finger_flickright`),
+and therefore the same bindings and the same entries in Input Gestures.
+Nothing here invents a gesture vocabulary.
+
+- **Why this is not "turning NVDA's touch support on":** that support gets
+  its contacts from `RegisterPointerInputTarget`, which is about a touch
+  screen's pointers and needs UI Access. The tracker underneath it needs
+  neither and takes `update(ID, x, y, complete)`.
+- **A finger that stops being mentioned has LIFTED.** The pad stops
+  reporting a contact rather than announcing its end, so without that
+  nothing would ever complete and every touch would be an endless hover.
+- **NVDA and the wheel to the right turns it on, to the left off** - a
+  gesture the trackpad itself can make with two fingers, which matters when
+  the reason to turn it on is that the user is holding a trackpad. There is
+  a bindable command as well.
+- Raw Input is a listener: the pointer still moves, clicks still click,
+  Windows' own gestures still work. That is also the honest limit - a flick
+  left is also a two-finger scroll to whatever is under the pointer.
+- **Verified against a real pad, which found two bugs nothing else would
+  have.** An ELAN precision touchpad on this machine: the descriptor parses
+  into 5 contact slots with a 3679 x 2261 surface, mapped onto a 1280 x 800
+  screen, and a real finger drag arrives as contacts at the right screen
+  coordinates.
+  - **`CreateWindowExW` raised before Windows was ever called.**
+    `wanted.hInstance` read off the class structure is a plain Python int,
+    and a module handle is too large for the C int ctypes converts a bare
+    int into: `OverflowError: int too long to convert`. Both windows this
+    add-on creates - the pad's and the attention watcher's - failed at
+    creation, and each module dutifully reported "the window would not be
+    created" without anybody being able to say why. It goes back as
+    `c_void_p`.
+  - **Contact Count is what says how many slots are real.** A pad describes
+    every slot it could ever use and sends ALL of them in every report; the
+    unused ones come back at (0, 0), tip switch clear, contact id **zero** -
+    the same id as the first real finger. Measured before the fix: one
+    finger drawn across the pad turned 238 reports into 1190 contacts, 955
+    of them "finger 0 has lifted". Every touch was a press followed
+    instantly by a lift, so not one gesture could ever have been
+    recognised. Usage 0x54 on the top-level collection is the count, and
+    the first that many collections are the ones to read. After: 168
+    reports, one contact each, 4 real lifts.
+  - **The gestures arrived, and every one of them died in the script.**
+    Seen in a live NVDA's log: `ts(object)` gestures were recognised and
+    dispatched - `'przesuwanie'`, `'stuknięcie'` - and each ran into
+    `AttributeError: 'NoneType' object has no attribute 'screenExplorer'`.
+    NVDA's own touch scripts reach for `touchHandler.handler`, and on a
+    machine whose touch support never started there is none. Feeding a
+    tracker is not enough: the pad needs the HANDLER to exist.
+    `TouchSurface` is it - the three things NVDA's scripts and its core
+    pump really use (`screenExplorer.ScreenExplorer`, the tracker, the
+    touch mode), each of them the real object, with the thread, window and
+    pointer registration that need a touch screen and UI Access left out.
+    Installed only when NVDA has none of its own, and removed again on the
+    way out.
+  - **And the gestures are emitted from `pump()`, not from the input
+    thread.** A tap is held back for a moment in case a second one follows
+    and makes it a double tap (`pendingEmitInterval`), so a tracker drained
+    only when the next HID report arrives emits that tap late - and the
+    last tap before the user lifts off, never. `feed` asks
+    `core.requestPump()`; NVDA pumps; the gesture runs on the thread that
+    is allowed to read the screen and speak. That is NVDA's own design, and
+    it is what makes a double tap, a hold and a tap-and-hold possible.
+
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376). Nothing in
+  them speaks, opens a window, reaches the bus or touches the user's own
+  NVDA configuration - the stores are exercised against a temporary
+  configuration folder of their own, because a test that wrote into the
+  real one would change the reader of whoever ran it.
 
 #### Anybody can write one of these
 

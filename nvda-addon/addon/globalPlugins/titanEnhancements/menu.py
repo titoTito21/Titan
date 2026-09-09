@@ -66,6 +66,12 @@ class _Builder:
         self.wx = wx
         self.frame = frame
         self.doing = {}
+        #: Every id this menu bound on NVDA's main frame, so it can be let
+        #: go again. A handler left bound outlives the menu item it was
+        #: for, and wx recycles ``ID_ANY`` - so the next menu built here
+        #: inherits whatever the last one left behind, growing by one
+        #: binding per open for the rest of the session.
+        self.bound = []
 
     def item(self, menu, label, what, enabled=True):
         entry = menu.Append(self.wx.ID_ANY, label)
@@ -73,8 +79,22 @@ class _Builder:
             entry.Enable(False)
             return entry
         self.doing[entry.GetId()] = what
-        self.frame.Bind(self.wx.EVT_MENU, self._fired, entry)
+        self._bind(entry)
         return entry
+
+    def _bind(self, entry):
+        self.frame.Bind(self.wx.EVT_MENU, self._fired, entry)
+        self.bound.append(entry.GetId())
+
+    def release(self):
+        """Let go of every handler this menu put on NVDA's own frame."""
+        for identifier in self.bound:
+            try:
+                self.frame.Unbind(self.wx.EVT_MENU, id=identifier)
+            except Exception:                        # noqa: BLE001
+                pass
+        self.bound = []
+        self.doing.clear()
 
     def _fired(self, event):
         what = self.doing.get(event.GetId())
@@ -172,6 +192,16 @@ def build(plugin):
     builder.item(ocr, _('Read this window'), lambda: _run_command('ocr_read'))
     builder.item(ocr, _('Ask about this window...'),
                  lambda: _run_command('ocr_ask'))
+    builder.item(ocr, _('The last reading again'),
+                 lambda: _run_command('ocr_again'))
+    ocr.AppendSeparator()
+    # Reading a window nothing can read is half of it; PRESSING something in
+    # it is the other half, and on a window that exposes nothing it is the
+    # only way to press anything at all.
+    builder.item(ocr, _('Press what it read...'),
+                 lambda: _run_command('ocr_press'))
+    builder.item(ocr, _('Send a key to that window...'),
+                 lambda: _run_command('ocr_key'))
     builder.item(ocr, _("Put Titan's controls over this window"),
                  lambda: _run_command('ocr_overlay'))
     menu.AppendSubMenu(ocr, _('AI OCR (read a window nothing else can)'))
@@ -179,6 +209,51 @@ def build(plugin):
     builder.item(menu, _('Macros...'), lambda: _run_command('macros'))
     menu.AppendSubMenu(_actions_menu(builder, wx),
                        _('Everything Titan can do'))
+
+    # What Titan can be ASKED, as against what it can be told to do. Every
+    # one of these is a list of what has happened rather than something to
+    # run, which is why none of them belongs in the actions menu above.
+    what = wx.Menu()
+    builder.item(what, _('Notifications'),
+                 lambda: _run_command('notifications'))
+    builder.item(what, _('Buffers (what arrived while a window was closed)'),
+                 lambda: _run_command('buffers'))
+    builder.item(what, _('What Titan is showing'),
+                 lambda: _run_command('showing'))
+    builder.item(what, _('Components'), lambda: _run_command('components'))
+    menu.AppendSubMenu(what, _('What Titan has to say'))
+    menu.AppendSeparator()
+
+    # **The reader's own half.** Everything above needs Titan; none of this
+    # does, which is why it is a group of its own and why it is here even
+    # when Titan is not running.
+    reader = wx.Menu()
+    builder.item(reader, _('Where am I'), lambda: _run_command('where_am_i'))
+    builder.item(reader, _('Name this control...'),
+                 lambda: _run_command('label_control'))
+    builder.item(reader, _('What does this show? (reads it)'),
+                 lambda: _run_command('describe_control'))
+    builder.item(reader, _('Read this window as a picture'),
+                 lambda: _run_command('watch_surface'))
+    builder.item(reader, _('Read it as a game, or as an application'),
+                 lambda: _run_command('surface_mode'))
+    builder.item(reader, _('Voice classes...'),
+                 lambda: _run_command('voice_classes'))
+    builder.item(reader, _('Reader modules'),
+                 lambda: _run_command('reader_modules'))
+    builder.item(reader, _('Write a module for this program'),
+                 lambda: _run_command('draft_module'))
+    builder.item(reader, _('Use the touchpad as a touch screen'),
+                 lambda: _run_command('toggle_trackpad'))
+    menu.AppendSubMenu(reader, _('How this program is read'))
+
+    # **The switches that spend something, answered for THIS program.**
+    # Not in the settings page: the question is about the window the user
+    # is in at the moment they are wondering about it, and a settings page
+    # is somewhere else by the time they get there.
+    here = _this_program(builder, wx)
+    if here is not None:
+        menu.AppendSubMenu(here[0], here[1])
     menu.AppendSeparator()
 
     builder.item(menu, _("Titan's settings"),
@@ -199,6 +274,43 @@ def build(plugin):
     return menu, builder
 
 
+def _this_program(builder, wx):
+    """A submenu of the per-program switches, or None with no window.
+
+    Each one says what it is and where its answer came from: a switch the
+    user has never touched here shows what it inherited, because otherwise
+    they cannot tell why something they did not ask for is on.
+    """
+    from . import perProgram
+    program = perProgram.application_of()
+    if not program:
+        return None
+    words = {
+        # Translators: a per-program switch in the Titan menu.
+        'autoLabel': _('Work out names for unnamed controls (AI)'),
+        # Translators: a per-program switch in the Titan menu.
+        'surfaceReading': _('Read this window as a picture (AI)'),
+        # Translators: a per-program switch in the Titan menu.
+        'graphicKinds': _('Say what pictures are'),
+    }
+    here = wx.Menu()
+    for row in perProgram.described():
+        label = words.get(row['id'], row['id'])
+        if not row['own']:
+            # Translators: marks a per-program switch that has no answer of
+            # its own and is following the general setting.
+            label = _('{what} (following the general setting)').format(
+                what=label)
+        _switch(builder, here, label, row['on'],
+                lambda name=row['id']: _run_command('toggle_here', name))
+    here.AppendSeparator()
+    builder.item(here, _('Use the general settings in this program'),
+                 lambda: _run_command('forget_here'))
+    # Translators: a submenu in the Titan menu. {program} is the program
+    # the user is in.
+    return here, _('In {program}').format(program=perProgram.label_of())
+
+
 def _switch(builder, menu, label, on, what):
     """A switch reads as a switch, not as a word in a label.
 
@@ -211,7 +323,7 @@ def _switch(builder, menu, label, on, what):
     entry = menu.AppendCheckItem(wx.ID_ANY, label)
     entry.Check(bool(on))
     builder.doing[entry.GetId()] = what
-    builder.frame.Bind(wx.EVT_MENU, builder._fired, entry)
+    builder._bind(entry)
     return entry
 
 
@@ -245,5 +357,5 @@ def show(plugin):
             # menu first and dropping it afterwards is the order that leaves
             # nothing bound to a menu that has gone.
             menu.Destroy()
-            builder.doing.clear()
+            builder.release()
     wx.CallAfter(popup)

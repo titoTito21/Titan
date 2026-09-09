@@ -1209,7 +1209,29 @@ if __name__ == "__main__":
                             'Used by the Explorer file association for '
                             'double-clicked scripts. Needs the Macro Manager '
                             'component, which is what understands the language.')
+    parser.add_argument('--capture-frame', default=None, metavar='PATH',
+                       help='Grab one frame of the desktop through the '
+                            'compositor and write it to PATH, then exit. '
+                            'Titan runs ITSELF this way to photograph a '
+                            'full-screen program: the Desktop Duplication '
+                            'API is COM whose reference counting is '
+                            'unforgiving, and a crash must not be able to '
+                            'take the desktop down with it.')
     args = parser.parse_args()
+
+    # **Before anything else starts.** This is Titan run as a tool rather
+    # than as a desktop: one frame, one file, exit. Nothing here may build a
+    # window, play a sound or load a component - the parent is waiting on
+    # this process and will give up on it in seconds.
+    if getattr(args, 'capture_frame', None):
+        try:
+            from src.ai.ocr import duplication as _duplication
+            raise SystemExit(_duplication.write_frame(args.capture_frame))
+        except SystemExit:
+            raise
+        except Exception as _capture_error:          # noqa: BLE001
+            print(f"[capture] {_capture_error}")
+            raise SystemExit(1)
 
     # `titan script.tcs` means the same as `titan --run-script script.tcs`:
     # a bare path is what a shell, a shortcut and a drag-and-drop all produce,

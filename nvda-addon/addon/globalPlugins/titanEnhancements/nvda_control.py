@@ -379,6 +379,8 @@ def settings(**_kw):
     from . import earcons
     from . import elements
     from . import focus
+    from . import interject
+    from . import panner
     answer = {'settings': out, 'synth': _synth_section(),
               'may_change': _allowed(), 'may_press_keys': _allowed('keys'),
               'reading': {
@@ -389,12 +391,79 @@ def settings(**_kw):
                   'titan_pid': focus.titan_pid(),
                   'titan_coordinates': focus.titan_coordinates(),
                   'can_mute': focus.can_mute(),
+                  # "Positioned speech is on and nothing moves" is a report
+                  # with no evidence in it, and there are three different
+                  # things it can mean: the voice cannot be placed at all,
+                  # nothing asked for a position, or it was asked for and
+                  # applied and the user cannot hear it. Only these tell
+                  # them apart.
+                  'can_place': panner.PANNER.can_place(),
+                  'why_not_placed': panner.PANNER.why_not(),
+                  'placed': interject.placed(),
+                  # What the semantic layer really did, per layer, because
+                  # "it does not understand my applications" and "it
+                  # understands them and I cannot hear the difference" are
+                  # different problems and only a count tells them apart.
+                  'semantic': focus.semantic(),
+                  'windows_semantic': focus.windows(),
+                  # What that layer COSTS, because it runs on the thread
+                  # that reads the screen and the only honest way to have
+                  # it there is to measure it and stand down when it is
+                  # too expensive.
+                  'semantic_ms': round(_semantic_timing()
+                                       .get('average', 0.0) * 1000, 2),
+                  'semantic_worst_ms': round(_semantic_timing()
+                                             .get('worst', 0.0) * 1000, 2),
+                  'semantic_stopped': _semantic_timing().get('stopped', ''),
+                  'applications': _applications_known(),
+                  'bindable': _bindable(),
                   'heard': _heard_log(),
                   'spoken': _spoken_log(),
               }}
     if absent:
         answer['absent'] = absent
     return answer
+
+
+def _semantic_timing():
+    try:
+        from . import semantics
+        return semantics.timing()
+    except Exception:                                # noqa: BLE001
+        return {}
+
+
+def _applications_known():
+    """Which Titan applications this reader can recognise by their window."""
+    try:
+        from . import semantics
+        return sorted({str(row.get('id') or '')
+                       for row in semantics.known_processes().values()
+                       if row.get('id')})
+    except Exception:                                # noqa: BLE001
+        return []
+
+
+def _bindable():
+    """How many Titan actions NVDA would really OFFER in Input Gestures.
+
+    Counted the way NVDA counts them - the plugin CLASS and its bases, each
+    class's own ``__dict__`` - and not by how many attributes this add-on
+    thinks it installed. Those were different numbers for the whole of this
+    add-on's first version: the scripts were set on the instance, ran
+    perfectly for any binding that already existed, and appeared in that
+    dialog nowhere at all.
+    """
+    try:
+        from . import gestures
+        import globalPlugins.titanEnhancements as plugin
+        return len(gestures.bindable(plugin.GlobalPlugin))
+    except Exception:                                # noqa: BLE001
+        try:
+            from . import gestures
+            return gestures.installed()
+        except Exception:                            # noqa: BLE001
+            return 0
 
 
 def _heard_log():

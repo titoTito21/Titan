@@ -245,6 +245,32 @@ class ChoosingTheReader(unittest.TestCase):
         self.assertEqual(channel.name, 'addon')
         self.assertTrue(channel.can('position'))
 
+    def test_a_reader_that_will_not_announce_is_not_the_reader(self):
+        """Switched off in the add-on must mean NVDA's own behaviour back.
+
+        The reader's user turned Titan's announcements off inside it, and
+        the add-on used to claim it could take one anyway and then drop it
+        with a reason nobody reads. That is worse than not having the
+        add-on at all: `announce_view_switched` and `announce_shell_group`
+        ask `replaces_focus` FIRST and stay quiet when the answer is no, so
+        those sentences were lost in both directions at once.
+        """
+        self._peer = FakePeer(capabilities={'announce': False,
+                                            'replaces_focus': True})
+        self.assertNotEqual(reader_channel.channel().name, 'addon')
+
+    def test_a_reader_older_than_the_key_is_still_the_reader(self):
+        """Absence is not a refusal: an add-on written before `announce`
+        existed answers everything it can do and never mentions it."""
+        self._peer = FakePeer(capabilities={'position': True})
+        self.assertEqual(reader_channel.channel().name, 'addon')
+
+    def test_a_channel_told_no_says_nothing_even_if_it_is_asked(self):
+        channel = reader_channel.AddonChannel('nvda', {'announce': False})
+        self._peer = FakePeer()
+        self.assertFalse(channel.say(reader_channel.Message('x')))
+        self.assertEqual(self._peer.calls, [])
+
     def test_a_peer_that_has_gone_is_not_the_reader(self):
         self._peer = FakePeer()
         self._peer.alive = False

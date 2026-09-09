@@ -418,17 +418,31 @@ class Result:
 
     ``question`` is set when the action asked for something instead of running
     - a dict with ``name``, ``prompt`` and ``options``. Ask the user, then call
-    again with that name among the arguments.
+      again with that name among the arguments.
+
+    ``consent`` is the OTHER kind of not-yet, and it is why this is not a
+    plain boolean: Titan is asking the person sitting at Titan whether this
+    program may control it, and until they answer it may only READ. That is
+    not a call that failed and must not be retried as one. The bridge in
+    Elten has always been able to tell the two apart (``needs_consent?``);
+    this client could not, so every Python client - the NVDA add-on among
+    them - had to guess from the wording of a sentence that is written in
+    the user's own language.
     """
 
-    def __init__(self, ok, text, question=None):
+    def __init__(self, ok, text, question=None, consent=''):
         self.ok = bool(ok)
         self.text = text or ''
         self.question = question
+        self.consent = str(consent or '')
 
     @property
     def pending(self):
         return self.question is not None
+
+    @property
+    def needs_consent(self):
+        return bool(self.consent)
 
     def __bool__(self):
         return self.ok
@@ -497,7 +511,8 @@ def call(addon, action, timeout=30.0, **args):
                          'args': args}, timeout)
     if not answer.get('ok'):
         return Result(False, str(answer.get('error') or 'the call failed'),
-                      question=answer.get('question'))
+                      question=answer.get('question'),
+                      consent=answer.get('consent'))
     return Result(True, str(answer.get('result') or ''))
 
 
@@ -518,7 +533,8 @@ def call_sequence(steps, stop_on_error=True, timeout=120.0):
                          'stop_on_error': bool(stop_on_error)}, timeout)
     if not answer.get('ok'):
         return Result(False, str(answer.get('error') or 'the sequence failed'),
-                      question=answer.get('question'))
+                      question=answer.get('question'),
+                      consent=answer.get('consent'))
     return Result(True, str(answer.get('result') or ''))
 
 

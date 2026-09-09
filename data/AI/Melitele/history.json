@@ -603,5 +603,15 @@
     "role": "user",
     "content": "wyłącz Titan",
     "timestamp": 1787223343.4622731
+  },
+  {
+    "role": "user",
+    "content": "ustaw prędkość nvda na 20%",
+    "timestamp": 1788870845.243241
+  },
+  {
+    "role": "assistant",
+    "content": "Zmieniłam prędkość eSpeak na **20%** w konfiguracji NVDA i wysłałam skrót przeładowania (**NVDA + Ctrl + R**). \n\nJeśli syntezator nie zmienił jeszcze tempa, naciśnij na klawiaturze **NVDA + Ctrl + R**, aby natychmiast wczytać nową konfigurację.",
+    "timestamp": 1788870958.0259724
   }
 ]
