@@ -5029,11 +5029,17 @@ class InstallingItIntoTheRealNVDA(unittest.TestCase):
         stray = os.path.join(package, 'old.py')
         with io.open(stray, 'w', encoding='utf-8') as handle:
             handle.write('# left over from an older build\n')
-        subprocess.run([sys.executable, installer, '--to', self.dir],
-                       capture_output=True, text=True,
-                       cwd=os.path.dirname(installer))
+        again = subprocess.run([sys.executable, installer, '--to', self.dir],
+                               capture_output=True, text=True,
+                               cwd=os.path.dirname(installer))
+        # Said with the installer's own words when it fails: "it is still
+        # there" is a report with no reason in it, and the reason - a
+        # build that refused, a file something else is holding - is
+        # already printed by the thing that knows.
         self.assertFalse(os.path.exists(stray),
-                         'a module that is no longer shipped is still there')
+                         'a module that is no longer shipped is still '
+                         'there. The installer said: %s'
+                         % (again.stdout or again.stderr)[-300:])
 
 # --------------------------------------------------------------------------- #
 class AVariantIsNotASpeechCommand(unittest.TestCase):
@@ -6920,7 +6926,7 @@ class TheManagersAreAMenuOfTheirOwn(unittest.TestCase):
         self.managers = self._between('managers = wx.Menu()',
                                       'reader = wx.Menu()')
         self.reader = self._between('reader = wx.Menu()',
-                                    "_('How this program is read')")
+                                    "_('This program')")
 
     def _between(self, start, end):
         at = self.source.index(start)
@@ -7480,6 +7486,22 @@ class TheMapOfTitan(unittest.TestCase):
         self.assertEqual(asked.get('item'), 'sound_theme')
         self.assertNotIn('id', asked)
 
+    def test_a_widget_answers_ELEMENT_and_nothing_else(self):
+        """Read off a live Titan. Looking for `text` or `said` found
+        neither: reading a widget came back as the words "element:
+        Top-Left" and MOVING one came back empty, which in the review is a
+        cursor that moves and says nothing."""
+        self.answers['widgets.read'] = (True, {'element': 'Top-Left'})
+        ok, said = self.titan.read_widget('example_grid')
+        self.assertTrue(ok)
+        self.assertEqual(said, 'Top-Left')
+
+    def test_moving_a_widget_says_what_is_under_it_now(self):
+        self.answers['widgets.move'] = (True, {'element': 'Top-Right'})
+        ok, said = self.titan.move_widget('example_grid', 'right')
+        self.assertTrue(ok)
+        self.assertEqual(said, 'Top-Right')
+
     def test_a_sound_is_played_by_NAME_with_a_pan(self):
         asked = {}
 
@@ -7583,6 +7605,55 @@ class ATitanApplicationAsAVirtualWindow(unittest.TestCase):
         self.assertEqual(self.review.row_text(['Shopping', '12 KB']),
                          'Shopping, 12 KB')
         self.assertEqual(self.review.row_text({'text': 'Ideas'}), 'Ideas')
+
+    def test_enter_CLICKS_the_row_rather_than_sending_a_key(self):
+        """A press on a list is `EVT_LISTBOX_DCLICK` in the shim - the
+        application's own "this row was opened", the same event a double
+        click produces. Sending Enter does something only if the
+        application happens to bind Enter, and most bind the activation.
+        """
+        from titanEnhancements import titan
+        done = []
+        was_press = titan.press_described
+        was_key = titan.key_described
+        titan.press_described = lambda token, control: (
+            done.append(('press', control)) or (True, {'answered': True}))
+        titan.key_described = lambda token, key: (
+            done.append(('key', key)) or (True, {'answered': True}))
+        try:
+            self.review._state['at'] = 1        # the list
+            self.review.activate()
+            for _ in range(40):
+                if done:
+                    break
+                time.sleep(0.02)
+        finally:
+            titan.press_described = was_press
+            titan.key_described = was_key
+        self.assertEqual(done[0], ('press', 2))
+
+    def test_the_key_is_the_fallback_when_nothing_answered(self):
+        """An application that binds Enter rather than the activation
+        would otherwise be a press that silently did nothing."""
+        from titanEnhancements import titan
+        done = []
+        was_press = titan.press_described
+        was_key = titan.key_described
+        titan.press_described = lambda token, control: (
+            done.append(('press', control)) or (True, {'answered': False}))
+        titan.key_described = lambda token, key: (
+            done.append(('key', key)) or (True, {'answered': True}))
+        try:
+            self.review._state['at'] = 1
+            self.review.activate()
+            for _ in range(40):
+                if len(done) > 1:
+                    break
+                time.sleep(0.02)
+        finally:
+            titan.press_described = was_press
+            titan.key_described = was_key
+        self.assertEqual(done, [('press', 2), ('key', 'enter')])
 
     def test_leaving_does_not_close_the_application(self):
         """A key that both leaves and quits is a key nobody can use
@@ -7905,6 +7976,51 @@ class AnyWindowAsAVirtualWindow(unittest.TestCase):
         self.assertEqual(parts[0][1], 'name')
         self.assertIn('place', [voice for _text, voice in parts])
 
+    def test_a_window_too_big_to_walk_is_cut_short_by_TIME(self):
+        """Measured on this machine: a dialog is 25 ms, a file manager
+        312 ms and a forum page in Edge **4.4 seconds** for 477 controls -
+        none of which is worth waiting for with the key already pressed.
+        The counts are a guess at how long a window will take; the clock
+        is the measurement."""
+        maker = AnyWindowAsAVirtualWindow.Obj
+
+        class Slow(object):
+            """A window whose every branch costs what a real one costs -
+            a call into another process per node."""
+            name = 'huge'
+            value = ''
+            description = ''
+            role = types.SimpleNamespace(name='BUTTON')
+            windowHandle = 1
+
+            @property
+            def children(self):
+                time.sleep(0.02)
+                return [Slow() for _ in range(6)]
+
+        was = self.vw.SECONDS
+        self.vw.SECONDS = 0.15
+        try:
+            note = {}
+            started = time.time()
+            nodes = self.vw.nodes_of(Slow(), note)
+            took = time.time() - started
+        finally:
+            self.vw.SECONDS = was
+        self.assertEqual(note.get('ran_out'), 'time')
+        self.assertLess(took, 2.0, 'it walked for %.1f s' % took)
+        # And it hands over what it HAS rather than nothing: a partial
+        # window is usable, a wait is not.
+        self.assertTrue(nodes)
+
+    def test_it_says_when_it_only_got_part_of_the_way(self):
+        """Said once, because it happened once - the user would otherwise
+        arrow to the end and wonder where the rest of the window went."""
+        source = _source_of('virtualWindow.py')
+        self.assertIn("_('Part of it only')", source)
+        block = source.split('def start(', 1)[1].split('\ndef ', 1)[0]
+        self.assertIn("note.get('ran_out')", block)
+
     def test_it_ends_when_the_window_has_gone(self):
         """A review that outlived its window would swallow the arrow keys
         in whatever the user moved to."""
@@ -7916,6 +8032,379 @@ class AnyWindowAsAVirtualWindow(unittest.TestCase):
             self.assertFalse(self.vw.reviewing())
         finally:
             del self.vw._foreground
+
+
+class AMenuRowIsANameNotASentence(unittest.TestCase):
+    """A menu is walked one row at a time with the arrows.
+
+    So a row that is a sentence is a sentence heard on the way to the row
+    below it, every time. The entries here read "Open an application and
+    walk it with the arrows..." and the submenu holding them was called
+    "Titan itself" - a description of a feature rather than the name of a
+    place to go. Reported, in those words: the naming is wrong, they
+    should be "(applications)", "(TCE)".
+    """
+
+    #: Just above the longest that survived the rewrite ("Read the steps
+    #: of one..."). A bound set at what is there rather than at a round
+    #: number, so the next sentence written into a menu fails this.
+    LONGEST = 5
+
+    def setUp(self):
+        import re
+        self.re = re
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'menu.py')
+        with io.open(path, encoding='utf-8') as handle:
+            self.source = handle.read()
+
+    def _labels(self):
+        found = []
+        for match in self.re.finditer(
+                r"(builder\.item\([a-z_]+, |AppendSubMenu\([a-z_]+, )"
+                r"_\((.*?)\)(?:,|\))", self.source, self.re.S):
+            text = ' '.join(self.re.findall(r"'((?:[^'\\]|\\.)*)'",
+                                            match.group(2)))
+            text = text.replace("\\'", "'")
+            if text:
+                found.append(text)
+        return found
+
+    def test_no_row_is_a_sentence(self):
+        labels = self._labels()
+        self.assertGreater(len(labels), 40, 'the labels were not found')
+        long = [text for text in labels
+                if len(text.split()) > self.LONGEST]
+        self.assertEqual(long, [], 'these read as sentences: %s' % long)
+
+    def test_no_row_explains_itself_in_brackets(self):
+        """"AI OCR (read a window nothing else can)" is a name and then a
+        sentence about it. The name is the half that survives."""
+        for text in self._labels():
+            inside = text.partition('(')[2].partition(')')[0]
+            self.assertLessEqual(len(inside.split()), 3,
+                                 'explained in brackets: %s' % text)
+
+    def test_the_applications_are_called_what_they_are(self):
+        """TCE is what Titan's own applications have always been called,
+        and it is what the user asked for."""
+        self.assertIn("_('TCE applications')", self.source)
+        self.assertNotIn("_('Titan itself')", self.source)
+
+
+class LeavingAnApplicationDoesNotLeaveItRunning(unittest.TestCase):
+    """Escape leaves the review and deliberately does NOT close the
+    application - a key that both leaves and quits is a key nobody can use
+    safely. Which means something has to come BACK to it.
+
+    Without that, walking away and opening it again opened a second copy.
+    Measured on a live Titan: three sessions left behind by three probes,
+    each a subprocess of Titan's with nobody rendering it.
+    """
+
+    def setUp(self):
+        from titanEnhancements import titan
+        from titanEnhancements.link import LINK
+        self.titan = titan
+        self.calls = []
+        self.sessions = []
+        self._bridge = LINK.bridge
+
+        def bridge(call, timeout=None, **args):
+            self.calls.append((call, args))
+            if call == 'app.sessions':
+                return True, self.sessions
+            if call == 'app.screen':
+                return True, {'screen': {'controls': []}, 'said': ''}
+            if call == 'app.open':
+                return True, {'session': '9', 'application': args.get('name'),
+                              'screen': {'controls': []}}
+            if call == 'app.close':
+                return True, {'closed': True}
+            return False, 'nothing said'
+        LINK.bridge = bridge
+        self.addCleanup(lambda: setattr(LINK, 'bridge', self._bridge))
+
+    def test_it_comes_back_to_the_one_already_open(self):
+        self.sessions = [{'token': 3, 'application': 'File Manager',
+                          'owner': 'nvda'}]
+        ok, data = self.titan.open_described('File Manager')
+        self.assertTrue(ok)
+        self.assertEqual(data.get('session'), '3')
+        self.assertNotIn('app.open', [call for call, _args in self.calls])
+
+    def test_somebody_elses_session_is_not_taken_over(self):
+        """Another client rendering the same application is not ours."""
+        self.sessions = [{'token': 3, 'application': 'File Manager',
+                          'owner': 'elten_tce_bridge'}]
+        ok, _data = self.titan.open_described('File Manager')
+        self.assertTrue(ok)
+        self.assertIn('app.open', [call for call, _args in self.calls])
+
+    def test_a_different_application_is_opened_freshly(self):
+        self.sessions = [{'token': 3, 'application': 'Notes',
+                          'owner': 'nvda'}]
+        self.titan.open_described('File Manager')
+        self.assertIn('app.open', [call for call, _args in self.calls])
+
+    def test_everything_ours_is_closed_when_the_plugin_goes(self):
+        self.sessions = [{'token': 1, 'application': 'Notes',
+                          'owner': 'nvda'},
+                         {'token': 2, 'application': 'Other',
+                          'owner': 'somebody else'},
+                         {'token': 3, 'application': 'File Manager',
+                          'owner': 'nvda'}]
+        self.assertEqual(self.titan.close_all_described(), 2)
+        closed = [args.get('session') for call, args in self.calls
+                  if call == 'app.close']
+        self.assertEqual(closed, ['1', '3'])
+
+    def test_the_plugin_really_calls_it_on_the_way_out(self):
+        source = _source_of('__init__.py')
+        self.assertIn('_close_described_applications', source)
+        self.assertIn('close_all_described', source)
+
+
+class AToggleSaysWhichStateAndNothingElse(unittest.TestCase):
+    """A pair of messages a user hears many times a day.
+
+    They have to be short and symmetrical, or somebody has to listen to
+    the whole sentence to work out which state they are now in. "Virtual
+    window on, 24 controls" carried a fact about the WINDOW in a message
+    about the SWITCH - and the first control is spoken straight after it
+    anyway, so the count was said on the way to what was wanted.
+    """
+
+    #: Every review that is a real switch, and the two words it must
+    #: answer with. `appReview` is deliberately not here: opening an
+    #: application takes seconds, so its start is news ("Opening Notes")
+    #: rather than a switch.
+    TOGGLES = ('terminal', 'ocrReview', 'virtualWindow', 'widgetReview')
+
+    def test_each_pair_is_the_same_words_with_on_and_off(self):
+        import importlib
+        import re
+        for name in self.TOGGLES:
+            module = importlib.import_module('titanEnhancements.' + name)
+            source = _source_of(name + '.py')
+            said = set(re.findall(r"_\('([A-Z][^']*(?:on|off))'\)", source))
+            ons = {text for text in said if text.endswith(' on')}
+            offs = {text for text in said if text.endswith(' off')}
+            self.assertTrue(ons, '%s never says it is on: %s' % (name, said))
+            self.assertTrue(offs, '%s never says it is off' % name)
+            for text in ons:
+                self.assertIn(text[:-3] + ' off', offs,
+                              '%s says %r but not its opposite' % (name, text))
+
+    def test_no_toggle_carries_a_count(self):
+        import re
+        for name in self.TOGGLES:
+            source = _source_of(name + '.py')
+            for text in re.findall(r"_\('([^']*(?: on| off))'\)", source):
+                self.assertNotIn('{', text,
+                                 '%s puts a number in a toggle: %r'
+                                 % (name, text))
+
+    def test_the_virtual_window_says_exactly_that(self):
+        from titanEnhancements import virtualWindow
+        self.assertIn("_('Virtual window on')",
+                      _source_of('virtualWindow.py'))
+        self.assertIn("_('Virtual window off')",
+                      _source_of('virtualWindow.py'))
+
+
+class OpenMeansTheVirtualWindow(unittest.TestCase):
+    """The Open button in the Titan window.
+
+    It built a window of native controls, which is a second interface to
+    be in rather than the one the user has already learned everywhere
+    else here. That view is still there - "As real controls" on the menu -
+    for a form that is easier to fill in than to read.
+    """
+
+    def setUp(self):
+        self.source = _source_of('titanWindow.py')
+
+    def test_open_starts_the_virtual_window(self):
+        block = self.source.split('def _open_here', 1)[1]
+        block = block.split('\n        def ', 1)[0]
+        self.assertIn('appReview.start', block)
+        self.assertNotIn('appScreen', block)
+
+    def test_open_still_means_something_for_a_game(self):
+        """A game is played on Titan's own screen and a menu entry is a
+        command: there is no virtual window to be had, and a first button
+        greyed out for four of the five kinds is one nobody trusts."""
+        block = self.source.split('def _open_here', 1)[1]
+        block = block.split('\n        def ', 1)[0]
+        self.assertIn('_start_it', block)
+        self.assertNotIn('_here_button', self.source)
+
+    def test_the_other_button_says_where_it_opens(self):
+        self.assertIn("_('Open in &Titan')", self.source)
+
+
+class AWidgetIsAVirtualWindowToo(unittest.TestCase):
+    """A widget's cursor lives in Titan, so the arrows move it there.
+
+    The other reviews build the whole thing up front and then move about
+    locally. A widget answers one element at a time and nothing answers
+    how many there are - so there is no list, no "3 of 10", and no page
+    key offered that could not be honoured.
+    """
+
+    def setUp(self):
+        from titanEnhancements import widgetReview
+        self.review = widgetReview
+        self.said = []
+        self._say = widgetReview._say
+        self._parts = widgetReview._say_parts
+        widgetReview._say = lambda text: self.said.append(str(text))
+        widgetReview._say_parts = lambda parts: self.said.append(
+            ', '.join(str(text) for text, _voice in parts))
+        self.addCleanup(lambda: setattr(widgetReview, '_say', self._say))
+        self.addCleanup(
+            lambda: setattr(widgetReview, '_say_parts', self._parts))
+        self.addCleanup(lambda: widgetReview._state.update(
+            {'on': False, 'widget': '', 'said': ''}))
+
+    def test_the_directions_are_the_ones_titan_understands(self):
+        """`up`, `down`, `left`, `right` - read out of Titan's own applets.
+        `next` is what this was written with first, and it moved nothing at
+        all: the applet's navigate() tests for the four words and silently
+        ignores anything else."""
+        source = _source_of('__init__.py')
+        block = source.split('def script_widgetUp', 1)[1][:900]
+        for word in ("'up'", "'down'", "'left'", "'right'"):
+            self.assertIn(word, block, word)
+        self.assertNotIn("'next'", block)
+
+    def test_a_move_that_changed_nothing_is_the_end_of_the_widget(self):
+        """Titan answers the same element when the move went nowhere, and
+        saying it again would be a cursor that reads as stuck."""
+        from titanEnhancements import titan
+        self.review._state.update({'on': True, 'widget': 'taskbar',
+                                   'name': 'Taskbar', 'said': 'the same'})
+        edges = []
+        was_edge = self.review._edge
+        self.review._edge = lambda: edges.append(1)
+        was_move = titan.move_widget
+        titan.move_widget = lambda widget, direction: (True, 'the same')
+        try:
+            self.review.move('down')
+            for _ in range(40):
+                if edges:
+                    break
+                time.sleep(0.02)
+        finally:
+            self.review._edge = was_edge
+            titan.move_widget = was_move
+        self.assertEqual(edges, [1])
+
+    def test_it_is_one_of_the_reviews_that_end_each_other(self):
+        from titanEnhancements import reviews
+        self.assertIn('widgetReview', reviews._ALL)
+
+    def test_it_answers_the_two_questions_every_review_answers(self):
+        self.assertTrue(callable(self.review.reviewing))
+        self.assertTrue(callable(self.review.stop))
+
+
+class TheSettingsAreShapedLikeTheJawsSettingsCentre(unittest.TestCase):
+    """One list, Space acts on the row, and a word is edited in a field.
+
+    Asked for in those terms. Pressing a button called "Change" is one
+    more thing to Tab to for something that should be a keystroke, and a
+    dialog on top of the window is a second place for the keyboard to be.
+    """
+
+    def setUp(self):
+        self.source = _source_of('titanWindow.py')
+
+    def test_space_acts_on_the_row(self):
+        block = self.source.split('def _setting_key', 1)[1][:400]
+        self.assertIn('WXK_SPACE', block)
+        self.assertIn('_change_setting', block)
+
+    def test_a_word_setting_is_a_real_edit_field(self):
+        block = self.source.split('def _setting_chosen', 1)[1][:900]
+        for kind in ("'text'", "'number'", "'secret'"):
+            self.assertIn(kind, block, kind)
+        self.assertIn('self.field.Show', block)
+
+    def test_nothing_raises_a_dialog_to_type_into_any_more(self):
+        self.assertNotIn('TextEntryDialog', self.source)
+
+    def test_the_list_is_called_what_is_IN_it(self):
+        """"Titan has, list" is a sentence about the window; "Applications,
+        list" is what the keyboard has landed on."""
+        self.assertNotIn("_('&Titan has')", self.source)
+        # To the end of the method rather than a number of characters: a
+        # slice measured in characters fails the day somebody writes a
+        # comment, which is a test that punishes explaining yourself.
+        block = self.source.split('def _kind_chosen', 1)[1]
+        block = block.split('\n        def ', 1)[0]
+        self.assertIn('self.things.SetName', block)
+
+
+class ACappedWalkIsAHoleNotABudget(unittest.TestCase):
+    """Found on a real taskbar: an anchored control was not found again.
+
+    `anchors.find` and `monitors._find_control` both walked a window
+    breadth first and queued `children[:40]`. The walk is already bounded
+    by how many objects it looks at, so capping the CHILDREN buys nothing
+    and costs everything: a control past the fortieth child of its parent
+    could never be reached, so a place marker on the twelfth tray icon or
+    a monitor on a deep toolbar row silently never came back.
+    """
+
+    class Obj:
+        def __init__(self, name='', children=()):
+            self.name = name
+            self.value = ''
+            self.description = ''
+            self.role = types.SimpleNamespace(name='BUTTON')
+            self.children = list(children)
+            self.windowClassName = 'Shell_TrayWnd'
+            self.UIAAutomationId = name
+
+    def test_a_control_past_the_fortieth_child_is_still_found(self):
+        from titanEnhancements import anchors
+        from titanEnhancements import labels
+        wanted = self.Obj(name='the fiftieth')
+        window = self.Obj(name='taskbar', children=[
+            self.Obj(name='button %d' % index) for index in range(49)
+        ] + [wanted])
+        key = labels.key_of(wanted)[0]
+        module = types.ModuleType('api')
+        module.getForegroundObject = lambda: window
+        had = sys.modules.get('api')
+
+        def put_back():
+            if had is None:
+                sys.modules.pop('api', None)
+            else:
+                sys.modules['api'] = had
+        sys.modules['api'] = module
+        self.addCleanup(put_back)
+        note = {}
+        found = anchors.find({'kind': anchors.BY_CONTROL, 'where': key},
+                             note)
+        self.assertIs(found, wanted,
+                      'not found, and it said: %s' % note.get('why'))
+
+    def test_neither_walk_caps_the_children_any_more(self):
+        for name in ('anchors.py', 'monitors.py'):
+            self.assertNotIn('children or [])[:40]', _source_of(name), name)
+
+    def test_it_says_WHY_it_found_nothing(self):
+        """"It was not found" has four causes with four different things
+        to do about them, and a caller that cannot tell them apart reports
+        a bug that is really a window having closed."""
+        from titanEnhancements import anchors
+        note = {}
+        anchors.find({'kind': anchors.BY_CONTROL, 'where': ''}, note)
+        self.assertTrue(note.get('why'))
 
 
 class InstallingNeverLeavesHalfAScreenReader(unittest.TestCase):
@@ -8155,7 +8644,8 @@ def _plugin_class():
 
 def _source_of(name):
     where = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements', name)
-    return io.open(where, encoding='utf-8').read()
+    with io.open(where, encoding='utf-8') as handle:
+        return handle.read()
 
 
 if __name__ == "__main__":

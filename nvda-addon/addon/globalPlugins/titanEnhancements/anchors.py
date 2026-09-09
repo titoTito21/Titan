@@ -106,30 +106,48 @@ def anchor_for(obj):
 MAX_SEEN = 400
 
 
-def find(anchor):
+def find(anchor, note=None):
     """The control this anchor points at, if it is on the screen now.
 
     Only inside the program the anchor was made in, and only through NVDA's
     own tree. A search that ranged over the whole desktop would eventually
     find a control that matched and was not the one meant.
+
+    ``note`` is a dict this fills in with WHY it answered nothing - how far
+    it got, whether it ran out of budget, and what it was looking for.
+    "It was not found" has four different causes with four different things
+    to do about them, and a caller that cannot tell them apart reports a
+    bug that is really a window having closed.
     """
+    if note is None:
+        note = {}
+    note.update({'seen': 0, 'ran_out': False, 'why': ''})
     if not anchor:
+        note['why'] = 'there is no anchor'
         return None
     kind = anchor.get('kind')
     if kind == BY_POINT:
-        return at_point(anchor.get('point'))
+        found = at_point(anchor.get('point'))
+        note['why'] = '' if found is not None else 'nothing is at that point'
+        return found
     wanted = _text(anchor.get('where'))
+    note['wanted'] = wanted
     if not wanted:
+        note['why'] = 'the anchor names no control'
         return None
     try:
         import api
         from . import labels
         window = api.getForegroundObject()
-    except Exception:                                # noqa: BLE001
+    except Exception as error:                       # noqa: BLE001
+        note['why'] = 'NVDA would not say what is in front: %s' % error
         return None
     if window is None:
+        note['why'] = 'there is no window in front'
         return None
     if anchor.get('program') and program_of(window) != anchor['program']:
+        note['why'] = ('the window in front is %s, not %s'
+                       % (program_of(window), anchor['program']))
         return None
     seen, queue = 0, [window]
     while queue and seen < MAX_SEEN:
@@ -137,10 +155,22 @@ def find(anchor):
         seen += 1
         try:
             if labels.key_of(obj)[0] == wanted:
+                note['seen'] = seen
                 return obj
-            queue.extend(list(obj.children or [])[:40])
+            # **All of them.** This used to take the first forty children
+            # of each node, which is not a budget - the whole walk is
+            # already bounded by MAX_SEEN - it is a hole: a control past
+            # the fortieth child of its parent could never be found, so a
+            # marker on the twelfth tray icon or the fiftieth row of a
+            # toolbar silently never came back. Found on a real taskbar.
+            queue.extend(list(obj.children or []))
         except Exception:                            # noqa: BLE001
             continue
+    note['seen'] = seen
+    note['ran_out'] = seen >= MAX_SEEN
+    note['why'] = ('looked at %d controls and ran out' % seen if note['ran_out']
+                   else 'walked the whole window (%d controls) and it is not '
+                        'there' % seen)
     return None
 
 

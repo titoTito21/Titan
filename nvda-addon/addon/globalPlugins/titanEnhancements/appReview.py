@@ -352,12 +352,19 @@ def activate():
     if kind in TOGGLEABLE:
         return toggle()
     if kind in ('list', 'table', 'tree'):
-        # A list has no press of its own: what opens a row is the key the
-        # application binds, which is Enter. `app.key` is how Titan's own
-        # renderers do it and it is what the shim understands.
+        # **Enter CLICKS the row**, which is what `app.press` on a list
+        # really does: read out of the shim, a press on a `ListBox` fires
+        # `EVT_LISTBOX_DCLICK`, on a `ListCtrl` `EVT_LIST_ITEM_ACTIVATED`
+        # and on a tree `EVT_TREE_ITEM_ACTIVATED` - the application's own
+        # "this row was opened", the same event a double click produces.
+        #
+        # Sending the KEY was what this did first, and it is weaker in the
+        # way that matters: it does something only if the application
+        # happens to bind Enter, and most of them bind the activation
+        # instead. The key is kept as the fallback for the ones that do.
         icons.play('open-object')
-        _act(lambda: titan.key_described(token, 'enter'))
-        # Translators: said when Enter is sent to an application.
+        _act(lambda: _press_then_key(token, identifier))
+        # Translators: said when a row of a list is opened.
         return True, _('Opened')
     if kind in ('text', 'multiline'):
         return type_here()
@@ -405,6 +412,23 @@ def press_key(key):
     token = session()
     _act(lambda: titan.key_described(token, key))
     return True, ''
+
+
+def _press_then_key(token, control):
+    """Click the row; if nothing answered, send Enter instead.
+
+    `answered` is the application saying whether anything of its own ran.
+    A row that is clicked and handled is done; a row in an application
+    that binds the key rather than the activation would otherwise be a
+    press that silently did nothing, which is the failure this whole
+    module exists not to have.
+    """
+    ok, answer = titan.press_described(token, control)
+    if not ok:
+        return ok, answer
+    if isinstance(answer, dict) and answer.get('answered') is False:
+        return titan.key_described(token, 'enter')
+    return ok, answer
 
 
 def _act(work):

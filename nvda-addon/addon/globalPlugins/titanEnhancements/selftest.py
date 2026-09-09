@@ -25,22 +25,71 @@ import time
 from . import compat
 
 
+#: How long any one check may take. This whole self-test is asked over the
+#: bus and answered on NVDA's own main thread, so a check that takes ten
+#: seconds is ten seconds of a reader that has stopped answering - which
+#: is exactly how it read from the outside: "the application
+#: disconnected", about an NVDA that was perfectly alive and busy walking
+#: windows. A check that freezes the reader it is checking is worse than
+#: no check at all.
+BUDGET = 6.0
+
+
 def _try(name, work):
-    """One check. ``{name, ok, said}`` - and never raises, because a check
-    that takes the harness down tells you about one thing and hides the
-    rest."""
+    """One check. ``{name, ok, said}`` - never raises, never hangs.
+
+    It never raises because a check that takes the harness down tells you
+    about one thing and hides the rest; it never hangs because the harness
+    runs inside the thing being checked.
+    """
     started = time.time()
+    done, answer = _budgeted(work, BUDGET,
+                             (False, 'gave up after %g seconds - it is not '
+                                     'broken, it is slower than this check '
+                                     'may wait' % BUDGET))
     try:
-        ok, said = work()
-    except Exception as error:                       # noqa: BLE001
-        ok, said = False, '%s: %s' % (type(error).__name__, error)
+        ok, said = answer
+    except Exception:                                # noqa: BLE001
+        ok, said = False, str(answer)
     return {'check': name, 'ok': bool(ok), 'said': str(said),
-            'ms': int((time.time() - started) * 1000)}
+            'ms': int((time.time() - started) * 1000),
+            'gave_up': not done}
 
 
 # --------------------------------------------------------------------------- #
 # The checks
 # --------------------------------------------------------------------------- #
+#: What every check that is ABOUT the window in front says when there is
+#: no window in front. Not a failure: it is a true answer about the
+#: machine, and four checks going red over one environmental fact - the
+#: desktop showing, the screen locked, a window closing as this ran -
+#: teaches people to ignore the whole report. The same discipline the
+#: anchoring check already carries.
+NO_WINDOW = ('there is no window in front to look at, so there is nothing '
+             'here to read - not a fault')
+
+
+def _no_window():
+    """Whether there is really no foreground window at all.
+
+    Asked of NVDA and of Windows, because they can disagree: NVDA answers
+    about the object it is tracking and Windows about the handle, and a
+    window that is closing is briefly one and not the other.
+    """
+    try:
+        import api
+        if api.getForegroundObject() is not None:
+            return False
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        import ctypes
+        ctypes.windll.user32.GetForegroundWindow.restype = ctypes.c_void_p
+        return not int(ctypes.windll.user32.GetForegroundWindow() or 0)
+    except Exception:                                # noqa: BLE001
+        return True
+
+
 def _local_ocr():
     """The one that was broken, and the one a stand-in could not catch."""
     from . import localOcr
@@ -53,6 +102,8 @@ def _local_ocr():
         hwnd = int(ctypes.windll.user32.GetForegroundWindow() or 0)
     except Exception as error:                       # noqa: BLE001
         return False, 'no foreground window: %s' % error
+    if not hwnd and _no_window():
+        return True, NO_WINDOW
     if not hwnd:
         return False, 'no foreground window'
     reading = localOcr.read_window(hwnd)
@@ -76,6 +127,8 @@ def _ocr_review():
         return False, why
     ok, said = ocrReview.start()
     if not ok:
+        if _no_window():
+            return True, NO_WINDOW
         return False, said
     try:
         ocrReview.move_line(1)
@@ -94,10 +147,16 @@ def _controls():
     from . import windowsAndActions as wa
     window = wa.foreground()
     if window is None:
-        return False, 'there is no window in front'
+        return True, NO_WINDOW
     found = wa.controls(window)
     if not found:
-        return False, 'nothing in the window in front could be listed'
+        if _no_window():
+            return True, NO_WINDOW
+        # A window that IS there and lists nothing is a real answer about
+        # a real window - a menu, or a window that exposes nothing - so it
+        # says which of the two it is rather than being counted as broken.
+        return True, ('the window in front lists no controls at all, which '
+                      'is what the recognised-screen review is for')
     with_verbs = [row for row in found if row['actions']]
     return True, ('%d controls, %d of them offering an action; first "%s"'
                   % (len(found), len(with_verbs), found[0]['label'][:40]))
@@ -124,11 +183,13 @@ def _anchor():
         return True, ('this control has nothing stable to be remembered by, '
                       'so marking or watching it would be refused - which '
                       'is the right answer, not a fault')
-    again = anchors.find(anchor)
+    note = {}
+    again = anchors.find(anchor, note)
     if again is None:
         return False, ('the control was anchored as %s and could NOT be '
                        'found again - a marker made here would not come '
-                       'back to it' % anchor.get('kind'))
+                       'back to it (%s)'
+                       % (anchor.get('kind'), note.get('why') or 'no reason'))
     return True, 'anchored as %s and found again' % anchor.get('kind')
 
 
@@ -136,7 +197,10 @@ def _find_control():
     from . import findControl
     rows = findControl.controls()
     if not rows:
-        return False, 'nothing in this window to search'
+        if _no_window():
+            return True, NO_WINDOW
+        return True, ('the window in front offers no controls to search, '
+                      'which is a true answer about it')
     wanted = rows[0]['label'].split(',')[0].strip()
     hits = findControl.by_words(wanted, rows)
     if not hits:
@@ -240,7 +304,8 @@ def _virtual_window():
     window = virtualWindow._foreground()
     if window is None:
         return False, 'there is no window in front to walk'
-    nodes = virtualWindow.nodes_of(window)
+    note = {}
+    nodes = virtualWindow.nodes_of(window, note)
     if not nodes:
         return True, ('this window answers nothing - which is what the '
                       'recognised-screen review is for, not a fault')
@@ -252,9 +317,12 @@ def _virtual_window():
     # matches nothing on this machine is reported rather than assumed.
     reachable = [letter for letter, roles in virtualWindow.QUICK.items()
                  if any(node['role'].upper() in roles for node in nodes)]
-    return True, ('%d controls, mostly %s; %d of the %d quick-navigation '
-                  'letters find something here (%s); first %r%s'
-                  % (len(nodes),
+    return True, ('%d controls in %d ms%s, mostly %s; %d of the %d '
+                  'quick-navigation letters find something here (%s); '
+                  'first %r%s'
+                  % (len(nodes), note.get('ms') or 0,
+                     (' (ran out of %s)' % note['ran_out'])
+                     if note.get('ran_out') else '',
                      ', '.join('%s %d' % (name.lower(), count)
                                for name, count in top),
                      len(reachable), len(virtualWindow.QUICK),
@@ -274,23 +342,65 @@ def _richest_window():
     """
     from . import virtualWindow
     from . import windowsAndActions
-    best, where, walked = 0, '', 0
+    import time
+    # **A budget, because this runs on NVDA's own thread.** Walking a
+    # window is a call into another process per node, and walking twelve
+    # of them took long enough that NVDA stopped answering the bus and the
+    # whole self-test came back as "the application disconnected". A check
+    # that freezes the reader it is checking is worse than no check: the
+    # add-on's own semantic layer carries exactly this rule, and this
+    # ignored it.
+    BUDGET = 1.5
+    deadline = time.time() + BUDGET
+    best, where, walked, took = 0, '', 0, 0.0
     try:
         windows = windowsAndActions.windows()
     except Exception:                                # noqa: BLE001
         return ''
-    for label, obj in (windows or [])[:12]:
+    for label, obj in (windows or [])[:6]:
+        if time.time() > deadline:
+            break
+        started = time.time()
         try:
             count = len(virtualWindow.nodes_of(obj))
         except Exception:                            # noqa: BLE001
             continue
         walked += 1
         if count > best:
-            best, where = count, str(label)
+            # **Timed, because this is what the user waits for.** Walking a
+            # window is a call into another process per node, and how long
+            # that takes on a rich window is the difference between a mode
+            # that opens and one that appears to hang.
+            best, where, took = count, str(label), time.time() - started
     if not walked:
         return ''
-    return ('; across %d open windows the richest is %s with %d controls'
-            % (walked, where.split(' (')[0], best))
+    return ('; across %d open windows the richest is %s with %d controls '
+            'in %d ms'
+            % (walked, where.split(' (')[0], best, int(took * 1000)))
+
+
+def _budgeted(work, seconds, otherwise):
+    """Run something on a thread and give up on it. ``(done, answer)``.
+
+    The self-test is asked over the bus and answered on NVDA's own main
+    thread, so anything in it that can take seconds has to be able to be
+    abandoned - or a check that is merely slow reads as a reader that has
+    crashed.
+    """
+    import threading
+    box = {}
+
+    def run():
+        try:
+            box['answer'] = work()
+        except Exception as error:                   # noqa: BLE001
+            box['answer'] = (False, '%s: %s' % (type(error).__name__, error))
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if 'answer' not in box:
+        return False, otherwise
+    return True, box['answer']
 
 
 def _auditory_icons():
@@ -374,6 +484,46 @@ def _asked_for():
     return asked
 
 
+def _widgets():
+    """A Titan widget, walked the way the widget review walks one.
+
+    **It puts the cursor back.** The widget's cursor is Titan's own and
+    the user may be sitting on it, so this moves down and then up again -
+    and says so, because a check that quietly moved something would be a
+    check nobody should run while working.
+    """
+    from . import titan
+    from .link import LINK
+    if not LINK.connected():
+        return True, 'Titan is not running, so it has no widgets'
+    ok, rows = titan.widgets()
+    if not ok:
+        return False, str(rows)
+    if not rows:
+        return True, 'Titan has no widgets'
+    walkable = [row for row in rows
+                if str(row.get('type') or '') == 'grid']
+    if not walkable:
+        return True, ('%d widgets, none of them a grid - nothing to walk'
+                      % len(rows))
+    name = str(walkable[0].get('id') or walkable[0].get('name') or '')
+    ok, first = titan.read_widget(name)
+    if not ok:
+        return False, 'could not read %s: %s' % (name, first)
+    ok, moved = titan.move_widget(name, 'down')
+    if not ok:
+        return False, 'could not move in %s: %s' % (name, moved)
+    titan.move_widget(name, 'up')
+    ok, back = titan.read_widget(name)
+    where = 'put back' if ok and back == first else 'NOT put back'
+    if moved == first:
+        return True, ('%d widgets, %d walkable; %s has one element only '
+                      '(%s)' % (len(rows), len(walkable), name, first[:40]))
+    return True, ('%d widgets, %d walkable; %s moved %r -> %r, cursor %s'
+                  % (len(rows), len(walkable), name, first[:30],
+                     moved[:30], where))
+
+
 def _voice_classes():
     """The classes, the named voices, and what the user has changed."""
     from . import classes
@@ -410,6 +560,7 @@ CHECKS = (
     ('the voice', _voice),
     ('the voice classes', _voice_classes),
     ('the virtual window', _virtual_window),
+    ('the widgets', _widgets),
     ('auditory icons', _auditory_icons),
     ('all of Titan', _titan_map),
 )

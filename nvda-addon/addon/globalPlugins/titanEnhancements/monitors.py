@@ -502,7 +502,14 @@ def _find_control(monitor):
         try:
             if labels.key_of(obj)[0] == wanted:
                 return obj
-            stack.extend(list(obj.children or [])[:40])
+            # **All of them, not the first forty.** The walk is already
+            # bounded by `seen`; capping the children was a hole rather
+            # than a budget - a control past the fortieth child of its
+            # parent could never be found again, so a monitor on the
+            # twelfth tray icon or a deep row of a toolbar silently
+            # watched nothing for ever. The same bug was in `anchors`,
+            # and was found on a real taskbar.
+            stack.extend(list(obj.children or []))
         except Exception:                            # noqa: BLE001
             continue
     return None

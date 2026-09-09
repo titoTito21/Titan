@@ -151,19 +151,34 @@ def build():
                 choices=[label for _id, label in self._kinds])
             self.kind.SetSelection(0)
             self.kind.Bind(wx.EVT_CHOICE, self._kind_chosen)
-            # Translators: the list on the Start page.
-            self.things = helper.addLabeledControl(
-                _('&Titan has'), wx.ListBox, style=wx.LB_SINGLE)
+            # **The list is called what is IN it.** It was "Titan has",
+            # which is a sentence about the window rather than the name of
+            # the thing the keyboard has landed on - so a reader said
+            # "Titan has, list" where it should say "Applications, list".
+            # The label follows the chooser, which is what Titan's own
+            # window does (`views.list` carries a `short_name` per view).
+            #
+            # The static text is kept rather than made by `addLabeledControl`,
+            # because that helper hands back the control and throws the
+            # label away - and this one has to be renamed.
+            self._things_label = wx.StaticText(page, label='')
+            helper.addItem(self._things_label)
+            self.things = helper.addItem(
+                wx.ListBox(page, style=wx.LB_SINGLE))
             buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
-            # Translators: a button in the Titan window.
-            start = buttons.addButton(page, label=_('&Open in Titan'))
-            start.Bind(wx.EVT_BUTTON, self._start_it)
-            # Translators: a button in the Titan window - it opens the
-            # application as a screen here, in the reader, rather than as a
-            # window over on Titan's own screen.
-            here = buttons.addButton(page, label=_('Open &here'))
+            # **Open means the virtual window**, which is the shape
+            # everything else in this add-on is walked in. It used to
+            # build a window of native controls instead, and that is a
+            # second interface to be in rather than the one the user has
+            # already learned - it is still there, as "As real controls"
+            # on the Titan menu, for a form that is easier to fill in than
+            # to read.
+            here = buttons.addButton(page, label=_('&Open'))
             here.Bind(wx.EVT_BUTTON, self._open_here)
-            self._here_button = here
+            # Translators: a button in the Titan window - it opens the
+            # thing on Titan's own screen instead of here.
+            start = buttons.addButton(page, label=_('Open in &Titan'))
+            start.Bind(wx.EVT_BUTTON, self._start_it)
             helper.addItem(buttons)
             page.Sizer = helper.sizer
 
@@ -171,11 +186,19 @@ def build():
             at = self.kind.GetSelection()
             kind = self._kinds[at][0] if 0 <= at < len(self._kinds) else ''
             self._kind = kind
-            # Only an application can be opened as a screen in here: a game
-            # is played on Titan's own screen and a menu entry is a command,
-            # so the button says so by being unavailable rather than by
-            # answering with a refusal after it is pressed.
-            self._here_button.Enable(kind == 'applications')
+            name = self._kinds[at][1] if 0 <= at < len(self._kinds) else ''
+            self._things_label.SetLabel(name)
+            # **Open always opens.** It used to be unavailable for
+            # anything but an application, because only an application can
+            # be a virtual window - but "open" has an obvious meaning for
+            # a game and a menu entry too, and a first button that is
+            # greyed out for four of the five kinds is a button nobody
+            # trusts. It opens what it can here and hands the rest to
+            # Titan, which is what the user meant either way.
+            # Both, because they are read by different things: wx uses the
+            # static text in front of the control, and a screen reader
+            # asks the control itself.
+            self.things.SetName(name)
             self.things.Set([_('Asking Titan...')])
             readers = {
                 'applications': titan.applications,
@@ -247,13 +270,26 @@ def build():
             self._say(str(said) or _('Done'))
 
         def _open_here(self, _event):
+            """Open the application as a VIRTUAL WINDOW, walked with the
+            arrows - not as a window of native controls.
+
+            The window is destroyed rather than left behind it: the review
+            borrows the arrow keys, and a window still on the screen that
+            no longer answers them is worse than no window.
+            """
             row = self._chosen_thing()
             if row is None:
                 return
+            if self._kind != 'applications':
+                # A game is played on Titan's own screen and a menu entry
+                # is a command: there is no virtual window to be had, and
+                # the honest thing is to do what "open" means for it.
+                self._start_it(None)
+                return
             name = _label_of(row, 'name', 'label', 'id')
-            from . import appScreen
-            self.Hide()
-            appScreen.open_application(name, parent=self.Parent)
+            from . import appReview
+            _ok, said = appReview.start(name)
+            self._say(said)
             self.Destroy()
 
         # -------------------------------------------------------- settings
@@ -268,13 +304,30 @@ def build():
             self.category = helper.addLabeledControl(
                 _('&Category'), wx.Choice, choices=[])
             self.category.Bind(wx.EVT_CHOICE, self._category_chosen)
-            # Translators: the list of settings.
+            # **Shaped like the JAWS Settings Center**, because that is the
+            # shape people who set a lot of settings by ear already know:
+            # one list of settings with their values on the row, and SPACE
+            # acts on the row - a tick box is ticked, a choice is opened, a
+            # command is run. Pressing a button called "Change" is one more
+            # thing to Tab to for something that should be a keystroke.
             self.settings = helper.addLabeledControl(
+                # Translators: the list of settings.
                 _('&Settings'), wx.ListBox, style=wx.LB_SINGLE)
+            self.settings.Bind(wx.EVT_CHAR_HOOK, self._setting_key)
+            self.settings.Bind(wx.EVT_LISTBOX, self._setting_chosen)
+            # **And where the setting is a word, it IS an edit field.** A
+            # setting that holds text or a number is edited in place, in a
+            # real `wx.TextCtrl` that appears for it and goes away again -
+            # not in a dialog on top of the window, which is a second
+            # place for the keyboard to be.
+            self.field_label = wx.StaticText(page, label='')
+            helper.addItem(self.field_label)
+            self.field = helper.addItem(
+                wx.TextCtrl(page, style=wx.TE_PROCESS_ENTER))
+            self.field.Bind(wx.EVT_TEXT_ENTER, self._field_entered)
+            self.field.Hide()
+            self.field_label.Hide()
             buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
-            # Translators: a button in the Titan window.
-            change = buttons.addButton(page, label=_('C&hange...'))
-            change.Bind(wx.EVT_BUTTON, self._change_setting)
             # Translators: a button in the Titan window.
             save = buttons.addButton(page, label=_('Sa&ve'))
             save.Bind(wx.EVT_BUTTON, self._save_settings)
@@ -282,6 +335,44 @@ def build():
             page.Sizer = helper.sizer
             self._categories = []
             self._do(titan.settings, self._settings_are)
+
+        def _setting_key(self, event):
+            import wx
+            code = event.GetKeyCode()
+            if code in (wx.WXK_SPACE, wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+                self._change_setting(None)
+                return
+            event.Skip()
+
+        def _setting_chosen(self, _event):
+            """Show the edit field for a setting that is a word.
+
+            It follows the cursor rather than waiting to be asked for, so
+            arriving on a setting that is text puts the field there ready -
+            which is what "then it is an edit field" means.
+            """
+            item = self._chosen_setting()
+            if item is None:
+                return
+            kind = str(item.get('kind') or '')
+            wanted = kind in ('text', 'number', 'secret')
+            self.field_label.Show(wanted)
+            self.field.Show(wanted)
+            if wanted:
+                label = str(item.get('label') or item.get('id') or '')
+                self.field_label.SetLabel(label)
+                self.field.SetName(label)
+                self.field.ChangeValue(
+                    '' if kind == 'secret' else str(item.get('value') or ''))
+            self.Layout()
+
+        def _field_entered(self, _event):
+            item = self._chosen_setting()
+            if item is None:
+                return
+            control = str(item.get('id') or '')
+            typed = self.field.GetValue()
+            self._do(lambda: titan.set_setting(control, typed), self._changed)
 
         def _settings_are(self, ok, rows):
             if not ok:
@@ -303,6 +394,7 @@ def build():
             self.settings.Set([_setting_line(item) for item in self._items])
             if self._items:
                 self.settings.SetSelection(0)
+                self._setting_chosen(None)
 
         def _chosen_setting(self):
             at = self.settings.GetSelection()
@@ -347,15 +439,12 @@ def build():
                          self._changed)
                 return
             if kind in ('text', 'number', 'secret'):
-                with wx.TextEntryDialog(
-                        self, label, _('Titan'),
-                        '' if kind == 'secret'
-                        else str(item.get('value') or '')) as box:
-                    if box.ShowModal() != wx.ID_OK:
-                        return
-                    typed = box.GetValue()
-                self._do(lambda: titan.set_setting(control, typed),
-                         self._changed)
+                # The field is already there, under the list, holding this
+                # setting's value. Space puts the keyboard in it; Enter in
+                # the field is what commits.
+                self._setting_chosen(None)
+                self.field.SetFocus()
+                self.field.SetInsertionPointEnd()
                 return
             # **A kind this add-on has not been taught is not silently
             # dropped.** A tick list is several answers at once and Titan's
@@ -510,6 +599,10 @@ def build():
             # Translators: a button in the Titan window.
             press = buttons.addButton(page, label=_('&Press it'))
             press.Bind(wx.EVT_BUTTON, self._press_widget)
+            # Translators: a button in the Titan window - it walks the
+            # widget with the arrow keys, like everything else here.
+            walk = buttons.addButton(page, label=_('&Walk it'))
+            walk.Bind(wx.EVT_BUTTON, self._walk_widget)
             helper.addItem(buttons)
             page.Sizer = helper.sizer
             self._do(titan.widgets, self._widgets_are)
@@ -540,6 +633,24 @@ def build():
             widget = self._chosen_widget()
             if widget:
                 self._do(lambda: titan.press_widget(widget), self._reported)
+
+        def _walk_widget(self, _event):
+            """Leave the window and walk the widget with the arrows.
+
+            The window is closed rather than left open behind it: the
+            review borrows the arrow keys, and a window still on the
+            screen that no longer answers them is worse than no window.
+            """
+            at = self.widgets.GetSelection()
+            rows = getattr(self, '_widget_rows', [])
+            if not 0 <= at < len(rows):
+                return
+            from . import widgetReview
+            name = _label_of(rows[at], 'id', 'name')
+            label = _label_of(rows[at], 'name', 'id')
+            _ok, said = widgetReview.start(name, label)
+            self._say(said)
+            self.Destroy()
 
         # ---------------------------------------------------------- status
         def _status_page(self):

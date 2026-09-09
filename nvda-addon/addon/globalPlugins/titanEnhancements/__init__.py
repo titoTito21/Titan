@@ -49,6 +49,7 @@ from . import appReview
 from . import ocrReview
 from . import reporting
 from . import virtualWindow
+from . import widgetReview
 from . import journal
 from . import origin
 from . import panner
@@ -78,6 +79,20 @@ CATEGORY = 'Titan'
 #: How often the connection is looked at. This is not a poll of Titan - the
 #: bus client keeps its own connection - only of a flag, so it can be lazy.
 WATCH_SECONDS = 3.0
+
+
+def _close_described_applications():
+    """Close the TCE applications this add-on opened.
+
+    A described application is a subprocess of TITAN's that only this
+    add-on is rendering, so NVDA going away with one open leaves a program
+    running that nobody can see or reach.
+    """
+    try:
+        from . import titan
+        titan.close_all_described()
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
@@ -199,7 +214,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             pass
         for leave in (states.stop, trackpad.stop, surface.stop_now,
                       terminal.stop, monitors.stop, ocrReview.stop,
-                      appReview.stop, virtualWindow.stop):
+                      appReview.stop, virtualWindow.stop,
+                      widgetReview.stop, _close_described_applications):
             try:
                 leave()
             except Exception:                        # noqa: BLE001
@@ -294,6 +310,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # back. What the binding must follow is whether the review is on.
         self._keep_app_keys_right()
         self._keep_virtual_keys_right()
+        self._keep_widget_keys_right()
         try:
             # **A recording follows the CONTROL, not the keys.** A step is
             # where the user went and what they did there, so the focus is
@@ -542,6 +559,37 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             want = False
         if want != getattr(self, '_virtual_bound', False):
             self._borrow_virtual_keys(want)
+
+    #: A widget's keys. Fewer than the others because a widget answers
+    #: one element at a time and nothing answers how many there are, so
+    #: there is no page key, no Home and no End to offer honestly.
+    WIDGET_KEYS = {
+        'kb:upArrow': 'widgetUp',
+        'kb:downArrow': 'widgetDown',
+        'kb:leftArrow': 'widgetLeft',
+        'kb:rightArrow': 'widgetRight',
+        'kb:enter': 'widgetPress',
+        'kb:escape': 'widgetLeave',
+    }
+
+    def _borrow_widget_keys(self, borrow=True):
+        for gesture, script_name in self.WIDGET_KEYS.items():
+            try:
+                if borrow:
+                    self.bindGesture(gesture, script_name)
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._widget_bound = bool(borrow)
+
+    def _keep_widget_keys_right(self):
+        try:
+            want = widgetReview.reviewing()
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want != getattr(self, '_widget_bound', False):
+            self._borrow_widget_keys(want)
 
     def _borrow_ocr_keys(self, borrow=True):
         for gesture, script_name in self.OCR_KEYS.items():
@@ -1044,6 +1092,57 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def script_watchedAreas(self, gesture):
         commands.watched_areas()
 
+    # ------------------------------------------------- a Titan widget
+    def _widget_move(self, gesture, direction):
+        if not widgetReview.reviewing():
+            self._keep_widget_keys_right()
+            gesture.send()
+            return
+        widgetReview.move(direction)
+
+    @script(description=_('In a widget: up'), category=CATEGORY)
+    def script_widgetUp(self, gesture):
+        self._widget_move(gesture, 'up')
+
+    @script(description=_('In a widget: down'), category=CATEGORY)
+    def script_widgetDown(self, gesture):
+        self._widget_move(gesture, 'down')
+
+    @script(description=_('In a widget: left'), category=CATEGORY)
+    def script_widgetLeft(self, gesture):
+        self._widget_move(gesture, 'left')
+
+    @script(description=_('In a widget: right'), category=CATEGORY)
+    def script_widgetRight(self, gesture):
+        self._widget_move(gesture, 'right')
+
+    @script(description=_('In a widget: press what you are on'),
+            category=CATEGORY)
+    def script_widgetPress(self, gesture):
+        if not widgetReview.reviewing():
+            self._keep_widget_keys_right()
+            gesture.send()
+            return
+        widgetReview.press()
+
+    @script(description=_('Leave the widget'), category=CATEGORY)
+    def script_widgetLeave(self, gesture):
+        if not widgetReview.reviewing():
+            self._keep_widget_keys_right()
+            gesture.send()
+            return
+        _on, said = widgetReview.stop()
+        self._keep_widget_keys_right()
+        dialogs.report(said)
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Titan widgets: choose one and walk it'),
+        category=CATEGORY)
+    def script_widgets(self, gesture):
+        commands.walk_a_widget()
+        self._keep_widget_keys_right()
+
     # ------------------------------------------- any window at all
     def _virtual_move(self, gesture, move):
         if not virtualWindow.reviewing():
@@ -1175,8 +1274,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     # --------------------------------------------- a Titan application
     @script(
         # Translators: an NVDA command.
-        description=_('Open one of Titan\'s applications and walk it with '
-                      'the arrow keys'),
+        description=_('TCE applications: open one and walk it with the '
+                      'arrow keys'),
         category=CATEGORY, gesture='kb:NVDA+shift+a')
     def script_titanApplications(self, gesture):
         def work():
@@ -1282,16 +1381,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     @script(
         # Translators: an NVDA command.
-        description=_('Type into the field you are on in a Titan '
-                      'application'),
+        description=_('TCE applications: write into the field you are '
+                      'on'),
         category=CATEGORY)
     def script_appType(self, gesture):
         commands.type_into_application()
 
     @script(
         # Translators: an NVDA command.
-        description=_('Show the application being reviewed as real '
-                      'controls instead'),
+        description=_('TCE applications: show it as real controls '
+                      'instead'),
         category=CATEGORY)
     def script_appAsWindow(self, gesture):
         commands.application_as_a_window()
@@ -1299,7 +1398,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     @script(
         # Translators: an NVDA command.
-        description=_('Close the Titan application being reviewed'),
+        description=_('TCE applications: close it'),
         category=CATEGORY)
     def script_appClose(self, gesture):
         commands.close_application()
@@ -1307,7 +1406,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     @script(
         # Translators: an NVDA command.
-        description=_('Titan: everything it can start, its settings, what '
+        description=_('Titan: what it can start, its settings, what '
                       'arrived'),
         category=CATEGORY, gesture='kb:NVDA+shift+i')
     def script_titanWindow(self, gesture):

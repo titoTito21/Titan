@@ -111,7 +111,7 @@ def _actions_menu(builder, wx):
     rows = gestures.load_catalogue()
     menu = wx.Menu()
     if not rows:
-        builder.item(menu, _('(Titan has not been asked yet)'), None,
+        builder.item(menu, _('(not asked yet)'), None,
                      enabled=False)
         return menu
     groups = {}
@@ -134,7 +134,7 @@ def _actions_menu(builder, wx):
                          lambda row=row: gestures.run(row))
         menu.AppendSubMenu(submenu, label)
     if len(ordered) > MAX_GROUPS:
-        builder.item(menu, _('More, in the Titan actions command...'),
+        builder.item(menu, _('More actions...'),
                      lambda: _run_command('actions'))
     return menu
 
@@ -177,14 +177,14 @@ def build(plugin):
     # The assistant first: it is the one entry that can answer a question
     # the user has not worked out which command to use for.
     ai = wx.Menu()
-    builder.item(ai, _('Ask Titan a question...'),
+    builder.item(ai, _('Ask a question...'),
                  lambda: _run_command('assistant', False))
-    builder.item(ai, _('Tell Titan to do something...'),
+    builder.item(ai, _('Give an instruction...'),
                  lambda: _run_command('assistant', True))
     ai.AppendSeparator()
-    builder.item(ai, _('Read the conversation'),
+    builder.item(ai, _('The conversation'),
                  lambda: _run_command('assistant_history'))
-    builder.item(ai, _('Forget the conversation'),
+    builder.item(ai, _('Forget it'),
                  lambda: _run_command('assistant_forget'))
     menu.AppendSubMenu(ai, _('Assistant'))
 
@@ -200,34 +200,40 @@ def build(plugin):
     # only way to press anything at all.
     builder.item(ocr, _('Press what it read...'),
                  lambda: _run_command('ocr_press'))
-    builder.item(ocr, _('Send a key to that window...'),
+    builder.item(ocr, _('Send a key...'),
                  lambda: _run_command('ocr_key'))
     builder.item(ocr, _("Put Titan's controls over this window"),
                  lambda: _run_command('ocr_overlay'))
-    menu.AppendSubMenu(ocr, _('AI OCR (read a window nothing else can)'))
+    menu.AppendSubMenu(ocr, _('AI OCR'))
 
-    titan_menu = wx.Menu()
+    # **A menu entry is the NAME of a thing, not a sentence about it.**
+    # These read "Open an application and walk it with the arrows..." and
+    # the submenu holding them was called "Titan itself", which is a
+    # description of a feature rather than a place to go. A menu is walked
+    # one row at a time with the arrows, so a row that is a sentence is a
+    # sentence heard on the way to the row below it.
+    apps_menu = wx.Menu()
     # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Titan window (start, settings, what '
-                               'arrived)...'),
-                 lambda: _run_command('titan_window'))
-    # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Open an application and walk it with the '
-                               'arrows...'),
+    builder.item(apps_menu, _('Applications...'),
                  lambda: _run_command('titan_applications'))
     # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Show that application as real controls'),
+    builder.item(apps_menu, _('As real controls'),
                  lambda: _run_command('application_as_a_window'))
     # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Type into the field you are on...'),
+    builder.item(apps_menu, _('Write into this field...'),
                  lambda: _run_command('type_into_application'))
     # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Close the application being walked'),
+    builder.item(apps_menu, _('Close'),
                  lambda: _run_command('close_application'))
     # Translators: an entry in the Titan menu.
-    builder.item(titan_menu, _('Why did that application say nothing?'),
+    builder.item(apps_menu, _('The log'),
                  lambda: _run_command('application_log'))
-    menu.AppendSubMenu(titan_menu, _('Titan itself'))
+    # Translators: a submenu of the Titan menu - TCE is what Titan's own
+    # applications have always been called.
+    menu.AppendSubMenu(apps_menu, _('TCE applications'))
+
+    # Translators: an entry in the Titan menu.
+    builder.item(menu, _('Titan...'), lambda: _run_command('titan_window'))
 
     builder.item(menu, _('Macros...'), lambda: _run_command('macros'))
     menu.AppendSubMenu(_actions_menu(builder, wx),
@@ -239,12 +245,12 @@ def build(plugin):
     what = wx.Menu()
     builder.item(what, _('Notifications'),
                  lambda: _run_command('notifications'))
-    builder.item(what, _('Buffers (what arrived while a window was closed)'),
+    builder.item(what, _('Buffers'),
                  lambda: _run_command('buffers'))
-    builder.item(what, _('What Titan is showing'),
+    builder.item(what, _('Views'),
                  lambda: _run_command('showing'))
     builder.item(what, _('Components'), lambda: _run_command('components'))
-    menu.AppendSubMenu(what, _('What Titan has to say'))
+    menu.AppendSubMenu(what, _('News'))
     menu.AppendSeparator()
 
     # **The reader's own half.** Everything above needs Titan; none of this
@@ -279,11 +285,10 @@ def build(plugin):
     builder.item(watched, _('Watch this object'),
                  lambda: _run_command('watch_this'))
     # Translators: an entry in the Titan menu.
-    builder.item(watched, _('Watch the area of this object '
-                            '(Windows\' own OCR)'),
+    builder.item(watched, _('Watch this object\'s area'),
                  lambda: _run_command('watch_this_area'))
     # Translators: an entry in the Titan menu.
-    builder.item(watched, _('Watch this window (Windows\' own OCR)'),
+    builder.item(watched, _('Watch this window'),
                  lambda: _run_command('watch_this_window'))
     # Translators: an entry in the Titan menu.
     builder.item(watched, _('What is being watched...'),
@@ -293,7 +298,7 @@ def build(plugin):
 
     doing = wx.Menu()
     # Translators: an entry in the Titan menu.
-    builder.item(doing, _('Record one, or keep what was recorded'),
+    builder.item(doing, _('Record, or keep'),
                  lambda: _run_command('record_procedure'))
     # Translators: an entry in the Titan menu.
     builder.item(doing, _('Do one again...'),
@@ -302,7 +307,7 @@ def build(plugin):
     builder.item(doing, _('Read the steps of one...'),
                  lambda: _run_command('read_procedure'))
     # Translators: an entry in the Titan menu.
-    builder.item(doing, _('Throw away what is being recorded'),
+    builder.item(doing, _('Discard the recording'),
                  lambda: _run_command('cancel_procedure'))
     # Translators: a submenu of the Titan menu.
     managers.AppendSubMenu(doing, _('Procedures'))
@@ -315,33 +320,33 @@ def build(plugin):
     builder.item(spoken, _('Find something that was said...'),
                  lambda: _run_command('search_journal'))
     # Translators: an entry in the Titan menu.
-    builder.item(spoken, _('All of it, as a page to read'),
+    builder.item(spoken, _('As a page'),
                  lambda: _run_command('journal_page'))
     # Translators: a submenu of the Titan menu.
-    managers.AppendSubMenu(spoken, _('What the reader has said'))
+    managers.AppendSubMenu(spoken, _('Speech history'))
 
     finding = wx.Menu()
     # Translators: an entry in the Titan menu.
-    builder.item(finding, _('By its name, or by what is on the screen...'),
+    builder.item(finding, _('By name...'),
                  lambda: _run_command('find_control'))
     # Translators: an entry in the Titan menu.
-    builder.item(finding, _('By what it does, using the AI...'),
+    builder.item(finding, _('By what it does (AI)...'),
                  lambda: _run_command('find_control_with_ai'))
     # Translators: a submenu of the Titan menu.
     managers.AppendSubMenu(finding, _('Find a control'))
 
     modules = wx.Menu()
     # Translators: an entry in the Titan menu.
-    builder.item(modules, _('What is installed, and what each one knows'),
+    builder.item(modules, _('What is installed...'),
                  lambda: _run_command('reader_modules'))
     # Translators: an entry in the Titan menu.
-    builder.item(modules, _('Write one for this program'),
+    builder.item(modules, _('Write one...'),
                  lambda: _run_command('draft_module'))
     # Translators: a submenu of the Titan menu.
     managers.AppendSubMenu(modules, _('Reader modules'))
 
     # Translators: an entry in the Titan menu.
-    builder.item(managers, _('Does it all work? (run the checks)'),
+    builder.item(managers, _('Does it all work?'),
                  lambda: _run_command('self_test'))
     # Translators: an entry in the Titan menu.
     builder.item(managers, _('Windows and actions...'),
@@ -361,26 +366,26 @@ def build(plugin):
     builder.item(reader, _('Where am I'), lambda: _run_command('where_am_i'))
     builder.item(reader, _('Name this control...'),
                  lambda: _run_command('label_control'))
-    builder.item(reader, _('What does this show? (reads it)'),
+    builder.item(reader, _('What does this show?'),
                  lambda: _run_command('describe_control'))
-    builder.item(reader, _('Read this window (Windows\' own OCR)'),
+    builder.item(reader, _('Read this window'),
                  lambda: _run_command('read_locally'))
     # Translators: an entry in the Titan menu.
-    builder.item(reader, _('Walk this window with the arrows (Enter clicks)'),
+    builder.item(reader, _('Screen review'),
                  lambda: _run_command('ocr_review'))
-    builder.item(reader, _('Read this window as a picture'),
+    builder.item(reader, _('As a picture'),
                  lambda: _run_command('watch_surface'))
-    builder.item(reader, _('Read it as a game, or as an application'),
+    builder.item(reader, _('Game or application'),
                  lambda: _run_command('surface_mode'))
     # Translators: an entry in the Titan menu.
-    builder.item(reader, _('Walk this window as a virtual window'),
+    builder.item(reader, _('Virtual window'),
                  lambda: _run_command('virtual_window'))
     # Translators: an entry in the Titan menu.
-    builder.item(reader, _('Which letter jumps to what...'),
+    builder.item(reader, _('Quick navigation keys...'),
                  lambda: _run_command('virtual_window_help'))
-    builder.item(reader, _('Use the touchpad as a touch screen'),
+    builder.item(reader, _('Touchpad'),
                  lambda: _run_command('toggle_trackpad'))
-    menu.AppendSubMenu(reader, _('How this program is read'))
+    menu.AppendSubMenu(reader, _('This program'))
 
     # **The switches that spend something, answered for THIS program.**
     # Not in the settings page: the question is about the window the user
@@ -394,7 +399,7 @@ def build(plugin):
     builder.item(menu, _("Titan's settings"),
                  lambda: _open_titan_settings())
     builder.item(menu, _('Status'), lambda: _run_command('status'))
-    builder.item(menu, _('Ask Titan what it can do'),
+    builder.item(menu, _('What can Titan do?'),
                  lambda: _run_command('refresh_actions', plugin))
     menu.AppendSeparator()
 
@@ -439,7 +444,7 @@ def _this_program(builder, wx):
         _switch(builder, here, label, row['on'],
                 lambda name=row['id']: _run_command('toggle_here', name))
     here.AppendSeparator()
-    builder.item(here, _('Use the general settings in this program'),
+    builder.item(here, _('Use the general settings'),
                  lambda: _run_command('forget_here'))
     # Translators: a submenu in the Titan menu. {program} is the program
     # the user is in.

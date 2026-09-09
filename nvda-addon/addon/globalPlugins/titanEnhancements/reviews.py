@@ -19,7 +19,8 @@ one knowing about the other three - which is the arrangement that would
 quietly grow a fifth.
 """
 
-_ALL = ('terminal', 'ocrReview', 'appReview', 'virtualWindow')
+_ALL = ('terminal', 'ocrReview', 'appReview', 'virtualWindow',
+        'widgetReview')
 
 
 def stop_others(keep):

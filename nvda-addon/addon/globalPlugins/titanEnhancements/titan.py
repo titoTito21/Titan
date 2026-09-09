@@ -230,16 +230,29 @@ def widgets():
     return _rows('widgets.list', 'widgets')
 
 
+#: What Titan calls the thing under a widget's cursor. Read off a live
+#: Titan: `widgets.read` and `widgets.move` both answer `{'element': ...}`
+#: and nothing else. Looking for `text` or `said` here found neither, so
+#: reading a widget came back as the words "element: Top-Left" and MOVING
+#: one came back empty - which in the review is a cursor that moves and
+#: says nothing at all.
+ELEMENT = ('element', 'text', 'said', 'value')
+
+
+def _element(data):
+    if isinstance(data, dict):
+        for key in ELEMENT:
+            if data.get(key):
+                return str(data[key])
+        return _summarise(data)
+    return str(data or '')
+
+
 def read_widget(widget):
     ok, data = LINK.bridge('widgets.read', widget=widget)
     if not ok:
         return False, str(data)
-    if isinstance(data, dict):
-        for key in ('text', 'said', 'value'):
-            if data.get(key):
-                return True, str(data[key])
-        return True, _summarise(data)
-    return True, str(data or '')
+    return True, _element(data)
 
 
 def press_widget(widget):
@@ -247,7 +260,18 @@ def press_widget(widget):
 
 
 def move_widget(widget, direction):
-    return _did('widgets.move', widget=widget, direction=direction)
+    """Move the widget's own cursor. Answers what is under it now.
+
+    The four words Titan's applets really test for are `up`, `down`,
+    `left` and `right` - anything else falls through their `navigate()`
+    and moves nothing, silently. `next` was what this was written with
+    first, and it did exactly that.
+    """
+    ok, data = LINK.bridge('widgets.move', widget=widget,
+                           direction=direction)
+    if not ok:
+        return False, str(data)
+    return True, _element(data)
 
 
 def _summarise(data):
@@ -371,14 +395,81 @@ def describable_applications():
     return True, []
 
 
+#: The name this add-on opens applications under, so its own sessions can
+#: be told from anybody else's.
+OWNER = 'nvda'
+
+
 def open_described(name, mirror=None):
-    args = {'name': name, 'client': 'nvda'}
+    """Open a TCE application, or come back to the one already open.
+
+    **Reusing is the whole of it.** Leaving the review does NOT close the
+    application - a key that both leaves and quits is a key nobody can use
+    safely - so without this, walking away and coming back opened a SECOND
+    copy, and a morning's work left five subprocesses of Titan's running
+    with nobody rendering any of them. Measured live: three left behind by
+    three probes. Coming back to the one that is there is also what the
+    user means by opening it again: it is where they left it.
+    """
+    standing = _ours(name)
+    if standing:
+        ok, screen = described_screen(standing)
+        if ok and screen:
+            answer = dict(screen)
+            answer.setdefault('session', standing)
+            answer.setdefault('application', name)
+            return True, answer
+    args = {'name': name, 'client': OWNER}
     if mirror is not None:
         args['mirror'] = bool(mirror)
     ok, data = LINK.bridge('app.open', timeout=45, **args)
     if not ok:
         return False, str(data)
     return True, data if isinstance(data, dict) else {}
+
+
+def _ours(name):
+    """The session we already have open for this application, or ''.
+
+    Matched on the application's own name as Titan reports it, and only
+    among sessions this add-on opened - somebody else's client rendering
+    the same application is not ours to take over.
+    """
+    ok, rows = described_sessions()
+    if not ok:
+        return ''
+    wanted = str(name or '').strip().lower()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('owner') or '') != OWNER:
+            continue
+        for key in ('application', 'title'):
+            if str(row.get(key) or '').strip().lower() == wanted:
+                return str(row.get('token') or '')
+    return ''
+
+
+def close_all_described():
+    """Close every application this add-on left open. Answers how many.
+
+    Called when the plugin goes away: an application nobody is rendering
+    is a subprocess of Titan's doing nothing, and NVDA being restarted is
+    exactly when nobody is rendering them.
+    """
+    ok, rows = described_sessions()
+    if not ok:
+        return 0
+    closed = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get('owner') or '') != OWNER:
+            continue
+        token = str(row.get('token') or '')
+        if token and close_described(token)[0]:
+            closed += 1
+    return closed
 
 
 def described_screen(session):

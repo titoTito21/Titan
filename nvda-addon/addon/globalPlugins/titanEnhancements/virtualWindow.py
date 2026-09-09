@@ -34,6 +34,7 @@ arrows slow. F5 rebuilds; so does moving to another window.
 """
 
 import threading
+import time
 
 from . import compat
 from . import i18n
@@ -47,6 +48,16 @@ _ = i18n.install(globals())
 MAX_SEEN = 3000
 MAX_NODES = 600
 
+#: **And a budget in seconds, which is the one that really bites.** The
+#: counts above are a guess at how long a window will take; this is the
+#: measurement. Every node is a call into another process, and how long
+#: that takes depends on the program: measured on this machine, a dialog
+#: is 25 ms, a file manager 312 ms and a forum page in Edge **4.4
+#: seconds** - 477 controls, none of which is worth waiting that long
+#: with the key already pressed. A walk that runs out says so and hands
+#: over what it has, which is a usable window rather than a wait.
+SECONDS = 1.2
+
 #: Roles that are furniture rather than content: the frame around a window
 #: is not the window. Read out as they came, they put Minimise, Maximise
 #: and both scrollbars' arrows in front of every real control, which is
@@ -58,14 +69,15 @@ SKIP = frozenset({
 
 _LOCK = threading.RLock()
 _state = {'on': False, 'nodes': [], 'at': 0, 'inner': 0, 'hwnd': 0,
-          'title': '', 'moves': 0, 'presses': 0}
+          'title': '', 'moves': 0, 'presses': 0, 'partial': '', 'ms': 0}
 
 
 def report():
     with _LOCK:
         return {'reviewing': _state['on'], 'controls': len(_state['nodes']),
                 'at': _state['at'], 'window': _state['title'],
-                'moves': _state['moves'], 'presses': _state['presses']}
+                'moves': _state['moves'], 'presses': _state['presses'],
+                'partial': _state['partial'], 'ms': _state['ms']}
 
 
 def reviewing():
@@ -98,19 +110,32 @@ def _role_name(obj):
         return ''
 
 
-def nodes_of(window):
-    """Every control in a window, breadth first and bounded.
+def nodes_of(window, note=None):
+    """Every control in a window, breadth first and bounded three ways.
 
     Breadth first because a dialog's own controls are near the top of its
     tree, and a depth-first walk spends the whole budget in the first
     branch it falls into - which is how a review of a browser ends up
     being a review of its toolbar.
+
+    Bounded by how many objects are looked at, how many are kept, and -
+    the one that really decides it - **how long it has taken**. ``note``
+    is filled in with which of the three stopped it, so the caller can
+    say "as far as it got" rather than presenting a part of a window as
+    the whole of it.
     """
+    if note is None:
+        note = {}
+    note.update({'seen': 0, 'ran_out': '', 'ms': 0})
     if window is None:
         return []
+    started = time.time()
     found, seen = [], 0
     queue = [(window, 0)]
     while queue and seen < MAX_SEEN and len(found) < MAX_NODES:
+        if time.time() - started > SECONDS:
+            note['ran_out'] = 'time'
+            break
         obj, level = queue.pop(0)
         seen += 1
         try:
@@ -131,6 +156,13 @@ def nodes_of(window):
             continue
         found.append({'name': name, 'value': value, 'description': described,
                       'role': role, 'level': level, 'obj': obj})
+    note['seen'] = seen
+    note['ms'] = int((time.time() - started) * 1000)
+    if not note['ran_out']:
+        if seen >= MAX_SEEN:
+            note['ran_out'] = 'objects'
+        elif len(found) >= MAX_NODES:
+            note['ran_out'] = 'controls'
     return found
 
 
@@ -142,7 +174,8 @@ def start(hwnd=0):
         return False, _('There is no window here')
     from . import reviews
     reviews.stop_others('virtualWindow')
-    nodes = nodes_of(window)
+    note = {}
+    nodes = nodes_of(window, note)
     if not nodes:
         # **An empty answer is not a failure with no name.** A window that
         # exposes nothing is exactly what AI OCR and the recognised-screen
@@ -151,15 +184,28 @@ def start(hwnd=0):
                         'instead.')
     with _LOCK:
         _state.update({'on': True, 'nodes': nodes, 'at': 0, 'inner': 0,
+                       'partial': str(note.get('ran_out') or ''),
+                       'ms': int(note.get('ms') or 0),
                        'title': _text(getattr(window, 'name', '')),
                        'hwnd': int(getattr(window, 'windowHandle', 0) or 0)})
     if not icons.play('open-object'):
         _cue(True)
+    if note.get('ran_out'):
+        # **Said once, because it happened once.** The toggle itself stays
+        # two words; this is the one thing about THIS window that the user
+        # would otherwise find out by arrowing to the end and wondering
+        # where the rest of it went.
+        # Translators: said when a window was too big to be walked whole.
+        _say(_('Part of it only'))
     say_here()
-    # Translators: said when the virtual window is turned on. {count} is
-    # how many controls are in it.
-    return True, _('Virtual window on, {count} controls').format(
-        count=len(nodes))
+    # **A toggle says which state it is in and nothing else.** It carried
+    # the number of controls, which is a fact about this window rather
+    # than about the switch - and the first control is spoken straight
+    # after it anyway, so the count was said on the way to what the user
+    # actually wanted to hear. The pair has to be symmetrical or somebody
+    # has to listen to work out which state they are now in.
+    # Translators: said when the virtual window is turned on.
+    return True, _('Virtual window on')
 
 
 def stop():

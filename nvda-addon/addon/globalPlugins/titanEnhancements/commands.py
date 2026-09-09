@@ -1369,8 +1369,9 @@ def titan_applications():
                        # Translators: how an application that can only be
                        # read off its own window is listed.
                        _('{name} (read off its window)').format(name=name))
-    # Translators: the title of the list of Titan's applications.
-    dialogs.choose(choices, _('Titan applications'), on_chosen=chosen)
+    # Translators: the title of the list of Titan's applications. TCE is
+    # what Titan's own applications have always been called.
+    dialogs.choose(choices, _('TCE applications'), on_chosen=chosen)
 
 
 def application_review_off():
@@ -1417,6 +1418,32 @@ def application_as_a_window():
                                    screen.get('screen'), name).Show())
     except Exception:                                # noqa: BLE001
         _refused(_('That window could not be opened'))
+
+
+def walk_a_widget():
+    """Choose one of Titan's widgets and walk it with the arrows."""
+    from . import titan
+    from . import widgetReview
+    ok, rows = titan.widgets()
+    if not ok:
+        _refused(str(rows))
+        return
+    if not rows:
+        # Translators: said when Titan has no widgets.
+        _refused(_('Titan has no widgets'))
+        return
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(rows):
+            return
+        name = str(rows[index].get('id') or rows[index].get('name') or '')
+        label = str(rows[index].get('name') or name)
+        _ok, said = widgetReview.start(name, label)
+        dialogs.report(said)
+
+    # Translators: the title of the list of Titan's widgets.
+    dialogs.choose([str(row.get('name') or row.get('id') or '')
+                    for row in rows], _('Widgets'), on_chosen=chosen)
 
 
 def virtual_window():
@@ -1491,7 +1518,7 @@ def type_into_application():
     dialogs.ask_text(str(control.get('label') or _('Field')),
                      # Translators: the title of the box for typing into a
                      # Titan application.
-                     _('Titan application'), on_answer=answered,
+                     _('TCE application'), on_answer=answered,
                      default=str(control.get('value') or ''))
 
 
