@@ -47,11 +47,36 @@ def message(text, title=None, error=False):
     wx.CallAfter(show)
 
 
-def report(text):
-    """Say something without a window - the answer to most gestures."""
+def report(text, voice_class='notification'):
+    """Say something without a window - the answer to most gestures.
+
+    Everything this add-on tells the user goes through here, so this is
+    where the **notification** class is applied: what a reader says ABOUT
+    the machine is not what it says about the control the user is on, and a
+    listener is entitled to hear the difference before the words arrive.
+
+    A class that names a synthesizer of its own is spoken by it and NVDA is
+    not asked; a class that names only dials is spoken by NVDA with them
+    applied; a class the user has left alone is spoken exactly as it always
+    was. Every one of those ends with the message being said.
+    """
     from . import compat
+    try:
+        from . import voices
+        if voices.say_whole(voice_class, text):
+            return
+    except Exception:                                # noqa: BLE001
+        pass
     if compat.ui is None:
         return
+    try:
+        from . import voices
+        sequence = voices.sequence([(str(text), voice_class)])
+        if sequence and compat.speech is not None:
+            compat.speech.speak(sequence)
+            return
+    except Exception:                                # noqa: BLE001
+        pass
     try:
         compat.ui.message(text)
     except Exception:                                # noqa: BLE001

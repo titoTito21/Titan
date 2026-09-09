@@ -951,8 +951,10 @@ def label_control():
         return
     key, strong = labels.key_of(obj)
     if not key:
-        _refused(_('There is nothing about this control that would still be '
-                   'true next time, so a name could not be kept for it.'))
+        # Terse on purpose: the long version explained the reason it
+        # cannot be done, which is this add-on's business and not the
+        # user's. What they need is what happened.
+        _refused(_('You cannot set a name on this control'))
         return
     existing, source = labels.described(obj)
 
@@ -1008,6 +1010,49 @@ def describe_control():
 # --------------------------------------------------------------------------- #
 # A window that answers nothing
 # --------------------------------------------------------------------------- #
+def read_locally():
+    """Read the window with WINDOWS' own OCR. No AI, no Titan, no request.
+
+    The everyday half of reading an unreadable window. Windows has a
+    recogniser built in and NVDA already wraps it, so the words of a custom
+    installer, a game's menu or a program that exposes nothing are a tenth
+    of a second away, on this machine, for nothing - and the result is a
+    page the reader's own cursor can be moved through, which is what
+    somebody wants to do with a wall of text.
+
+    What it cannot do is understand: which of these is a button, what is
+    highlighted. That is what the AI reading is for, and it is a different
+    key.
+    """
+    from . import localOcr
+    ok, why = localOcr.available()
+    if not ok:
+        _refused(why)
+        return
+    hwnd = int(_here().get('hwnd') or 0) or _foreground_window()
+    if not hwnd:
+        # Translators: said when there is no window to read.
+        _refused(_('There is no window to read.'))
+        return
+
+    def work():
+        reading = localOcr.read_window(hwnd)
+        if reading is None or not reading:
+            _refused(localOcr.report().get('why')
+                     # Translators: said when the local recogniser found no
+                     # words in a window.
+                     or _('Windows read nothing in that window.'))
+            return
+        # The cursor as well as the words: a reading nobody can move through
+        # is a wall of text, and this one knows where every line is, so Tab
+        # and the arrows work and Enter clicks.
+        from . import smart
+        smart.take_local(hwnd, reading)
+        # Translators: the title of the window showing a local OCR reading.
+        dialogs.browse(reading.text, _('What Windows read here'))
+    _work(work)
+
+
 def watch_surface():
     """Read the window as a picture, and follow what is highlighted."""
     from . import surface
@@ -1197,3 +1242,659 @@ def surface_mode():
               program=perProgram.label_of()))
     if surface.watching():
         surface.stop_now()
+
+
+# --------------------------------------------------------------------------- #
+# Watching an area
+# --------------------------------------------------------------------------- #
+def watch_this():
+    """Watch the object the navigator is on, and say when it changes.
+
+    The navigator, not the focus: a progress bar, a status line or a pane
+    that fills itself in is never focused, and object navigation is how
+    NVDA reaches one. The navigator follows the focus until the user moves
+    it, so on the control they are working in this is that control.
+    """
+    from . import monitors
+    _ok, said = monitors.watch_this_control()
+    dialogs.report(said)
+
+
+def watch_this_area():
+    """Watch the area this object covers, with Windows' own recogniser.
+
+    For a part of a window that answers nothing - a panel a program draws
+    itself. Walk to it with object navigation and watch what is drawn
+    there, rather than the whole window, which would read every clock and
+    counter anywhere in it.
+    """
+    from . import monitors
+    _ok, said = monitors.watch_this_area()
+    dialogs.report(said)
+
+
+def watch_this_window():
+    """Watch this whole window as a rectangle, with Windows' own OCR.
+
+    The one that works on a program with no accessibility at all - a game's
+    score, an installer's progress - which is what JAWS Frames is for.
+    """
+    from . import monitors
+    _ok, said = monitors.watch_this_window()
+    dialogs.report(said)
+
+
+def watched_areas():
+    """Everything being watched, and a way to stop watching one."""
+    from . import monitors
+    rows = monitors.all_monitors()
+    if not rows:
+        # Translators: said when nothing is being watched.
+        _refused(_('Nothing is being watched. Use the command for watching '
+                   'this control, its area or this window to mark one.'))
+        return
+    kinds = {
+        # Translators: a kind of watched area.
+        monitors.BY_CONTROL: _('a control'),
+        # Translators: a kind of watched area.
+        monitors.BY_POINT: _('a place in the window'),
+        # Translators: a kind of watched area.
+        monitors.BY_AREA: _('an area of the screen'),
+    }
+    choices = ['%s (%s%s)' % (
+        row.get('name') or '', kinds.get(row.get('kind'), ''),
+        (', ' + row['program']) if row.get('program') else '')
+        for row in rows]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(rows):
+            return
+        # Translators: asked before a watched area is forgotten. {what} is
+        # its name.
+        dialogs.confirm(
+            _('Stop watching {what}?').format(what=rows[index].get('name')
+                                              or ''),
+            # Translators: the title of that question.
+            _('Watched areas'),
+            lambda: _forget_monitor(index))
+    # Translators: the title of the list of watched areas.
+    dialogs.choose(choices, _('Watched areas'), on_chosen=chosen)
+
+
+def _forget_monitor(index):
+    from . import monitors
+    monitors.remove(index)
+    # Translators: said when a watched area is forgotten.
+    dialogs.report(_('No longer watching'))
+
+
+# --------------------------------------------------------------------------- #
+# Titan, whole
+# --------------------------------------------------------------------------- #
+def titan_window():
+    """Everything Titan is, in a window of NVDA's own."""
+    from . import titanWindow
+    if not titanWindow.show():
+        # Translators: said when a window of this add-on cannot be opened.
+        _refused(_('That window could not be opened'))
+
+
+def titan_applications():
+    """Choose one of Titan's applications and walk it with the arrows."""
+    from . import appReview
+    from . import titan
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(rows):
+            return
+        name = str(rows[index].get('name') or rows[index].get('id') or '')
+        _ok, said = appReview.start(name)
+        dialogs.report(said)
+
+    ok, rows = titan.describable_applications()
+    if not ok:
+        _refused(str(rows))
+        return
+    if not rows:
+        # Translators: said when Titan has no application to describe.
+        _refused(_('Titan has no applications to show'))
+        return
+    choices = []
+    for row in rows:
+        name = str(row.get('name') or row.get('id') or '')
+        # An application whose interface cannot be described is read off
+        # its own window instead, which says less - so it says so here,
+        # before it is opened rather than after.
+        choices.append(name if row.get('describable') else
+                       # Translators: how an application that can only be
+                       # read off its own window is listed.
+                       _('{name} (read off its window)').format(name=name))
+    # Translators: the title of the list of Titan's applications.
+    dialogs.choose(choices, _('Titan applications'), on_chosen=chosen)
+
+
+def application_review_off():
+    from . import appReview
+    _on, said = appReview.stop()
+    dialogs.report(said)
+
+
+def close_application():
+    from . import appReview
+    _on, said = appReview.close_application()
+    dialogs.report(said)
+
+
+def application_as_a_window():
+    """The application being reviewed, as real controls instead.
+
+    The same screen, the other way round - the pair Titan's own AI OCR
+    already offers (a reading to walk, or the controls rebuilt), for the
+    same reason: a list is better for reading and real controls are better
+    for filling in.
+    """
+    from . import appReview
+    from . import appScreen
+    if not appReview.reviewing():
+        # Translators: said when no application is being reviewed.
+        _refused(_('No application is being reviewed'))
+        return
+    session = appReview.session()
+    name = appReview.report().get('application') or ''
+    ok, screen = _screen_of(session)
+    if not ok:
+        _refused(str(screen))
+        return
+    appReview.stop()
+    built = appScreen.build()
+    if built is None:
+        _refused(_('That window could not be opened'))
+        return
+    try:
+        import gui
+        import wx
+        wx.CallAfter(lambda: built(gui.mainFrame, session,
+                                   screen.get('screen'), name).Show())
+    except Exception:                                # noqa: BLE001
+        _refused(_('That window could not be opened'))
+
+
+def virtual_window():
+    """Walk this window as a virtual window of all its controls."""
+    from . import virtualWindow
+    _on, said = virtualWindow.toggle()
+    dialogs.report(said)
+
+
+def virtual_window_help():
+    """Which letter jumps to what, as a page to read."""
+    from . import virtualWindow
+    words = virtualWindow.quick_names()
+    lines = ['%s - %s' % (letter, words.get(letter, ''))
+             for letter in sorted(virtualWindow.QUICK)]
+    # Translators: the title of the page listing the quick navigation keys.
+    dialogs.browse('\n'.join(lines), _('Quick navigation in the virtual '
+                                        'window'))
+
+
+def application_log():
+    """Why the application said nothing - its own log, read here.
+
+    A TCE application reports a failure the way Titan's own do: it
+    rescues, says one sentence and carries on. "It did nothing" is a
+    report with no reason in it, and the reason is always there - in a
+    window the user cannot see, because the application has no window on
+    this machine at all.
+    """
+    from . import appReview
+    from . import titan
+    if not appReview.reviewing():
+        # Translators: said when no application is being reviewed.
+        _refused(_('No application is being reviewed'))
+        return
+    ok, lines = titan.application_log(appReview.session())
+    if not ok:
+        _refused(str(lines))
+        return
+    if not lines:
+        # Translators: said when an application has said nothing.
+        dialogs.report(_('The application has said nothing'))
+        return
+    # Translators: the title of the page showing an application's log.
+    dialogs.browse('\n'.join(lines), _('What the application said'))
+
+
+def _screen_of(session):
+    from . import titan
+    return titan.described_screen(session)
+
+
+def type_into_application():
+    """Put something into the field the review cursor is on."""
+    from . import appReview
+    control = appReview.here()
+    if control is None:
+        # Translators: said when no application is being reviewed.
+        _refused(_('No application is being reviewed'))
+        return
+    if str(control.get('kind') or '') not in ('text', 'multiline'):
+        # Translators: said when the cursor is not on something to type in.
+        _refused(_('This is not a field'))
+        return
+
+    def answered(text):
+        if text is None:
+            return
+        _ok, said = appReview.type_here(text)
+        if said:
+            dialogs.report(said)
+    dialogs.ask_text(str(control.get('label') or _('Field')),
+                     # Translators: the title of the box for typing into a
+                     # Titan application.
+                     _('Titan application'), on_answer=answered,
+                     default=str(control.get('value') or ''))
+
+
+# --------------------------------------------------------------------------- #
+# Windows and actions
+# --------------------------------------------------------------------------- #
+def windows_and_actions():
+    """Window-Eyes' own idea: the windows, their controls, and what each
+    control will actually DO.
+
+    Three lists, one after another, because that is the shape of the
+    question - which window, which control, which of the things it offers -
+    and because each of them is a plain choice a reader already knows how to
+    read.
+    """
+    from . import windowsAndActions as wa
+    found = wa.windows()
+    if not found:
+        # Translators: said when no windows could be listed.
+        _refused(_('No windows could be listed.'))
+        return
+    here = wa.foreground()
+    labels = [label for label, _obj in found]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(found):
+            return
+        _controls_of(found[index][1])
+    # The window the user is in is offered first, because it is what they
+    # almost always mean - but every window is there, which is the point.
+    if here is not None:
+        for at, (_label, obj) in enumerate(found):
+            if obj == here:
+                found.insert(0, found.pop(at))
+                labels = [label for label, _o in found]
+                break
+    # Translators: the title of the list of windows.
+    dialogs.choose(labels, _('Windows'), on_chosen=chosen)
+
+
+def _controls_of(window):
+    from . import windowsAndActions as wa
+
+    def work():
+        found = wa.controls(window)
+        if not found:
+            # Translators: said when a window has no controls to list.
+            _refused(_('Nothing in that window could be listed.'))
+            return
+        labels = []
+        for row in found:
+            verbs = ', '.join(name for _index, name in row['actions'])
+            labels.append('%s%s' % (row['label'],
+                                    (' - ' + verbs) if verbs else ''))
+
+        def chosen(index):
+            if index is None or not 0 <= index < len(found):
+                return
+            _actions_of(found[index])
+        # Translators: the title of the list of controls in a window.
+        dialogs.choose(labels, _('Controls'), on_chosen=chosen)
+    _work(work)
+
+
+def _actions_of(row):
+    """What this control offers, plus the two things any control allows.
+
+    Focus and the review cursor are not the control's own actions and are
+    listed apart from them - a control that declares nothing can still be
+    moved to, which is half of what a list like this is for.
+    """
+    from . import windowsAndActions as wa
+    verbs = list(row['actions'])
+    labels = [name for _index, name in verbs]
+    # Translators: an entry in the list of what can be done with a control.
+    labels.append(_('Move the keyboard here'))
+    # Translators: an entry in the list of what can be done with a control.
+    labels.append(_('Move the review cursor here'))
+
+    def chosen(index):
+        if index is None or index < 0:
+            return
+        if index < len(verbs):
+            _ok, said = wa.do(row['obj'], verbs[index][0])
+        elif index == len(verbs):
+            _ok, said = wa.focus(row['obj'])
+        else:
+            _ok, said = wa.review(row['obj'])
+        dialogs.report(said)
+    # Translators: the title of the list of what a control can do. {what}
+    # is the control.
+    dialogs.choose(labels, _('{what}: what it can do').format(
+        what=row['label']), on_chosen=chosen)
+
+
+# --------------------------------------------------------------------------- #
+# Place markers
+# --------------------------------------------------------------------------- #
+def mark_this():
+    """Mark the control the user is on, so a key comes back to it."""
+    from . import markers
+    _ok, said = markers.mark()
+    dialogs.report(said)
+
+
+def go_to_marker():
+    """This program's markers, and go to the one chosen."""
+    from . import markers
+    here = markers.for_program()
+    if not here:
+        # Translators: said when a program has no place markers.
+        _refused(_('Nothing is marked in this program. Use the command for '
+                   'marking this control to mark one.'))
+        return
+    labels = ['%d. %s' % (at + 1, row.get('name') or '')
+              for at, row in enumerate(here)]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(here):
+            return
+        _ok, said = markers.go(here[index])
+        dialogs.report(said)
+    # Translators: the title of the list of place markers.
+    dialogs.choose(labels, _('Place markers'), on_chosen=chosen)
+
+
+def marker_number(number):
+    """Go straight to this program's Nth marker - what the numbers are for."""
+    from . import markers
+    _ok, said = markers.go_to_number(number)
+    dialogs.report(said)
+
+
+def forget_marker():
+    """Take one of this program's markers away."""
+    from . import markers
+    here = markers.for_program()
+    if not here:
+        # Translators: said when a program has no place markers.
+        _refused(_('Nothing is marked in this program.'))
+        return
+    labels = ['%d. %s' % (at + 1, row.get('name') or '')
+              for at, row in enumerate(here)]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(here):
+            return
+        markers.remove(here[index])
+        # Translators: said when a place marker is forgotten.
+        dialogs.report(_('Marker forgotten'))
+    # Translators: the title of the list of place markers to forget.
+    dialogs.choose(labels, _('Forget a marker'), on_chosen=chosen)
+
+
+# --------------------------------------------------------------------------- #
+# The sound scheme
+# --------------------------------------------------------------------------- #
+def sound_scheme():
+    """Which states are answered with a sound instead of the word."""
+    from . import schemes
+    rows = schemes.described()
+    ways = schemes.way_names()
+    labels = ['%s - %s' % (row['label'], ways.get(row['way'], ''))
+              for row in rows]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(rows):
+            return
+        _how_to_say(rows[index])
+    # Translators: the title of the sound scheme manager.
+    dialogs.choose(labels, _('Sound scheme'), on_chosen=chosen)
+
+
+def _how_to_say(row):
+    from . import schemes
+    ways = schemes.way_names()
+    order = [schemes.AS_WORD, schemes.AS_SOUND, schemes.AS_BOTH]
+    labels = [ways[way] for way in order]
+    # Translators: an entry in the sound scheme manager - hear the sound.
+    labels.append(_('Hear the sound'))
+
+    def chosen(index):
+        if index is None or index < 0:
+            return
+        if index < len(order):
+            schemes.set_way(row['state'], order[index])
+            # Translators: said when a state's answer is changed. {what} is
+            # the state, {how} how it will be answered.
+            dialogs.report(_('{what}: {how}').format(
+                what=row['label'], how=ways[order[index]]))
+            return
+        schemes.try_it(row['state'])
+    # Translators: the title of the list of ways a state can be answered.
+    # {what} is the state.
+    dialogs.choose(labels, _('{what}: how to say it').format(
+        what=row['label']), on_chosen=chosen)
+
+
+def manager():
+    """The one window for what the user has made: markers, monitors, sounds."""
+    from . import managerGui
+    if not managerGui.show():
+        # Translators: said when the manager window cannot be opened.
+        _refused(_('The manager needs NVDA\'s own interface.'))
+
+
+# --------------------------------------------------------------------------- #
+# The journal
+# --------------------------------------------------------------------------- #
+def read_journal():
+    """Everything the reader said, newest first, and the way back to it."""
+    from . import journal
+    rows = journal.lines()
+    if not rows:
+        # Translators: said when the journal is empty.
+        _refused(_('Nothing has been said yet.'))
+        return
+    labels = [journal.label(row) for row in rows]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(rows):
+            return
+        _ok, said = journal.go(rows[index])
+        dialogs.report(said)
+    # Translators: the title of the list of what the reader has said.
+    dialogs.choose(labels, _('What was said'), on_chosen=chosen)
+
+
+def search_journal():
+    """Find a line in the journal, and go back to what said it."""
+    from . import journal
+
+    def asked(text):
+        if not text:
+            return
+        rows = journal.lines(containing=text)
+        if not rows:
+            # Translators: said when nothing in the journal matches.
+            _refused(_('Nothing said that.'))
+            return
+        labels = [journal.label(row) for row in rows]
+
+        def chosen(index):
+            if index is None or not 0 <= index < len(rows):
+                return
+            _ok, said = journal.go(rows[index])
+            dialogs.report(said)
+        # Translators: the title of the list of matching journal lines.
+        dialogs.choose(labels, _('What was said'), on_chosen=chosen)
+    # Translators: asked when searching what the reader has said.
+    dialogs.ask_text(_('What was said?'), _('Search what was said'), asked)
+
+
+def journal_page():
+    """The journal as a page to read with the reader's own cursor."""
+    from . import journal
+    text = journal.as_text()
+    if not text:
+        # Translators: said when the journal is empty.
+        _refused(_('Nothing has been said yet.'))
+        return
+    # Translators: the title of the page of what the reader has said.
+    dialogs.browse(text, _('What was said'))
+
+
+# --------------------------------------------------------------------------- #
+# Procedures
+# --------------------------------------------------------------------------- #
+def record_procedure():
+    """Start recording what the user does, or keep what was recorded."""
+    from . import procedures
+    if not procedures.recording():
+        _ok, said = procedures.start_recording()
+        dialogs.report(said)
+        return
+
+    def asked(name):
+        _ok, kept = procedures.stop_recording(name or '')
+        dialogs.report(kept)
+    # Translators: asked when a recorded procedure is being kept.
+    dialogs.ask_text(_('What should it be called?'),
+                     # Translators: the title of that box.
+                     _('Keep the procedure'), asked)
+
+
+def cancel_procedure():
+    from . import procedures
+    was, said = procedures.cancel_recording()
+    if not was:
+        # Translators: said when nothing is being recorded.
+        _refused(_('Nothing is being recorded'))
+        return
+    dialogs.report(said)
+
+
+def run_procedure():
+    """This program's procedures, and do the one chosen."""
+    from . import procedures
+    here = procedures.for_program()
+    if not here:
+        # Translators: said when a program has no recorded procedures.
+        _refused(_('Nothing is recorded for this program. Use the command '
+                   'for recording a procedure to make one.'))
+        return
+    labels = ['%s (%d)' % (row.get('name') or '', len(row.get('steps') or []))
+              for row in here]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(here):
+            return
+
+        def work():
+            _ok, said = procedures.run(here[index], say=dialogs.report)
+            dialogs.report(said)
+        _work(work)
+    # Translators: the title of the list of procedures.
+    dialogs.choose(labels, _('Procedures'), on_chosen=chosen)
+
+
+def read_procedure():
+    """Read a procedure's steps - which is what makes one checkable."""
+    from . import procedures
+    here = procedures.for_program()
+    if not here:
+        # Translators: said when a program has no recorded procedures.
+        _refused(_('Nothing is recorded for this program.'))
+        return
+    labels = [row.get('name') or '' for row in here]
+
+    def chosen(index):
+        if index is None or not 0 <= index < len(here):
+            return
+        dialogs.browse(procedures.as_text(here[index]),
+                       here[index].get('name') or '')
+    # Translators: the title of the list of procedures to read.
+    dialogs.choose(labels, _('Procedures'), on_chosen=chosen)
+
+
+# --------------------------------------------------------------------------- #
+# Finding a control
+# --------------------------------------------------------------------------- #
+def find_control(use_ai=False):
+    """Find the control that DOES a thing, not the one you can name."""
+    from . import findControl
+
+    def asked(question):
+        if not question:
+            return
+
+        def work():
+            tier, rows, why = findControl.find(question, use_ai=use_ai)
+            if not rows:
+                _refused(why)
+                return
+            tiers = findControl.tier_names()
+            labels = ['%s - %s' % (row['label'], tiers.get(tier, ''))
+                      for row in rows]
+
+            def chosen(index):
+                if index is None or not 0 <= index < len(rows):
+                    return
+                _ok, said = findControl.go(rows[index])
+                dialogs.report(said)
+            if len(rows) == 1:
+                _ok, said = findControl.go(rows[0])
+                dialogs.report(said)
+                return
+            # Translators: the title of the list of controls found.
+            dialogs.choose(labels, _('Found'), on_chosen=chosen)
+        _work(work)
+    # Translators: asked when searching for a control.
+    dialogs.ask_text(_('What are you looking for?'),
+                     # Translators: the title of that box.
+                     _('Find a control'), asked)
+
+
+def find_control_with_ai():
+    find_control(use_ai=True)
+
+
+def ocr_review():
+    """Read this window and walk it with the arrow keys; Enter clicks."""
+    from . import ocrReview
+
+    def work():
+        _on, said = ocrReview.toggle()
+        dialogs.report(said)
+    _work(work)
+
+
+def self_test():
+    """Run the add-on's own features here, in this NVDA, and say what
+    happened.
+
+    Not a substitute for the suite: it is the other kind of check. The suite
+    asks whether a function returns the right thing; this asks whether the
+    thing really works on this machine, with this NVDA, in the window in
+    front - which is where the fault that started it lived.
+    """
+    from . import selftest
+
+    def work():
+        answer = selftest.run()
+        # Translators: the title of the page of self-test results.
+        dialogs.browse(selftest.as_text(answer), _('Does it all work?'))
+    _work(work)

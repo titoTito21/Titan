@@ -277,6 +277,21 @@ def _filter(speechSequence=None, **_kwargs):
     except Exception:                                # noqa: BLE001
         pass
     try:
+        sequence = _reading_voice(sequence)
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        sequence = _origin_voice(sequence)
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        # **Written down here because here is where it is really said.**
+        # Anything earlier would record what was meant rather than what came
+        # out, and anything later would be after the words had gone.
+        _journal(sequence)
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
         with _LOCK:
             prefix = _prefix if _fresh(_prefix) else None
             suffix = _suffix if _fresh(_suffix) else None
@@ -409,3 +424,139 @@ def capabilities():
     """
     return {'dialog_kind': _registered, 'state_suffix': _registered,
             'role_label': False}
+
+
+# --------------------------------------------------------------------------- #
+# Reading text, in the voice for reading text
+# --------------------------------------------------------------------------- #
+#: How many utterances were spoken in the reading voice. For the
+#: diagnostics command, which is the only way to tell "the class does
+#: nothing" from "say all was never running".
+_read_aloud = 0
+
+
+def read_aloud():
+    return _read_aloud
+
+
+def _saying_all():
+    """Whether NVDA is reading continuously right now.
+
+    Say-all is the one thing a reader does that is not about a control: it
+    is a document being read, it goes on for minutes, and it is exactly
+    what somebody wants in a voice of its own - faster, or a different one
+    entirely, so it is not mistaken for the reader talking about the screen.
+
+    Asked of NVDA's own handler, and every one of the places it has lived:
+    it moved from `sayAllHandler` to `speech.sayAll` and the class was
+    renamed on the way, so an add-on that knows only one of them answers
+    "no" for ever on the other and the feature is silently absent.
+    """
+    for reach in (lambda: __import__('speech.sayAll', fromlist=['SayAllHandler'])
+                  .SayAllHandler.isRunning(),
+                  lambda: __import__('sayAllHandler').isRunning()):
+        try:
+            return bool(reach())
+        except Exception:                            # noqa: BLE001
+            continue
+    return False
+
+
+def _reading_voice(sequence):
+    """The `text` class, applied to a document being read aloud."""
+    global _read_aloud
+    if not sequence or not _saying_all():
+        return sequence
+    if not any(isinstance(part, str) and part.strip() for part in sequence):
+        return sequence
+    from . import classes
+    from . import prosody
+    from . import voices
+    profile = classes.voice_of('text')
+    if not profile:
+        return sequence
+    # **A synthesizer of its own is not applied HERE**, and that is not the
+    # same as not applied at all. Say-all is NVDA's own machinery: it
+    # tracks where it has got to by the indexes in the sequence it handed
+    # its synth, so taking the words away to speak them somewhere else
+    # leaves that machinery reading a document nobody can hear. The synthesizer
+    # for reading text is arranged where NVDA already switches
+    # one - its own say-all configuration profile, see the sayall_profile
+    # module - and what is left for this filter is the dials, which are
+    # real speech commands and can honestly be applied.
+    on, off = voices._commands(profile, prosody.panner.current_synth())
+    if not on:
+        return sequence
+    _read_aloud += 1
+    return list(on) + list(sequence) + list(off)
+
+
+# --------------------------------------------------------------------------- #
+# Keyboard echo, a spelled word, a message, the controller
+# --------------------------------------------------------------------------- #
+#: How many utterances were coloured by where they came from, per class.
+_by_origin = {}
+
+
+def by_origin():
+    return dict(_by_origin)
+
+
+def _origin_voice(sequence):
+    """The voice for what this utterance IS, not for what it says.
+
+    `origin` marks an utterance while NVDA is still in the function that
+    knows what kind it is - keyboard echo, a word being spelled, a message,
+    what another program said through the controller - and this is where the
+    mark is spent. Nothing here reads the words.
+
+    **The dials go inside the utterance; a voice or a variant is put on the
+    driver.** The first is exact and free. The second cannot be a command at
+    all (see `voices.BY_SETTING`), and there is no utterance before this one
+    to change the driver at the end of - so it is changed here, immediately
+    before the sequence goes to the synth, and put back by a callback at the
+    end of it. `speaking` keeps what is outstanding and restores it before
+    the next change and on a timer, so the worst case is one utterance in
+    the wrong voice rather than a session in it.
+    """
+    from . import origin
+    mark = origin.current()
+    if not mark or not sequence or not origin.wanted():
+        return sequence
+    if not any(isinstance(part, str) and part.strip() for part in sequence):
+        return sequence
+    from . import classes
+    from . import prosody
+    from . import voices
+    profile = classes.voice_of(mark)
+    if not profile:
+        return sequence
+    synth = prosody.panner.current_synth()
+    on, off = voices._commands(profile, synth)
+    named = voices._signature(profile)
+    if not on and not named:
+        return sequence
+    _by_origin[mark] = _by_origin.get(mark, 0) + 1
+    out = list(on) + list(sequence) + list(off)
+    if named:
+        from . import speaking
+        speaking.become(named)
+        out.extend(voices._boundary({}))
+    return out
+
+
+def _journal(sequence):
+    """One line of what the reader said, with the way back to what said it.
+
+    The words are what is in the sequence at this moment - commands and all
+    the rest are not words - and the KIND comes from `origin`, which knows
+    because NVDA knew while it was still in the function that produced it.
+    """
+    from . import journal
+    from . import origin
+    if not journal.wanted():
+        return
+    said = ' '.join(part for part in sequence if isinstance(part, str)
+                    and part.strip())
+    if said.strip():
+        journal.note(said, kind=origin.current())

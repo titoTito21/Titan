@@ -100,7 +100,20 @@ MODE_APPLICATION = 'application'
 #: nothing.
 MODE_NATIVE = 'native'
 
-MODES = (MODE_GAME, MODE_APPLICATION, MODE_NATIVE)
+#: **Windows' own OCR, and no model at all.**
+#:
+#: The reading is the words and where each line is, from the recogniser
+#: built into Windows that NVDA already wraps - local, free, about a tenth
+#: of a second, and nothing leaves the machine. That is enough to make a
+#: drawn window navigable: the cursor is built from it and a control
+#: presses itself by clicking where it was read.
+#:
+#: It is what MODE_NATIVE falls back to, and it is a better floor than the
+#: AI list ever was: a window that will not wear controls is now read for
+#: nothing rather than at a request per change.
+MODE_LOCAL = 'local'
+
+MODES = (MODE_GAME, MODE_APPLICATION, MODE_NATIVE, MODE_LOCAL)
 
 
 def mode_for(obj, module=None):
@@ -129,11 +142,35 @@ def mode_for(obj, module=None):
         if perProgram.answered('surfaceGame',
                                perProgram.application_of(obj)):
             return MODE_GAME if perProgram.value('surfaceGame', obj) \
-                else MODE_NATIVE
+                else _not_a_game()
     except Exception:                                # noqa: BLE001
         pass
-    return MODE_GAME if _text(getattr(obj, 'windowClassName', '')) \
-        in GAME_CLASSES else MODE_NATIVE
+    if _text(getattr(obj, 'windowClassName', '')) in GAME_CLASSES:
+        return MODE_GAME
+    return _not_a_game()
+
+
+def _not_a_game():
+    """What a window that is not a game gets - the user's own answer.
+
+    Which recogniser reads an unreadable window is a real choice with a real
+    cost on one side of it, so it is a setting rather than a decision made
+    for somebody: Windows' own is free, local and private; Titan's AI OCR
+    understands what it reads and sends a picture of the screen to a
+    provider to do it.
+    """
+    try:
+        from . import configSpec
+        answer = str(configSpec.read().get('ocrTier') or '').strip()
+    except Exception:                                # noqa: BLE001
+        answer = ''
+    if answer == 'ai':
+        return MODE_NATIVE
+    if answer == 'both':
+        # The AI first, and it falls back to the local reader by itself
+        # when the window will not wear controls.
+        return MODE_NATIVE
+    return MODE_LOCAL
 
 
 #: How often the window is looked at while watching. A poll on a still
@@ -466,6 +503,77 @@ def overlay_close():
     _overlay('ocr.overlay_close', timeout=10.0)
 
 
+def _watch_locally(hwnd, stop):
+    """Watch a window with WINDOWS' own OCR - free, local, nothing sent.
+
+    **The tier under the AI one, and for a window that is watched it is the
+    one that matters.** A game menu repaints constantly; a reading per poll
+    from a vision provider is a request per poll and somebody's money. This
+    is a screenshot and Windows' own recogniser: about a tenth of a second,
+    on this machine, and nothing leaves it.
+
+    It gives the WORDS and where each line is, which is enough to make the
+    window navigable - the cursor is built from it and a control presses
+    itself by clicking where it was read. What it cannot give is
+    understanding: which of these is a button, what is highlighted. That
+    stays with the AI, and this is what stops the AI being asked about a
+    screen that has not changed.
+
+    Answers ``''`` when it is done, or the name of the mode to fall back to.
+    """
+    from . import localOcr
+    ok, why = localOcr.available()
+    if not ok:
+        _log('no local OCR: %s' % why)
+        return MODE_APPLICATION
+    interval = POLL
+    busy = 0
+    last = None
+    while True:
+        if not _window_alive(hwnd):
+            _say(_('That window has closed.'))
+            break
+        if _user_is_here(hwnd):
+            reading = localOcr.read_window(hwnd)
+            with _LOCK:
+                _watching['reads'] += 1
+            if reading is None:
+                with _LOCK:
+                    _watching['why'] = localOcr.report().get('why', '')
+                _log('local reading failed: %s'
+                     % _watching.get('why', ''), error=True)
+                return MODE_APPLICATION
+            if reading.changed_from(last):
+                with _LOCK:
+                    _watching['changed'] += 1
+                try:
+                    from . import smart
+                    smart.take_local(hwnd, reading)
+                except Exception:                    # noqa: BLE001
+                    pass
+                # Only what is NEW. A window whose whole reading is
+                # announced on every change would be a reader reading a
+                # menu from the top every time one line of it moved.
+                for line in reading.added_since(last)[:MAX_SAID]:
+                    _say(line, interrupt=False)
+                last = reading
+                busy += 1
+                if busy >= BUSY_ENOUGH and interval == POLL:
+                    interval = SLOW_POLL
+            else:
+                busy = 0
+                interval = POLL
+        if stop.wait(interval):
+            break
+    return ''
+
+
+#: How many new lines are said when a window changes. A screen that has
+#: been replaced wholesale would otherwise be read out from the top, which
+#: is the thing the diff exists to avoid.
+MAX_SAID = 6
+
+
 def _watch_native(hwnd, stop):
     """Watch a window by WEARING it: the reading, as the window's controls.
 
@@ -532,7 +640,17 @@ def _watch(hwnd, stop):
         # answer, and being told which they got is the difference between a
         # feature that degraded and one that is quietly not what it claimed.
         _say(_('This window will not take controls of its own, so it is being '
-               'read as a list instead.'))
+               'read with Windows\' own recogniser instead.'))
+        with _LOCK:
+            _watching['mode'] = mode = MODE_LOCAL
+    if mode == MODE_LOCAL:
+        # Free, local, and still navigable. The AI is not asked at all.
+        fallback = _watch_locally(hwnd, stop)
+        if not fallback:
+            _finish_watch()
+            return
+        _say(_('Windows cannot read this window either, so it is being read '
+               'with AI instead.'))
         with _LOCK:
             _watching['mode'] = mode = MODE_APPLICATION
     interval = POLL

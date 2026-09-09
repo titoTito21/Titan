@@ -16,9 +16,14 @@ Nothing here speaks, opens a window, reaches the bus or touches the user's
 NVDA configuration.
 """
 
+import collections
 import io
+import re
 import json
 import os
+import shutil
+import tempfile
+import threading
 import sys
 import time
 import types
@@ -748,17 +753,57 @@ class AControlInThreeTones(unittest.TestCase):
             displayString = 'pressed'
         parts = self.elements.describe(self.Obj(name='Save', role=Role(),
                                                 states=()))
-        self.assertEqual(parts[0], ('Save', 0))
-        self.assertEqual(parts[1], ('button', -4))
+        self.assertEqual(parts[0], ('Save', 'name'))
+        self.assertEqual(parts[1], ('button', 'kind'))
+
+    def test_every_part_is_tagged_with_its_CLASS_and_not_a_pitch(self):
+        """The reported bug: "I want the variant quincy as the control type
+        and it does not work" - and neither did a rate, a voice or a
+        synthesizer.
+
+        A reading was built with bare pitch NUMBERS, and `voices.voice_of`
+        answers a number with a bare pitch and never looks at the user's
+        table at all. Everything they set was written down, shown back to
+        them in the dialog, and thrown away at the one moment it was needed.
+        The dials only ever appeared to work because those numbers are what
+        the classes happen to default to.
+        """
+        parts = self.elements.describe(self.Obj(
+            name='Save', value='x', description='Saves the file',
+            position={'indexInGroup': 3, 'similarItemsInGroup': 10}))
+        for _text, voice in parts:
+            self.assertIsInstance(voice, str,
+                                  'a part must name its class, not a pitch')
+
+    def test_the_classes_it_names_all_exist(self):
+        """A part tagged with a class nobody defined is a part the user
+        cannot set - which is the same bug wearing a different hat."""
+        from titanEnhancements import classes
+        known = classes.defaults()
+        parts = self.elements.describe(self.Obj(
+            name='Save', value='x', description='Saves the file',
+            position={'indexInGroup': 3, 'similarItemsInGroup': 10}))
+        for _text, voice in parts:
+            self.assertIn(voice, known, voice)
+
+    def test_the_defaults_are_what_they_always_were(self):
+        """The wiring changed; what a control SOUNDS like must not."""
+        from titanEnhancements import voices
+        self.assertEqual(voices.voice_of('name').get('pitch', 0),
+                         self.elements.NAME_PITCH)
+        self.assertEqual(voices.voice_of('kind').get('pitch', 0),
+                         self.elements.ROLE_PITCH)
+        self.assertEqual(voices.voice_of('state').get('pitch', 0),
+                         self.elements.STATE_PITCH)
 
     def test_a_field_says_its_name_and_what_is_in_it(self):
         parts = self.elements.describe(self.Obj(name='Address',
                                                 value='titosoft.com'))
-        self.assertEqual(parts[0], ('Address, titosoft.com', 0))
+        self.assertEqual(parts[0], ('Address, titosoft.com', 'name'))
 
     def test_a_value_that_repeats_the_name_is_not_said_twice(self):
         parts = self.elements.describe(self.Obj(name='Save', value='Save'))
-        self.assertEqual(parts[0], ('Save', 0))
+        self.assertEqual(parts[0], ('Save', 'name'))
 
     def test_focus_is_implied_and_never_said(self):
         # The live reading said "zaznaczalne, mozliwy fokus, ma fokus" for
@@ -2405,30 +2450,20 @@ class EverySubsystemTitanHasIsReachable(unittest.TestCase):
     checked against Titan's own list of them rather than against a memory
     of which ones were wired up."""
 
-    #: Calls this add-on deliberately does not make, each for a reason.
-    #: Everything else Titan answers must be reachable from here.
-    NOT_OURS = {
-        # Driving Titan's own settings window from a reader is Titan's own
-        # settings interfaces' job, and the add-on opens that window.
-        'settings.screen', 'settings.set', 'settings.press', 'settings.save',
-        'settings.cancel',
-        # Speaking is what the reader does; Titan speaking through NVDA is
-        # the announcement channel, which is `announce`, not these.
-        'speech.say', 'speech.stop', 'speech.speaking', 'speech.rate',
-        # A reader is not the thing that reports somebody else's program.
-        'notifications.add', 'client.report', 'notifications.clear',
-        # The application renderer: a screen to work, which is a different
-        # add-on's worth of interface and deliberately not this one's.
-        'app.list', 'app.open', 'app.screen', 'app.press', 'app.set',
-        'app.key', 'app.close', 'app.sessions', 'app.log',
-        # Answered for the caller, not asked by it.
-        'capabilities', 'ai.available', 'sounds.theme',
-        # Reached through the action layer instead, which is where every
-        # one of them already is as a bindable script.
-        'apps.list', 'apps.open', 'games.list', 'games.open',
-        'im.modules', 'im.open', 'menu.list', 'menu.run', 'cling.list',
-        'widgets.list', 'widgets.read', 'widgets.move', 'widgets.press',
-    }
+    #: Calls this add-on deliberately does not make.
+    #:
+    #: **It is empty, and that is the point.** It used to hold most of
+    #: Titan - the settings, the speech, the notifications, the whole
+    #: application renderer, and everything reachable "through the action
+    #: layer instead" - each with a reason that was true when it was
+    #: written and is not true any more. Every one of them is now asked
+    #: for by name, so the sweep below is the whole claim rather than the
+    #: claim minus a list.
+    #:
+    #: A call added to Titan later fails this test until something here
+    #: asks for it, which is exactly what it is for. Put a name back only
+    #: with the reason beside it.
+    NOT_OURS = set()
 
     def test_the_addon_asks_for_everything_else(self):
         import re
@@ -3832,17 +3867,32 @@ class AGameAndAnInaccessibleApplicationAreDifferentProblems(unittest.TestCase):
             self.surface.mode_for(Fake(klass='UnityWndClass')),
             self.surface.MODE_GAME)
 
-    def test_anything_else_drawn_wears_the_reading_as_controls(self):
-        """The default for a window that is not a game is NATIVE.
+    def test_anything_else_drawn_is_read_locally_by_default(self):
+        """The default for a window that is not a game is LOCAL.
 
-        Not MODE_APPLICATION, which is a cursor of ours over a list of what
-        was read - a reading you can move through. What somebody wants from
-        an inaccessible program is the program, so the reading becomes real
-        controls on the real window and NVDA reads them as it reads any
-        others. MODE_APPLICATION is what that falls back to.
+        Windows has a recogniser built in: free, on this machine, and
+        nothing sent anywhere. The AI reading understands what it reads -
+        which of these is a button, what is highlighted - and costs a
+        picture of the user's screen at a provider, so it is opted INTO,
+        which is the same rule everything else here follows.
         """
         self.assertEqual(self.surface.mode_for(Fake(klass='WeirdInstaller')),
-                         self.surface.MODE_NATIVE)
+                         self.surface.MODE_LOCAL)
+
+    def test_the_user_chooses_which_recogniser_reads_it(self):
+        from titanEnhancements import configSpec
+        before = configSpec.read
+        try:
+            for answer, wanted in (('ai', self.surface.MODE_NATIVE),
+                                   ('both', self.surface.MODE_NATIVE),
+                                   ('local', self.surface.MODE_LOCAL)):
+                configSpec.read = lambda a=answer: dict(configSpec.defaults(),
+                                                        ocrTier=a)
+                self.assertEqual(
+                    self.surface.mode_for(Fake(klass='WeirdInstaller')),
+                    wanted, answer)
+        finally:
+            configSpec.read = before
 
     def test_a_reader_module_may_simply_say(self):
         from titanEnhancements.readerModules import schema
@@ -3866,11 +3916,12 @@ class AGameAndAnInaccessibleApplicationAreDifferentProblems(unittest.TestCase):
                                                     app='thing.exe')),
                          self.surface.MODE_GAME)
 
-    def test_saying_it_is_not_a_game_asks_for_the_controls(self):
+    def test_saying_it_is_not_a_game_asks_for_a_reading(self):
+        """And which reading is the user's other answer, not this one's."""
         self.per.set_value('surfaceGame', 'thing.exe', False)
-        self.assertEqual(self.surface.mode_for(Fake(klass='UnityWndClass',
-                                                    app='thing.exe')),
-                         self.surface.MODE_NATIVE)
+        self.assertIn(self.surface.mode_for(Fake(klass='UnityWndClass',
+                                                 app='thing.exe')),
+                      (self.surface.MODE_LOCAL, self.surface.MODE_NATIVE))
 
     # -------------------------------------------------- the navigable model
     def _reading(self):
@@ -4149,6 +4200,7 @@ class TheSoundsAndWordsItUses(unittest.TestCase):
         self.assertEqual(entries.get('Window recognised, Native TCE cursor'),
                          'Rozpoznano okno, Native TCE cursor')
 
+
     def test_the_compiled_catalogue_is_readable_by_gettext(self):
         import gettext
         made = os.path.join(ADDON, 'locale', 'pl', 'LC_MESSAGES', 'nvda.mo')
@@ -4159,10 +4211,63 @@ class TheSoundsAndWordsItUses(unittest.TestCase):
         self.assertEqual(
             catalogue.gettext('Window recognised, Native TCE cursor'),
             'Rozpoznano okno, Native TCE cursor')
-        # Anything untranslated must fall back to the English source, not
-        # to nothing.
-        self.assertEqual(catalogue.gettext('Titan is not running.'),
-                         'Titan is not running.')
+        # Anything the catalogue has not got must fall back to the English
+        # source, not to nothing. A msgid that will never exist, because
+        # using a real untranslated one is a test that starts failing the
+        # day somebody translates it.
+        self.assertEqual(catalogue.gettext('__no such string__'),
+                         '__no such string__')
+
+    def test_every_string_the_addon_can_say_is_translated(self):
+        """The whole catalogue, checked against the whole source.
+
+        A reader whose Polish is nine tenths of the way there is one that
+        says every tenth sentence in English, and the sentences that get
+        left behind are always the newest - which are the ones nobody has
+        read yet. So this is not "is there a catalogue": it is every
+        `_('...')` in every module, and a string added today fails it.
+
+        The strings are found the way the builder finds them, by parsing
+        the source rather than by matching text, so a call written across
+        several lines counts and a word in a comment does not.
+        """
+        import ast
+        source_of = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements')
+        made = os.path.join(ADDON, 'locale', 'pl', 'LC_MESSAGES', 'nvda.po')
+        if not os.path.exists(made):
+            self.skipTest('no Polish catalogue')
+        sys.path.insert(0, os.path.join(ROOT, 'nvda-addon'))
+        try:
+            import build as builder
+        finally:
+            sys.path.pop(0)
+        have = {key for key, value in builder._read_po(made).items() if value}
+        missing = []
+        for base, _dirs, names in os.walk(source_of):
+            if '__pycache__' in base:
+                continue
+            for name in sorted(names):
+                if not name.endswith('.py'):
+                    continue
+                with io.open(os.path.join(base, name),
+                             encoding='utf-8') as handle:
+                    tree = ast.parse(handle.read())
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call) or not node.args:
+                        continue
+                    called = getattr(node.func, 'id', None) \
+                        or getattr(node.func, 'attr', None)
+                    if called != '_':
+                        continue
+                    first = node.args[0]
+                    if isinstance(first, ast.Constant) and \
+                            isinstance(first.value, str) and \
+                            first.value not in have:
+                        missing.append('%s:%d %r' % (name, node.lineno,
+                                                     first.value[:60]))
+        self.assertEqual(missing, [],
+                         '%d strings have no Polish: %s'
+                         % (len(missing), '; '.join(missing[:8])))
 
 
 
@@ -4507,6 +4612,3550 @@ class OneKeyOneMacro(unittest.TestCase):
         from titanEnhancements import link
         link.LINK.bridge = lambda call, **kw: (False, 'not running')
         self.assertEqual(self.gestures.macro_rows(), [])
+
+
+
+# --------------------------------------------------------------------------- #
+class AVoiceIsMoreThanThreeDials(unittest.TestCase):
+    """A class may name a whole voice - and only where that can be honoured.
+
+    Pitch, rate and volume are real NVDA speech commands: exact, per
+    utterance, and they can be part of a control's reading. A voice, a
+    variant and above all a SYNTHESIZER are not commands at all - they are
+    settings on a driver - and a different synthesizer is a second program
+    producing sound, which cannot be part of one sentence. So the table can
+    hold that answer for a whole MESSAGE and must refuse it for a part.
+    """
+
+    def setUp(self):
+        from titanEnhancements import classes
+        self.classes = classes
+        self._path = classes.path
+        self._dir = tempfile.mkdtemp()
+        classes.path = lambda: os.path.join(self._dir, 'classes.json')
+        classes.forget()
+        self.addCleanup(classes.forget)
+        self.addCleanup(lambda: setattr(classes, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self._dir, ignore_errors=True))
+
+    def test_a_whole_message_may_have_a_synthesizer_of_its_own(self):
+        self.classes.set_voice('notification',
+                               {'synth': 'espeak', 'pitch': 3})
+        self.assertEqual(self.classes.synth_of('notification'), 'espeak')
+
+    def test_part_of_a_reading_may_not(self):
+        """Two synthesizers cannot make one sentence between them."""
+        self.classes.set_voice('kind', {'synth': 'espeak', 'pitch': -4})
+        self.assertEqual(self.classes.voice_of('kind').get('synth'), None)
+        self.assertEqual(self.classes.synth_of('kind'), '')
+
+    def test_a_stored_synth_on_a_part_is_still_not_acted_on(self):
+        """A table that can hold a wrong answer must not obey it - the file
+        is a file, and an older add-on or a hand edit can put one there."""
+        self.classes._load()['kind'] = {'synth': 'espeak'}
+        self.assertEqual(self.classes.synth_of('kind'), '')
+
+    def test_a_voice_and_a_variant_are_kept_for_anything(self):
+        self.classes.set_voice('kind', {'voice': 'pl', 'variant': 'max'})
+        kept = self.classes.voice_of('kind')
+        self.assertEqual(kept['voice'], 'pl')
+        self.assertEqual(kept['variant'], 'max')
+
+    def test_inflection_is_a_dial_like_the_others(self):
+        self.classes.set_voice('text', {'inflection': 5})
+        self.assertEqual(self.classes.voice_of('text')['inflection'], 5)
+
+    def test_a_dial_of_nothing_is_not_stored(self):
+        """Or every class would be "changed" the moment it was looked at."""
+        self.classes.set_voice('text', {'pitch': 0, 'voice': ''})
+        self.assertEqual(self.classes.voice_of('text'), {})
+
+    def test_the_old_file_still_reads(self):
+        """The store used to be nothing but classes. Reading that shape as
+        the new one would lose every answer somebody had given."""
+        with io.open(self.classes.path(), 'w', encoding='utf-8') as handle:
+            json.dump({'kind': {'pitch': -6}}, handle)
+        self.classes.forget()
+        self.assertEqual(self.classes.voice_of('kind')['pitch'], -6)
+
+    def test_the_new_classes_are_all_whole_messages(self):
+        for tag in ('notification', 'controller', 'text'):
+            self.assertTrue(self.classes.is_whole(tag), tag)
+
+    def test_every_class_is_in_a_group(self):
+        """A class in no group would be missing from the manager's list."""
+        grouped = {tag for _name, members in self.classes.GROUPS
+                   for tag in members}
+        for tag in self.classes.defaults():
+            self.assertIn(tag, grouped, tag)
+
+    def test_every_class_has_words_saying_what_it_is_for(self):
+        words = self.classes.meanings()
+        for tag in self.classes.defaults():
+            self.assertTrue(words.get(tag), tag)
+
+
+# --------------------------------------------------------------------------- #
+class TheOrderTheePartsAreReadIn(unittest.TestCase):
+    """"Checked, check box" and "check box, checked" are the same three
+    facts in two orders, and which is right is what somebody is used to."""
+
+    class Obj:
+        def __init__(self, **kw):
+            self.name = kw.get('name', '')
+            self.value = kw.get('value', '')
+            self.description = kw.get('description', '')
+            self.role = types.SimpleNamespace(name=kw.get('role', 'BUTTON'))
+            self.states = kw.get('states', set())
+            self.positionInfo = kw.get('position', {})
+
+    def setUp(self):
+        from titanEnhancements import classes, elements
+        self.classes, self.elements = classes, elements
+        self._path = classes.path
+        self._dir = tempfile.mkdtemp()
+        classes.path = lambda: os.path.join(self._dir, 'classes.json')
+        classes.forget()
+        self.addCleanup(classes.forget)
+        self.addCleanup(lambda: setattr(classes, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self._dir, ignore_errors=True))
+
+    def _said(self, obj):
+        return [text for text, _voice in self.elements.describe(obj)]
+
+    def test_the_default_is_the_name_then_what_it_is(self):
+        self.assertEqual(self.classes.parts_read()[:3],
+                         ['name', 'kind', 'state'])
+
+    def test_the_order_can_be_turned_round(self):
+        self.classes.set_order([('kind', True), ('state', True),
+                                ('name', True)])
+        said = self._said(self.Obj(name='Save', role='CHECKBOX'))
+        self.assertEqual(said[-1], 'Save')
+
+    def test_a_part_can_be_switched_off_entirely(self):
+        self.classes.set_order([('name', True), ('kind', False),
+                                ('state', True)])
+        said = self._said(self.Obj(name='Save', role='BUTTON'))
+        self.assertEqual(said, ['Save'])
+
+    def test_a_part_this_version_added_appears_rather_than_vanishing(self):
+        """A stored order written before a part existed must gain it, or
+        the part is silently missing for everybody who ever saved one."""
+        self.classes.set_order([('name', True), ('kind', True)])
+        self.assertEqual([name for name, _on in self.classes.order()],
+                         ['name', 'kind', 'state', 'value', 'description',
+                          'place'])
+
+    def test_a_switched_off_part_stays_switched_off_across_a_save(self):
+        self.classes.set_order([('name', True), ('kind', False)])
+        self.assertFalse(dict(self.classes.order())['kind'])
+
+    def test_putting_it_back_really_puts_it_back(self):
+        self.classes.set_order([('state', True), ('name', True)])
+        self.classes.reset_order()
+        self.assertEqual(self.classes.parts_read()[0], 'name')
+        self.assertFalse(self.classes.order_changed())
+
+    def test_a_control_is_never_read_as_silence(self):
+        """Every part off is a preference; saying nothing at all is a
+        reader that has stopped working."""
+        self.classes.set_order([(name, False) for name in self.classes.PARTS])
+        said = self._said(self.Obj(name='', role='BUTTON'))
+        self.assertTrue(said)
+
+    def test_a_value_is_not_said_twice(self):
+        said = self._said(self.Obj(name='Save', value='Save'))
+        self.assertEqual(said.count('Save'), 1)
+
+    def test_every_part_has_words_saying_what_it_is(self):
+        words = self.classes.part_names()
+        for name in self.classes.PARTS:
+            self.assertTrue(words.get(name), name)
+
+
+# --------------------------------------------------------------------------- #
+class AnotherSynthesizerForAWholeMessage(unittest.TestCase):
+    """`speaking` is the half a speech command cannot do, and it is written
+    around putting back what it changed."""
+
+    class Synth:
+        def __init__(self):
+            self.rate = 50
+            self.pitch = 50
+            self.volume = 50
+            self.voice = 'en'
+            self.variant = 'none'
+            self.said = []
+            self.cancelled = 0
+
+        def speak(self, sequence):
+            self.said.append(sequence)
+
+        def cancel(self):
+            self.cancelled += 1
+
+    def setUp(self):
+        from titanEnhancements import speaking
+        self.speaking = speaking
+        speaking.forget()
+        self.addCleanup(speaking.forget)
+
+    def test_a_profile_is_put_on_and_taken_off_again(self):
+        synth = self.Synth()
+        was = self.speaking.apply_to(synth, {'rate': 4, 'voice': 'pl'})
+        self.assertEqual(synth.voice, 'pl')
+        self.assertNotEqual(synth.rate, 50)
+        self.speaking.put_back(synth, was)
+        self.assertEqual(synth.voice, 'en')
+        self.assertEqual(synth.rate, 50)
+
+    def test_a_dial_stays_inside_nvdas_own_range(self):
+        synth = self.Synth()
+        synth.rate = 98
+        self.speaking.apply_to(synth, {'rate': 10})
+        self.assertLessEqual(synth.rate, 100)
+        synth.rate = 2
+        self.speaking.apply_to(synth, {'rate': -10})
+        self.assertGreaterEqual(synth.rate, 0)
+
+    def test_a_dial_the_driver_has_not_got_is_left_alone(self):
+        class Bare:
+            supportedSettings = ()
+            voice = 'en'
+        bare = Bare()
+        self.assertEqual(self.speaking.apply_to(bare, {'rate': 5}), {})
+
+    def test_putting_back_never_raises(self):
+        class Awkward:
+            def __setattr__(self, name, value):
+                raise RuntimeError('no')
+        self.speaking.put_back(Awkward(), {'rate': 50})
+
+    def test_a_synthesizer_that_will_not_start_is_not_asked_twice(self):
+        self.assertIsNone(self.speaking.driver_for('no such synth'))
+        self.assertIn('no such synth', self.speaking.refused())
+        self.assertIsNone(self.speaking.driver_for('no such synth'))
+
+    def test_nothing_named_is_nothing_asked_for(self):
+        self.assertIsNone(self.speaking.driver_for(''))
+
+    def test_saying_a_whole_thing_needs_a_synthesizer_to_say_it_with(self):
+        self.assertFalse(self.speaking.speak_with({}, 'hello'))
+        self.assertFalse(self.speaking.speak_with({'synth': 'nope'}, 'hello'))
+
+
+# --------------------------------------------------------------------------- #
+class AWholeMessageInItsOwnVoice(unittest.TestCase):
+    """`voices.say_whole` is where the rule is enforced rather than trusted,
+    and `False` from it always means "say it the ordinary way"."""
+
+    def setUp(self):
+        from titanEnhancements import classes, voices
+        self.classes, self.voices = classes, voices
+        self._path = classes.path
+        self._dir = tempfile.mkdtemp()
+        classes.path = lambda: os.path.join(self._dir, 'classes.json')
+        classes.forget()
+        self.addCleanup(classes.forget)
+        self.addCleanup(lambda: setattr(classes, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self._dir, ignore_errors=True))
+
+    def test_nothing_to_say_is_not_said(self):
+        self.assertFalse(self.voices.say_whole('notification', '   '))
+
+    def test_a_part_of_a_reading_is_refused_outright(self):
+        self.assertFalse(self.voices.say_whole(
+            'kind', 'hello', profile={'synth': 'espeak'}))
+
+    def test_a_class_with_no_synthesizer_is_left_to_the_ordinary_path(self):
+        """It keeps the message in NVDA's own queue, where it can be
+        interrupted and where braille follows it."""
+        self.assertFalse(self.voices.say_whole('notification', 'hello'))
+
+    def test_the_dials_are_offered_to_a_message_either_way(self):
+        self.classes.set_voice('notification', {'pitch': 3, 'rate': -2})
+        self.assertEqual(self.voices.dials_of('notification'),
+                         {'pitch': 3, 'rate': -2, 'volume': 0})
+
+# --------------------------------------------------------------------------- #
+class TheCatalogueCanBeBroughtBackInStep(unittest.TestCase):
+    """`test_every_string_the_addon_can_say_is_translated` fails when a
+    string is added, and a failing test that names no way to fix it is a
+    test people learn to ignore. `update_catalogue.py` is the way, so it is
+    checked too - and the one thing it must never do is lose somebody's
+    work.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, 'nvda-addon'))
+        try:
+            import update_catalogue
+        finally:
+            sys.path.pop(0)
+        self.tool = update_catalogue
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def _po(self, text):
+        path = os.path.join(self.dir, 'nvda.po')
+        with io.open(path, 'w', encoding='utf-8') as handle:
+            handle.write(text)
+        return path
+
+    def test_it_reads_a_catalogue_it_wrote(self):
+        path = self._po('msgid "Save"\nmsgstr "Zapisz"\n')
+        self.assertEqual(self.tool.read_po(path), {'Save': 'Zapisz'})
+
+    def test_a_string_split_across_lines_is_one_string(self):
+        """gettext joins adjacent quoted strings, and a reader that does not
+        loses everything after the first line of every long message."""
+        path = self._po('msgid ""\n"one "\n"two"\nmsgstr ""\n"raz "\n"dwa"\n')
+        self.assertEqual(self.tool.read_po(path), {'one two': 'raz dwa'})
+
+    def test_the_escapes_survive_a_round_trip(self):
+        for text in ('a "quoted" word', 'two\nlines', 'a\\backslash',
+                     'a\ttab'):
+            path = self._po('msgid "x"\nmsgstr "%s"\n' % self.tool.escape(text))
+            self.assertEqual(self.tool.read_po(path)['x'], text, repr(text))
+
+    def test_the_header_is_not_an_entry(self):
+        path = self._po('msgid ""\nmsgstr "Language: pl\\n"\n\n'
+                        'msgid "Save"\nmsgstr "Zapisz"\n')
+        self.assertEqual(self.tool.read_po(path), {'Save': 'Zapisz'})
+
+    def test_an_obsolete_entry_is_still_read(self):
+        """Or a string that came back would be re-translated from nothing."""
+        path = self._po('#~ msgid "Old"\n#~ msgstr "Stare"\n')
+        self.assertEqual(self.tool.read_po(path).get('Old'), 'Stare')
+
+    def test_every_string_it_finds_is_one_the_addon_really_says(self):
+        found = self.tool.strings()
+        self.assertTrue(found)
+        for where, line, _note, msgid in found:
+            self.assertTrue(msgid, where)
+            self.assertGreater(line, 0)
+
+    def test_it_finds_no_string_twice(self):
+        seen = [msgid for _w, _l, _n, msgid in self.tool.strings()]
+        self.assertEqual(len(seen), len(set(seen)))
+
+    def test_english_is_never_given_a_catalogue(self):
+        """Its msgid is its translation, so one would be 391 empty entries
+        and a build product nobody reads."""
+        self.assertEqual(self.tool.SOURCE_LANGUAGE, 'en')
+        made = os.path.join(ADDON, 'locale', 'en', 'LC_MESSAGES', 'nvda.po')
+        self.assertFalse(os.path.exists(made))
+
+# --------------------------------------------------------------------------- #
+class InstallingItIntoTheRealNVDA(unittest.TestCase):
+    """`install.py` empties a folder, so what it will and will not empty is
+    the part that has to be pinned.
+
+    Nothing here installs anything: the target is a temporary folder of the
+    test's own, and the build step is never run.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, 'nvda-addon'))
+        try:
+            import install
+        finally:
+            sys.path.pop(0)
+        self.install = install
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def _make(self, *names):
+        for name in names:
+            path = os.path.join(self.dir, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if name.endswith('/'):
+                os.makedirs(path, exist_ok=True)
+            else:
+                with io.open(path, 'w', encoding='utf-8') as handle:
+                    handle.write('x')
+
+    def test_an_install_of_this_add_on_may_be_replaced(self):
+        self._make('manifest.ini', 'globalPlugins/titanEnhancements/x.py')
+        self.assertTrue(self.install._is_ours(self.dir))
+
+    def test_an_empty_folder_may_be_used(self):
+        self.assertTrue(self.install._is_ours(self.dir))
+
+    def test_a_folder_that_is_not_this_add_on_is_LEFT_ALONE(self):
+        """One bad --to away from taking somebody's configuration with it."""
+        self._make('nvda.ini', 'speechDicts/default.dic')
+        self.assertFalse(self.install._is_ours(self.dir))
+        self.assertFalse(self.install.install(self.dir))
+        self.assertTrue(os.path.exists(os.path.join(self.dir, 'nvda.ini')))
+
+    def test_another_add_on_is_left_alone_too(self):
+        self._make('manifest.ini', 'synthDrivers/somebodyElse.py')
+        self.assertFalse(self.install._is_ours(self.dir))
+
+    def test_it_installs_the_add_on_this_repository_builds(self):
+        """The name and the package path have to agree with build.py, or
+        this installs nothing and says it installed something."""
+        self.assertTrue(self.install.PACKAGE.endswith('.nvda-addon'))
+        self.assertIn(self.install.NAME,
+                      os.path.basename(self.install.PACKAGE))
+        manifest = os.path.join(ADDON, 'manifest.ini')
+        with io.open(manifest, encoding='utf-8') as handle:
+            self.assertIn('name = ' + self.install.NAME, handle.read())
+
+    def test_the_target_is_nvdas_own_add_ons_folder(self):
+        where = self.install.nvda_addons()
+        self.assertTrue(where.replace('\\', '/').endswith('nvda/addons'))
+
+    def test_a_module_that_has_gone_really_goes(self):
+        """A file left from the last build is a module that still imports,
+        still runs, and is not in the source any more.
+
+        This is the one thing emptying the folder was FOR, and it is still
+        true now that the installer writes over instead: what the old
+        install had and the new package has not is taken away afterwards.
+        """
+        import subprocess
+        installer = os.path.join(os.path.dirname(HERE), 'install.py')
+        if not os.path.isfile(installer):
+            self.skipTest('install.py is not beside the tests')
+        subprocess.run([sys.executable, installer, '--to', self.dir],
+                       capture_output=True, text=True,
+                       cwd=os.path.dirname(installer))
+        package = os.path.join(self.dir, 'globalPlugins', 'titanEnhancements')
+        if not os.path.isdir(package):
+            self.skipTest('the add-on could not be built here')
+        stray = os.path.join(package, 'old.py')
+        with io.open(stray, 'w', encoding='utf-8') as handle:
+            handle.write('# left over from an older build\n')
+        subprocess.run([sys.executable, installer, '--to', self.dir],
+                       capture_output=True, text=True,
+                       cwd=os.path.dirname(installer))
+        self.assertFalse(os.path.exists(stray),
+                         'a module that is no longer shipped is still there')
+
+# --------------------------------------------------------------------------- #
+class AVariantIsNotASpeechCommand(unittest.TestCase):
+    """The reported bug: "I want the variant quincy as the control type, and
+    it does not work".
+
+    It did not, and the reason is structural rather than a slip. Pitch, rate
+    and volume are `SynthParamCommand`s - the synth is HANDED them inside the
+    utterance. A voice, a variant and an inflection are SETTINGS on the
+    driver, and this module changed them with a `CallbackCommand`, which
+    NVDA's own speech manager runs "when the synth reaches this point" -
+    that is, when the audio has been PLAYED, by which time the whole
+    utterance was synthesized long ago. So three dials worked and three did
+    nothing at all.
+
+    The answer is the only moment NVDA guarantees: the end of the utterance
+    BEFORE the one that wants the voice.
+    """
+
+    # A stand-in PER command, not one for all of them: a test that cannot
+    # tell an EndUtterance from a PitchCommand cannot check the shape of
+    # the sequence, which is the whole of what is being fixed.
+    @staticmethod
+    def _fake(kind):
+        class Fake:
+            COMMAND = kind
+
+            def __init__(self, offset=0, **kw):
+                self.offset = offset
+                self.name = kw.get('name', '')
+        Fake.__name__ = kind
+        return Fake
+
+    def setUp(self):
+        from titanEnhancements import classes, compat, voices
+        self.voices, self.classes, self.compat = voices, classes, compat
+        self._path = classes.path
+        self._dir = tempfile.mkdtemp()
+        classes.path = lambda: os.path.join(self._dir, 'classes.json')
+        classes.forget()
+        self._before = {}
+        for name in ('PitchCommand', 'RateCommand', 'VolumeCommand',
+                     'CallbackCommand', 'EndUtteranceCommand'):
+            self._before[name] = getattr(compat, name, None)
+            setattr(compat, name, self._fake(name))
+        self._supported = voices._supported
+        voices._supported = lambda synth, command: command is not None
+        self.addCleanup(lambda: setattr(voices, '_supported', self._supported))
+        self.addCleanup(lambda: [setattr(compat, k, v)
+                                 for k, v in self._before.items()])
+        self.addCleanup(classes.forget)
+        self.addCleanup(lambda: setattr(classes, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self._dir, ignore_errors=True))
+        voices._remember_first(None)
+
+    def _kinds(self, sequence):
+        return ['text' if isinstance(part, str) else
+                getattr(part, 'name', '') or getattr(part, 'COMMAND', 'dial')
+                for part in sequence]
+
+    def _has(self, sequence, kind):
+        return any(getattr(part, 'COMMAND', '') == kind for part in sequence)
+
+    def test_a_variant_starts_a_new_utterance(self):
+        """Which is the whole fix: a driver setting can only change between
+        utterances, so the part that wants one has to be its own."""
+        self.classes.set_voice('kind', {'variant': 'quincy'})
+        out = self.voices.sequence([('Save', 'name'), ('button', 'kind')])
+        self.assertTrue(self._has(out, 'EndUtteranceCommand'))
+
+    def test_the_change_is_made_before_the_utterance_that_wants_it(self):
+        """The callback has to be the LAST thing in the utterance that is
+        ending, or it fires after the words it was meant to colour."""
+        self.classes.set_voice('kind', {'variant': 'quincy'})
+        out = self.voices.sequence([('Save', 'name'), ('button', 'kind')])
+        kinds = self._kinds(out)
+        self.assertLess(kinds.index('titanVoice'), kinds.index('text', 1),
+                        'the change must come before the words it colours')
+        said = [part for part in out if isinstance(part, str)]
+        self.assertEqual(said[0].strip().rstrip(','), 'Save')
+
+    def test_the_driver_is_always_put_back_at_the_end(self):
+        """A variant left on is every word afterwards in the wrong voice."""
+        self.classes.set_voice('kind', {'variant': 'quincy'})
+        out = self.voices.sequence([('Save', 'name'), ('button', 'kind')])
+        self.assertEqual(self._kinds(out)[-1], 'EndUtteranceCommand',
+                         'the last thing is the end of an utterance')
+        self.assertEqual(self._kinds(out).count('titanVoice'), 2,
+                         'one to put it on, one to take it off')
+
+    def test_an_ordinary_reading_is_still_ONE_utterance(self):
+        """Nothing may pay for this that did not ask for it."""
+        out = self.voices.sequence([('Save', 'name'), ('button', 'kind'),
+                                    ('checked', 'state')])
+        self.assertEqual(self._kinds(out).count('titanVoice'), 0)
+        self.assertFalse(self._has(out, 'EndUtteranceCommand'))
+
+    def test_two_parts_asking_for_the_same_voice_share_an_utterance(self):
+        self.classes.set_voice('kind', {'variant': 'quincy'})
+        self.classes.set_voice('state', {'variant': 'quincy'})
+        out = self.voices.sequence([('Save', 'name'), ('button', 'kind'),
+                                    ('checked', 'state')])
+        self.assertEqual(self._kinds(out).count('titanVoice'), 2)
+
+    def test_the_first_part_is_handed_to_whoever_speaks_it(self):
+        """There is no utterance before the first one, so its voice cannot
+        be a callback: it is put on immediately before `speech.speak`."""
+        self.classes.set_voice('name', {'variant': 'quincy'})
+        self.voices.sequence([('Save', 'name'), ('button', 'kind')])
+        self.assertEqual(self.voices.pending_first(), {'variant': 'quincy'})
+
+    def test_asking_for_it_twice_gets_it_once(self):
+        """Or a sequence built and never spoken lends its voice to whatever
+        is spoken next."""
+        self.classes.set_voice('name', {'variant': 'quincy'})
+        self.voices.sequence([('Save', 'name')])
+        self.voices.pending_first()
+        self.assertIsNone(self.voices.pending_first())
+
+    def test_a_stale_answer_is_thrown_away(self):
+        self.classes.set_voice('name', {'variant': 'quincy'})
+        self.voices.sequence([('Save', 'name')])
+        self.voices._pending['at'] -= self.voices.PENDING_SECONDS * 2
+        self.assertIsNone(self.voices.pending_first())
+
+    def test_an_ordinary_reading_leaves_nothing_pending(self):
+        self.classes.set_voice('name', {'variant': 'quincy'})
+        self.voices.sequence([('Save', 'name')])
+        self.voices.sequence([('Save', 'name'), ('button', 'kind')])
+        self.voices._pending['profile'] = None
+        self.voices.sequence([('x', 'kind')])
+        self.assertIsNone(self.voices.pending_first())
+
+    def test_the_reading_is_spoken_through_the_one_door(self):
+        """`focus._speak` must go through `voices`, or the first part's
+        voice is worked out and then dropped on the floor."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'focus.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('voices.speak_sequence(', source)
+
+
+# --------------------------------------------------------------------------- #
+class ADriverSettingIsAlwaysPutBack(unittest.TestCase):
+    """The one thing this must not do is leave the reader in another voice.
+
+    A reading that changes a variant and is then cut short - the user
+    presses a key, speech is cancelled, the callback that would have put it
+    back never fires - would otherwise leave every word afterwards wrong.
+    That cannot be made impossible, so it is made harmless.
+    """
+
+    class Synth:
+        def __init__(self):
+            self.variant = 'none'
+            self.voice = 'en'
+            self.rate = 50
+
+    def setUp(self):
+        from titanEnhancements import speaking
+        self.speaking = speaking
+        self.synth = self.Synth()
+        self._current = speaking.current
+        speaking.current = lambda: self.synth
+        speaking.restore_standing(self.synth)
+        self.addCleanup(lambda: setattr(speaking, 'current', self._current))
+        self.addCleanup(speaking.restore_standing)
+
+    def test_becoming_a_voice_and_becoming_nothing_again(self):
+        self.speaking.become({'variant': 'quincy'})
+        self.assertEqual(self.synth.variant, 'quincy')
+        self.speaking.become({})
+        self.assertEqual(self.synth.variant, 'none')
+
+    def test_what_is_outstanding_is_known(self):
+        self.speaking.become({'variant': 'quincy'})
+        self.assertEqual(self.speaking.standing(), {'variant': 'none'})
+        self.speaking.restore_standing()
+        self.assertEqual(self.speaking.standing(), {})
+
+    def test_a_second_change_does_not_lose_the_original(self):
+        """Two changes and one restore must end at the ORIGINAL, not at the
+        first change - which is what happens if what was there is
+        overwritten instead of kept."""
+        self.speaking.become({'variant': 'quincy'})
+        self.speaking.become({'variant': 'michael'})
+        self.speaking.become({})
+        self.assertEqual(self.synth.variant, 'none')
+
+    def test_restoring_when_nothing_is_outstanding_is_not_an_error(self):
+        self.assertFalse(self.speaking.restore_standing())
+
+# --------------------------------------------------------------------------- #
+class ADifferentSynthesizerForReadingText(unittest.TestCase):
+    """"RHVoice for reading text" - and the one class this add-on must not
+    speak itself.
+
+    Say all feeds itself: each utterance carries the callbacks that queue
+    the next line, so taking the words away to another synthesizer stops the
+    reading after one line, and `setSynth` mid-read cancels speech. NVDA
+    already switches synthesizer for say all, through a configuration
+    profile, at the right utterance boundary. So the whole job is to put a
+    synthesizer in that profile.
+
+    What is checked here is the FOOTPRINT, because that is what can go
+    wrong: this writes into somebody's NVDA configuration.
+    """
+
+    def setUp(self):
+        from titanEnhancements import sayall_profile
+        self.profile = sayall_profile
+        self.dir = tempfile.mkdtemp()
+        self._folder = sayall_profile.folder
+        sayall_profile.folder = lambda: os.path.join(self.dir, 'profiles')
+        self.triggers = {}
+        self.saved = [0]
+
+        class Conf:
+            triggersToProfiles = self.triggers
+
+            @staticmethod
+            def saveProfileTriggers():
+                self.saved[0] += 1
+        self.config = types.SimpleNamespace(conf=Conf)
+        self._config = sayall_profile._config
+        sayall_profile._config = lambda: self.config
+        self.addCleanup(lambda: setattr(sayall_profile, 'folder',
+                                        self._folder))
+        self.addCleanup(lambda: setattr(sayall_profile, '_config',
+                                        self._config))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def _written(self):
+        with io.open(self.profile.path(), encoding='utf-8') as handle:
+            return handle.read()
+
+    def test_choosing_one_writes_the_profile_and_binds_the_trigger(self):
+        ok, said = self.profile.set_synth('rhvoice')
+        self.assertTrue(ok, said)
+        self.assertIn('synth = rhvoice', self._written())
+        self.assertEqual(self.triggers['sayAll'], self.profile.PROFILE)
+        self.assertEqual(self.saved[0], 1, 'the trigger map must be saved')
+
+    def test_the_profile_carries_the_synthesizer_and_nothing_else(self):
+        """A profile holds only what differs from the base one. That is what
+        makes it safe: everything not written is whatever the user has, so
+        this changes the synthesizer for reading text and nothing else about
+        how they read."""
+        self.profile.set_synth('rhvoice')
+        written = self._written()
+        for never in ('rate =', 'pitch =', 'volume =', 'symbolLevel'):
+            self.assertNotIn(never, written, never)
+
+    def test_a_voice_and_variant_go_under_the_synthesizer(self):
+        """NVDA keeps a synth's own settings under its own name."""
+        self.profile.set_synth('rhvoice', voice='anna', variant='x')
+        written = self._written()
+        self.assertIn('[[rhvoice]]', written)
+        self.assertIn('voice = anna', written)
+
+    def test_it_says_it_is_ours(self):
+        """A profile somebody finds in NVDA's own dialog has to be traceable
+        to the thing that made it."""
+        self.profile.set_synth('rhvoice')
+        self.assertIn(self.profile.MARK, self._written())
+        self.assertTrue(self.profile.ours())
+
+    def test_a_profile_this_add_on_did_not_write_is_LEFT_ALONE(self):
+        os.makedirs(os.path.dirname(self.profile.path()), exist_ok=True)
+        with io.open(self.profile.path(), 'w', encoding='utf-8') as handle:
+            handle.write('[speech]\nsynth = somebodyElse\n')
+        ok, said = self.profile.set_synth('rhvoice')
+        self.assertFalse(ok)
+        self.assertIn('somebodyElse', self._written())
+        self.assertNotIn('sayAll', self.triggers)
+        self.assertIn(self.profile.PROFILE, said)
+
+    def test_choosing_nothing_takes_the_arrangement_away(self):
+        self.profile.set_synth('rhvoice')
+        ok, _said = self.profile.set_synth('')
+        self.assertTrue(ok)
+        self.assertNotIn('sayAll', self.triggers)
+        self.assertFalse(os.path.exists(self.profile.path()))
+
+    def test_it_never_unbinds_somebody_elses_trigger(self):
+        """A user who has pointed say-all at a profile of their own keeps
+        it."""
+        self.triggers['sayAll'] = 'Their own profile'
+        self.profile.clear()
+        self.assertEqual(self.triggers['sayAll'], 'Their own profile')
+
+    def test_what_it_is_set_to_can_be_read_back(self):
+        self.assertEqual(self.profile.current(), '')
+        self.profile.set_synth('rhvoice')
+        self.assertEqual(self.profile.current(), 'rhvoice')
+
+    def test_with_no_nvda_it_says_so_rather_than_raising(self):
+        self.profile._config = lambda: None
+        self.profile.folder = lambda: ''
+        ok, said = self.profile.set_synth('rhvoice')
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_the_dialog_really_calls_it(self):
+        """A choice the dialog offers and never acts on is a switch that
+        lies, which is the fault this whole change is about."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'classManager.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('sayall_profile.set_synth(', source)
+        self.assertIn('sayall_profile.clear()', source)
+
+# --------------------------------------------------------------------------- #
+class WhereAnUtteranceCameFrom(unittest.TestCase):
+    """Keyboard echo in one voice, the controller in another.
+
+    By the time NVDA's speech filter sees an utterance it is a list of
+    strings and nothing says what kind it is. NVDA knows while it is still
+    in the function that produced it - `speakTypedCharacters`,
+    `speakSpelling`, `speakMessage`, `speakText` - so the mark is taken
+    there. Nothing here reads the words.
+    """
+
+    def _speech(self):
+        """A stand-in shaped like NVDA's speech MODULE - plain functions on
+        a module object, not methods - because that is what is really being
+        wrapped, and a bound method behaves differently on the way back."""
+        from titanEnhancements import origin
+        marks = []
+        module = types.ModuleType('speech')
+
+        def record():
+            marks.append(origin.current())
+
+        def speakTypedCharacters(ch):
+            record()
+
+        def speakSpelling(text):
+            record()
+
+        def speakText(text):
+            record()
+
+        def speakMessage(text):
+            # NVDA's own does exactly this, which is the whole reason the
+            # OUTERMOST mark has to win.
+            module.speakText(text)
+        for name, value in (('speakTypedCharacters', speakTypedCharacters),
+                            ('speakSpelling', speakSpelling),
+                            ('speakText', speakText),
+                            ('speakMessage', speakMessage)):
+            setattr(module, name, value)
+        module.marks = marks
+        return module
+
+    def setUp(self):
+        from titanEnhancements import compat, origin
+        self.origin = origin
+        self.speech = self._speech()
+        self._before = compat.speech
+        compat.speech = self.speech
+        origin.stop()
+        self.addCleanup(origin.stop)
+        self.addCleanup(lambda: setattr(compat, 'speech', self._before))
+
+    def test_typing_is_marked_as_typing(self):
+        self.origin.start()
+        self.speech.speakTypedCharacters('a')
+        self.assertEqual(self.speech.marks, ['typed'])
+
+    def test_spelling_is_marked_as_spelling(self):
+        self.origin.start()
+        self.speech.speakSpelling('cat')
+        self.assertEqual(self.speech.marks, ['spelling'])
+
+    def test_the_controller_is_marked_as_the_controller(self):
+        """`nvdaController_speakText` queues `speech.speakText` - read out
+        of NVDA's own NVDAHelper - so that is where the mark goes."""
+        self.origin.start()
+        self.speech.speakText('from another program')
+        self.assertEqual(self.speech.marks, ['controller'])
+
+    def test_a_message_is_a_message_and_not_the_controller(self):
+        """The OUTERMOST mark wins. `speakMessage` calls `speakText`, so if
+        the innermost decided, every message NVDA says about itself would be
+        coloured as though another program had said it."""
+        self.origin.start()
+        self.speech.speakMessage('Titan is not running.')
+        self.assertEqual(self.speech.marks, ['notification'])
+
+    def test_nothing_is_marked_before_it_is_started(self):
+        self.speech.speakTypedCharacters('a')
+        self.assertEqual(self.speech.marks, [''])
+
+    def test_the_mark_does_not_outlive_the_call(self):
+        """A mark left standing colours whatever is said next."""
+        self.origin.start()
+        self.speech.speakTypedCharacters('a')
+        self.assertEqual(self.origin.current(), '')
+
+    def test_a_mark_is_per_thread(self):
+        """Speech is queued from several threads - the controller's own RPC
+        call is one - and a mark visible to another thread would colour
+        whatever that thread was saying at the same moment."""
+        self.origin.push('typed')
+        try:
+            seen = []
+            worker = threading.Thread(
+                target=lambda: seen.append(self.origin.current()))
+            worker.start()
+            worker.join()
+        finally:
+            # In a finally, or a test that fails here leaves a mark on this
+            # thread and colours every test after it - which is exactly what
+            # it would do to a reader.
+            self.origin.pop()
+        self.assertEqual(seen, [''])
+
+    def test_stopping_puts_nvdas_own_functions_back(self):
+        original = self.speech.speakText
+        self.origin.start()
+        self.assertIsNot(self.speech.speakText, original)
+        self.origin.stop()
+        self.assertIs(self.speech.speakText, original)
+
+    def test_starting_twice_does_not_bury_the_real_one(self):
+        original = self.speech.speakText
+        self.origin.start()
+        self.origin.start()
+        self.origin.stop()
+        self.assertIs(self.speech.speakText, original)
+
+    def test_somebody_elses_wrapper_is_never_thrown_away(self):
+        """A reader is not the place to win an argument with another
+        add-on."""
+        self.origin.start()
+        theirs = lambda text: None
+        self.speech.speakText = theirs
+        self.origin.stop()
+        self.assertIs(self.speech.speakText, theirs)
+
+    def test_a_function_this_nvda_has_not_got_is_recorded_not_fatal(self):
+        del self.speech.speakSpelling
+        self.assertGreater(self.origin.start(), 0)
+        self.assertIn('speakSpelling', self.origin.report()['missing'])
+
+    def test_the_plugin_starts_and_stops_it(self):
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            '__init__.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('origin.start()', source)
+        self.assertIn('origin.stop()', source)
+
+    def test_every_mark_is_a_class_that_really_exists(self):
+        """A mark naming a class nobody defined is a voice nobody can set."""
+        from titanEnhancements import classes
+        known = classes.defaults()
+        for _name, mark in self.origin.MARKS:
+            self.assertIn(mark, known, mark)
+
+    def test_the_filter_spends_the_mark(self):
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'interject.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('origin.current()', source)
+
+# --------------------------------------------------------------------------- #
+class ATerminalReviewedTheWayTitanAccessDoesIt(unittest.TestCase):
+    """Numpad minus, then the plain arrow keys walk the buffer.
+
+    Ported from Titan Access's own terminal module. What is checked here is
+    the part that can make a machine worse: the arrows are the shell's own
+    keys the rest of the time, so they are borrowed only while review is
+    really on and given straight back.
+    """
+
+    def setUp(self):
+        from titanEnhancements import terminal
+        self.terminal = terminal
+        terminal.stop()
+        self._is = terminal.is_terminal
+        self._read = terminal._read_lines
+        terminal.is_terminal = lambda obj=None: True
+        terminal._read_lines = lambda obj=None: [
+            'C:\\> dir', 'one.txt', 'two.txt', '', 'C:\\> ']
+        self.said = []
+        self._say = terminal._say
+        terminal._say = lambda text, **kw: self.said.append(str(text))
+        self.beeps = []
+        self._beep = terminal._beep
+        terminal._beep = lambda row: self.beeps.append(row)
+        self.addCleanup(terminal.stop)
+        self.addCleanup(lambda: setattr(terminal, '_beep', self._beep))
+        self.addCleanup(lambda: setattr(terminal, '_say', self._say))
+        self.addCleanup(lambda: setattr(terminal, '_read_lines', self._read))
+        self.addCleanup(lambda: setattr(terminal, 'is_terminal', self._is))
+
+    def test_it_starts_on_the_last_line_that_has_anything_on_it(self):
+        """Where the prompt is. Entering at the very bottom of a buffer
+        padded with blank lines reads as a terminal with nothing in it."""
+        self.terminal.start()
+        self.assertEqual(self.terminal.report()['row'], 4)
+
+    def test_the_arrows_walk_the_buffer(self):
+        self.terminal.start()
+        self.terminal.move_line(-1)
+        self.assertEqual(self.terminal.report()['row'], 3)
+        self.terminal.move_line(-1)
+        self.assertIn('two.txt', self.said)
+
+    def test_a_blank_line_says_so_rather_than_nothing(self):
+        self.terminal.start()
+        self.said[:] = []
+        self.terminal.move_line(-1)
+        self.assertTrue(self.said, 'a blank line must still be reported')
+
+    def test_it_cannot_walk_off_either_end(self):
+        self.terminal.start()
+        for _ in range(20):
+            self.terminal.move_line(-1)
+        self.assertEqual(self.terminal.report()['row'], 0)
+        for _ in range(50):
+            self.terminal.move_line(1)
+        self.assertEqual(self.terminal.report()['row'], 4)
+
+    def test_every_line_movement_is_marked_by_a_beep(self):
+        """Pitched by where the line is on its screenful, which is what
+        makes it worth listening to rather than a noise per line."""
+        self.terminal.start()
+        self.beeps[:] = []
+        self.terminal.move_line(-1)
+        self.assertEqual(len(self.beeps), 1)
+
+    def test_a_page_is_exactly_a_screenful(self):
+        """So the beep's pattern repeats and the pitch means the same thing
+        all the way through the scrollback."""
+        self.terminal.start()
+        before = self.terminal.report()['row']
+        self.terminal.move_page(-1)
+        self.assertEqual(before - self.terminal.report()['row'],
+                         min(before, self.terminal.VISIBLE))
+
+    def test_numpad_minus_turns_it_off_again(self):
+        self.terminal.toggle()
+        self.assertTrue(self.terminal.reviewing())
+        self.terminal.toggle()
+        self.assertFalse(self.terminal.reviewing())
+
+    def test_it_refuses_outside_a_terminal_rather_than_doing_nothing(self):
+        self.terminal.is_terminal = lambda obj=None: False
+        on, said = self.terminal.start()
+        self.assertFalse(on)
+        self.assertTrue(said)
+
+    def test_a_terminal_that_will_not_give_up_its_text_says_so(self):
+        self.terminal._read_lines = lambda obj=None: []
+        on, said = self.terminal.start()
+        self.assertFalse(on)
+        self.assertTrue(said)
+
+    def test_leaving_the_terminal_ends_the_review(self):
+        """A review cursor left running over a window the user has moved
+        away from would swallow their arrow keys in whatever they moved
+        to."""
+        self.terminal.start()
+        self.terminal.is_terminal = lambda obj=None: False
+        self.assertTrue(self.terminal.left_the_terminal())
+        self.assertFalse(self.terminal.reviewing())
+
+    def test_staying_in_the_terminal_does_not(self):
+        self.terminal.start()
+        self.assertFalse(self.terminal.left_the_terminal())
+        self.assertTrue(self.terminal.reviewing())
+
+    def test_the_keys_are_borrowed_only_while_review_is_on(self):
+        import re
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            '__init__.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        keys = re.search(r'TERMINAL_KEYS = \{(.+?)\}', source, re.S).group(1)
+        self.assertIn('kb:upArrow', keys)
+        self.assertIn('kb:escape', keys)
+        self.assertIn('terminal.reviewing()', source)
+        # And given back: a binding that outlived the terminal would
+        # swallow an arrow key in whatever the user moved to, so the state
+        # of the binding follows `reviewing()` rather than being set once.
+        self.assertIn('self._borrow_terminal_keys(want)', source)
+        self.assertIn('removeGestureBinding', source)
+
+    def test_a_terminal_is_recognised_by_what_it_IS(self):
+        """Both ways, because neither is enough on its own: Windows
+        Terminal, an old conhost and PuTTY share no window class."""
+        self.assertIn('ConsoleWindowClass', self.terminal.CLASSES)
+        self.assertIn('powershell', self.terminal.PROGRAMS)
+        self.assertIn('wt', self.terminal.PROGRAMS)
+
+
+# --------------------------------------------------------------------------- #
+class WindowsOwnRecogniserIsTheFirstTier(unittest.TestCase):
+    """The cheap reading, and it is a first-class one.
+
+    Windows has an OCR engine built in and NVDA already wraps it: local,
+    free, about a tenth of a second, nothing sent anywhere. It gives the
+    words and a rectangle per line in real screen coordinates - which is
+    everything a cursor needs - so a drawn window becomes navigable with no
+    model asked. The AI is left for what only it can do.
+    """
+
+    class Info:
+        resizeFactor = 2.0
+
+        @staticmethod
+        def convertXToScreen(x):
+            return 100 + x // 2
+
+        @staticmethod
+        def convertYToScreen(y):
+            return 200 + y // 2
+
+    class Result:
+        """NVDA's OWN shape, quoted from `contentRecog.LinesWordsResult`:
+        a LIST of lines, each a list of word dicts. It is not a dict with a
+        "lines" key, and this test used to say it was - so it passed while
+        every real reading came back empty and three features reported
+        "Windows read nothing in that window". A stand-in that is not the
+        shape of the real thing tests nothing."""
+        data = [
+            [{'text': 'New', 'x': 0, 'y': 0, 'width': 40, 'height': 20},
+             {'text': 'game', 'x': 50, 'y': 0, 'width': 60, 'height': 20}],
+            [{'text': 'Options', 'x': 0, 'y': 40, 'width': 80, 'height': 20}],
+            [{'text': '   ', 'x': 0, 'y': 80, 'width': 10, 'height': 20}],
+        ]
+
+    class OldResult:
+        data = {'lines': [
+            [{'text': 'New', 'x': 0, 'y': 0, 'width': 40, 'height': 20}],
+        ]}
+
+    def setUp(self):
+        from titanEnhancements import localOcr
+        self.localOcr = localOcr
+        self.reading = localOcr.Reading.of(self.Result(), self.Info())
+
+    def test_the_words_come_back_as_lines(self):
+        self.assertEqual(self.reading.text, 'New game\nOptions')
+
+    def test_a_word_that_is_only_whitespace_is_not_a_word(self):
+        self.assertEqual(len(self.reading.lines), 2)
+
+    def test_the_rectangles_are_SCREEN_coordinates(self):
+        """The recogniser answers in the coordinates of the picture it was
+        given, scaled - so a rectangle used as it comes points at the wrong
+        place, by an amount that changes with the window's size."""
+        _text, rect = self.reading.rows()[0]
+        self.assertEqual(rect[0], 100)
+        self.assertEqual(rect[1], 200)
+
+    def test_a_line_is_the_whole_line_and_its_box(self):
+        text, rect = self.reading.rows()[0]
+        self.assertEqual(text, 'New game')
+        self.assertGreater(rect[2], 0)
+        self.assertGreater(rect[3], 0)
+
+    def test_an_unchanged_screen_is_known_to_be_unchanged(self):
+        """Which is the whole reason this tier exists: it is what stops the
+        AI being asked about a screen that has not moved."""
+        again = self.localOcr.Reading.of(self.Result(), self.Info())
+        self.assertFalse(again.changed_from(self.reading))
+
+    def test_a_changed_screen_is_known_to_have_changed(self):
+        self.assertTrue(self.reading.changed_from(None))
+        empty = self.localOcr.Reading()
+        self.assertTrue(self.reading.changed_from(empty))
+
+    def test_only_what_is_NEW_is_offered_to_be_said(self):
+        """A window whose whole reading is announced on every change would
+        be a reader reading a menu from the top every time one line of it
+        moved."""
+        before = self.localOcr.Reading([self.reading.lines[0]])
+        self.assertEqual(self.reading.added_since(before), ['Options'])
+
+    def test_a_line_can_be_found_by_its_words(self):
+        found = self.reading.find('options')
+        self.assertIsNotNone(found)
+        self.assertEqual(found[0], 'Options')
+
+    def test_nothing_read_is_falsy(self):
+        self.assertFalse(self.localOcr.Reading())
+        self.assertTrue(self.reading)
+
+    def test_a_result_that_is_not_one_answers_nothing(self):
+        self.assertFalse(self.localOcr.Reading.of(object(), self.Info()))
+
+    def test_the_shape_is_nvdas_documented_one(self):
+        """Pinned against the real class rather than against what this
+        test happened to build: `LinesWordsResult.data` is a list of lines."""
+        self.assertIsInstance(self.Result.data, list)
+        self.assertIsInstance(self.Result.data[0], list)
+        self.assertIn('text', self.Result.data[0][0])
+
+    def test_the_older_shape_is_still_read(self):
+        """An older NVDA, or somebody else's recogniser. Taking both costs
+        a line and losing one costs the whole feature."""
+        reading = self.localOcr.Reading.of(self.OldResult(), self.Info())
+        self.assertEqual(reading.text, 'New')
+
+    def test_it_says_why_it_cannot_rather_than_raising(self):
+        ok, why = self.localOcr.available()
+        self.assertIsInstance(ok, bool)
+        if not ok:
+            self.assertTrue(why)
+
+    def test_the_cursor_can_be_built_straight_from_it(self):
+        """The point of the tier: navigable with no model asked."""
+        from titanEnhancements import smart
+        controls = smart.controls_from(self.reading)
+        self.assertEqual([c['name'] for c in controls],
+                         ['New game', 'Options'])
+        self.assertTrue(all(c.get('rect') for c in controls))
+
+    def test_a_control_that_knows_where_it_is_presses_itself(self):
+        """No Titan, no AI, no request - a click at a place we were told."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'smart.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn("rect = control.get('rect')", source)
+        self.assertIn('SetCursorPos', source)
+
+    def test_the_user_chooses_which_recogniser(self):
+        from titanEnhancements import configSpec
+        self.assertEqual(configSpec.defaults()['ocrTier'], 'local')
+        self.assertEqual(sorted(configSpec.choices('ocrTier')),
+                         ['ai', 'both', 'local'])
+
+
+# --------------------------------------------------------------------------- #
+class TheSettingsPageIsCategorised(unittest.TestCase):
+    """It has outgrown a column, and a page nobody can find anything on is
+    a page of settings nobody uses."""
+
+    def setUp(self):
+        from titanEnhancements import configSpec, settingsPanel
+        self.panel = settingsPanel
+        self.configSpec = configSpec
+
+    def test_every_category_has_a_name(self):
+        for label, _note, _rows in self.panel._page():
+            self.assertTrue(str(label).strip())
+
+    def test_no_category_is_empty_of_both_settings_and_words(self):
+        """A category with nothing in it and nothing to say is a row in the
+        list that answers with a blank page."""
+        for label, note, rows in self.panel._page():
+            self.assertTrue(rows or str(note).strip(), label)
+
+    def test_a_setting_with_more_than_two_answers_is_a_list(self):
+        values, labels = self.panel._options_for('ocrTier')
+        self.assertEqual(len(values), len(labels))
+        self.assertIn('local', values)
+
+    def test_an_ordinary_switch_is_not(self):
+        self.assertEqual(self.panel._options_for('pitchedFocus'), ([], []))
+
+    def test_a_setting_whose_answers_are_a_fact_about_this_machine(self):
+        """Which languages Windows can read in is not something a spec can
+        say, so it is asked at the moment the page is built."""
+        values, labels = self.panel._options_for('localOcrLanguage')
+        self.assertEqual(values[0], '')
+        self.assertEqual(len(values), len(labels))
+
+    def test_the_stored_word_is_never_the_translated_one(self):
+        """A setting whose value is translated is a configuration file that
+        means something different on a Polish machine."""
+        for word in ('local', 'ai', 'both', 'pitch', 'pan'):
+            self.assertIn(word, self.panel.WORDS.keys() | {'pan'})
+
+# --------------------------------------------------------------------------- #
+class WatchingAPartOfTheScreen(unittest.TestCase):
+    """JAWS calls them Frames, ZDSR calls them monitored areas.
+
+    A status line at the bottom of a build, a chat window behind the one you
+    are typing in, a percentage in a corner. A reader speaks about the thing
+    you are ON, and none of that is the thing you are on.
+    """
+
+    class Obj:
+        def __init__(self, name='Status', value='', klass='Static',
+                     automation='statusText', location=(10, 20, 100, 30)):
+            self.name = name
+            self.value = value
+            self.description = ''
+            self.windowClassName = klass
+            self.UIAAutomationId = automation
+            self.location = location
+            self.role = types.SimpleNamespace(name='STATICTEXT')
+            self.children = []
+
+    def setUp(self):
+        from titanEnhancements import monitors
+        self.monitors = monitors
+        self.dir = tempfile.mkdtemp()
+        self._path = monitors.path
+        monitors.path = lambda: os.path.join(self.dir, 'monitors.json')
+        monitors.forget()
+        self.said = []
+        self._say = monitors._say
+        monitors._say = lambda text: self.said.append(str(text))
+        self.addCleanup(monitors.stop)
+        self.addCleanup(monitors.forget)
+        self.addCleanup(lambda: setattr(monitors, '_say', self._say))
+        self.addCleanup(lambda: setattr(monitors, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    # ------------------------------------------------------------- making
+    def test_a_control_with_a_name_of_its_own_is_watched_by_that(self):
+        """Not by where it sits: a control watched by its place among its
+        siblings starts watching the one next door the moment a toolbar
+        gains a button."""
+        ok, _said = self.monitors.watch_this_control(self.Obj())
+        self.assertTrue(ok)
+        self.assertEqual(self.monitors.all_monitors()[0]['kind'],
+                         self.monitors.BY_CONTROL)
+
+    def test_a_control_with_nothing_stable_is_watched_by_its_PLACE(self):
+        """Weaker, and it is what happens rather than a refusal - but it is
+        a different kind, so the difference is not hidden."""
+        ok, _said = self.monitors.watch_this_control(
+            self.Obj(automation=''))
+        self.assertTrue(ok)
+        self.assertEqual(self.monitors.all_monitors()[0]['kind'],
+                         self.monitors.BY_POINT)
+
+    def test_a_control_that_is_nowhere_at_all_is_refused(self):
+        ok, said = self.monitors.watch_this_control(
+            self.Obj(automation='', location=None))
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_a_whole_window_is_watched_as_a_rectangle(self):
+        """The one that works on a program with no accessibility at all,
+        which is what JAWS Frames is really for."""
+        ok, _said = self.monitors.watch_this_window(self.Obj())
+        self.assertTrue(ok)
+        row = self.monitors.all_monitors()[0]
+        self.assertEqual(row['kind'], self.monitors.BY_AREA)
+        self.assertEqual(row['rect'], [10, 20, 100, 30])
+
+    # ------------------------------------------------ object navigation
+    def _navigator_is(self, navigator=None, focus=None, foreground=None):
+        """Stand in for NVDA's ``api`` so a test can say where the
+        navigator is with no NVDA under it."""
+        module = types.ModuleType('api')
+        module.getNavigatorObject = lambda: navigator
+        module.getFocusObject = lambda: focus
+        module.getForegroundObject = lambda: foreground
+        had = sys.modules.get('api')
+
+        def put_back():
+            if had is None:
+                sys.modules.pop('api', None)
+            else:
+                sys.modules['api'] = had
+        sys.modules['api'] = module
+        self.addCleanup(put_back)
+
+    def test_what_is_watched_is_the_NAVIGATOR_object(self):
+        """A progress bar, a status line, a pane that fills itself in: not
+        one of them is ever focused, and object navigation is how NVDA
+        reaches them - which is the whole reason anybody watches one."""
+        bar = self.Obj(name='', value='40%', klass='msctls_progress32',
+                       automation='theProgress')
+        self._navigator_is(navigator=bar, focus=self.Obj(name='Focused'))
+        ok, _said = self.monitors.watch_this_control()
+        self.assertTrue(ok)
+        row = self.monitors.all_monitors()[0]
+        self.assertEqual(row['kind'], self.monitors.BY_CONTROL)
+        self.assertNotEqual(row['name'], 'Focused')
+
+    def test_the_focus_is_what_the_navigator_falls_back_to(self):
+        """An NVDA whose review cursor has not settled anywhere must still
+        answer, or the command does nothing and says nothing."""
+        self._navigator_is(navigator=None, focus=self.Obj(name='Focused'))
+        ok, _said = self.monitors.watch_this_control()
+        self.assertTrue(ok)
+        self.assertEqual(self.monitors.all_monitors()[0]['name'], 'Focused')
+
+    def test_the_AREA_of_an_object_is_watched_not_the_whole_window(self):
+        """Watching the window instead would read every clock and counter
+        anywhere in it, which is a monitor that never stops talking."""
+        self._navigator_is(navigator=self.Obj(location=(5, 6, 70, 8)))
+        ok, _said = self.monitors.watch_this_area()
+        self.assertTrue(ok)
+        row = self.monitors.all_monitors()[0]
+        self.assertEqual(row['kind'], self.monitors.BY_AREA)
+        self.assertEqual(row['rect'], [5, 6, 70, 8])
+
+    def test_an_object_with_no_width_is_not_an_area(self):
+        """A rectangle with no width is not a small area, it is an object
+        that is not on the screen - and OCR on one reads whatever is
+        behind it for ever."""
+        self._navigator_is(navigator=self.Obj(location=(5, 6, 0, 0)))
+        ok, said = self.monitors.watch_this_area()
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_an_unnamed_control_is_called_what_it_IS(self):
+        """Not "this area": the things worth watching are exactly the ones
+        with no name, and a list of them all called the same thing is a
+        list nobody can tell apart."""
+        bar = self.Obj(name='', klass='msctls_progress32')
+        bar.role = types.SimpleNamespace(name='PROGRESSBAR')
+        self.assertEqual(self.monitors._describe(bar), 'PROGRESSBAR')
+
+    def test_the_same_thing_is_not_watched_twice(self):
+        self.monitors.watch_this_control(self.Obj())
+        ok, said = self.monitors.watch_this_control(self.Obj())
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_it_survives_being_forgotten_and_read_again(self):
+        self.monitors.watch_this_control(self.Obj())
+        self.monitors.forget()
+        self.assertEqual(len(self.monitors.all_monitors()), 1)
+
+    def test_one_can_be_stopped(self):
+        self.monitors.watch_this_control(self.Obj())
+        self.assertTrue(self.monitors.remove(0))
+        self.assertEqual(self.monitors.all_monitors(), [])
+
+    def test_stopping_one_that_is_not_there_is_not_an_error(self):
+        self.assertFalse(self.monitors.remove(3))
+
+    # ------------------------------------------------------------ saying
+    def test_a_change_is_announced_and_an_unchanged_one_is_not(self):
+        monitor = {'kind': self.monitors.BY_AREA, 'name': 'Score',
+                   'rect': [0, 0, 10, 10]}
+        self.monitors._load().append(monitor)
+        readings = ['10 points', '10 points', '20 points']
+        self.monitors._read = lambda m: readings.pop(0)
+        try:
+            self.monitors.check()          # the first reading is a baseline
+            self.assertEqual(self.said, [])
+            self.monitors.check()
+            self.assertEqual(self.said, [])
+            self.monitors.check()
+            self.assertEqual(len(self.said), 1)
+            self.assertIn('20 points', self.said[0])
+            self.assertIn('Score', self.said[0])
+        finally:
+            del self.monitors._read
+
+    def test_something_that_cannot_be_read_is_not_news(self):
+        """A monitor whose window is closed has nothing to say and must not
+        be announced as having become blank."""
+        monitor = {'kind': self.monitors.BY_AREA, 'name': 'Score',
+                   'rect': [0, 0, 10, 10]}
+        self.monitors._load().append(monitor)
+        readings = ['10 points', None, None]
+        self.monitors._read = lambda m: readings.pop(0)
+        try:
+            self.monitors.check()
+            self.monitors.check()
+            self.assertEqual(self.said, [])
+        finally:
+            del self.monitors._read
+
+    def test_becoming_empty_is_not_news_either(self):
+        """Usually a window being rebuilt rather than something happening."""
+        monitor = {'kind': self.monitors.BY_AREA, 'name': 'Score',
+                   'rect': [0, 0, 10, 10]}
+        self.monitors._load().append(monitor)
+        readings = ['10 points', '   ']
+        self.monitors._read = lambda m: readings.pop(0)
+        try:
+            self.monitors.check()
+            self.monitors.check()
+            self.assertEqual(self.said, [])
+        finally:
+            del self.monitors._read
+
+    def test_a_long_change_is_shortened_rather_than_read_out(self):
+        """A monitor that has become a page of text is not something to
+        read at somebody who is doing something else."""
+        said = self.monitors._shorten('word ' * 500)
+        self.assertLessEqual(len(said), self.monitors.MAX_SAID + 3)
+
+    def test_it_never_interrupts(self):
+        """A reader that talks over you is one you switch off, and none of
+        this is the thing the user is doing."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'monitors.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('queueFunction', source)
+        self.assertNotIn('cancelSpeech', source)
+
+    def test_the_watch_only_runs_when_there_is_something_to_watch(self):
+        """A thread polling nothing is a thread reading the screen for no
+        reason, and this one can reach Windows' own recogniser."""
+        self.monitors._keep_running()
+        self.assertFalse(self.monitors.report()['running'])
+        self.monitors.watch_this_control(self.Obj())
+        self.assertTrue(self.monitors.report()['running'])
+        self.monitors.clear()
+        self.assertFalse(self.monitors.report()['running'])
+
+# --------------------------------------------------------------------------- #
+class WatchingAListMeansWatchingWhatIsINIt(unittest.TestCase):
+    """"Monitor an area, of a list say" - and a list is the case a monitor
+    that reads one object gets wrong.
+
+    Asking a list for its value answers the same string for ever, because
+    what changes is what is IN it. A chat, a build log, a queue: being told
+    that a line arrived is the whole reason anybody watches one.
+    """
+
+    class Row:
+        def __init__(self, name):
+            self.name = name
+            self.value = ''
+            self.children = []
+            self.role = types.SimpleNamespace(name='LISTITEM')
+
+    class List:
+        def __init__(self, rows):
+            self.name = 'Messages'
+            self.value = ''
+            self.description = ''
+            self.role = types.SimpleNamespace(name='LIST')
+            self.children = rows
+
+    def setUp(self):
+        from titanEnhancements import monitors
+        self.monitors = monitors
+
+    def test_a_list_is_read_as_its_rows(self):
+        listed = self.List([self.Row('one'), self.Row('two')])
+        self.assertEqual(self.monitors._read_object(listed), 'one\ntwo')
+
+    def test_an_ordinary_control_is_still_read_as_itself(self):
+        control = self.Row('Save')
+        control.role = types.SimpleNamespace(name='BUTTON')
+        self.assertEqual(self.monitors._read_object(control), 'Save')
+
+    def test_a_list_that_cannot_be_walked_is_not_an_empty_list(self):
+        """None rather than '': a collection that cannot be read is not one
+        that has become empty, and saying the second when it is the first is
+        how a window being rebuilt is reported as news."""
+        listed = self.List([])
+        self.assertIsNone(self.monitors._read_rows(listed))
+
+    def test_only_what_ARRIVED_is_said(self):
+        """A chat window that has gained one line must not be read out from
+        the top."""
+        before = 'one\ntwo'
+        now = 'one\ntwo\nthree'
+        self.assertEqual(self.monitors.rows_added(before, now), ['three'])
+
+    def test_rows_merely_reordered_are_not_news(self):
+        self.assertEqual(self.monitors.rows_added('one\ntwo', 'two\none'), [])
+
+    def test_the_first_reading_is_all_of_it(self):
+        self.assertEqual(self.monitors.rows_added(None, 'one\ntwo'),
+                         ['one', 'two'])
+
+    def test_a_huge_list_is_not_read_out(self):
+        listed = self.List([self.Row('row %d' % n) for n in range(500)])
+        read = self.monitors._read_object(listed)
+        self.assertLessEqual(len(read.splitlines()),
+                             self.monitors.MAX_ROWS + 1)
+        self.assertIn('(+', read)
+
+
+# --------------------------------------------------------------------------- #
+class WindowsAndActions(unittest.TestCase):
+    """Window-Eyes' own idea: the windows, their controls, and what each
+    control will actually DO.
+
+    A different question from "read me the screen": this is about what can
+    be done, and it is the answer to "there is a button in this dialog and
+    Tab will not reach it".
+    """
+
+    class Obj:
+        def __init__(self, name='', role='BUTTON', actions=(), value='',
+                     children=()):
+            self.name = name
+            self.value = value
+            self.role = types.SimpleNamespace(name=role)
+            self.children = list(children)
+            self._actions = list(actions)
+            self.done = []
+            self.focused = False
+
+        @property
+        def actionCount(self):
+            return len(self._actions)
+
+        def getActionName(self, index):
+            return self._actions[index]
+
+        def doAction(self, index):
+            self.done.append(index)
+
+        def setFocus(self):
+            self.focused = True
+
+    def setUp(self):
+        from titanEnhancements import windowsAndActions
+        self.wa = windowsAndActions
+
+    def test_a_controls_own_verbs_are_what_is_offered(self):
+        """Nothing is invented: an action is one the control declares, so a
+        control that offers nothing comes back empty - which is a true
+        answer and a useful one."""
+        obj = self.Obj(name='Save', actions=('Press',))
+        self.assertEqual(self.wa.actions_of(obj), [(0, 'Press')])
+        self.assertEqual(self.wa.actions_of(self.Obj(name='Label')), [])
+
+    def test_a_control_that_says_nothing_at_all_is_not_asked(self):
+        self.assertEqual(self.wa.actions_of(object()), [])
+
+    def test_doing_one_says_what_it_was(self):
+        obj = self.Obj(name='Save', actions=('Press',))
+        ok, said = self.wa.do(obj, 0)
+        self.assertTrue(ok)
+        self.assertEqual(obj.done, [0])
+        self.assertIn('Press', said)
+
+    def test_one_that_fails_says_so_rather_than_raising(self):
+        class Awkward(self.Obj):
+            def doAction(self, index):
+                raise RuntimeError('no')
+        ok, said = self.wa.do(Awkward(actions=('Press',)), 0)
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_the_keyboard_can_be_moved_to_one(self):
+        """Half of what a list like this is for: a control Tab will not
+        reach can still be worked."""
+        obj = self.Obj(name='Save')
+        ok, _said = self.wa.focus(obj)
+        self.assertTrue(ok)
+        self.assertTrue(obj.focused)
+
+    def test_furniture_is_not_listed(self):
+        """A window and a pane hold other things and do nothing themselves,
+        so listing them puts a hundred rows between the user and the
+        controls they came for."""
+        window = self.Obj(name='Dialog', role='WINDOW', children=[
+            self.Obj(name='Panel', role='PANE', children=[
+                self.Obj(name='Save', role='BUTTON', actions=('Press',)),
+            ]),
+        ])
+        found = self.wa.controls(window)
+        self.assertEqual([row['label'].split(',')[0] for row in found],
+                         ['Save'])
+
+    def test_a_control_with_nothing_to_call_it_is_not_listed(self):
+        window = self.Obj(name='Dialog', role='WINDOW', children=[
+            self.Obj(name='', role='BUTTON'),
+            self.Obj(name='Save', role='BUTTON'),
+        ])
+        self.assertEqual(len(self.wa.controls(window)), 1)
+
+    def test_the_walk_is_bounded(self):
+        """A reader that walks a whole browser tree is a reader that has
+        stopped answering."""
+        deep = self.Obj(name='leaf', role='BUTTON')
+        for _ in range(50):
+            deep = self.Obj(name='x', role='PANE', children=[deep] * 20)
+        found = self.wa.controls(deep)
+        self.assertLessEqual(len(found), self.wa.MAX_CONTROLS)
+
+    def test_it_never_acts_by_itself(self):
+        """Listing is free and changes nothing; doing is a separate
+        keypress on a chosen row."""
+        window = self.Obj(name='Dialog', role='WINDOW', children=[
+            self.Obj(name='Delete everything', role='BUTTON',
+                     actions=('Press',)),
+        ])
+        found = self.wa.controls(window)
+        self.assertEqual(found[0]['obj'].done, [])
+
+# --------------------------------------------------------------------------- #
+class PlaceMarkers(unittest.TestCase):
+    """JAWS has had them for twenty years and people who use them do not
+    give them up.
+
+    A program you use every day has three places in it you actually go, and
+    getting to each is a dozen Tabs every time - because a reader can only
+    offer you the control you are ON and the one after it.
+    """
+
+    class Obj:
+        def __init__(self, name='Search', automation='searchBox',
+                     klass='Edit', location=(10, 20, 100, 30)):
+            self.name = name
+            self.value = ''
+            self.windowClassName = klass
+            self.UIAAutomationId = automation
+            self.location = location
+            self.role = types.SimpleNamespace(name='EDITABLETEXT')
+            self.children = []
+            self.focused = False
+
+        def setFocus(self):
+            self.focused = True
+
+    def setUp(self):
+        from titanEnhancements import anchors, markers
+        self.markers, self.anchors = markers, anchors
+        self.dir = tempfile.mkdtemp()
+        self._path = markers.path
+        markers.path = lambda: os.path.join(self.dir, 'markers.json')
+        markers.forget()
+        self._program = anchors.program_of
+        anchors.program_of = lambda obj=None: 'mail.exe'
+        self.addCleanup(markers.forget)
+        self.addCleanup(lambda: setattr(anchors, 'program_of', self._program))
+        self.addCleanup(lambda: setattr(markers, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def test_a_marker_is_made_and_numbered(self):
+        """The number is the point: the third thing you marked is always the
+        third thing, so going there becomes a key you press."""
+        ok, said = self.markers.mark(self.Obj())
+        self.assertTrue(ok)
+        self.assertIn('1', said)
+
+    def test_the_numbering_follows_the_order_they_were_made(self):
+        self.markers.mark(self.Obj(name='Search', automation='a'))
+        self.markers.mark(self.Obj(name='List', automation='b'))
+        self.markers.mark(self.Obj(name='Send', automation='c'))
+        self.assertEqual([row['name'] for row in self.markers.for_program()],
+                         ['Search', 'List', 'Send'])
+
+    def test_they_belong_to_a_program(self):
+        """Or the first nine markers are nine markers from nine different
+        programs, and the list is not worth opening."""
+        self.markers.mark(self.Obj(automation='a'))
+        self.anchors.program_of = lambda obj=None: 'browser.exe'
+        self.assertEqual(self.markers.for_program(), [])
+        self.assertEqual(len(self.markers.all_markers()), 1)
+
+    def test_the_same_control_is_not_marked_twice(self):
+        self.markers.mark(self.Obj())
+        ok, said = self.markers.mark(self.Obj())
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_a_control_with_nothing_stable_is_marked_by_its_place(self):
+        ok, _said = self.markers.mark(self.Obj(automation=''))
+        self.assertTrue(ok)
+        self.assertEqual(self.markers.for_program()[0]['anchor']['kind'],
+                         self.anchors.BY_POINT)
+
+    def test_a_control_that_is_nowhere_is_refused(self):
+        ok, said = self.markers.mark(self.Obj(automation='', location=None))
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_going_to_one_moves_the_keyboard(self):
+        obj = self.Obj()
+        self.markers.mark(obj)
+        self.anchors.find = lambda anchor: obj
+        try:
+            ok, _said = self.markers.go(self.markers.for_program()[0])
+        finally:
+            del self.anchors.find
+        self.assertTrue(ok)
+        self.assertTrue(obj.focused)
+
+    def test_a_control_that_cannot_take_the_keyboard_gets_the_review_cursor(self):
+        """Most of the places worth marking cannot be focused, and a marker
+        that refused those would be a marker for buttons only."""
+        class Static(self.Obj):
+            def setFocus(self):
+                raise RuntimeError('no')
+        obj = Static(name='Status')
+        self.markers.mark(obj)
+        self.anchors.find = lambda anchor: obj
+        moved = []
+        import titanEnhancements.markers as m
+        self.assertTrue(hasattr(m, 'go'))
+        try:
+            ok, said = self.markers.go(self.markers.for_program()[0])
+        finally:
+            del self.anchors.find
+        # With no NVDA there is no review cursor either, so what is checked
+        # is that it did not simply give up on the focus failing.
+        self.assertIsInstance(said, str)
+        self.assertTrue(said)
+
+    def test_a_marker_whose_control_is_gone_says_so(self):
+        self.markers.mark(self.Obj())
+        self.anchors.find = lambda anchor: None
+        try:
+            ok, said = self.markers.go(self.markers.for_program()[0])
+        finally:
+            del self.anchors.find
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_a_number_nobody_marked_says_so(self):
+        ok, said = self.markers.go_to_number(4)
+        self.assertFalse(ok)
+        self.assertIn('4', said)
+
+    def test_one_can_be_renamed_and_forgotten(self):
+        self.markers.mark(self.Obj())
+        row = self.markers.for_program()[0]
+        self.assertTrue(self.markers.rename(row, 'The search box'))
+        self.assertEqual(self.markers.for_program()[0]['name'],
+                         'The search box')
+        self.assertTrue(self.markers.remove(self.markers.for_program()[0]))
+        self.assertEqual(self.markers.for_program(), [])
+
+    def test_they_survive_being_forgotten_and_read_again(self):
+        self.markers.mark(self.Obj())
+        self.markers.forget()
+        self.assertEqual(len(self.markers.for_program()), 1)
+
+    def test_only_a_STRONG_anchor_names_a_control(self):
+        """A key built from where a control sits moves the moment a toolbar
+        gains a button, and a marker that jumped somewhere wrong is one the
+        user acts on."""
+        self.assertTrue(self.anchors.strong_key(self.Obj()))
+        self.assertEqual(self.anchors.strong_key(self.Obj(automation='')), '')
+
+
+# --------------------------------------------------------------------------- #
+class TheSoundScheme(unittest.TestCase):
+    """A state said in words costs a word every time, and the word is the
+    same length whether or not the listener already knew."""
+
+    def setUp(self):
+        from titanEnhancements import schemes
+        self.schemes = schemes
+        self.dir = tempfile.mkdtemp()
+        self._path = schemes.path
+        schemes.path = lambda: os.path.join(self.dir, 'scheme.json')
+        schemes.forget()
+        self.addCleanup(schemes.forget)
+        self.addCleanup(lambda: setattr(schemes, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def test_nothing_is_changed_until_something_is_chosen(self):
+        """A state nobody has touched is spoken exactly as NVDA spoke it,
+        through the same path, with no work done at all."""
+        words, sounds = self.schemes.answer(['CHECKED', 'SELECTED'])
+        self.assertEqual(words, ['CHECKED', 'SELECTED'])
+        self.assertEqual(sounds, [])
+
+    def test_a_state_given_a_sound_is_played_instead_of_said(self):
+        self.schemes.set_way('CHECKED', self.schemes.AS_SOUND)
+        words, sounds = self.schemes.answer(['CHECKED', 'SELECTED'])
+        self.assertEqual(words, ['SELECTED'])
+        self.assertEqual(len(sounds), 1)
+
+    def test_both_says_it_and_plays_it(self):
+        self.schemes.set_way('CHECKED', self.schemes.AS_BOTH)
+        words, sounds = self.schemes.answer(['CHECKED'])
+        self.assertEqual(words, ['CHECKED'])
+        self.assertEqual(len(sounds), 1)
+
+    def test_a_sound_is_never_the_only_way_something_is_said_by_default(self):
+        """The mistake to avoid is the one where the earcon becomes
+        load-bearing."""
+        for row in self.schemes.described():
+            if not row['changed']:
+                self.assertEqual(row['way'], self.schemes.AS_WORD, row['state'])
+
+    def test_putting_one_back_really_puts_it_back(self):
+        self.schemes.set_way('CHECKED', self.schemes.AS_SOUND)
+        self.schemes.reset('CHECKED')
+        self.assertEqual(self.schemes.way_of('CHECKED'),
+                         self.schemes.AS_WORD)
+
+    def test_the_switch_being_off_means_every_word_is_said(self):
+        from titanEnhancements import configSpec
+        self.schemes.set_way('CHECKED', self.schemes.AS_SOUND)
+        before = configSpec.read
+        configSpec.read = lambda: dict(configSpec.defaults(),
+                                       soundScheme=False)
+        try:
+            words, sounds = self.schemes.answer(['CHECKED'])
+        finally:
+            configSpec.read = before
+        self.assertEqual(words, ['CHECKED'])
+        self.assertEqual(sounds, [])
+
+    def test_every_default_sound_is_one_the_theme_really_has(self):
+        """A mapping to a missing file is silence, which for a state that is
+        no longer being said in words is the state simply gone."""
+        for state, name in self.schemes.STATES.items():
+            self.assertTrue(os.path.exists(
+                os.path.join(ROOT, 'sfx', 'default', 'SRE', name)),
+                '%s -> %s' % (state, name))
+
+    def test_every_state_has_words_saying_what_it_is(self):
+        words = self.schemes.state_names()
+        for state in self.schemes.STATES:
+            self.assertTrue(words.get(state), state)
+
+    def test_it_survives_being_forgotten_and_read_again(self):
+        self.schemes.set_way('SELECTED', self.schemes.AS_SOUND)
+        self.schemes.forget()
+        self.assertEqual(self.schemes.way_of('SELECTED'),
+                         self.schemes.AS_SOUND)
+
+    def test_the_reader_really_asks_it(self):
+        """A scheme nothing consults is a manager that changes nothing."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'elements.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('schemes.answer(', source)
+        self.assertIn('schemes.play(', source)
+
+# --------------------------------------------------------------------------- #
+class TheManagerIsAManagerAndNotAChooser(unittest.TestCase):
+    """A list you pick one thing out of and that then closes is right for
+    "go to this marker" and wrong for tidying up what you have accumulated.
+
+    Nothing here opens a window: what is checked is that the manager reads
+    and writes the modules that OWN each kind of thing, so what it shows is
+    what is really in force.
+    """
+
+    def setUp(self):
+        from titanEnhancements import managerGui
+        self.gui = managerGui
+        with io.open(managerGui.__file__, encoding='utf-8') as handle:
+            self.source = handle.read()
+
+    def test_it_has_a_page_for_each_kind_of_thing(self):
+        for page in ('_markers_page', '_monitors_page', '_scheme_page'):
+            self.assertIn('def %s' % page, self.source)
+
+    def test_every_page_reads_the_module_that_owns_its_kind(self):
+        """A manager that showed one thing while the reader did another
+        would be worse than not having one."""
+        self.assertIn('markers.all_markers()', self.source)
+        self.assertIn('monitors.all_monitors()', self.source)
+        self.assertIn('schemes.described()', self.source)
+
+    def test_every_page_can_change_what_it_shows(self):
+        for call in ('markers.rename(', 'markers.remove(',
+                     'monitors.remove(', 'schemes.set_way('):
+            self.assertIn(call, self.source, call)
+
+    def test_it_is_a_real_tab_control(self):
+        """The platform says "tab, 1 of 3" without a word being written
+        here."""
+        self.assertIn('wx.Notebook', self.source)
+
+    def test_it_answers_with_nothing_rather_than_raising_without_wx(self):
+        self.assertIsNone(self.gui.build())
+        self.assertFalse(self.gui.show())
+
+    def test_the_command_and_the_menu_both_reach_it(self):
+        for name, needle in (
+                ('__init__.py', 'commands.manager()'),
+                ('menu.py', "_run_command('manager')"),
+                ('commands.py', 'managerGui.show()')):
+            path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                                name)
+            with io.open(path, encoding='utf-8') as handle:
+                self.assertIn(needle, handle.read(), name)
+
+# --------------------------------------------------------------------------- #
+class TheJournalRemembersWhereItCameFrom(unittest.TestCase):
+    """Every reader has a speech history. None of them answers "where was
+    that?", because the words were stored and the thing that said them was
+    not.
+    """
+
+    class Obj:
+        def __init__(self, name='Status', automation='statusText'):
+            self.name = name
+            self.value = ''
+            self.windowClassName = 'Static'
+            self.UIAAutomationId = automation
+            self.location = (0, 0, 10, 10)
+            self.role = types.SimpleNamespace(name='STATICTEXT')
+            self.children = []
+
+    def setUp(self):
+        from titanEnhancements import anchors, journal
+        self.journal, self.anchors = journal, anchors
+        journal.forget()
+        self._program = anchors.program_of
+        anchors.program_of = lambda obj=None: 'mail.exe'
+        self.addCleanup(journal.forget)
+        self.addCleanup(lambda: setattr(anchors, 'program_of', self._program))
+
+    def test_a_line_is_kept_with_the_way_back_to_it(self):
+        self.journal.note('Message sent', kind='notification',
+                          obj=self.Obj())
+        row = self.journal.lines()[0]
+        self.assertEqual(row['text'], 'Message sent')
+        self.assertTrue(self.journal.can_go(row))
+
+    def test_the_kind_of_speech_is_kept_too(self):
+        self.journal.note('a', kind='typed', obj=self.Obj())
+        self.assertEqual(self.journal.lines()[0]['kind'], 'typed')
+
+    def test_the_same_line_twice_running_is_one_thing(self):
+        """A list that re-announced, a status bar rewritten on a timer - a
+        reader repeating itself is not two things that happened."""
+        self.journal.note('Ready', obj=self.Obj())
+        self.journal.note('Ready', obj=self.Obj())
+        self.assertEqual(len(self.journal.lines()), 1)
+
+    def test_it_is_newest_first(self):
+        for said in ('one', 'two', 'three'):
+            self.journal.note(said, obj=self.Obj())
+        self.assertEqual([row['text'] for row in self.journal.lines()],
+                         ['three', 'two', 'one'])
+
+    def test_it_can_be_searched(self):
+        self.journal.note('Message sent', obj=self.Obj())
+        self.journal.note('Nothing to send', obj=self.Obj())
+        self.assertEqual(len(self.journal.lines(containing='sent')), 1)
+
+    def test_it_never_grows_without_bound(self):
+        for number in range(self.journal.KEPT + 50):
+            self.journal.note('line %d' % number, obj=self.Obj())
+        self.assertLessEqual(len(self.journal.lines()), self.journal.KEPT)
+
+    def test_a_line_whose_control_is_gone_says_so(self):
+        self.journal.note('Message sent', obj=self.Obj())
+        row = self.journal.lines()[0]
+        self.anchors.find = lambda anchor: None
+        try:
+            ok, said = self.journal.go(row)
+        finally:
+            del self.anchors.find
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_the_switch_being_off_keeps_nothing(self):
+        from titanEnhancements import configSpec
+        before = configSpec.read
+        configSpec.read = lambda: dict(configSpec.defaults(), journal=False)
+        try:
+            self.assertFalse(self.journal.note('x', obj=self.Obj()))
+        finally:
+            configSpec.read = before
+        self.assertEqual(self.journal.lines(), [])
+
+    def test_the_reader_really_writes_to_it(self):
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'interject.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('journal.note(', source)
+
+
+# --------------------------------------------------------------------------- #
+class ProceduresAreRecordedByCONTROLnotByKey(unittest.TestCase):
+    """The one that goes past JAWS, and the reason is not cleverness: a
+    recorded keystroke is the wrong unit.
+
+    Tab, Tab, Tab, Space works until the dialog gains a checkbox - and then
+    it does the wrong thing silently, which for somebody who cannot see the
+    screen is the failure that matters.
+    """
+
+    class Obj:
+        def __init__(self, name='Save', automation='saveButton',
+                     actions=('Press',)):
+            self.name = name
+            self.value = ''
+            self.windowClassName = 'Button'
+            self.UIAAutomationId = automation
+            self.location = (0, 0, 10, 10)
+            self.role = types.SimpleNamespace(name='BUTTON')
+            self.children = []
+            self._actions = list(actions)
+            self.done = []
+            self.focused = False
+
+        @property
+        def actionCount(self):
+            return len(self._actions)
+
+        def getActionName(self, index):
+            return self._actions[index]
+
+        def doAction(self, index):
+            self.done.append(index)
+
+        def setFocus(self):
+            self.focused = True
+
+    def setUp(self):
+        from titanEnhancements import anchors, procedures
+        self.procedures, self.anchors = procedures, anchors
+        self.dir = tempfile.mkdtemp()
+        self._path = procedures.path
+        procedures.path = lambda: os.path.join(self.dir, 'procedures.json')
+        procedures.forget()
+        procedures.cancel_recording()
+        self._program = anchors.program_of
+        anchors.program_of = lambda obj=None: 'mail.exe'
+        self.addCleanup(procedures.cancel_recording)
+        self.addCleanup(procedures.forget)
+        self.addCleanup(lambda: setattr(anchors, 'program_of', self._program))
+        self.addCleanup(lambda: setattr(procedures, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def test_nothing_is_recorded_until_it_is_asked_for(self):
+        self.procedures.note_focus(self.Obj())
+        self.assertEqual(self.procedures.report()['steps'], 0)
+
+    def test_a_step_is_a_control_and_what_happened_to_it(self):
+        self.procedures.start_recording()
+        self.procedures.note_focus(self.Obj())
+        self.procedures.note_press(self.Obj())
+        _ok, _said = self.procedures.stop_recording('Send')
+        steps = self.procedures.for_program()[0]['steps']
+        self.assertEqual([step['do'] for step in steps],
+                         [self.procedures.GO, self.procedures.PRESS])
+        self.assertTrue(steps[0]['anchor'])
+
+    def test_passing_through_a_control_is_not_visiting_it(self):
+        """Tabbing through a dialog would otherwise record a step per
+        control passed, which is a keystroke macro wearing a hat."""
+        self.procedures.start_recording()
+        for name in ('First', 'Second', 'Third'):
+            self.procedures.note_focus(self.Obj(name=name, automation=name))
+        self.procedures.stop_recording('x')
+        steps = self.procedures.for_program()[0]['steps']
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0]['what'], 'Third')
+
+    def test_a_run_of_typing_is_one_step(self):
+        self.procedures.start_recording()
+        for letter in 'hello':
+            self.procedures.note_typing(letter)
+        self.procedures.stop_recording('x')
+        steps = self.procedures.for_program()[0]['steps']
+        self.assertEqual(steps, [{'do': self.procedures.TYPE,
+                                  'text': 'hello'}])
+
+    def test_a_recording_is_READABLE(self):
+        """A keystroke macro can only be re-recorded; this can be checked,
+        corrected and handed to somebody else."""
+        self.procedures.start_recording()
+        self.procedures.note_focus(self.Obj(name='Search'))
+        self.procedures.note_typing('titan')
+        self.procedures.stop_recording('Look it up')
+        text = self.procedures.as_text(self.procedures.for_program()[0])
+        self.assertIn('Search', text)
+        self.assertIn('titan', text)
+
+    def test_an_empty_recording_is_not_kept(self):
+        self.procedures.start_recording()
+        ok, said = self.procedures.stop_recording('x')
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_replay_finds_the_control_before_it_touches_it(self):
+        obj = self.Obj()
+        self.procedures.start_recording()
+        self.procedures.note_press(obj)
+        self.procedures.stop_recording('Send')
+        self.anchors.find = lambda anchor: obj
+        try:
+            ok, _said = self.procedures.run(
+                self.procedures.for_program()[0])
+        finally:
+            del self.anchors.find
+        self.assertTrue(ok)
+        self.assertEqual(obj.done, [0])
+
+    def test_it_STOPS_at_the_first_step_it_cannot_do(self):
+        """A procedure that carried on past a step that did not happen
+        would be pressing controls in a state nobody predicted."""
+        obj = self.Obj()
+        self.procedures.start_recording()
+        self.procedures.note_press(obj)
+        self.procedures.note_press(self.Obj(name='Close', automation='close'))
+        self.procedures.stop_recording('Send')
+        self.anchors.find = lambda anchor: None
+        before = self.procedures.APPEAR_SECONDS
+        self.procedures.APPEAR_SECONDS = 0.0
+        try:
+            ok, said = self.procedures.run(
+                self.procedures.for_program()[0])
+        finally:
+            self.procedures.APPEAR_SECONDS = before
+            del self.anchors.find
+        self.assertFalse(ok)
+        self.assertIn('1', said)
+        self.assertEqual(obj.done, [])
+
+    def test_it_presses_the_controls_OWN_action(self):
+        """Never a synthesised click: a click at a coordinate is what a
+        keystroke macro degrades into, and it is what this exists not to
+        be."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'procedures.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('obj.doAction(0)', source)
+        self.assertNotIn('SetCursorPos', source)
+
+    def test_they_belong_to_a_program(self):
+        self.procedures.start_recording()
+        self.procedures.note_press(self.Obj())
+        self.procedures.stop_recording('Send')
+        self.anchors.program_of = lambda obj=None: 'browser.exe'
+        self.assertEqual(self.procedures.for_program(), [])
+        self.assertEqual(len(self.procedures.all_procedures()), 1)
+
+
+# --------------------------------------------------------------------------- #
+class FindingTheControlThatDOESAThing(unittest.TestCase):
+    """Every reader can move you to the next button. None can answer "where
+    is the thing that saves this?"."""
+
+    class Obj:
+        def __init__(self, name='', value='', description='', children=()):
+            self.name = name
+            self.value = value
+            self.description = description
+            self.role = types.SimpleNamespace(name='BUTTON')
+            self.children = list(children)
+
+    def setUp(self):
+        from titanEnhancements import findControl
+        self.find = findControl
+        self.rows = [
+            {'label': 'Save', 'obj': None, 'words': 'save'},
+            {'label': 'Save as...', 'obj': None, 'words': 'save as'},
+            {'label': 'Preferences', 'obj': None,
+             'words': 'preferences turn off notifications'},
+        ]
+
+    def test_the_words_are_tried_first_and_are_free(self):
+        hits = self.find.by_words('save', self.rows)
+        self.assertEqual(len(hits), 2)
+
+    def test_the_words_in_any_order_still_find_it(self):
+        """"save file" should find "Save the file as..." and a substring
+        match alone will not."""
+        rows = [{'label': 'x', 'obj': None, 'words': 'save the file as'}]
+        self.assertEqual(len(self.find.by_words('file save', rows)), 1)
+
+    def test_a_question_nothing_matches_finds_nothing(self):
+        self.assertEqual(self.find.by_words('quit', self.rows), [])
+
+    def test_the_ai_is_not_reached_unless_it_is_asked_for(self):
+        """It sends the control names of the window to a provider, which is
+        a small thing to send and still a thing to be asked about."""
+        tier, rows, why = self.find.find('turn off notifications',
+                                        use_ai=False)
+        self.assertEqual(rows, [])
+        self.assertTrue(why)
+
+    def test_a_match_says_which_tier_found_it(self):
+        """"Save, by its name" and "Preferences, by what it does" are
+        different answers and the user knows which they got."""
+        names = self.find.tier_names()
+        for tier in (self.find.BY_WORDS, self.find.BY_SCREEN,
+                     self.find.BY_MEANING):
+            self.assertTrue(names.get(tier), tier)
+
+    def test_a_match_off_the_screen_carries_where_it_is(self):
+        """So it can be pressed, with no control behind it at all."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'findControl.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn("'rect': rect", source)
+        self.assertIn('smart._click(', source)
+
+# --------------------------------------------------------------------------- #
+class EveryCommandAndKeyReallyGoesSomewhere(unittest.TestCase):
+    """The sweep that keeps a growing add-on honest.
+
+    Every one of these is a fault that is invisible until somebody presses
+    the key: a script that calls a command nobody wrote, a menu entry
+    naming one that has been renamed, two commands claiming one gesture -
+    where the second silently never fires and the user reports "that key
+    does nothing" about a feature that is perfectly written.
+    """
+
+    def setUp(self):
+        folder = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements')
+        self.folder = folder
+        self.sources = {}
+        for name in sorted(os.listdir(folder)):
+            if name.endswith('.py'):
+                with io.open(os.path.join(folder, name),
+                             encoding='utf-8') as handle:
+                    self.sources[name] = handle.read()
+        self.commands = set(re.findall(r'^def ([a-z_][a-z_0-9]*)\(',
+                                       self.sources['commands.py'], re.M))
+
+    def test_no_two_things_claim_the_same_key(self):
+        """The second one silently never fires."""
+        found = re.findall(r"gesture='(kb:[^']+)'", self.sources['__init__.py'])
+        twice = [key for key, count in collections.Counter(found).items()
+                 if count > 1]
+        self.assertEqual(twice, [], 'two commands claim: %s' % twice)
+
+    def test_every_script_calls_a_command_that_exists(self):
+        called = set(re.findall(r'commands\.([a-z_][a-z_0-9]*)\(',
+                                self.sources['__init__.py']))
+        self.assertEqual(sorted(called - self.commands), [])
+
+    def test_every_menu_entry_names_a_command_that_exists(self):
+        named = set(re.findall(r"_run_command\('([a-z_][a-z_0-9]*)'",
+                               self.sources['menu.py']))
+        self.assertEqual(sorted(named - self.commands), [])
+
+    def test_every_script_has_a_description(self):
+        """It is what the user reads in Input Gestures, and a script with
+        none is a row they cannot tell from any other."""
+        source = self.sources['__init__.py']
+        for name in re.findall(r'def (script_[A-Za-z0-9_]+)\(', source):
+            at = source.index('def %s(' % name)
+            before = source[max(0, at - 500):at]
+            self.assertIn('description=', before, name)
+
+    def test_every_module_the_plugin_imports_is_really_there(self):
+        imported = set(re.findall(r'^from \. import ([a-z_A-Z0-9]+)',
+                                  self.sources['__init__.py'], re.M))
+        for name in imported:
+            self.assertIn('%s.py' % name, self.sources, name)
+
+    def test_every_module_imports_without_nvda(self):
+        """The property that makes the add-on degrade on an NVDA missing a
+        feature instead of failing to load at all."""
+        import importlib
+        for name in sorted(self.sources):
+            if name == '__init__.py':
+                continue
+            importlib.import_module('titanEnhancements.%s' % name[:-3])
+
+    def test_every_store_writes_somewhere_of_its_own(self):
+        """Two features sharing a file would overwrite each other."""
+        files = []
+        for name, source in self.sources.items():
+            for found in re.findall(r"^FILENAME = '([^']+)'", source, re.M):
+                files.append((name, found))
+        names = [found for _module, found in files]
+        self.assertEqual(sorted(names), sorted(set(names)), files)
+
+    def test_nothing_speaks_by_calling_speech_directly_on_a_worker(self):
+        """Everything that says something goes through `dialogs.report` or
+        the speech filter, so the sound scheme, the journal and the voice
+        classes all see it."""
+        for name in ('markers.py', 'procedures.py', 'findControl.py',
+                     'monitors.py'):
+            self.assertNotIn('speech.speak(', self.sources[name], name)
+
+# --------------------------------------------------------------------------- #
+class TheManagersAreAMenuOfTheirOwn(unittest.TestCase):
+    """They were mixed in among "where am I" and "read this window", and by
+    the time there were twenty of them that list was something a user
+    arrowed through looking for the one they came for.
+
+    A manager is not a thing you do to the control you are on: it is a
+    thing you keep. Keeping the two apart is what makes both lists short
+    enough to read.
+    """
+
+    def setUp(self):
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'menu.py')
+        with io.open(path, encoding='utf-8') as handle:
+            self.source = handle.read()
+        self.managers = self._between('managers = wx.Menu()',
+                                      'reader = wx.Menu()')
+        self.reader = self._between('reader = wx.Menu()',
+                                    "_('How this program is read')")
+
+    def _between(self, start, end):
+        at = self.source.index(start)
+        return self.source[at:self.source.index(end, at)]
+
+    def test_there_is_a_managers_menu(self):
+        self.assertIn("menu.AppendSubMenu(managers, _('Managers'))",
+                      self.source)
+
+    def test_every_manager_is_in_it(self):
+        for command in ('manager', 'mark_this', 'go_to_marker',
+                        'watch_this', 'watched_areas', 'record_procedure',
+                        'run_procedure', 'read_journal', 'search_journal',
+                        'find_control', 'find_control_with_ai',
+                        'windows_and_actions', 'sound_scheme',
+                        'voice_classes', 'reader_modules'):
+            self.assertIn("_run_command('%s')" % command, self.managers,
+                          command)
+
+    def test_none_of_them_is_left_in_the_reading_menu(self):
+        for command in ('manager', 'mark_this', 'run_procedure',
+                        'read_journal', 'find_control', 'sound_scheme',
+                        'windows_and_actions', 'voice_classes'):
+            self.assertNotIn("_run_command('%s')" % command, self.reader,
+                             command)
+
+    def test_the_reading_menu_keeps_what_is_about_THIS_window(self):
+        for command in ('where_am_i', 'label_control', 'describe_control',
+                        'read_locally', 'watch_surface'):
+            self.assertIn("_run_command('%s')" % command, self.reader,
+                          command)
+
+    def test_a_manager_with_several_commands_gets_a_submenu_of_its_own(self):
+        """Six commands in a row under one heading is the flat list again,
+        one level down."""
+        for name in ('markers', 'watched', 'doing', 'spoken', 'finding',
+                     'modules'):
+            self.assertIn('%s = wx.Menu()' % name, self.source, name)
+            self.assertIn('managers.AppendSubMenu(%s,' % name, self.source,
+                          name)
+
+    def test_no_manager_command_is_reachable_from_nowhere(self):
+        """A command with a key and no menu entry is one nobody discovers;
+        every one of these has both."""
+        plugin = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                              '__init__.py')
+        with io.open(plugin, encoding='utf-8') as handle:
+            scripts = handle.read()
+        for command in ('journal_page', 'cancel_procedure',
+                        'read_procedure', 'forget_marker'):
+            self.assertIn("_run_command('%s')" % command, self.source,
+                          command)
+            self.assertIn('commands.%s(' % command, scripts, command)
+
+# --------------------------------------------------------------------------- #
+class WhatIsSETInAManagerReallyCHANGESWhatIsRead(unittest.TestCase):
+    """The check that matters, and the one a manager can pass without.
+
+    Every manager here has tests that it stores what it was told. That is
+    not the question. The question is whether the reader then behaves
+    differently - because a manager that writes a file nothing reads is a
+    window full of switches that do nothing, and it looks exactly like one
+    that works.
+    """
+
+    class Obj:
+        def __init__(self, name='', value='', description='',
+                     automation='thing', klass='Button'):
+            self.name = name
+            self.value = value
+            self.description = description
+            self.windowClassName = klass
+            self.UIAAutomationId = automation
+            self.location = (0, 0, 10, 10)
+            self.role = types.SimpleNamespace(name='BUTTON')
+            self.children = []
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def _store(self, module, name):
+        before = module.path
+        module.path = lambda: os.path.join(self.dir, name)
+        module.forget()
+        self.addCleanup(module.forget)
+        self.addCleanup(lambda: setattr(module, 'path', before))
+
+    # ------------------------------------------------------ the labels
+    def test_renaming_a_NAMED_control_really_renames_it(self):
+        """The reported bug. It stored the name, said "this control is now
+        called X", and read the old one for ever - because the rule that
+        decided whether to use a stored name was the rule for deciding
+        whether to GUESS one."""
+        from titanEnhancements import labels
+        self._store(labels, 'labels.json')
+        obj = self.Obj(name='Button 3')
+        labels.put(obj, 'Send', source='user')
+        label, source = labels.applies(obj)
+        self.assertEqual(label, 'Send')
+        self.assertEqual(source, 'user')
+
+    def test_a_GUESSED_name_is_still_only_for_a_control_with_none(self):
+        """The other half of the same rule, which was right and must stay
+        right: a control the program named is not improved by a guess."""
+        from titanEnhancements import labels
+        self._store(labels, 'labels.json')
+        obj = self.Obj(name='Button 3')
+        labels.put(obj, 'Probably send', source='ai')
+        self.assertEqual(labels.applies(obj), ('', ''))
+
+    def test_a_guessed_name_IS_used_where_the_control_has_nothing(self):
+        from titanEnhancements import labels
+        self._store(labels, 'labels.json')
+        obj = self.Obj(name='')
+        labels.put(obj, 'Probably send', source='ai')
+        label, source = labels.applies(obj)
+        self.assertEqual(label, 'Probably send')
+        self.assertEqual(source, 'ai')
+
+    def test_forgetting_a_name_really_forgets_it(self):
+        from titanEnhancements import labels
+        self._store(labels, 'labels.json')
+        obj = self.Obj(name='Button 3')
+        labels.put(obj, 'Send', source='user')
+        labels.remove(obj)
+        self.assertEqual(labels.applies(obj), ('', ''))
+
+    def test_the_reader_asks_that_one_place(self):
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'focus.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertIn('labels.applies(', source)
+
+    # ----------------------------------------------- the sound scheme
+    def test_a_state_given_a_sound_really_leaves_the_reading(self):
+        from titanEnhancements import elements, schemes
+        self._store(schemes, 'scheme.json')
+        played = []
+        before = schemes.play
+        schemes.play = lambda sounds: played.extend(sounds)
+        try:
+            said = elements._sounded([('CHECKED', 'checked'),
+                                      ('SELECTED', 'selected')])
+            self.assertEqual(said, ['checked', 'selected'])
+            self.assertEqual(played, [])
+            schemes.set_way('CHECKED', schemes.AS_SOUND)
+            said = elements._sounded([('CHECKED', 'checked'),
+                                      ('SELECTED', 'selected')])
+            self.assertEqual(said, ['selected'])
+            self.assertEqual(len(played), 1)
+        finally:
+            schemes.play = before
+
+    def test_both_really_says_it_and_plays_it(self):
+        from titanEnhancements import elements, schemes
+        self._store(schemes, 'scheme.json')
+        played = []
+        before = schemes.play
+        schemes.play = lambda sounds: played.extend(sounds)
+        try:
+            schemes.set_way('CHECKED', schemes.AS_BOTH)
+            said = elements._sounded([('CHECKED', 'checked')])
+            self.assertEqual(said, ['checked'])
+            self.assertEqual(len(played), 1)
+        finally:
+            schemes.play = before
+
+    # ------------------------------------------------- the voice table
+    def test_a_variant_set_on_a_class_really_reaches_the_sequence(self):
+        from titanEnhancements import classes, compat, voices
+
+        class Fake:
+            def __init__(self, offset=0, **kw):
+                self.offset = offset
+                self.name = kw.get('name', '')
+        self._store(classes, 'classes.json')
+        before = {name: getattr(compat, name, None)
+                  for name in ('PitchCommand', 'CallbackCommand',
+                               'EndUtteranceCommand')}
+        for name in before:
+            setattr(compat, name, Fake)
+        supported = voices._supported
+        voices._supported = lambda synth, command: command is not None
+        try:
+            classes.set_voice('kind', {'variant': 'quincy'})
+            out = voices.sequence([('Save', 'name'), ('button', 'kind')])
+            self.assertTrue(any(getattr(part, 'name', '') == 'titanVoice'
+                                for part in out))
+        finally:
+            voices._supported = supported
+            for name, value in before.items():
+                setattr(compat, name, value)
+
+    def test_the_reading_order_set_really_changes_the_reading(self):
+        from titanEnhancements import classes, elements
+        self._store(classes, 'classes.json')
+
+        class Row:
+            name = 'Save'
+            value = ''
+            description = ''
+            role = types.SimpleNamespace(name='BUTTON')
+            states = set()
+            positionInfo = {}
+        classes.set_order([('kind', True), ('name', True)])
+        said = [text for text, _voice in elements.describe(Row())]
+        self.assertEqual(said[-1], 'Save')
+
+    # ----------------------------------------------------- the journal
+    def test_what_the_reader_says_really_reaches_the_journal(self):
+        from titanEnhancements import interject, journal
+        journal.forget()
+        self.addCleanup(journal.forget)
+        interject._filter(speechSequence=['Message sent'])
+        self.assertEqual([row['text'] for row in journal.lines()],
+                         ['Message sent'])
+
+    def test_the_journal_switch_off_really_keeps_nothing(self):
+        from titanEnhancements import configSpec, interject, journal
+        journal.forget()
+        self.addCleanup(journal.forget)
+        before = configSpec.read
+        configSpec.read = lambda: dict(configSpec.defaults(), journal=False)
+        try:
+            interject._filter(speechSequence=['Message sent'])
+        finally:
+            configSpec.read = before
+        self.assertEqual(journal.lines(), [])
+
+    # ----------------------------------------------------- the monitors
+    def test_a_monitor_added_really_starts_the_watch(self):
+        from titanEnhancements import anchors, monitors
+        self._store(monitors, 'monitors.json')
+        program = anchors.program_of
+        anchors.program_of = lambda obj=None: 'x.exe'
+        self.addCleanup(lambda: setattr(anchors, 'program_of', program))
+        self.addCleanup(monitors.stop)
+        monitors._keep_running()
+        self.assertFalse(monitors.report()['running'])
+        monitors.watch_this_window(self.Obj(name='Window'))
+        self.assertTrue(monitors.report()['running'])
+
+    # --------------------------------------------------- the OCR tier
+    def test_the_ocr_tier_set_really_decides_which_reader_is_used(self):
+        from titanEnhancements import configSpec, surface
+        before = configSpec.read
+        try:
+            configSpec.read = lambda: dict(configSpec.defaults(),
+                                           ocrTier='ai')
+            self.assertEqual(surface._not_a_game(), surface.MODE_NATIVE)
+            configSpec.read = lambda: dict(configSpec.defaults(),
+                                           ocrTier='local')
+            self.assertEqual(surface._not_a_game(), surface.MODE_LOCAL)
+        finally:
+            configSpec.read = before
+
+
+# --------------------------------------------------------------------------- #
+class WalkingTheRecognisedScreen(unittest.TestCase):
+    """The terminal review, applied to a screen that was read as a picture.
+
+    Every reader that does OCR hands you a document and stops there: the
+    words are text and the thing they were written on is gone. This keeps
+    the coordinates, so Enter clicks what you just read.
+    """
+
+    def setUp(self):
+        from titanEnhancements import localOcr, ocrReview
+        self.review = ocrReview
+        ocrReview.stop()
+        self.addCleanup(ocrReview.stop)
+        reading = localOcr.Reading([
+            [{'text': 'New', 'left': 10, 'top': 10, 'width': 30,
+              'height': 20},
+             {'text': 'game', 'left': 50, 'top': 10, 'width': 40,
+              'height': 20}],
+            [{'text': 'Options', 'left': 10, 'top': 40, 'width': 60,
+              'height': 20}],
+        ])
+        with ocrReview._LOCK:
+            ocrReview._state.update({'on': True, 'row': 0, 'word': 0,
+                                     'hwnd': 1,
+                                     'rows': reading.rows(),
+                                     'lines': list(reading.lines)})
+        self.said = []
+        self._say = ocrReview._say
+        ocrReview._say = lambda text, **kw: self.said.append(str(text))
+        self._beep = ocrReview._beep
+        ocrReview._beep = lambda row: None
+        self.addCleanup(lambda: setattr(ocrReview, '_beep', self._beep))
+        self.addCleanup(lambda: setattr(ocrReview, '_say', self._say))
+
+    def test_up_and_down_are_lines(self):
+        self.review.move_line(1)
+        self.assertIn('Options', self.said)
+
+    def test_left_and_right_are_words(self):
+        self.review.move_word(1)
+        self.assertEqual(self.said[-1], 'game')
+
+    def test_it_cannot_walk_off_either_end(self):
+        for _ in range(10):
+            self.review.move_line(-1)
+        self.assertEqual(self.review.report()['row'], 0)
+        for _ in range(10):
+            self.review.move_line(1)
+        self.assertEqual(self.review.report()['row'], 1)
+
+    def test_the_cursor_carries_where_it_is_on_the_SCREEN(self):
+        """Which is the whole reason to keep the coordinates."""
+        text, rect = self.review.here()
+        self.assertEqual(text, 'New game')
+        self.assertEqual(rect[0], 10)
+
+    def test_moving_along_the_line_narrows_the_click_to_the_WORD(self):
+        """A click meant for the third word must not land on the first."""
+        self.review.move_word(1)
+        text, rect = self.review.here()
+        self.assertEqual(text, 'game')
+        self.assertEqual(rect[0], 50)
+
+    def test_enter_clicks_where_the_cursor_is(self):
+        from titanEnhancements import smart
+        clicked = []
+        before = smart._click
+        smart._click = lambda rect, name: (clicked.append((rect, name)),
+                                           (True, name))[1]
+        try:
+            ok, _said = self.review.click()
+        finally:
+            smart._click = before
+        self.assertTrue(ok)
+        self.assertEqual(clicked[0][1], 'New game')
+
+    def test_home_and_end_are_the_ends_of_the_line(self):
+        self.review.move_end(True)
+        self.assertEqual(self.said[-1], 'game')
+        self.review.move_end(False)
+        self.assertEqual(self.said[-1], 'New')
+
+    def test_leaving_the_window_ends_it(self):
+        before = self.review._foreground
+        self.review._foreground = lambda: 999
+        try:
+            self.assertTrue(self.review.left_the_window())
+        finally:
+            self.review._foreground = before
+        self.assertFalse(self.review.reviewing())
+
+    def test_the_keys_are_the_terminal_reviews_own(self):
+        """A user should learn one set of keys and not two."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            '__init__.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        ocr = re.search(r'OCR_KEYS = \{(.+?)\}', source, re.S).group(1)
+        terminal = re.search(r'TERMINAL_KEYS = \{(.+?)\}', source,
+                             re.S).group(1)
+        for key in ('kb:upArrow', 'kb:downArrow', 'kb:leftArrow',
+                    'kb:rightArrow', 'kb:pageUp', 'kb:pageDown', 'kb:home',
+                    'kb:end', 'kb:escape'):
+            self.assertIn(key, ocr, key)
+            self.assertIn(key, terminal, key)
+        # And the one the terminal has no use for.
+        self.assertIn('kb:enter', ocr)
+
+# --------------------------------------------------------------------------- #
+class RunningItForRealInsideNVDA(unittest.TestCase):
+    """The check that catches what a stand-in cannot.
+
+    Every other test here asks a question a stand-in can answer, and all of
+    them passed while the local recogniser returned an empty reading for
+    every window on the machine - because the stand-in was built in the
+    shape the code EXPECTED rather than the shape NVDA really hands back,
+    so the test agreed with the bug.
+    """
+
+    def setUp(self):
+        from titanEnhancements import link, selftest
+        self.selftest = selftest
+        self.link = link
+
+    def test_it_runs_and_answers_rather_than_raising(self):
+        """With no NVDA under it every check fails, and that is the right
+        answer - what must not happen is an exception, because a harness
+        that dies tells you about one thing and hides the rest."""
+        answer = self.selftest.run()
+        self.assertIn('checks', answer)
+        self.assertEqual(len(answer['checks']), len(self.selftest.CHECKS))
+        for row in answer['checks']:
+            self.assertIn('ok', row)
+            self.assertTrue(row['said'], row['check'])
+
+    def test_it_covers_every_feature_that_can_fail_on_the_machine(self):
+        named = {name for name, _work in self.selftest.CHECKS}
+        for wanted in ('local OCR', 'screen review', 'windows and actions',
+                       'anchoring a control', 'finding a control',
+                       'the journal', 'the sound scheme', 'the names',
+                       'the monitors', 'speech origins'):
+            self.assertIn(wanted, named, wanted)
+
+    def test_it_reads_and_never_acts(self):
+        """It runs on somebody's live machine: it must not press a control,
+        type, write to a store or send anything to a provider."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'selftest.py')
+        with io.open(path, encoding='utf-8') as handle:
+            source = handle.read()
+        for never in ('doAction(', 'setFocus(', '_click(', '.send()',
+                      'set_way(', 'set_voice(', 'put(', 'save()',
+                      "run_action('ocr'"):
+            self.assertNotIn(never, source, never)
+
+    def test_it_can_be_asked_for_from_outside(self):
+        """A check nobody can run from outside is a check that is run once
+        and then never again."""
+        self.assertIn('selftest', dict(self.link.handlers()))
+
+    def test_everything_served_that_is_a_THING_TO_DO_is_declared(self):
+        """An action served and not declared is not callable over the bus -
+        this add-on's own rule, which it has already broken once."""
+        served = set(dict(self.link.handlers()))
+        declared = {row['name'] for row in self.link.DECLARED}
+        # The channel's own plumbing: Titan calls these directly and nobody
+        # should be offered them as things to do.
+        plumbing = {'attach', 'detach', 'status', 'announce', 'braille',
+                    'interrupt', 'speaking', 'beep', 'capabilities',
+                    'stand_down'}
+        self.assertEqual(sorted(served - declared - plumbing), [])
+
+    def test_the_local_ocr_check_names_the_fault_it_was_written_for(self):
+        """A failing check that says "it did not work" sends nobody
+        anywhere; this one names the shape to look at."""
+        path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'selftest.py')
+        with io.open(path, encoding='utf-8') as handle:
+            self.assertIn('LinesWordsResult.data', handle.read())
+
+# --------------------------------------------------------------------------- #
+class ASettingThatIsAWordIsNotABoolean(unittest.TestCase):
+    """Found by asking the live NVDA what its switches were, which is the
+    only place it could have been found.
+
+    `localOcrLanguage` came back as `False`. It is a `string(...)`, and the
+    reader matched only `option(...)` as "not a yes or a no" - so the
+    language was read through `bool()`, and the next thing to save would
+    have written that `False` back over whatever the user had chosen.
+    """
+
+    def setUp(self):
+        from titanEnhancements import configSpec
+        self.configSpec = configSpec
+
+    def test_a_string_setting_reads_as_a_string(self):
+        self.assertEqual(self.configSpec.defaults()['localOcrLanguage'], '')
+
+    def test_an_option_setting_reads_as_its_word(self):
+        self.assertEqual(self.configSpec.defaults()['ocrTier'], 'local')
+
+    def test_a_switch_still_reads_as_a_switch(self):
+        for name in ('journal', 'monitors', 'soundScheme'):
+            self.assertIsInstance(self.configSpec.defaults()[name], bool,
+                                  name)
+
+    def test_a_string_setting_offers_no_fixed_list(self):
+        """It allows any word, so the page asks something that knows the
+        machine what the answers really are."""
+        self.assertEqual(self.configSpec.choices('localOcrLanguage'), [])
+        self.assertTrue(self.configSpec.choices('ocrTier'))
+
+    def test_every_setting_in_the_spec_reads_back_as_its_own_kind(self):
+        """The sweep, so a third kind added later cannot arrive as False."""
+        defaults = self.configSpec.defaults()
+        for name, spec in self.configSpec.SPEC.items():
+            wanted = str if ('option(' in spec or 'string(' in spec) else bool
+            self.assertIsInstance(defaults[name], wanted, name)
+class TheMapOfTitan(unittest.TestCase):
+    """`titan.py` - Titan's whole bridge, in the shapes a window is built of.
+
+    Every one of these is a shape read off a LIVE Titan before the code was
+    written, because a key nothing writes is a working-looking empty list -
+    the fault this add-on has already shipped twice (`ai.history`, and the
+    download count in Titan's own repository).
+    """
+
+    def setUp(self):
+        from titanEnhancements import titan
+        from titanEnhancements.link import LINK
+        self.titan = titan
+        self.answers = {}
+        self._bridge = LINK.bridge
+        LINK.bridge = lambda call, timeout=None, **args: self.answers.get(
+            call, (False, 'nothing said'))
+        self.addCleanup(lambda: setattr(LINK, 'bridge', self._bridge))
+
+    def test_buffers_are_read_as_CATEGORIES(self):
+        """Titan answers `categories`, each carrying its own buffers -
+        measured, not assumed. Reading `buffers` gets an empty list from a
+        Titan that is working perfectly."""
+        self.answers['buffers.list'] = (True, {'categories': [{'id': 'tts'}]})
+        ok, rows = self.titan.buffers()
+        self.assertTrue(ok)
+        self.assertEqual(rows, [{'id': 'tts'}])
+
+    def test_the_status_bar_is_a_LIST_of_applets(self):
+        """The clock, the battery, the volume, the network - not one
+        string. Reading it as one makes the whole bar one unreadable
+        line."""
+        self.answers['statusbar.read'] = (
+            True, {'items': [{'key': 'time', 'text': 'Zegar: 14:49'},
+                             {'key': 'battery', 'text': '100%'}]})
+        ok, rows = self.titan.statusbar()
+        self.assertTrue(ok)
+        self.assertEqual(len(rows), 2)
+
+    def test_speaking_answers_the_WORD_no(self):
+        """Titan says "no", and `bool('no')` is True - so a caller reading
+        it as a boolean is told Titan is speaking for ever."""
+        self.answers['speech.speaking'] = (True, {'speaking': 'no'})
+        ok, speaking = self.titan.speaking()
+        self.assertTrue(ok)
+        self.assertIs(speaking, False)
+
+    def test_speaking_still_answers_a_real_boolean(self):
+        self.answers['speech.speaking'] = (True, {'speaking': True})
+        self.assertIs(self.titan.speaking()[1], True)
+
+    def test_a_refusal_is_carried_through_as_titans_own_sentence(self):
+        """In the user's own language, naming the one thing that changes
+        the answer - which a translation of ours would not."""
+        self.answers['apps.list'] = (False, 'Titan nie zezwolil na to')
+        ok, said = self.titan.applications()
+        self.assertFalse(ok)
+        self.assertEqual(said, 'Titan nie zezwolil na to')
+
+    def test_an_answer_that_is_not_a_list_is_refused_rather_than_empty(self):
+        self.answers['apps.list'] = (True, {'nothing': 1})
+        ok, said = self.titan.applications()
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_a_setting_is_set_by_ITEM_not_by_id(self):
+        """Read out of Titan's own `bridge_api._settings_set`. A nearly
+        right argument name is the bug this bridge keeps producing, and it
+        fails as "nothing happened"."""
+        asked = {}
+
+        def bridge(call, timeout=None, **args):
+            asked.update(args)
+            asked['call'] = call
+            return True, {}
+        from titanEnhancements.link import LINK
+        LINK.bridge = bridge
+        self.titan.set_setting('sound_theme', 'default')
+        self.assertEqual(asked.get('item'), 'sound_theme')
+        self.assertNotIn('id', asked)
+
+    def test_a_sound_is_played_by_NAME_with_a_pan(self):
+        asked = {}
+
+        def bridge(call, timeout=None, **args):
+            asked.update(args)
+            return True, {}
+        from titanEnhancements.link import LINK
+        LINK.bridge = bridge
+        self.titan.play('done.ogg', pan=-1)
+        self.assertEqual(asked.get('name'), 'done.ogg')
+        self.assertEqual(asked.get('pan'), -1)
+
+
+class ATitanApplicationAsAVirtualWindow(unittest.TestCase):
+    """`appReview.py` - the terminal review's idea, applied to an interface.
+
+    What the arrows walk here is not text read off a screen: it is the
+    application's own account of itself, so Enter presses the real control.
+    """
+
+    SCREEN = {
+        'id': 1, 'kind': 'window', 'title': 'Notes',
+        'controls': [
+            {'id': 1, 'kind': 'label', 'label': 'Your notes'},
+            {'id': 2, 'kind': 'list', 'label': 'Notes',
+             'items': ['Shopping', 'Ideas'], 'index': 0},
+            {'id': 3, 'kind': 'check', 'label': 'Read it back',
+             'value': False},
+            {'id': 4, 'kind': 'button', 'label': 'New note'},
+        ],
+        'menus': [],
+    }
+
+    def setUp(self):
+        from titanEnhancements import appReview
+        self.review = appReview
+        self.said = []
+        self._say = appReview._say
+        appReview._say = lambda text, interrupt=True: self.said.append(
+            str(text))
+        self._parts = appReview._say_parts
+        appReview._say_parts = lambda parts: self.said.append(
+            ', '.join(str(text) for text, _voice in parts))
+        appReview._state.update({'on': True, 'session': 'abc',
+                                 'name': 'Notes', 'screen': self.SCREEN,
+                                 'at': 0, 'inner': 0})
+        self.addCleanup(lambda: appReview._state.update(
+            {'on': False, 'session': '', 'screen': {}, 'at': 0, 'inner': 0}))
+        self.addCleanup(lambda: setattr(appReview, '_say', self._say))
+        self.addCleanup(lambda: setattr(appReview, '_say_parts', self._parts))
+
+    def test_up_and_down_walk_the_controls(self):
+        self.review.move(1)
+        self.assertEqual(self.review.here()['id'], 2)
+        self.review.move(1)
+        self.assertEqual(self.review.here()['id'], 3)
+        self.review.move(-1)
+        self.assertEqual(self.review.here()['id'], 2)
+
+    def test_it_stops_at_the_ends_rather_than_wrapping(self):
+        """A cursor that wraps is one nobody can tell has reached the end,
+        which for somebody working by ear is the list having no shape."""
+        self.review.move(-1)
+        self.assertEqual(self.review.here()['id'], 1)
+        self.review.move_end(True)
+        self.review.move(1)
+        self.assertEqual(self.review.here()['id'], 4)
+
+    def test_left_and_right_walk_what_is_INSIDE_a_control(self):
+        """The same relationship as the OCR review's lines and words, one
+        level up."""
+        self.review.move(1)
+        sent = []
+        self.review._send_inside = lambda control, index: sent.append(index)
+        _ok, said = self.review.move_inside(1)
+        self.assertEqual(said, 'Ideas')
+
+    def test_a_control_with_nothing_inside_says_itself_rather_than_moving(self):
+        self.review.move_end(True)
+        ok, _said = self.review.move_inside(1)
+        self.assertTrue(ok)
+        self.assertEqual(self.review.here()['id'], 4)
+
+    def test_a_control_is_read_in_the_users_own_voice_classes(self):
+        """The label as a name, what it IS a little lower - so a described
+        application is read like everything else this add-on reads."""
+        parts = self.review.parts_of(self.SCREEN['controls'][3], at=3,
+                                     count=4)
+        self.assertIn(('New note', 'name'), parts)
+        kinds = [voice for _text, voice in parts]
+        self.assertIn('kind', kinds)
+        self.assertIn('place', kinds)
+
+    def test_a_tick_box_says_its_state(self):
+        parts = self.review.parts_of(self.SCREEN['controls'][2])
+        self.assertIn('state', [voice for _text, voice in parts])
+
+    def test_a_table_row_of_cells_is_not_read_as_a_python_list(self):
+        """A table's row is a list of cells and a list's row is a string.
+        A renderer that assumed one would say "['a', 'b']" out loud."""
+        self.assertEqual(self.review.row_text(['Shopping', '12 KB']),
+                         'Shopping, 12 KB')
+        self.assertEqual(self.review.row_text({'text': 'Ideas'}), 'Ideas')
+
+    def test_leaving_does_not_close_the_application(self):
+        """A key that both leaves and quits is a key nobody can use
+        safely."""
+        closed = []
+        from titanEnhancements import titan
+        was = titan.close_described
+        titan.close_described = lambda session: closed.append(session)
+        try:
+            self.review.stop()
+            self.assertEqual(closed, [])
+        finally:
+            titan.close_described = was
+
+
+class TheScreenChangedIsWhatTheControlsHOLD(unittest.TestCase):
+    """The rule the Elten renderer had to learn twice, pinned here.
+
+    Rebuilding on the index makes every arrow key take the keyboard away;
+    comparing the control just set makes a typed word come out backwards.
+    """
+
+    def setUp(self):
+        from titanEnhancements import appScreen
+        self.appScreen = appScreen
+
+    def _screen(self, **rest):
+        control = {'id': 1, 'kind': 'list', 'label': 'Notes',
+                   'items': ['a', 'b'], 'index': 0}
+        control.update(rest)
+        return {'title': 'Notes', 'kind': 'window', 'controls': [control]}
+
+    def test_the_cursor_moving_is_not_the_screen_changing(self):
+        before = self.appScreen.fingerprint(self._screen(index=0))
+        after = self.appScreen.fingerprint(self._screen(index=1))
+        self.assertEqual(before, after)
+
+    def test_what_a_control_holds_IS_the_screen_changing(self):
+        before = self.appScreen.fingerprint(self._screen())
+        after = self.appScreen.fingerprint(self._screen(items=['a', 'b', 'c']))
+        self.assertNotEqual(before, after)
+
+    def test_the_control_just_set_is_left_out_of_both_sides(self):
+        """Or the form is rebuilt on every keystroke and a typed word comes
+        out backwards, because a rebuilt field starts with its caret at the
+        beginning."""
+        before = self.appScreen.fingerprint(
+            self._screen(kind='text', value='ab'), ignore=1)
+        after = self.appScreen.fingerprint(
+            self._screen(kind='text', value='abc'), ignore=1)
+        self.assertEqual(before, after)
+
+
+class TheAuditoryIcons(unittest.TestCase):
+    """Emacspeak's oldest idea: a sound that says WHAT happened.
+
+    They are the add-on's own files played through NVDA's own audio, so an
+    icon sounds with no Titan running and no sound theme chosen.
+    """
+
+    def setUp(self):
+        from titanEnhancements import icons
+        self.icons = icons
+        self.dir = tempfile.mkdtemp()
+        self._path = icons.path
+        icons.path = lambda: os.path.join(self.dir, 'icons.json')
+        icons.forget()
+        self.addCleanup(icons.forget)
+        self.addCleanup(lambda: setattr(icons, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def test_every_name_it_knows_really_has_a_sound(self):
+        """A name with no file is silence, and silence is what a broken
+        icon sounds like - so the ones it ships are checked."""
+        missing = [name for name in self.icons.NAMES
+                   if not os.path.isfile(
+                       os.path.join(self.icons.OURS, name + '.wav'))]
+        self.assertEqual(missing, [], 'no sound for: %s' % missing)
+
+    def test_the_names_are_emacspeaks_own(self):
+        """So somebody who has used Emacspeak already knows what they mean,
+        and a theme written for one could be dropped in for the other."""
+        for name in ('select-object', 'open-object', 'close-object',
+                     'task-done', 'warn-user', 'item', 'button', 'on', 'off'):
+            self.assertIn(name, self.icons.NAMES, name)
+
+    def test_every_icon_says_what_it_marks(self):
+        """A row nobody can have an opinion about is a row that cannot be
+        set."""
+        for name in self.icons.NAMES:
+            self.assertTrue(self.icons.meanings().get(name), name)
+
+    def test_one_can_be_turned_off_and_stays_off(self):
+        self.icons.set_wanted('item', False)
+        self.icons.forget()
+        self.assertFalse(self.icons.wanted('item'))
+        self.icons.set_wanted('item', True)
+        self.assertTrue(self.icons.wanted('item'))
+
+    def test_a_name_that_could_escape_the_folder_is_refused(self):
+        """It is a file name from a store, and a store is a file on disk."""
+        for name in ('../secret', 'a/b', '..\\thing', '.hidden'):
+            self.assertEqual(self.icons.path_of(name), '', name)
+
+    def test_every_kind_of_control_has_an_icon(self):
+        from titanEnhancements import appReview
+        for kind in ('button', 'check', 'list', 'text', 'gauge', 'label'):
+            self.assertIn(self.icons.for_control(kind), self.icons.NAMES,
+                          kind)
+
+    def test_an_unknown_kind_still_gets_one(self):
+        """A control kind added later is heard, not silent."""
+        self.assertIn(self.icons.for_control('something-new'),
+                      self.icons.NAMES)
+
+
+class TheNamedVoices(unittest.TestCase):
+    """Emacspeak's voice overlays: a name instead of four numbers."""
+
+    def setUp(self):
+        from titanEnhancements import personalities
+        self.personalities = personalities
+
+    def test_every_overlay_says_what_it_is_for(self):
+        for name in self.personalities.NAMES:
+            self.assertTrue(self.personalities.meanings().get(name), name)
+
+    def test_putting_one_on_leaves_what_it_does_not_name(self):
+        """So an overlay composes with what somebody already set rather
+        than wiping it."""
+        made = self.personalities.put_on({'volume': 5}, 'monotone-medium')
+        self.assertEqual(made['volume'], 5)
+        self.assertEqual(made['inflection'], -4)
+
+    def test_plain_really_means_the_readers_own_voice(self):
+        made = self.personalities.put_on(
+            {'pitch': 4, 'rate': 2, 'volume': 1, 'inflection': 3}, 'plain')
+        self.assertEqual(made, {})
+
+    def test_what_a_class_is_wearing_is_read_off_the_dials(self):
+        """Not remembered - a class whose numbers were edited by hand is
+        honestly reported as wearing none."""
+        self.assertEqual(self.personalities.matching(
+            self.personalities.dials_of('bolden')), 'bolden')
+        self.assertEqual(self.personalities.matching({'pitch': 7}), '')
+
+    def test_a_dial_is_never_pushed_past_what_a_class_takes(self):
+        from titanEnhancements import classes
+        for name in self.personalities.NAMES:
+            for dial, value in self.personalities.put_on({}, name).items():
+                self.assertLessEqual(abs(int(value)), classes.LIMIT,
+                                     '%s %s' % (name, dial))
+
+
+class TheThirdReviewUsesTheSameKeys(unittest.TestCase):
+    """One set of keys, not three.
+
+    The terminal review, the recognised screen and a Titan application are
+    three different things walked the same way on purpose: a user should
+    learn Up, Down, Left, Right, Home, End, Enter, F5 and Escape once.
+    """
+
+    def test_the_application_review_borrows_the_reviews_own_keys(self):
+        plugin = _plugin_class()
+        for gesture in plugin.OCR_KEYS:
+            self.assertIn(gesture, plugin.APP_KEYS,
+                          '%s is not in the application review' % gesture)
+
+    def test_every_borrowed_key_names_a_script_that_exists(self):
+        plugin = _plugin_class()
+        for gesture, name in plugin.APP_KEYS.items():
+            self.assertTrue(hasattr(plugin, 'script_' + name),
+                            '%s -> %s, which is not there' % (gesture, name))
+
+    def test_the_keys_are_given_back(self):
+        """A binding that outlived its review would swallow the user's
+        arrow keys in whatever they moved to."""
+        source = _source_of('__init__.py')
+        self.assertIn('_borrow_app_keys', source)
+        self.assertIn('removeGestureBinding', source)
+
+
+class AnyWindowAsAVirtualWindow(unittest.TestCase):
+    """`virtualWindow.py` - the fourth thing walked with the same keys.
+
+    The terminal review's shape applied to the accessibility tree, so
+    Emacspeak's voice classes and its auditory icons reach every program
+    on the machine - as a MODE, which is the honest way: NVDA's own
+    reporting is untouched the moment it is off.
+    """
+
+    class Obj:
+        def __init__(self, name='', role='BUTTON', value='',
+                     children=(), actions=(), location=(0, 0, 40, 20)):
+            self.name = name
+            self.value = value
+            self.description = ''
+            self.role = types.SimpleNamespace(name=role)
+            self.children = list(children)
+            self.location = types.SimpleNamespace(
+                left=location[0], top=location[1],
+                width=location[2], height=location[3])
+            self._actions = list(actions)
+            self.done = []
+            self.states = set()
+
+        @property
+        def actionCount(self):
+            return len(self._actions)
+
+        def getActionName(self, index):
+            return self._actions[index]
+
+        def doAction(self, index):
+            self.done.append(index)
+
+    def setUp(self):
+        from titanEnhancements import virtualWindow
+        self.vw = virtualWindow
+        self.said = []
+        self._say = virtualWindow._say
+        self._parts = virtualWindow._say_parts
+        virtualWindow._say = lambda text: self.said.append(str(text))
+        virtualWindow._say_parts = lambda parts: self.said.append(
+            ', '.join(str(text) for text, _voice in parts))
+        self.addCleanup(lambda: setattr(virtualWindow, '_say', self._say))
+        self.addCleanup(
+            lambda: setattr(virtualWindow, '_say_parts', self._parts))
+        self.addCleanup(lambda: virtualWindow._state.update(
+            {'on': False, 'nodes': [], 'at': 0, 'inner': 0}))
+
+    def _window(self):
+        return self.Obj(name='A window', role='WINDOW', children=[
+            self.Obj(name='Toolbar', role='TOOLBAR'),
+            self.Obj(name='Save', role='BUTTON', actions=['Press']),
+            self.Obj(name='Read it back', role='CHECKBOX'),
+            self.Obj(name='Notes', role='LIST', children=[
+                self.Obj(name='Shopping', role='LISTITEM'),
+                self.Obj(name='Ideas', role='LISTITEM'),
+            ]),
+            self.Obj(name='', role='PANE'),
+        ])
+
+    def _up(self):
+        nodes = self.vw.nodes_of(self._window())
+        self.vw._state.update({'on': True, 'nodes': nodes, 'at': 0,
+                               'inner': 0})
+        return nodes
+
+    def test_the_frame_around_a_window_is_not_the_window(self):
+        """Read as it comes, a window answers with its own scrollbars and
+        title bar before a word of its content - the mistake Titan's own
+        mirror documents."""
+        nodes = self.vw.nodes_of(self._window())
+        roles = [node['role'] for node in nodes]
+        self.assertNotIn('WINDOW', roles)
+        self.assertNotIn('PANE', roles)
+
+    def test_a_control_with_nothing_to_call_it_is_left_out(self):
+        """A blank row is one somebody arrows onto and is told nothing
+        about, which is worse than a shorter list."""
+        nodes = self.vw.nodes_of(self._window())
+        self.assertTrue(all(node['name'] or node['value'] for node in nodes))
+
+    def test_it_is_breadth_first_so_a_dialogs_own_controls_come_first(self):
+        """A depth-first walk spends the whole budget in the first branch
+        it falls into - which is how a review of a browser becomes a
+        review of its toolbar."""
+        nodes = self.vw.nodes_of(self._window())
+        names = [node['name'] for node in nodes]
+        self.assertLess(names.index('Save'), names.index('Shopping'))
+
+    def test_the_arrows_walk_it(self):
+        self._up()
+        self.vw.move(1)
+        self.assertEqual(self.vw.here()['name'], 'Save')
+
+    def test_quick_navigation_jumps_by_kind(self):
+        """b for a button, x for a check box, i for a row - NVDA's own
+        browse-mode letters, because a second set for the same job is a
+        second thing to learn for nothing."""
+        self._up()
+        ok, _said = self.vw.jump('x')
+        self.assertTrue(ok)
+        self.assertEqual(self.vw.here()['role'], 'CHECKBOX')
+        ok, _said = self.vw.jump('i')
+        self.assertTrue(ok)
+        self.assertEqual(self.vw.here()['name'], 'Shopping')
+        ok, _said = self.vw.jump('b', back=True)
+        self.assertTrue(ok)
+        self.assertEqual(self.vw.here()['name'], 'Save')
+
+    def test_a_letter_that_finds_nothing_SAYS_so(self):
+        """A letter that silently left the cursor where it was is
+        indistinguishable from a key that is not bound."""
+        self._up()
+        ok, said = self.vw.jump('k')
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_every_letter_says_what_it_jumps_to(self):
+        for letter in self.vw.QUICK:
+            self.assertTrue(self.vw.quick_names().get(letter), letter)
+
+    def test_enter_does_what_the_control_says_it_can_do(self):
+        """Its OWN verb from the accessibility layer, never a synthesised
+        click - a control that offers one is pressed, not clicked at."""
+        nodes = self._up()
+        at = [index for index, node in enumerate(nodes)
+              if node['name'] == 'Save'][0]
+        self.vw._state['at'] = at
+        ok, said = self.vw.activate()
+        self.assertTrue(ok)
+        self.assertEqual(nodes[at]['obj'].done, [0])
+        self.assertEqual(said, 'Press')
+
+    def test_a_control_is_read_in_the_users_own_voice_classes(self):
+        nodes = self._up()
+        parts = self.vw.parts_of(nodes[0], at=0, count=len(nodes))
+        self.assertEqual(parts[0][1], 'name')
+        self.assertIn('place', [voice for _text, voice in parts])
+
+    def test_it_ends_when_the_window_has_gone(self):
+        """A review that outlived its window would swallow the arrow keys
+        in whatever the user moved to."""
+        self._up()
+        self.vw._state['hwnd'] = 111
+        self.vw._foreground = lambda: types.SimpleNamespace(windowHandle=222)
+        try:
+            self.assertTrue(self.vw.left_the_window())
+            self.assertFalse(self.vw.reviewing())
+        finally:
+            del self.vw._foreground
+
+
+class InstallingNeverLeavesHalfAScreenReader(unittest.TestCase):
+    """The installer used to empty the folder and then copy into it.
+
+    Shipping sound files broke that: NVDA holds a `.wav` open the moment
+    it has played one, so the delete failed AFTER the folder had been
+    emptied, and what was on disk was a half-installed screen reader -
+    measured, 21 of 29 auditory icons gone. Writing over instead means a
+    file that cannot be replaced keeps its previous version, which is one
+    file behind and a working reader.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+        self.installer = os.path.join(os.path.dirname(HERE), 'install.py')
+        if not os.path.isfile(self.installer):
+            self.skipTest('install.py is not beside the tests')
+
+    def _install(self):
+        import subprocess
+        return subprocess.run([sys.executable, self.installer, '--to',
+                               self.dir], capture_output=True, text=True,
+                              cwd=os.path.dirname(self.installer))
+
+    def test_a_file_that_cannot_be_written_costs_only_that_file(self):
+        import stat
+        first = self._install()
+        if not os.path.isdir(os.path.join(self.dir, 'globalPlugins')):
+            self.skipTest('the add-on could not be built here: %s'
+                          % first.stdout[-200:])
+        sounds = os.path.join(self.dir, 'globalPlugins', 'titanEnhancements',
+                              'sounds')
+        victim = os.path.join(sounds, 'button.wav')
+        with io.open(victim, 'wb') as handle:
+            handle.write(b'OLD VERSION')
+        os.chmod(victim, stat.S_IREAD)
+        try:
+            again = self._install()
+        finally:
+            os.chmod(victim, stat.S_IWRITE)
+        # Everything else is really there, which is the whole point.
+        self.assertGreater(sum(len(names) for _b, _d, names
+                               in os.walk(self.dir)), 100)
+        self.assertEqual(len(os.listdir(sounds)), 29)
+        with io.open(victim, 'rb') as handle:
+            self.assertEqual(handle.read(), b'OLD VERSION')
+        # And the user is told which file, rather than being left to find
+        # out from a reader that has gone quiet.
+        self.assertIn('button.wav', again.stdout)
+
+    def test_the_installer_does_not_empty_the_folder_any_more(self):
+        with io.open(self.installer, encoding='utf-8') as handle:
+            source = handle.read()
+        self.assertNotIn('def _empty(', source)
+        self.assertIn('_write_over', source)
+
+
+class AllOfTitanIsAMEASUREMENT(unittest.TestCase):
+    """"All of Titan" is a claim, so it is counted rather than asserted.
+
+    The live check (`selftest._titan_map`) asks Titan what its bridge
+    serves and sweeps this add-on for every one of those names. It has to
+    go red when one is missing, or passing proves nothing - and it has to
+    sweep the WHOLE add-on, because reading one module reported 49 of 58
+    while nothing at all was missing, which is a measurement that invites
+    work on a gap that is not there.
+    """
+
+    def setUp(self):
+        from titanEnhancements import selftest
+        self.selftest = selftest
+
+    def test_the_sweep_finds_a_call_that_is_really_asked_for(self):
+        asked = self.selftest._asked_for()
+        for call in ('apps.list', 'settings.set', 'app.open', 'speech.say',
+                     'notifications.add', 'client.report', 'app.log',
+                     'ai.available', 'widgets.read', 'menu.run'):
+            self.assertIn(call, asked, call)
+
+    def test_the_sweep_does_not_invent_one(self):
+        self.assertNotIn('nonsense.call', self.selftest._asked_for())
+
+    def test_it_goes_red_when_something_is_unreached(self):
+        """Proved by making Titan claim a call nobody asks for."""
+        from titanEnhancements.link import LINK
+        was = LINK.bridge
+        LINK.bridge = lambda call, timeout=None, **args: (
+            True, {'calls': ['apps.list', 'nobody.asks']})
+        connected = LINK.connected
+        LINK.connected = lambda: True
+        try:
+            ok, said = self.selftest._titan_map()
+        finally:
+            LINK.bridge = was
+            LINK.connected = connected
+        self.assertFalse(ok)
+        self.assertIn('nobody.asks', said)
+
+    def test_nothing_is_exempt_any_more(self):
+        """The exemption list used to hold most of Titan. It is empty, and
+        a name put back must carry the reason beside it - which is what
+        this test is for: it fails on a silent re-exemption."""
+        self.assertEqual(EverySubsystemTitanHasIsReachable.NOT_OURS, set())
+
+
+class ALetterIsTheLetterWhenYouAreTyping(unittest.TestCase):
+    """The one guard quick navigation cannot do without.
+
+    The virtual window turns itself on in a program the user chose, and a
+    bare `b` would then be a command rather than the letter b. Browse mode
+    has exactly this problem and answers it exactly this way.
+    """
+
+    def setUp(self):
+        from titanEnhancements import virtualWindow
+        self.vw = virtualWindow
+
+    def _focus_is(self, role, states=()):
+        module = types.ModuleType('api')
+        module.getFocusObject = lambda: types.SimpleNamespace(
+            role=types.SimpleNamespace(name=role), states=set(states))
+        had = sys.modules.get('api')
+
+        def put_back():
+            if had is None:
+                sys.modules.pop('api', None)
+            else:
+                sys.modules['api'] = had
+        sys.modules['api'] = module
+        self.addCleanup(put_back)
+
+    def test_a_field_keeps_its_letters(self):
+        self._focus_is('EDITABLETEXT')
+        self.assertTrue(self.vw.typing_now())
+
+    def test_a_terminal_and_a_document_keep_theirs_too(self):
+        for role in ('TERMINAL', 'DOCUMENT', 'PASSWORDEDIT', 'COMBOBOX'):
+            self._focus_is(role)
+            self.assertTrue(self.vw.typing_now(), role)
+
+    def test_a_button_does_not(self):
+        self._focus_is('BUTTON')
+        self.assertFalse(self.vw.typing_now())
+
+    def test_the_key_handler_asks_before_it_takes_the_letter(self):
+        source = _source_of('__init__.py')
+        block = source.split('def _quick', 1)[1][:600]
+        self.assertIn('typing_now()', block)
+        self.assertIn('gesture.send()', block)
+
+
+class OnlyOneReviewAtATime(unittest.TestCase):
+    """Four reviews share one set of arrow keys, so only one may be up.
+
+    NVDA binds a gesture to one script per plugin: two at once means the
+    second one's bindings replaced the first's, and the first is then a
+    review that is still running, still says so, and answers no key. That
+    does not look like a bug from outside - it looks like the arrows
+    breaking.
+    """
+
+    def test_starting_one_ends_the_others(self):
+        from titanEnhancements import reviews
+        from titanEnhancements import virtualWindow
+        ended = []
+
+        class Fake:
+            def __init__(self, name):
+                self.name = name
+
+            def reviewing(self):
+                return True
+
+            def stop(self):
+                ended.append(self.name)
+                return False, ''
+        import sys
+        held = {}
+        for name in ('terminal', 'ocrReview', 'appReview'):
+            full = 'titanEnhancements.' + name
+            held[full] = sys.modules.get(full)
+            sys.modules[full] = Fake(name)
+        try:
+            reviews.stop_others('virtualWindow')
+        finally:
+            for full, was in held.items():
+                if was is None:
+                    sys.modules.pop(full, None)
+                else:
+                    sys.modules[full] = was
+        self.assertEqual(sorted(ended),
+                         ['appReview', 'ocrReview', 'terminal'])
+
+    def test_every_review_asks_before_it_starts(self):
+        """Read out of the source, so a fifth review added later without
+        asking fails here rather than silently stealing the keys."""
+        for name in ('terminal.py', 'ocrReview.py', 'appReview.py',
+                     'virtualWindow.py'):
+            self.assertIn('reviews.stop_others', _source_of(name), name)
+
+    def test_they_all_answer_the_same_two_questions(self):
+        """`reviewing()` and `stop()`, or the one place that ends them
+        cannot end them."""
+        import importlib
+        for name in ('terminal', 'ocrReview', 'appReview', 'virtualWindow'):
+            module = importlib.import_module('titanEnhancements.' + name)
+            self.assertTrue(callable(getattr(module, 'reviewing', None)), name)
+            self.assertTrue(callable(getattr(module, 'stop', None)), name)
+
+
+class OneReviewKeyDecidedByWhereYouAre(unittest.TestCase):
+    """Numpad minus reviews the terminal in a terminal and the window
+    everywhere else.
+
+    The contextual half the user asked for: one key, and what it reviews
+    is worked out rather than remembered.
+    """
+
+    def test_the_key_asks_whether_this_is_a_terminal(self):
+        source = _source_of('__init__.py')
+        block = source.split('def script_terminalReview', 1)[1][:1400]
+        self.assertIn('terminal.is_terminal()', block)
+        self.assertIn('virtualWindow.toggle()', block)
+
+    def test_the_virtual_window_is_remembered_per_program(self):
+        source = _source_of('virtualWindow.py')
+        self.assertIn('perProgram.set_value', source)
+        self.assertIn('def consider', source)
+
+
+def _plugin_class():
+    import titanEnhancements
+    return titanEnhancements.GlobalPlugin
+
+
+def _source_of(name):
+    where = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements', name)
+    return io.open(where, encoding='utf-8').read()
 
 
 if __name__ == "__main__":

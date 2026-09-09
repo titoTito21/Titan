@@ -35,6 +35,17 @@ from . import compat
 from . import context
 
 #: Titan Access's own pitches (`titan_access/accessible.py`).
+#: **These are the DEFAULTS of the classes, not what a reading is built
+#: with.** Every part of a control's reading is tagged with the NAME of its
+#: semantic class - name, kind, state - so that the voice table is asked
+#: for it.
+#:
+#: It used to be tagged with these numbers, and that is exactly why nothing
+#: the user set for the control type ever did anything: a NUMBER is answered
+#: with a bare pitch and the table is never looked at. A rate, a voice, a
+#: variant, a synthesizer - all of it was written down, shown in the dialog
+#: and thrown away at the one moment it mattered. The dials only ever
+#: appeared to work because these numbers are what the classes default to.
 NAME_PITCH = 0
 ROLE_PITCH = -4
 STATE_PITCH = 4
@@ -110,24 +121,69 @@ def _unavailable(obj):
 
 
 def _states_of(obj):
-    """The states worth saying, in Titan Access's order, in NVDA's words."""
+    """The states worth saying, in Titan Access's order, in NVDA's words.
+
+    **A state the user has given a SOUND is played rather than said.** That
+    is the sound scheme (:mod:`schemes`), and it is applied here because
+    here is the one place a control's states are turned into words - so
+    there is no second list of states to keep in step, and a state nobody
+    has touched goes through exactly as it always did.
+    """
     try:
         present = set(obj.states or ())
     except Exception:                                # noqa: BLE001
         present = set()
-    words = []
+    # Kept in lockstep - the state's own NAME beside the words NVDA gives
+    # it - because a state can be more than one word and matching two lists
+    # by position afterwards is how the wrong word gets dropped.
+    said = []
     for name in STATE_ORDER:
         state = _state(name)
-        if state is not None and state in present:
-            words.extend(context.state_names([state]))
+        if state is None or state not in present:
+            continue
+        for word in context.state_names([state]):
+            if word:
+                said.append((name, word))
     if _role_is(obj, *_CHECKABLE):
         checked = _state('CHECKED')
         half = _state('HALFCHECKED')
         if (checked is None or checked not in present) \
-                and (half is None or half not in present):
-            words.extend(context.state_names([_state('UNCHECKED')])
-                         if _state('UNCHECKED') is not None else [])
-    return [word for word in words if word]
+                and (half is None or half not in present) \
+                and _state('UNCHECKED') is not None:
+            for word in context.state_names([_state('UNCHECKED')]):
+                if word:
+                    said.append(('UNCHECKED', word))
+    return _sounded(said)
+
+
+def _sounded(said):
+    """Swap the states the scheme answers with a sound, and play them.
+
+    ``said`` is ``[(state name, word)]``. What comes back is the words that
+    are still to be spoken - which for a scheme nobody has touched is all of
+    them, unchanged and in the same order.
+    """
+    if not said:
+        return []
+    words = [word for _name, word in said]
+    try:
+        from . import schemes
+        keep, sounds = schemes.answer([name for name, _word in said])
+    except Exception:                                # noqa: BLE001
+        return words
+    if not sounds:
+        return words
+    kept = list(keep)
+    out = []
+    for name, word in said:
+        if name in kept:
+            kept.remove(name)            # one word per state answered
+            out.append(word)
+    try:
+        schemes.play(sounds)
+    except Exception:                                # noqa: BLE001
+        pass
+    return out
 
 
 def _position_of(obj):
@@ -226,7 +282,7 @@ def describe(obj):
             # with the VOICE: a control that cannot be used is heard as
             # unusable before the word arrives, and in a menu of twenty
             # items that is twenty times the word is not needed.
-            return [(name, 'disabled' if _unavailable(obj) else NAME_PITCH)] \
+            return [(name, 'disabled' if _unavailable(obj) else 'name')] \
                 if name else []
 
         def _the_kind():
@@ -243,10 +299,10 @@ def describe(obj):
                 role = tce.role_word(obj, _application, role)
             except Exception:                        # noqa: BLE001
                 pass
-            return [(role, ROLE_PITCH)] if role else []
+            return [(role, 'kind')] if role else []
 
         def _the_state():
-            return [(state, STATE_PITCH) for state in _states_of(obj)]
+            return [(state, 'state') for state in _states_of(obj)]
 
         def _the_value():
             try:
@@ -256,14 +312,14 @@ def describe(obj):
             # NVDA folds a control's value into what it reads as the name
             # for some controls, and saying it twice is worse than not
             # saying it at all.
-            return [(value, NAME_PITCH)] if value and value != name else []
+            return [(value, 'value')] if value and value != name else []
 
         def _the_description():
             try:
                 described = str(obj.description or '').strip()
             except Exception:                        # noqa: BLE001
                 return []
-            return [(described, NAME_PITCH)] if described and \
+            return [(described, 'description')] if described and \
                 described != name else []
 
         def _the_place():
@@ -285,7 +341,7 @@ def describe(obj):
             # be read as silence - which is a reader that has stopped
             # working, not a reader obeying a preference.
             segments = made.get('kind') or _the_kind()
-            segments = [(text, NAME_PITCH) for text, _pitch in segments]
+            segments = [(text, 'kind') for text, _voice in segments]
         return segments
     except Exception:                                # noqa: BLE001
         return []

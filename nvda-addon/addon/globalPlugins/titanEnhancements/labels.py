@@ -269,3 +269,42 @@ def needs_one(obj):
             continue
     key, _strong = key_of(obj)
     return bool(key)
+
+
+def applies(obj, module=None):
+    """``(label, source)`` - the name to READ for this control, or ``('', '')``.
+
+    **The one place that decides whether a stored name is used**, and it is
+    one place because it was two rules in one function and one of them was
+    wrong: `_label_reading` began by asking :func:`needs_one`, which answers
+    False for anything that has a name, a value or a description of its
+    own - so renaming a control that HAD a name stored the name, said "this
+    control is now called X", and read the old one for ever.
+
+    The two rules are different and now say so:
+
+    * A name the **user typed** applies whatever the control is called. They
+      renamed it on purpose; a reader that then read the old name is a
+      reader that ignored them.
+    * A name **nobody asked for** - a reader module's, or one worked out
+      from a picture - is only for a control with nothing to say for
+      itself. A control the program named is not improved by a guess at it.
+    """
+    if obj is None:
+        return '', ''
+    label, source = described(obj)
+    if label and source == 'user':
+        return label, source
+    if not needs_one(obj):
+        return '', ''
+    if label:
+        return label, source
+    if module is not None:
+        try:
+            key, _strong = key_of(obj)
+            found = module.label_for(key)
+            if found:
+                return found, 'module'
+        except Exception:                            # noqa: BLE001
+            pass
+    return '', ''

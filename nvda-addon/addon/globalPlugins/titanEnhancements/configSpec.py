@@ -108,6 +108,21 @@ SPEC = {
     # Unity game's menu - read as a picture, and watched so the highlight
     # moving is announced. OFF, and for the same reason as autoLabel.
     'surfaceReading': 'boolean(default=False)',
+    # **Which recogniser reads a window that shows a reader nothing.**
+    # Windows has one built in and NVDA already wraps it: local, free, about
+    # a tenth of a second, and nothing leaves the machine. Titan's AI OCR
+    # understands what it reads - which of these is a button, what is
+    # highlighted - and every reading is a picture of the user's screen sent
+    # to a provider.
+    #
+    # Local by default, and that is the same rule as everywhere else here: a
+    # thing that spends somebody's money and privacy is opted INTO. 'both'
+    # asks the AI first and falls back to Windows when it cannot.
+    'ocrTier': "option('local', 'ai', 'both', default='local')",
+    # Which language Windows' own recogniser reads in. Empty means whatever
+    # Windows is set to, which is right until somebody is reading a program
+    # in another language.
+    'localOcrLanguage': "string(default='')",
     # The hourglass, and a window whose taskbar button is flashing. Two
     # things a sighted person gets without looking at anything, and that no
     # reader says.
@@ -120,6 +135,49 @@ SPEC = {
     # every contact on the pad, and a user who has not asked for gestures
     # should not have them.
     'trackpad': 'boolean(default=False)',
+    # Whether an utterance is coloured by WHERE IT CAME FROM - keyboard
+    # echo, a word being spelled, a message, what another program said
+    # through the controller. On: it costs nothing when no class has been
+    # given a voice, and it is the thing that makes a voice table about
+    # more than controls.
+    'speechOrigins': 'boolean(default=True)',
+    # The areas the user has marked to be watched (JAWS calls them Frames).
+    # On: it costs nothing at all until somebody marks one, and a monitor
+    # somebody made and cannot hear is worse than not having them.
+    'monitors': 'boolean(default=True)',
+    # **Emacspeak's auditory icons.** A sound under a quarter of a second
+    # that says WHAT happened before a word of it is spoken - on a button,
+    # something opened, that was refused. They ship on, unlike the cursor
+    # earcons above, and the difference is real: a cursor cue plays on
+    # every control the focus reaches all day in every program, while an
+    # icon here is played by this add-on's own surfaces - the reviews, the
+    # Titan window - which the user opened deliberately.
+    'auditoryIcons': 'boolean(default=True)',
+    # The same icons on every control in every program, not only in this
+    # add-on's own windows. It ships ON where `pitchedEverywhere` and
+    # `earcons` ship off, and the difference is a real one rather than a
+    # preference: an icon is ADDITIVE - it never replaces, delays or
+    # shortens a word NVDA was going to say - where those two stand in for
+    # NVDA's own report. Nothing is lost by it and one switch takes all of
+    # them away.
+    'auditoryIconsEverywhere': 'boolean(default=True)',
+    # Telling Titan which program the user is really in, so ITS subsystems
+    # can be contextual. A self-report: nothing here changes Titan, and
+    # Titan serves it to any client without asking - which is why it can
+    # ship on. It is the same thing Titan can already ask this add-on for
+    # at any moment (`reader.context`), pushed when it changes instead of
+    # polled for.
+    'reportContext': 'boolean(default=True)',
+
+    # The sound scheme: a state answered with a sound instead of a word.
+    # On, and it costs nothing until a state is given one - a state nobody
+    # has touched is spoken exactly as NVDA spoke it.
+    'soundScheme': 'boolean(default=True)',
+    # Everything the reader said, kept in memory with the way back to what
+    # said it. On: it is a deque with a ceiling and a few strings per line,
+    # and it is what answers "where was that?" - which no reader answers.
+    # Nothing is written to disk unless the user asks for it.
+    'journal': 'boolean(default=True)',
     # Titan's own cursor cues on every focus change, everywhere EXCEPT
     # Titan's own windows (which already play their own). Off by default: it
     # changes what the whole machine sounds like, which is not a decision to
@@ -149,13 +207,30 @@ def apply(section=None):
 #: 'pitch' into True and then written True back over the user's answer. A
 #: spec that is an `option(...)` is read and written as the word it is.
 def _is_choice(spec):
-    return str(spec).strip().startswith('option(')
+    """Whether this setting is a WORD rather than a yes or a no.
+
+    Both shapes count: an `option(...)` is a word out of a fixed list, a
+    `string(...)` is any word at all. Matching only the first read a
+    `string` setting through `bool()`, so the OCR language came back as
+    `False` - a value that is not one of the things it can be, written back
+    over the user's answer the next time anything saved.
+    """
+    text = str(spec).strip()
+    return text.startswith('option(') or text.startswith('string(')
 
 
 def _choices(spec):
-    """The words an option spec allows, in the order it lists them."""
+    """The words an option spec allows, in the order it lists them.
+
+    ``[]`` for a `string(...)`: it allows any word, so there is no list -
+    and the page then asks something that knows the machine what the
+    answers really are (`settingsPanel._options_for`).
+    """
     import re
-    inside = str(spec)[len('option('):].rstrip(') ')
+    text = str(spec).strip()
+    if not text.startswith('option('):
+        return []
+    inside = text[len('option('):].rstrip(') ')
     return [word.strip().strip("'\"")
             for word in re.split(r",(?![^()]*\))", inside)
             if word.strip() and not word.strip().startswith('default')]

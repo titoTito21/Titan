@@ -242,6 +242,13 @@ def handlers():
     # Titan Access's own habits: a tone and a word for the kind of dialog
     # about to appear, and a state added to the control just read. Titan
     # has always done both and only its own reader ever heard them.
+    # **The add-on's own features, run inside the NVDA that is really
+    # running.** Everything else here is Titan asking the reader something;
+    # this is the reader being asked to prove that its own half works, and
+    # it is served because a check nobody can run from outside is a check
+    # that is run once and then never again.
+    from . import selftest
+    served['selftest'] = selftest.run
     served['dialog_kind'] = interject.dialog_kind
     served['state_suffix'] = interject.state_suffix
     # A live region, pushed. A program that KNOWS it has news says so,
@@ -403,6 +410,15 @@ DECLARED = [
                 "the file before an add-on has registered what its switches "
                 "are. With no name, answers all of them.",
      'params': {'name': dict(_STRING), 'value': {'type': 'boolean'}}},
+    {'name': 'selftest',
+     'summary': "Run the add-on's own features inside the NVDA that is "
+                "really running, and answer what happened: the local "
+                "recogniser, the screen review, the controls of the window "
+                "in front, anchoring a control and finding it again, the "
+                "journal, the sound scheme, the names, the monitors, the "
+                "speech origins and the voice. It reads; it presses "
+                "nothing, writes nothing and sends nothing to a provider.",
+     'params': {}},
     {'name': 'diagnostics',
      'summary': "What this add-on has switched on and what it has actually "
                 "done: whether NVDA's speech filter registered, whether its "

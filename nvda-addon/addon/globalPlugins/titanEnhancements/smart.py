@@ -115,6 +115,35 @@ def controls_in(reading):
     return found
 
 
+def controls_from(reading):
+    """The same, out of a LOCAL reading (:mod:`localOcr`).
+
+    **The cheap tier is a first-class one.** Windows' own OCR gives the
+    words and a rectangle per line, in real screen coordinates - which is
+    everything a cursor needs. So a drawn window becomes navigable with no
+    model asked, nothing sent anywhere and nothing spent, and the AI is left
+    for the question only it can answer: which of these is a button, and
+    what is highlighted.
+
+    A control from here carries its ``rect``, so pressing it is a click at a
+    place we were told rather than a name handed back to Titan.
+    """
+    found = []
+    for text, rect in (reading.rows() if reading else []):
+        name = str(text or '').strip()
+        if not name:
+            continue
+        found.append({'name': name, 'said': name, 'region': '',
+                      'rect': tuple(rect)})
+    return found
+
+
+def take_local(hwnd, reading):
+    """A new LOCAL reading of a window. Same cursor rules as `take`."""
+    return _take(hwnd, controls_from(reading),
+                 reading.text if reading else '')
+
+
 def _announce(entered):
     """Say that the cursor has appeared, or gone. Sound first, then words.
 
@@ -150,14 +179,18 @@ def _announce(entered):
 
 
 def take(hwnd, reading):
-    """A new reading of a window. Keeps the cursor if it still makes sense.
+    """A new reading of a window. Keeps the cursor if it still makes sense."""
+    return _take(hwnd, controls_in(reading), str(reading or ''))
+
+
+def _take(hwnd, controls, reading):
+    """One reading, whichever tier it came from.
 
     A game re-reads whenever the picture changes, and a cursor that jumped
     back to the top on every change would make the model unusable exactly
     when something is happening. So the control the user was on is looked
     for by name, and only a control that has really gone moves them.
     """
-    controls = controls_in(reading)
     with _LOCK:
         arrived = bool(controls) and not (_state['controls']
                                           and _state['hwnd'] == int(hwnd or 0))
@@ -262,24 +295,74 @@ def say(moved):
 def press():
     """Press the control the cursor is on. ``(ok, sentence)``.
 
-    Through Titan, which knows where the thing it read actually is. There
-    is no arithmetic here and no coordinate: a control is pressed by the
-    name it was read under, which is the only identifier that survives the
-    screen being read again.
+    **A control that knows where it is presses itself.** A local reading
+    (Windows' own OCR) carries a real screen rectangle per line, so pressing
+    is a click at a place we were told - no model, no request, nothing sent
+    anywhere, and it works with Titan closed.
+
+    Everything else goes through Titan, which knows where the thing IT read
+    actually is: there is no arithmetic here and no invented coordinate, and
+    a control is pressed by the name it was read under, which is the only
+    identifier that survives the screen being read again.
     """
     found = here()
     if not found:
         return False, _('There is nothing to press.')
+    control = found['control']
+    rect = control.get('rect')
+    if rect:
+        return _click(rect, control['name'])
     from .link import LINK
     if not LINK.connected():
         return False, _('Titan is not running.')
-    name = found['control']['name']
-    ok, said = LINK.run_action('ocr', 'press', name=name)
+    ok, said = LINK.run_action('ocr', 'press', name=control['name'])
     if not ok:
         return False, str(said or '')
     return True, str(said or '')
 
 
+#: Windows' own mouse events. `SendInput` would be the modern way and is
+#: worse here: it is refused by a window running as administrator when NVDA
+#: is not, and `mouse_event` is what NVDA's own mouse handling uses.
+_MOUSE_LEFT_DOWN = 0x0002
+_MOUSE_LEFT_UP = 0x0004
+
+
+def _click(rect, name):
+    """Click the middle of a rectangle, and put the mouse back.
+
+    Putting it back is not politeness: a mouse left sitting over another
+    control leaves that control hovered, which changes what some programs
+    show and what the next reading says about them.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except Exception as error:                       # noqa: BLE001
+        return False, str(error)
+    left, top, width, height = rect
+    if width <= 0 or height <= 0:
+        return False, _('That control has no place on the screen.')
+    user32 = ctypes.windll.user32
+    was = wintypes.POINT()
+    try:
+        user32.GetCursorPos(ctypes.byref(was))
+    except Exception:                                # noqa: BLE001
+        was = None
+    try:
+        user32.SetCursorPos(int(left + width // 2), int(top + height // 2))
+        user32.mouse_event(_MOUSE_LEFT_DOWN, 0, 0, 0, 0)
+        user32.mouse_event(_MOUSE_LEFT_UP, 0, 0, 0, 0)
+    except Exception as error:                       # noqa: BLE001
+        return False, str(error)
+    finally:
+        if was is not None:
+            try:
+                user32.SetCursorPos(was.x, was.y)
+            except Exception:                        # noqa: BLE001
+                pass
+    # Translators: said when a control read from the screen is pressed.
+    return True, _('Pressed {name}.').format(name=name)
 def send_key(key):
     """Send a whole key to the window, which is what a game usually wants.
 

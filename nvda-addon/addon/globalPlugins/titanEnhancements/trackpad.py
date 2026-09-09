@@ -393,6 +393,11 @@ def contacts_in(report_bytes, length, device):
 _manager = None
 _down = set()
 
+#: Where each finger that is down was last seen, so it can be COMPLETED
+#: there. See `feed`: a lift reported at the wrong place is a flick pointed
+#: at the wrong direction.
+_where = {}
+
 
 class TouchSurface:
     """What NVDA's own touch scripts reach for, without a touch screen.
@@ -602,6 +607,19 @@ def feed(contacts):
     stops mentioning a contact rather than announcing its end, so nothing
     would ever complete and every touch would be an endless hover - which
     is the one thing a tracker cannot recover from.
+
+    **And it has to be completed WHERE IT WAS.** This used to say
+    ``update(gone, 0, 0, True)``, and (0, 0) is the top-left corner of the
+    screen. Reported as "exploring works, double tap works, gestures do
+    not", and that is exactly the shape the fault has: NVDA's tracker
+    decides a flick from the VELOCITY of the last tenth of a second, worked
+    out by least squares over the recent samples
+    (`touchTracker.SingleTouchTracker`). Handing it a final sample at the
+    corner of the screen puts an enormous jump into that window, so every
+    flick came out pointing at the top-left whatever the finger really did,
+    and `maxAbsDeltaX/Y` was junk as well. Hovering never noticed, because
+    it uses the live position while the finger is down; a tap barely
+    noticed, because it is decided by how little the finger moved.
     """
     manager = _tracker_manager()
     if manager is None:
@@ -615,11 +633,20 @@ def feed(contacts):
             continue
         if down:
             _down.add(identifier)
+            _where[identifier] = (x, y)
         else:
             _down.discard(identifier)
+            _where.pop(identifier, None)
     for gone in list(_down - seen):
+        where = _where.pop(gone, None)
+        if where is None:
+            # It cannot be in `_down` without having had a position, so
+            # there is nothing truthful to complete it at - and an invented
+            # end point is the whole of what this comment is about.
+            _down.discard(gone)
+            continue
         try:
-            manager.update(gone, 0, 0, True)
+            manager.update(gone, where[0], where[1], True)   # where it WAS
         except Exception:                            # noqa: BLE001
             pass
         _down.discard(gone)

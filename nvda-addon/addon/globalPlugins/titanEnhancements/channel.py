@@ -40,6 +40,29 @@ def _main_thread(function):
     compat.queueHandler.queueFunction(compat.queueHandler.eventQueue, function)
 
 
+def _with_class(announcement, kind, allowed):
+    """The announcement, coloured by its class where the sender said
+    nothing.
+
+    A class whose voice is only dials still has to reach the message, and
+    `prosody.build` already speaks pitch, rate and volume - so the class is
+    folded into the announcement rather than a second path being written
+    for it. **What the SENDER said always wins**: Titan naming a pitch for
+    a particular line has a reason for it that this table cannot know.
+    """
+    if not allowed:
+        return announcement
+    from . import voices
+    dials = voices.dials_of(kind)
+    if not any(dials.values()):
+        return announcement
+    folded = dict(announcement)
+    for name, amount in dials.items():
+        if amount and not folded.get(name):
+            folded[name] = amount
+    return folded
+
+
 def _priority(announcement):
     """NVDA's own speech priority for this announcement.
 
@@ -120,6 +143,33 @@ class Channel:
 
         if announcement.get('replaces_focus'):
             focus.replace_next(time.time() + REPLACE_WINDOW)
+
+        # **What KIND of message this is, and therefore whose voice it
+        # gets.** Everything arriving here is another program speaking
+        # through the reader, which is the `controller` class - unless the
+        # sender says which of the others it is. A class that names a
+        # synthesizer of its own is spoken BY that synthesizer and NVDA is
+        # not asked at all, because a second synth cannot be part of NVDA's
+        # own utterance; everything else is folded into the sequence below
+        # as ordinary pitch, rate and volume.
+        kind = str(announcement.get('voice_class') or '').strip() or 'controller'
+        try:
+            from . import voices
+            if voices.say_whole(kind, text,
+                                interrupt=announcement.get('interrupt', True)):
+                self.spoken += 1
+                self.last_notes = []
+                self.last_text = text
+                if self.braille_enabled:
+                    braille_text = announcement.get('braille')
+                    self._braille(str(braille_text if braille_text is not None
+                                      else text))
+                return {'spoken': True, 'text': text, 'notes': [],
+                        'voice_class': kind}
+            announcement = _with_class(announcement, kind,
+                                       self.prosody_enabled)
+        except Exception:                            # noqa: BLE001
+            pass
 
         sequence, notes = prosody.build(
             announcement,

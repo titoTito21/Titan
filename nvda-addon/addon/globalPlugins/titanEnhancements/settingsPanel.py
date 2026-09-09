@@ -51,6 +51,11 @@ WORDS = {
     'pan': lambda: _('the voice moved left or right'),
     # Translators: how a control's place is conveyed - both ways at once.
     'both': lambda: _('both'),
+    # Translators: which recogniser reads a window - Windows' own.
+    'local': lambda: _('Windows\' own recogniser (free, nothing is sent)'),
+    # Translators: which recogniser reads a window - Titan's AI OCR.
+    'ai': lambda: _('Titan\'s AI (understands it, sends a picture to your '
+                    'provider)'),
 }
 
 
@@ -100,6 +105,16 @@ def _page():
                'error - anywhere in Windows'), ''),
             # Translators: a setting in the Titan enhancements panel.
             ('menuLeaving', _('Say when the keyboard leaves a menu'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('soundScheme',
+             _('Answer a control\'s state with a sound where you have '
+               'chosen one, instead of the word (set them under Sound '
+               'scheme)'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('speechOrigins',
+             _('Give keyboard echo, a spelled word, a message and what '
+               'another program says through the controller a voice of '
+               'their own (set them under Voices and reading order)'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
         (_('What changes while you are looking elsewhere'), '', (
@@ -117,6 +132,14 @@ def _page():
             # Translators: a setting in the Titan enhancements panel.
             ('attentionState',
              _('Say when a window asks for your attention'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('monitors',
+             _('Watch the areas you have marked, and say when one changes'),
+             ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('journal',
+             _('Keep what the reader has said, so you can look back at it '
+               'and go to what said it'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
         (_('Sounds, and where the voice comes from'), '', (
@@ -138,6 +161,14 @@ def _page():
             ('earcons',
              _('Play Titan\'s own cursor sounds on every control, outside '
                'Titan\'s own windows (they already play their own)'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('auditoryIcons',
+             _('Play a short sound for what just happened - on a button, '
+               'something opened, that was refused'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('auditoryIconsEverywhere',
+             _('Play them on every control in every program, not only in '
+               'Titan\'s own windows'), 'auditoryIcons'),
         )),
         # Translators: a group of settings in the Titan panel.
         (_('What Titan may say through NVDA'), '', (
@@ -161,6 +192,10 @@ def _page():
             # Translators: a setting in the Titan enhancements panel.
             ('announceConnection',
              _('Say when Titan connects and disconnects'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('reportContext',
+             _('Tell Titan which program you are in, so its own features '
+               'can be about that program'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
         (_('What Titan may do to NVDA'),
@@ -195,7 +230,22 @@ def _page():
             ('autoLabel',
              _('Work out a name for an unnamed control by reading it once, '
                'and remember it'), ''),
+            # Translators: a setting in the Titan enhancements panel: which
+            # recogniser reads a window that shows a screen reader nothing.
+            ('ocrTier', _('Read such a window with:'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('localOcrLanguage',
+             _('The language Windows\' own recogniser reads in:'),
+             ''),
         )),
+        # Translators: a group of settings in the Titan panel.
+        (_('The terminal'),
+         # Translators: text on the Titan enhancements panel.
+         _('Numpad minus turns the review on and off. While it is on the '
+           'plain arrow keys walk the buffer - lines with up and down, '
+           'characters with left and right, a screenful with page up and '
+           'page down - and each line is marked by a short beep pitched by '
+           'where it is on the screen. Escape leaves.'), ()),
         # Translators: a group of settings in the Titan panel.
         (_('The touchpad'),
          # Translators: text on the Titan enhancements panel.
@@ -231,83 +281,162 @@ def build():
         title = _('Titan enhancements')
 
         def makeSettings(self, sizer):
+            """A CATEGORY at a time, because the page has outgrown a column.
+
+            **A settings page nobody can find anything on is a page of
+            settings nobody uses.** There are more than thirty switches now,
+            across eight subjects that have nothing to do with each other,
+            and a single column of them is a page somebody arrows through
+            for a minute to find the one they came for. NVDA's own settings
+            dialog answers this with a category list, and so does Titan's;
+            this is the same shape one level down.
+
+            Two lists, and both of them native. The categories are a
+            `wx.ListBox`; the switches of the chosen one are a real
+            check-list, where every row is a check box Windows itself
+            reports - so a reader says the name AND whether it is ticked,
+            which an owner-drawn `wx.CheckListBox` cannot (see
+            `classManager`). Anything that is not a switch - a choice with
+            three answers - is a real control under the list.
+            """
+            import wx
             helper = guiHelper.BoxSizerHelper(self, sizer=sizer)
-            values = configSpec.read()
-            starts = configSpec.defaults()
+            self._values = configSpec.read()
+            self._starts = configSpec.defaults()
+            self._groups = _page()
             self._boxes = {}
             self._choices = {}
             self._depends = {}
 
-            for label, note, rows in _page():
-                group = helper.addItem(guiHelper.BoxSizerHelper(
-                    self, sizer=wx.StaticBoxSizer(
-                        wx.StaticBox(self, label=label), wx.VERTICAL)))
-                parent = group.sizer.GetStaticBox()
-                for key, text, depends in rows:
-                    words = configSpec.choices(key)
-                    if words:
-                        self._add_choice(group, parent, key, text, words,
-                                         values, starts)
-                    else:
-                        box = group.addItem(wx.CheckBox(parent, label=text))
-                        box.SetValue(bool(values.get(key,
-                                                     starts.get(key, True))))
-                        self._boxes[key] = box
-                    if depends:
-                        self._depends.setdefault(depends, []).append(key)
-                if note:
-                    group.addItem(wx.StaticText(parent, label=note))
+            side = wx.BoxSizer(wx.HORIZONTAL)
+            left = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
+            # Translators: the list of setting categories in the Titan panel.
+            self.categories = left.addLabeledControl(
+                _('&Categories'), wx.ListBox,
+                choices=[label for label, _note, _rows in self._groups],
+                style=wx.LB_SINGLE)
+            self.categories.Bind(wx.EVT_LISTBOX, self._category_chosen)
+            side.Add(left.sizer, 0, wx.EXPAND | wx.RIGHT, 10)
 
-            for key in self._depends:
-                box = self._boxes.get(key)
-                if box is not None:
-                    box.Bind(wx.EVT_CHECKBOX, self._follow)
-            self._follow(None)
+            self.page = wx.Panel(self)
+            self.pageSizer = wx.BoxSizer(wx.VERTICAL)
+            self.page.SetSizer(self.pageSizer)
+            side.Add(self.page, 1, wx.EXPAND)
+            helper.addItem(side, flag=wx.EXPAND, proportion=1)
 
+            buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
             # Translators: a button on the Titan enhancements panel.
-            classes = helper.addItem(wx.Button(self,
-                                               label=_('Voice classes...')))
+            classes = buttons.addButton(
+                self, label=_('Voices and reading order...'))
             classes.Bind(wx.EVT_BUTTON, self._classes)
             # Translators: a button on the Titan enhancements panel.
-            modules = helper.addItem(wx.Button(self,
-                                               label=_('Reader modules...')))
+            modules = buttons.addButton(self, label=_('Reader modules...'))
             modules.Bind(wx.EVT_BUTTON, self._modules)
-
+            helper.addItem(buttons)
             helper.addItem(wx.StaticText(self, label=self._state()))
 
-        def _add_choice(self, group, parent, key, text, words, values, starts):
-            """A setting with more than two answers, as a real list.
+            if self._groups:
+                self.categories.SetSelection(0)
+            self._show_category(0)
 
-            The words the user reads are this add-on's; the words that are
-            STORED are the spec's, and the two are kept apart on purpose -
-            translating a setting's value is how a Polish NVDA comes to have
-            a configuration file no other NVDA can read.
+        # ------------------------------------------------------ the pages
+        def _category_chosen(self, _event):
+            self._show_category(self.categories.GetSelection())
+
+        def _show_category(self, index):
+            """Build the chosen category's controls, keeping every answer.
+
+            The switches of a category that is not showing still hold what
+            the user set: `_boxes` and `_choices` are keyed on the setting
+            and never cleared, so `onSave` writes the whole page whichever
+            category happens to be up when Save is pressed. A page that
+            saved only what was on the screen would silently discard
+            everything the user changed and then moved away from.
             """
-            labels = [WORDS.get(word, lambda w=word: w)() for word in words]
-            control = group.addLabeledControl(text, wx.Choice, choices=labels)
-            wanted = str(values.get(key, starts.get(key, '')) or '')
-            try:
-                control.SetSelection(words.index(wanted))
-            except ValueError:
-                control.SetSelection(0)
-            self._choices[key] = (control, words)
+            import wx
+            if index < 0 or index >= len(self._groups):
+                return
+            self.pageSizer.Clear(delete_windows=True)
+            self._live = {}
+            label, note, rows = self._groups[index]
+            switches = [row for row in rows if not _options_for(row[0])[0]]
+            others = [row for row in rows if _options_for(row[0])[0]]
 
-        # ------------------------------------------------------- dependencies
+            if switches:
+                # Translators: the list of switches for the chosen category.
+                self.pageSizer.Add(wx.StaticText(
+                    self.page, label=_('{category}: switches').format(
+                        category=label)), 0, wx.BOTTOM, 3)
+                listed = _check_list_class()(
+                    self.page, choices=[text for _key, text, _d in switches])
+                for at, (key, _text, depends) in enumerate(switches):
+                    listed.Check(at, bool(self._values.get(
+                        key, self._starts.get(key, True))))
+                    self._live[key] = (listed, at)
+                    if depends:
+                        self._depends.setdefault(depends, []).append(key)
+                listed.Bind(wx.EVT_CHECKLISTBOX, self._ticked)
+                self.pageSizer.Add(listed, 1, wx.EXPAND | wx.BOTTOM, 6)
+                a11y_name(listed, label)
+
+            for key, text, depends in others:
+                words, labels = _options_for(key)
+                self.pageSizer.Add(wx.StaticText(self.page, label=text), 0)
+                control = wx.Choice(self.page, choices=labels)
+                wanted = str(self._values.get(key,
+                                              self._starts.get(key, '')) or '')
+                try:
+                    control.SetSelection(words.index(wanted))
+                except ValueError:
+                    control.SetSelection(0)
+                self.pageSizer.Add(control, 0, wx.BOTTOM, 6)
+                self._choices[key] = (control, words)
+                if depends:
+                    self._depends.setdefault(depends, []).append(key)
+
+            if note:
+                self.pageSizer.Add(wx.StaticText(self.page, label=note), 0)
+            self.page.Layout()
+            self.Layout()
+            self._follow(None)
+
+        def _ticked(self, event):
+            """What the user just did, kept where the page can find it.
+
+            The check-list is thrown away when the category changes, so its
+            answers have to be taken out of it as they are made rather than
+            read off it at Save - which would read a control that is gone.
+            """
+            try:
+                index = event.GetSelection()
+            except Exception:                        # noqa: BLE001
+                index = -1
+            for key, (listed, at) in self._live.items():
+                if index in (-1, at):
+                    self._values[key] = bool(listed.IsChecked(at))
+            self._follow(None)
+            event.Skip()
+
         def _follow(self, _event):
             """A setting that only means something under a switch is disabled
-            until that switch is on - and stays where it was, so turning the
-            parent back on gives the user their answer back rather than a
-            default."""
+            until that switch is on - and keeps its answer, so turning the
+            parent back on gives the user what they said rather than a
+            default.
+
+            Only what is on the screen: a category that is not showing has
+            no controls to enable, and its answers are in `_values` where
+            Save will find them.
+            """
             for parent, children in self._depends.items():
-                on = bool(self._boxes[parent].GetValue()) \
-                    if parent in self._boxes else True
+                on = bool(self._values.get(
+                    parent, self._starts.get(parent, True)))
                 for child in children:
-                    control = self._boxes.get(child)
-                    if control is None:
-                        pair = self._choices.get(child)
-                        control = pair[0] if pair else None
-                    if control is not None:
-                        control.Enable(on)
+                    pair = self._choices.get(child)
+                    if pair is not None:
+                        try:
+                            pair[0].Enable(on)
+                        except Exception:            # noqa: BLE001
+                            pass
 
         # ------------------------------------------------------------ buttons
         def _classes(self, _event):
@@ -336,19 +465,26 @@ def build():
                          reason=report['problem'] or _('the reason is unknown'))
 
         def onSave(self):
-            # Whatever is on the page. Restating the keys here is how a
-            # switch comes to tick and never save.
-            answers = {key: box.GetValue()
-                       for key, box in self._boxes.items()}
+            """The whole page, not the category that happens to be up.
+
+            Every switch's answer lives in `_values` from the moment it is
+            ticked, so a user who changes something in one category and
+            moves to another loses nothing - which a page that read its
+            controls at Save would do silently.
+            """
+            answers = dict(self._values)
             for key, (control, words) in self._choices.items():
-                index = control.GetSelection()
+                try:
+                    index = control.GetSelection()
+                except Exception:                    # noqa: BLE001
+                    continue
                 if 0 <= index < len(words):
                     answers[key] = words[index]
-            configSpec.write(answers)
+            configSpec.write({key: answers[key] for key in configSpec.SPEC
+                              if key in answers})
             configSpec.apply()
 
     return TitanEnhancementsPanel
-
 
 def register():
     """Put the panel into NVDA's settings. Returns the class, or None."""
@@ -373,3 +509,63 @@ def unregister(panel):
             NVDASettingsDialog.categoryClasses.remove(panel)
     except Exception:                                # noqa: BLE001
         pass
+
+
+def _check_list_class():
+    """NVDA's accessible checkable list, or wx's if this NVDA has none.
+
+    A `wx.CheckListBox` on Windows is an owner-drawn list box - wxWidgets
+    paints the little square itself, so there is no check box for the
+    platform to report and a reader says the name without saying whether it
+    is ticked. Titan learned this building its own settings; NVDA learned it
+    before either of us.
+    """
+    import wx
+    try:
+        from gui import nvdaControls
+        found = getattr(nvdaControls, 'CustomCheckListBox', None)
+        if found is not None:
+            return found
+    except Exception:                                # noqa: BLE001
+        pass
+    return wx.CheckListBox
+
+
+def a11y_name(control, name):
+    """Name a native control for MSAA as well as for wx.
+
+    `SetName` alone is wx's own name and never reaches a screen reader for a
+    native list: it answers with its own IAccessible, whose name comes from
+    window text these controls have none of.
+    """
+    try:
+        control.SetName(str(name))
+    except Exception:                                # noqa: BLE001
+        pass
+
+
+#: A setting whose answers are not in the spec because they are a fact about
+#: THIS machine. The spec can say what a setting may be only when the answer
+#: is the same everywhere; which languages Windows can read in is not.
+def _options_for(key):
+    """``(values, labels)`` for a setting with more than two answers.
+
+    ``([], [])`` for an ordinary switch, which is what tells the page to
+    render it as one.
+    """
+    words = configSpec.choices(key)
+    if words:
+        return words, [WORDS.get(word, lambda w=word: w)() for word in words]
+    if key == 'localOcrLanguage':
+        # Translators: the first entry of the OCR language list - whatever
+        # Windows is set to.
+        values, labels = [''], [_('(whatever Windows is set to)')]
+        try:
+            from contentRecog import uwpOcr
+            for language in uwpOcr.getLanguages() or []:
+                values.append(str(language))
+                labels.append(str(language))
+        except Exception:                            # noqa: BLE001
+            pass
+        return values, labels
+    return [], []

@@ -688,22 +688,19 @@ def _label_reading(obj, next_handler, module=None):
     global _labelled
     try:
         from . import labels
-        if not labels.needs_one(obj):
-            return False
-        label, source = labels.described(obj)
+        # `labels.applies` is the ONE place that decides whether a stored
+        # name is used, and it is one place because it was two rules in one
+        # function and one of them was wrong. See its docstring.
+        label, source = labels.applies(obj, module)
     except Exception:                                # noqa: BLE001
         return False
     if not label:
-        if module is not None:
-            try:
-                key, _strong = labels.key_of(obj)
-                label = module.label_for(key)
-                source = 'module'
-            except Exception:                        # noqa: BLE001
-                label = ''
-        if not label:
-            _maybe_label(obj)
-            return False
+        try:
+            if labels.needs_one(obj):
+                _maybe_label(obj)
+        except Exception:                            # noqa: BLE001
+            pass
+        return False
     if not can_mute():
         return False
     from . import context
@@ -752,13 +749,54 @@ def _maybe_label(obj):
         try:
             from . import graphics
             ok, said = graphics.label_with_ai(obj)
-            if ok and said:
+        except Exception as error:                   # noqa: BLE001
+            ok, said = False, str(error)
+        if ok and said:
+            try:
                 from . import live
                 live.announce(said, 'polite')
-        except Exception:                            # noqa: BLE001
-            pass
+            except Exception:                        # noqa: BLE001
+                pass
+            return
+        # **A failure here used to be completely silent**, and this is the
+        # feature most able to fail: it needs Titan running, its AI features
+        # on and a vision provider with a key. The user switched on "work
+        # out a name for an unnamed control", nothing ever happened, and
+        # there was nowhere at all that said why - which is
+        # indistinguishable from a switch that does nothing.
+        _label_failed(said)
     threading.Thread(target=look, name='TitanLabel', daemon=True).start()
     return True
+
+
+#: Why the last attempt to work out a name failed, and how many have.
+#: Read by the diagnostics command, and said ONCE - the first time it
+#: happens in a session - because a reader that explained it on every
+#: unnamed control the user passed would be worse than the silence.
+_label_trouble = {'why': '', 'failed': 0, 'said': False}
+
+
+def label_trouble():
+    return dict(_label_trouble)
+
+
+def _label_failed(why):
+    said = str(why or '').strip()
+    _label_trouble['why'] = said
+    _label_trouble['failed'] += 1
+    if compat.log is not None:
+        try:
+            compat.log.error('Titan could not work out a name: %s' % said)
+        except Exception:                            # noqa: BLE001
+            pass
+    if _label_trouble['said'] or not said:
+        return
+    _label_trouble['said'] = True
+    try:
+        from . import live
+        live.announce(said, 'polite')
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 def _only_context(parts):
@@ -917,6 +955,19 @@ def _cue(obj):
         earcons.announce(obj)
     except Exception:                                # noqa: BLE001
         pass
+    try:
+        # **Emacspeak's auditory icons, on the rest of Windows.** You are
+        # told you are on a button, in a list, at a heading, before the
+        # synthesizer has said a syllable. Deliberately beside the cursor
+        # cues rather than instead of them: a cue says WHERE the control
+        # is, an icon says WHAT it is, and a user may want either, both or
+        # neither. The icons are the add-on's own files played through
+        # NVDA's own audio, so this works with no Titan running at all -
+        # which the cursor cues, which ask Titan to play them, cannot.
+        from . import icons
+        icons.for_focus(obj)
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 def _pitched_wanted():
@@ -925,14 +976,29 @@ def _pitched_wanted():
 
 
 def _speak(sequence):
-    speech = compat.speech
-    if speech is None or not sequence:
+    if not sequence:
         return
     try:
         from . import interject
         interject.mine()
     except Exception:                                # noqa: BLE001
         pass
+    try:
+        # **Through `voices`, not straight to NVDA.** A reading whose first
+        # part asks for a voice or a variant of its own cannot carry that
+        # inside the sequence - there is no utterance before it to change
+        # the driver at the end of - so it is put on here, as late as it can
+        # be, immediately before the words that want it. Handing the
+        # sequence to `speech.speak` directly still says everything; it just
+        # says the first part in the reader's own voice.
+        from . import voices
+        if voices.speak_sequence(sequence):
+            return
+    except Exception:                                # noqa: BLE001
+        pass
+    speech = compat.speech
+    if speech is None:
+        return
     try:
         speech.speak(sequence)
     except Exception:                                # noqa: BLE001

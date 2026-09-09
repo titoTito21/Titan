@@ -75,8 +75,9 @@ LIMIT = 10
 #: for them it is not only possible but the most useful thing on the page: a
 #: notification in a plainly different voice is one the listener does not
 #: have to parse to know it is not the control they were reading.
-WHOLE = frozenset({'notification', 'controller', 'text', 'alert', 'dialog',
-                   'live'})
+WHOLE = frozenset({'notification', 'controller', 'text', 'typed',
+                   'spelling', 'alert', 'dialog', 'live', 'monitor',
+                   'busy', 'attention'})
 
 _LOCK = threading.RLock()
 _overrides = None
@@ -98,6 +99,10 @@ def meanings():
         'context': _('where the user now is: the folder or document that '
                      'has just been opened'),
         'place': _('orientation - "3 of 10", "level 2"'),
+        'value': _('what is IN a control - the text of a field, where a '
+                   'slider stands'),
+        'description': _('the description a program gives a control, '
+                         'beside its name'),
         'disabled': _('a control that is there and cannot be used'),
         'alert': _('something the user should act on'),
         'guessed': _('a name this add-on worked out rather than one the '
@@ -112,7 +117,87 @@ def meanings():
         'controller': _('what another program says through the NVDA '
                         'controller, rather than the reader itself'),
         'text': _('reading text - a document, a page, say all'),
+        'typed': _('keyboard echo - the characters and words you type'),
+        'spelling': _('a word being spelled out, letter by letter'),
+        'monitor': _('a watched area saying it has changed'),
+        'busy': _('a program that has stopped answering'),
+        'attention': _('a window asking for you - it flashed on the '
+                       'taskbar'),
+        'application': _('a control of a Titan application, walked as a '
+                         'virtual window'),
     }
+
+
+def labels():
+    """The SHORT name of each class - what the list in the manager says.
+
+    A list is read one row at a time with the arrows, so a row has to be
+    the thing itself and not a sentence about it: "control name", not "the
+    name of a control, and what is in it". The sentence is still worth
+    having and is still here - :func:`meanings` - but it belongs beside the
+    list, where somebody who wants it can read it, rather than in front of
+    every row for somebody who does not.
+    """
+    return {
+        # Translators: the short name of a voice class, in the list.
+        'name': _('control name'),
+        # Translators: the short name of a voice class.
+        'kind': _('control type'),
+        # Translators: the short name of a voice class.
+        'state': _('control state'),
+        # Translators: the short name of a voice class.
+        'folder': _('folder'),
+        # Translators: the short name of a voice class.
+        'file': _('file'),
+        # Translators: the short name of a voice class.
+        'detail': _('columns'),
+        # Translators: the short name of a voice class.
+        'context': _('where you now are'),
+        # Translators: the short name of a voice class.
+        'place': _('position'),
+        # Translators: the short name of a voice class.
+        'value': _('value'),
+        # Translators: the short name of a voice class.
+        'description': _('description'),
+        # Translators: the short name of a voice class.
+        'disabled': _('unavailable'),
+        # Translators: the short name of a voice class.
+        'alert': _('alert'),
+        # Translators: the short name of a voice class.
+        'guessed': _('guessed name'),
+        # Translators: the short name of a voice class.
+        'icon': _('icon'),
+        # Translators: the short name of a voice class.
+        'picture': _('picture'),
+        # Translators: the short name of a voice class.
+        'animation': _('animation'),
+        # Translators: the short name of a voice class.
+        'dialog': _('kind of dialog'),
+        # Translators: the short name of a voice class.
+        'live': _('changed elsewhere'),
+        # Translators: the short name of a voice class.
+        'notification': _('system notification'),
+        # Translators: the short name of a voice class.
+        'controller': _('NVDA controller'),
+        # Translators: the short name of a voice class.
+        'text': _('reading text'),
+        # Translators: the short name of a voice class.
+        'typed': _('keyboard echo'),
+        # Translators: the short name of a voice class.
+        'spelling': _('spelling'),
+        # Translators: the short name of a voice class.
+        'monitor': _('watched area'),
+        # Translators: the short name of a voice class.
+        'busy': _('busy'),
+        # Translators: the short name of a voice class.
+        'attention': _('wants attention'),
+        # Translators: the short name of a voice class.
+        'application': _('Titan application'),
+    }
+
+
+def label_of(tag):
+    return labels().get(str(tag), str(tag))
 
 
 #: Which group of the manager a class belongs in. A flat list of nineteen
@@ -120,10 +205,11 @@ def meanings():
 #: three different questions: what a control sounds like, what a message
 #: sounds like, and what a picture sounds like.
 GROUPS = (
-    ('control', ('name', 'kind', 'state', 'place', 'detail', 'disabled',
-                 'folder', 'file', 'context', 'guessed')),
-    ('message', ('notification', 'controller', 'text', 'alert', 'dialog',
-                 'live')),
+    ('control', ('name', 'kind', 'state', 'value', 'description', 'place',
+                 'detail', 'disabled', 'folder', 'file', 'context',
+                 'guessed', 'application')),
+    ('message', ('notification', 'controller', 'text', 'typed', 'spelling',
+                 'alert', 'dialog', 'live', 'monitor', 'busy', 'attention')),
     ('picture', ('icon', 'picture', 'animation')),
 )
 
@@ -167,6 +253,34 @@ EXTRA = {
     'notification': {},
     'controller': {},
     'text': {},
+    # Keyboard echo. A dial rather than a voice by default, and a small one:
+    # it is said on every keystroke, so anything that makes it longer is
+    # paid for hundreds of times an hour. Higher and quicker is what says
+    # "this is what you just typed" without saying it.
+    'typed': {'pitch': 3, 'rate': 2},
+    'spelling': {'pitch': 2},
+    # A watched area saying it has changed - a build's status line, a chat
+    # behind the window you are in. It is never about the control you are
+    # on, so it must not sound like one: louder and a little lower is what
+    # says "this is from somewhere else" before the words do.
+    'monitor': {'pitch': -2, 'volume': 2},
+    # A program that has stopped answering, and a window asking for you.
+    # Neither is something the user did, and both are things a sighted
+    # person gets from the screen without looking at anything.
+    'busy': {'pitch': -3, 'rate': -1},
+    'attention': {'pitch': 2, 'volume': 2},
+    # A control of a Titan application walked as a virtual window. It ships
+    # with nothing of its own: the parts of it are already read in `name`,
+    # `kind`, `state` and `value`, and this is here so somebody who wants
+    # the whole thing marked out as "not a real window" can say so.
+    'application': {},
+    # What is IN a control, and what the program says ABOUT it. Both are
+    # said at the plain voice by default, which is what they were before
+    # there was a table - the point of listing them is that they can now
+    # be told apart from the name, which is what a listener actually
+    # wants from a field that has something in it.
+    'value': {},
+    'description': {},
 }
 
 
@@ -385,6 +499,7 @@ def reset(tag=None):
 def described():
     """Every class, for the manager and for the status command."""
     words = meanings()
+    short = labels()
     rows = []
     for _group, members in GROUPS:
         for tag in members:
@@ -393,6 +508,7 @@ def described():
             rows.append({'id': tag,
                          'group': _group,
                          'meaning': words.get(tag, ''),
+                         'label': short.get(tag, tag),
                          'whole': is_whole(tag),
                          'voice': voice_of(tag),
                          'default': dict(defaults().get(tag, {})),
@@ -402,6 +518,7 @@ def described():
         if tag not in listed:
             rows.append({'id': tag, 'group': group_of(tag),
                          'meaning': words.get(tag, ''),
+                         'label': short.get(tag, tag),
                          'whole': is_whole(tag),
                          'voice': voice_of(tag),
                          'default': dict(defaults().get(tag, {})),

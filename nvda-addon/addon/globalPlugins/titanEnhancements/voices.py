@@ -112,8 +112,20 @@ def voice_of(tag):
 
 def _supported(synth, command):
     from . import prosody
+    return prosody._supported(synth, command)
+
+
 def _commands(voice, synth):
-    """The speech commands for one voice, and the ones to put it back."""
+    """The DIAL commands for one voice, and the ones to put it back.
+
+    Only pitch, rate and volume. Those are real speech commands: the synth
+    is handed them as part of the utterance, so they take effect exactly
+    where they sit and are put back exactly where they are put back.
+
+    A voice, a variant and an inflection are NOT commands - see
+    :data:`BY_SETTING` - and trying to make them behave like ones is the
+    bug this module shipped with.
+    """
     on, off = [], []
     for name, command in (('pitch', compat.PitchCommand),
                           ('rate', compat.RateCommand),
@@ -126,95 +138,190 @@ def _commands(voice, synth):
             off.append(command(offset=0))
         except Exception:                            # noqa: BLE001
             continue
-    named, restore = _named_commands(voice, synth)
-    if named is not None:
-        # In FRONT of the dials, and put back after them: a synthesizer
-        # that resets its rate when its voice changes would otherwise be
-        # handed the rate first and throw it away.
-        on.insert(0, named)
-        off.append(restore)
     return on, off
 
 
-#: The parts of a voice NVDA has no speech command for. `PitchCommand` and
-#: its two neighbours are real commands the synthesizer is HANDED; a voice,
-#: a variant and an inflection are SETTINGS on the driver, and the only way
-#: to change one part-way through an utterance is to reach in and set it at
-#: the moment the speech gets there. That is what `CallbackCommand` is, and
-#: it is the same mechanism the panner uses for the same reason.
+# --------------------------------------------------------------------------- #
+# The parts of a voice that are not speech commands
+# --------------------------------------------------------------------------- #
+#: A voice, a variant and an inflection are SETTINGS on the driver. NVDA has
+#: no speech command for any of them.
 #:
-#: What it costs, said plainly: a synthesizer that flushes its buffer when
-#: its voice changes will break the utterance at that point. That is the
-#: synth's behaviour rather than a fault here, it is why the DIALS are
-#: preferred wherever they will do, and it is why a whole message (see
-#: `classes.WHOLE`) is spoken by a driver of our own instead.
+#: **The obvious way to change one mid-utterance does not work, and this
+#: module shipped with it.** A `CallbackCommand` looks like the answer - it
+#: is what the panner uses - but it is not the same problem. Read out of
+#: NVDA's own `speech/manager.py`: a sequence is split at
+#: `EndUtteranceCommand` and sent to the synth ONE UTTERANCE AT A TIME, and
+#: a callback is turned into an index whose function runs "when the synth
+#: reaches this point" - which is when the audio for it has been PLAYED. By
+#: then the whole utterance has long since been synthesized, so setting
+#: `synth.variant` there changes nothing about the words around it. Asking
+#: for the variant "quincy" on the control type did exactly nothing, which
+#: is what a user reported.
+#:
+#: Pitch, rate and volume were never affected: those are `SynthParamCommand`s
+#: the synth is HANDED inside the utterance, which is a different mechanism
+#: with a different guarantee. That is why three dials worked and three did
+#: not.
+#:
+#: So a part that wants one of these is spoken as its **own utterance**, and
+#: the setting is applied by a callback at the END of the utterance before
+#: it - the one moment NVDA guarantees is after the previous audio and
+#: before the next utterance is handed over.
+#:
+#: **The first run is the one case that cannot be done that way**, because
+#: there is no utterance before it: an utterance made only of commands is
+#: built and returned, but its index never reaches the synth, so its
+#: callback never runs (`_handleIndex` pops the callback only for an index
+#: the synth reported). The only place left is immediately before
+#: `speech.speak`, which is what :func:`pending_first` and
+#: :func:`speak_sequence` are for.
 BY_SETTING = ('voice', 'variant', 'inflection')
 
 
-def _named_commands(voice, synth):
-    """``(set, put back)`` for the parts that are driver settings, or
-    ``(None, None)`` when this voice asks for none of them."""
-    wanted = {name: voice.get(name) for name in BY_SETTING
-              if voice.get(name)}
-    if not wanted or compat.CallbackCommand is None or synth is None:
-        return None, None
-    try:
-        from . import speaking
-    except Exception:                                # noqa: BLE001
-        return None, None
-    held = {}
+def _signature(voice):
+    """What this part asks the DRIVER for, or ``{}``. Two parts with the
+    same signature share an utterance; a different one starts a new one."""
+    return {name: voice[name] for name in BY_SETTING
+            if voice.get(name)}
 
-    def put_on():
-        held.clear()
+
+def _boundary(profile):
+    """``[apply, end]`` - change the driver, then start a new utterance.
+
+    In this order and never the other way round: the callback has to be the
+    last thing in the utterance that is ENDING, so that it fires on that
+    utterance's own audio and the change is in place before NVDA hands the
+    next one to the synth.
+    """
+    if compat.CallbackCommand is None or compat.EndUtteranceCommand is None:
+        return []
+    wanted = dict(profile or {})
+
+    def change():
         try:
-            held.update(speaking.apply_to(synth, wanted))
+            from . import speaking
+            speaking.become(wanted)
         except Exception:                            # noqa: BLE001
             pass
 
-    def put_back():
+    try:
+        return [compat.CallbackCommand(change, name='titanVoice'),
+                compat.EndUtteranceCommand()]
+    except Exception:                                # noqa: BLE001
+        return []
+
+
+#: What the NEXT `speak_sequence` has to put on the driver before it speaks,
+#: and when it was worked out. Timestamped because a sequence that was built
+#: and never spoken must not lend its voice to whatever is spoken next: a
+#: stale answer is thrown away rather than used.
+_pending = {'profile': None, 'at': 0.0}
+PENDING_SECONDS = 0.5
+
+
+def pending_first():
+    """The first run's driver settings, if the last built sequence had any.
+
+    Consumed: asking clears it, so it can be applied once and only once.
+    """
+    import time
+    profile = _pending['profile']
+    fresh = profile is not None and \
+        (time.time() - _pending['at']) < PENDING_SECONDS
+    _pending['profile'] = None
+    return profile if fresh else None
+
+
+def _remember_first(profile):
+    import time
+    _pending['profile'] = dict(profile) if profile else None
+    _pending['at'] = time.time()
+
+
+def speak_sequence(sequence):
+    """Speak a sequence this module built. ``True`` when it was spoken.
+
+    **The one place a built sequence should be handed to NVDA.** Everything
+    inside the sequence takes care of itself; the FIRST run's driver
+    settings cannot, for the reason written above, so they are put on here -
+    as late as it is possible to put them on, which is immediately before
+    the words that want them.
+    """
+    speech = compat.speech
+    if speech is None or not sequence:
+        return False
+    profile = pending_first()
+    if profile:
         try:
-            speaking.put_back(synth, dict(held))
+            from . import speaking
+            speaking.become(profile)
         except Exception:                            # noqa: BLE001
             pass
-        held.clear()
-
     try:
-        return (compat.CallbackCommand(put_on, name='titanVoiceOn'),
-                compat.CallbackCommand(put_back, name='titanVoiceOff'))
+        speech.speak(sequence)
+        return True
     except Exception:                                # noqa: BLE001
-        return None, None
-
+        return False
 
 def sequence(parts, synth=None, separator=','):
     """``[(text, class)]`` -> one NVDA speech sequence.
 
-    ONE utterance, so no part can be cut off by the part after it - which
-    is the promise a reader saying three separate lines cannot make, and
-    the reason Titan Access renders them together too.
+    **One utterance per VOICE**, and one utterance in the ordinary case
+    where every part shares the reader's own voice. That is the promise
+    worth keeping - no part cut off by the part after it, which is why
+    Titan Access renders them together too - and it can only be kept for
+    parts a single utterance can carry.
 
-    Every dial is put back at the end of the part that used it. A sequence
-    that changed the rate and did not restore it leaves the reader talking
-    that way for everything after it, which is the failure this module
-    could most easily cause and the one thing it must not.
+    A part that asks for a different voice, variant or inflection cannot
+    share one: those are settings on the driver, not commands inside the
+    utterance, and a driver setting changed by a callback lands after the
+    audio around it has already been made. So such a part starts its own
+    utterance, and the change is made at the end of the one before it -
+    see :data:`BY_SETTING` for why that is the only moment that works.
+
+    Every dial is put back at the end of the part that used it, and every
+    driver setting is put back at the end of the sequence. A sequence that
+    changed the rate and did not restore it leaves the reader talking that
+    way for everything after it, which is the failure this module could
+    most easily cause and the one thing it must not.
     """
     parts = [(str(text), tag) for text, tag in (parts or [])
              if str(text or '').strip()]
+    _remember_first(None)
     if not parts:
         return []
     if synth is None:
         from . import panner
         synth = panner.current_synth()
     out = []
+    standing = {}
     for index, (text, tag) in enumerate(parts):
         # NVDA puts a space between the parts of a sequence itself, so the
         # separator is a bare comma - "text, " gives ",  " and a reader
         # that announces punctuation says the gap.
         if index != len(parts) - 1:
             text = text + separator
-        on, off = _commands(voice_of(tag), synth)
+        voice = voice_of(tag)
+        wanted = _signature(voice)
+        if wanted != standing:
+            if index == 0:
+                # Nothing has been said yet, so there is no utterance to
+                # attach a callback to. This one is put on immediately
+                # before the words, by `speak_sequence`.
+                _remember_first(wanted)
+            else:
+                out.extend(_boundary(wanted))
+            standing = wanted
+        on, off = _commands(voice, synth)
         out.extend(on)
         out.append(text)
         out.extend(off)
+    if standing:
+        # Put the driver back. Not optional and not best effort: a variant
+        # left on is every word the reader says afterwards in the wrong
+        # voice.
+        out.extend(_boundary({}))
     return out
 
 
@@ -230,3 +337,68 @@ def can_hear_the_difference():
     return any(_supported(synth, command)
                for command in (compat.PitchCommand, compat.RateCommand,
                                compat.VolumeCommand))
+
+
+# --------------------------------------------------------------------------- #
+# A whole message, in a voice of its own
+# --------------------------------------------------------------------------- #
+def say_whole(tag, text, profile=None, interrupt=False):
+    """Say one whole thing in the class ``tag``'s voice. True when it did.
+
+    **This is the half a speech command cannot do.** A notification, what
+    another program said through the controller, a page being read - each of
+    those is a MESSAGE rather than part of a control's reading, and what a
+    listener most wants from it is not a bent version of the reading voice
+    but a plainly different one: a different voice, a different variant, or
+    a different synthesizer altogether, so it is known for what it is before
+    a word of it is parsed.
+
+    A different synthesizer is why this exists and why it is separate from
+    :func:`sequence`. It cannot be part of an utterance - it is a second
+    program producing sound, and the two would talk over each other - so it
+    is only ever offered for the classes in :data:`classes.WHOLE`, and this
+    is where that is enforced rather than trusted.
+
+    ``False`` means "nothing special was done", and every caller answers it
+    by speaking the message the ordinary way. That is the whole degradation
+    story: a class with no voice of its own, a synthesizer that will not
+    start, an NVDA without the driver - all of them end here, and the user
+    hears the message.
+    """
+    words = str(text or '').strip()
+    if not words:
+        return False
+    try:
+        from . import classes
+    except Exception:                                # noqa: BLE001
+        return False
+    if not classes.is_whole(tag):
+        return False
+    wanted = dict(profile) if profile is not None else classes.voice_of(tag)
+    if not str(wanted.get('synth') or '').strip():
+        # No synthesizer of its own, so there is nothing here the ordinary
+        # path cannot do better: it keeps the message in NVDA's own speech
+        # queue, where it can be interrupted and where braille follows it.
+        return False
+    try:
+        from . import speaking
+    except Exception:                                # noqa: BLE001
+        return False
+    if interrupt:
+        try:
+            speaking.stop()
+        except Exception:                            # noqa: BLE001
+            pass
+    return speaking.speak_with(wanted, words)
+
+
+def dials_of(tag):
+    """A class's profile as the three numbers `prosody.build` understands.
+
+    So a class that names no synthesizer still colours a message: the same
+    table, applied through NVDA's own commands, which is what keeps a
+    notification recognisable on a machine with one synthesizer.
+    """
+    profile = voice_of(tag)
+    return {name: profile.get(name) or 0
+            for name in ('pitch', 'rate', 'volume')}

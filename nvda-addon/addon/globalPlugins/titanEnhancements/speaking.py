@@ -379,3 +379,85 @@ def stop():
             driver.cancel()
         except Exception:                            # noqa: BLE001
             pass
+
+
+# --------------------------------------------------------------------------- #
+# The reader's own driver, changed and always changed back
+# --------------------------------------------------------------------------- #
+#: What we have put on NVDA's OWN synthesizer and not yet taken off, as
+#: ``{setting: what it was}``.
+#:
+#: **This is the safety net, and it is not optional.** A voice or a variant
+#: is a setting on the reader's driver, so a reading that changes one and is
+#: then cut short - the user presses a key, speech is cancelled, the callback
+#: that would have put it back never fires - leaves every word the reader
+#: says afterwards in the wrong voice. There is no way to make that
+#: impossible, so it is made harmless instead: whatever is outstanding is put
+#: back before the next change and again on a timer, so the worst case is one
+#: reading in the wrong voice rather than a session in it.
+_standing = {}
+_undo_at = None
+
+#: How long an outstanding change may stand with nothing putting it back.
+#: Longer than a reading and shorter than a user noticing.
+UNDO_SECONDS = 2.0
+
+
+def standing():
+    with _LOCK:
+        return dict(_standing)
+
+
+def become(profile):
+    """Put ``profile``'s driver settings on NVDA's own synthesizer.
+
+    An empty profile means "be the reader's own voice again", which is what
+    the end of every sequence asks for.
+    """
+    synth = current()
+    if synth is None:
+        return False
+    restore_standing(synth)
+    wanted = {name: value for name, value in (profile or {}).items() if value}
+    if not wanted:
+        return True
+    was = apply_to(synth, wanted)
+    if not was:
+        return False
+    with _LOCK:
+        _standing.update(was)
+    _arm_undo()
+    return True
+
+
+def restore_standing(synth=None):
+    """Put back whatever is outstanding. Safe to call at any time."""
+    with _LOCK:
+        was = dict(_standing)
+        _standing.clear()
+    if not was:
+        return False
+    put_back(synth if synth is not None else current(), was)
+    return True
+
+
+def _arm_undo():
+    """A timer that puts the driver back if nothing else does.
+
+    Through NVDA's own `core.callLater` where there is one, because this
+    touches the synthesizer and belongs on the main thread; a plain timer is
+    the fallback for a test, where there is no NVDA and nothing to race.
+    """
+    global _undo_at
+    try:
+        import core
+        core.callLater(int(UNDO_SECONDS * 1000), restore_standing)
+        return
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        _undo_at = threading.Timer(UNDO_SECONDS, restore_standing)
+        _undo_at.daemon = True
+        _undo_at.start()
+    except Exception:                                # noqa: BLE001
+        pass
