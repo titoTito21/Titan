@@ -301,6 +301,17 @@ class TitanAccessEngine:
             sp = SpeechAdapter(self.settings)
             return sp
         self.speech = _try(_mk_speech, "speech_adapter")
+        # **And say which one is speaking.** The modules shared with the
+        # NVDA add-on reach speech through `portable/compat.py`, which is
+        # written against NVDA's own `speech` module and has no engine to
+        # ask - so without this every ported feature was silent here and
+        # perfect in NVDA, with nothing anywhere saying why.
+        if self.speech is not None:
+            try:
+                from titan_access import speech_adapter
+                speech_adapter.use(self.speech)
+            except Exception:                        # noqa: BLE001
+                pass
 
         def _mk_sound():
             import os

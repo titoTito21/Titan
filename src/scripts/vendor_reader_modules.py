@@ -56,6 +56,13 @@ SHARED = (
     # MSAA for a window that has none: a virtual machine, a program on a
     # toolkit nobody wired up.
     'virtualInput.py',
+    # What a picture of a window IS - the menu bar, the columns, the
+    # status line and what is highlighted - worked out from geometry, so
+    # it is the same in every language and costs nothing.
+    'sceneModel.py',
+    # Windows' own recogniser, and the local model tier under it. Both
+    # readers ask Titan for the model, so this is one file.
+    'localOcr.py',
     # What kind of window you have arrived in, and what its icon is.
     'windowKind.py',
     # The semantic classes - what each kind of thing sounds like, and in

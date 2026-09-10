@@ -351,6 +351,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if virtualWindow.left_the_window():
                 self._keep_virtual_keys_right()
             self._keep_palette_keys_right()
+            self._keep_typing_keys_right()
         except Exception:                            # noqa: BLE001
             pass
         try:
@@ -500,6 +501,69 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     #: are controls where the OCR review has lines, and Left and Right are
     #: what is inside one where the OCR review has words - the same
     #: relationship, one level up.
+    #: What an edit-field mode holds: every printable key, so the
+    #: character reaches the field, and the editing keys beside them.
+    #: Held ONLY while a field is being typed into and given back the
+    #: moment it is not - a reader still holding the alphabet in the next
+    #: window is a machine that has stopped answering.
+    TYPING_CHARACTERS = ('abcdefghijklmnopqrstuvwxyz0123456789'
+                         "-=[];'\\,./`")
+
+    TYPING_KEYS = ('space', 'backspace', 'delete', 'leftArrow',
+                   'rightArrow', 'upArrow', 'downArrow', 'home', 'end',
+                   'pageUp', 'pageDown', 'enter', 'tab')
+
+    def _typing_gestures(self):
+        wanted = {}
+        for character in self.TYPING_CHARACTERS:
+            wanted['kb:%s' % character] = 'appType'
+            wanted['kb:shift+%s' % character] = 'appType'
+        for name in self.TYPING_KEYS:
+            wanted['kb:%s' % name] = 'appType'
+            wanted['kb:control+%s' % name] = 'appType'
+        # Escape is the way OUT, and is deliberately not relayed.
+        wanted['kb:escape'] = 'appLeave'
+        return wanted
+
+    def _borrow_typing_keys(self, borrow=True):
+        for gesture, script_name in self._typing_gestures().items():
+            try:
+                if borrow:
+                    self.bindGesture(gesture, script_name)
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._typing_bound = bool(borrow)
+
+    def _keep_typing_keys_right(self):
+        try:
+            want = appReview.reviewing() and appReview.typing_mode()
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want != getattr(self, '_typing_bound', False):
+            # The two sets overlap, so whichever is not wanted lets go
+            # first or a key is left bound to the wrong script.
+            if want:
+                self._borrow_app_keys(False)
+                self._borrow_typing_keys(True)
+            else:
+                self._borrow_typing_keys(False)
+                self._app_bound = False
+                self._keep_app_keys_right()
+
+    @script(description=_('In a described application: type into the field'),
+            category=CATEGORY)
+    def script_appType(self, gesture):
+        if not (appReview.reviewing() and appReview.typing_mode()):
+            self._keep_typing_keys_right()
+            gesture.send()
+            return
+        key = appReview.wire_key(
+            getattr(gesture, 'mainKeyName', ''),
+            getattr(gesture, 'modifierNames', None) or [])
+        appReview.relay(key)
+
     APP_KEYS = {
         'kb:upArrow': 'appUp',
         'kb:downArrow': 'appDown',
@@ -574,6 +638,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def _palette_key(self, gesture, act):
         if not palette.walking():
             self._keep_palette_keys_right()
+            self._keep_typing_keys_right()
             gesture.send()
             return
         try:
@@ -1525,6 +1590,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             gesture.send()
             return
         _ok, said = appReview.activate()
+        # Enter on a field hands the keyboard to it, so which keys this
+        # holds has just changed.
+        self._keep_typing_keys_right()
         if said:
             dialogs.report(said)
 
@@ -1553,6 +1621,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     @script(description=_('Leave the application review'),
             category=CATEGORY)
     def script_appLeave(self, gesture):
+        # **One level at a time.** Escape in a field comes back to the
+        # controls, Escape in a menu comes back to the
+        # controls; Escape in the controls leaves the review. Closing the
+        # whole thing from inside a menu would make one keystroke undo two
+        # decisions - the same rule the virtual window's field mode
+        # follows.
+        if appReview.reviewing() and appReview.typing_mode():
+            _ok, said = appReview.leave_typing()
+            self._keep_typing_keys_right()
+            if said:
+                dialogs.report(said)
+            return
+        if appReview.reviewing() and appReview.in_a_menu():
+            _ok, said = appReview.close_menu()
+            if said:
+                dialogs.report(said)
+            return
         if not appReview.reviewing():
             self._keep_app_keys_right()
             gesture.send()
@@ -1871,6 +1956,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             # answer every other mode in this add-on gives its own key.
             _ok, said = palette.stop()
             self._keep_palette_keys_right()
+            self._keep_typing_keys_right()
             dialogs.report(said)
             return
         commands.command_palette(self._open_layer)

@@ -881,8 +881,26 @@ def _watch_locally(hwnd, stop):
                     _watching['empty'] += 1
                     enough = _watching['empty'] >= EMPTY_ENOUGH
                 if enough:
-                    _log('Windows read nothing in this window %d times; '
-                         'asking the AI instead' % EMPTY_ENOUGH)
+                    # **The model on this machine before the one that
+                    # costs.** It reads a stylised game menu and a
+                    # low-resolution guest that Windows' recogniser
+                    # cannot, it sends nothing anywhere and it spends
+                    # nothing - so a window Windows read as blank is its
+                    # question, and the AI is only what is left when even
+                    # it found nothing.
+                    reading = _model_reading(hwnd)
+                    if reading is not None and reading.lines:
+                        _log('Windows read nothing; the local model read '
+                             '%d line(s)' % len(reading.lines))
+                        with _LOCK:
+                            _watching['empty'] = 0
+                        last = _said_reading(hwnd, reading, last)
+                        interval = SLOW_POLL
+                        if stop.wait(interval):
+                            break
+                        continue
+                    _log('neither Windows nor the local model read anything '
+                         'in this window; asking the AI instead')
                     return MODE_APPLICATION
             else:
                 with _LOCK:
@@ -936,6 +954,42 @@ def _watch_locally(hwnd, stop):
         if stop.wait(interval):
             break
     return ''
+
+
+def _model_reading(hwnd):
+    """The local model's reading of that window, or None.
+
+    Asked of Titan, because that is where the model lives: the add-on
+    ships as a `.nvda-addon` into NVDA's own Python and cannot carry
+    onnxruntime, and Titan already has the capture pipeline. Both readers
+    reach the same one through the same doorway.
+    """
+    try:
+        from . import localOcr
+        ok, _why = localOcr.model_available()
+        if not ok:
+            return None
+        return localOcr.read_window_model(hwnd)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def _said_reading(hwnd, reading, last):
+    """Say what is new in a reading, and answer it as the new `last`.
+
+    The same rule the poll follows: the highlight when there is one, and
+    otherwise only the lines that have just appeared - a window whose
+    whole reading is announced on every change is a reader reciting a
+    menu from the top every time one line of it moves.
+    """
+    try:
+        from . import smart
+        smart.take_local(hwnd, reading)
+    except Exception:                                # noqa: BLE001
+        pass
+    for line in reading.added_since(last)[:MAX_SAID]:
+        _say(line, interrupt=False)
+    return reading
 
 
 #: How many readings in a row may come back with no words in them

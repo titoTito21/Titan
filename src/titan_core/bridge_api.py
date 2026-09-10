@@ -868,9 +868,20 @@ def _app_ui_set(args):
 
 
 def _app_ui_key(args):
+    """One key into a described application.
+
+    ``control`` aims it at a field rather than at the window, which is
+    what an interface offering an edit mode needs: without it the only
+    way to change a field was `app.set` with the whole value, so there
+    was no caret, no Backspace and no moving by character or word - a
+    field that could be replaced but not typed into.
+    """
     held = _app_ui_session(args)
-    return _app_ui_answer(held, held.application.tell(
-        'key', key=str(args.get('key') or '')))
+    aimed = args.get('control')
+    rest = {'key': str(args.get('key') or '')}
+    if aimed not in (None, ''):
+        rest['control'] = int(aimed)
+    return _app_ui_answer(held, held.application.tell('key', **rest))
 
 
 def _app_ui_close(args):
@@ -919,6 +930,108 @@ def _whole(value):
 # find out whether the overlay went up - this repository has paid for that
 # mistake in every direction it can be made - so the same thing is here in one
 # shape, with real booleans and real numbers.
+def _ocr_model_status(_args):
+    """Whether the local recogniser is here, and what it has done.
+
+    Read-only, and answered whether or not anything is installed: "it is
+    not there" is the ordinary state and a caller has to be able to tell
+    it from "it failed".
+    """
+    from src.ai.ocr import local_model
+    return local_model.report()
+
+
+def _ocr_install_model(args):
+    """Fetch the local recogniser. Minutes, and a download, so it is
+    asked for - never done by itself."""
+    from src.ai.ocr import local_model
+    ok, said = local_model.install(
+        timeout=float(args.get('timeout') or 1800.0))
+    local_model.forget()
+    return {'ok': bool(ok), 'text': said,
+            'installed': local_model.installed()}
+
+
+def _ocr_read_local(args):
+    """Read one window with the LOCAL model. Nothing leaves the machine.
+
+    Answers lines in SCREEN coordinates, because that is the only shape a
+    reader can act on: `Capture` alone knows what it photographed and
+    where, so the conversion happens here rather than being handed to the
+    caller as arithmetic it cannot check.
+    """
+    from src.ai.ocr import capture as capture_module
+    from src.ai.ocr import local_model
+    ok, why = local_model.available()
+    if not ok:
+        return {'ok': False, 'text': why, 'lines': [], 'installed': False}
+    hwnd = int(args.get('hwnd') or 0)
+    shot = (capture_module.capture_window(hwnd) if hwnd
+            else capture_module.capture_screen())
+    if shot is None or getattr(shot, 'blank', False):
+        return {'ok': False, 'lines': [],
+                'text': 'that window could not be photographed'}
+    picture = _picture_of(shot)
+    if picture is None:
+        return {'ok': False, 'lines': [],
+                'text': 'the picture could not be read back'}
+    ok, found = local_model.read_array(picture)
+    if not ok:
+        return {'ok': False, 'lines': [], 'text': str(found)}
+    lines = []
+    for one in found:
+        left, top, width, height = one['box']
+        # The capture knows its own scale and origin; nothing else does.
+        where = shot.rect_to_screen([left, top, width, height]) \
+            if hasattr(shot, 'rect_to_screen') else (left, top, width, height)
+        lines.append({'text': one['text'], 'score': one.get('score', 0.0),
+                      'left': int(where[0]), 'top': int(where[1]),
+                      'width': int(where[2]), 'height': int(where[3])})
+    return {'ok': True, 'lines': lines, 'installed': True,
+            'ms': local_model.report().get('ms', 0.0)}
+
+
+def _picture_of(shot):
+    """The capture's PNG back as an ``(h, w, 3)`` array.
+
+    Titan encodes what it captured and keeps the bytes; the model wants
+    the pixels. Decoded with zlib and numpy rather than with an imaging
+    library, because Titan deliberately has none - `_encode_png` is
+    written the same way and this is its mirror.
+    """
+    try:
+        import struct
+        import zlib
+        import numpy as np
+    except Exception:                                # noqa: BLE001
+        return None
+    data = getattr(shot, 'png', None)
+    if not data:
+        return None
+    try:
+        at = 8
+        width = height = 0
+        pixels = b''
+        while at < len(data):
+            length = struct.unpack('>I', data[at:at + 4])[0]
+            kind = data[at + 4:at + 8]
+            body = data[at + 8:at + 8 + length]
+            if kind == b'IHDR':
+                width, height = struct.unpack('>II', body[:8])
+            elif kind == b'IDAT':
+                pixels += body
+            elif kind == b'IEND':
+                break
+            at += 12 + length
+        if not width or not height:
+            return None
+        raw = np.frombuffer(zlib.decompress(pixels), dtype=np.uint8)
+        raw = raw.reshape(height, 1 + width * 3)
+        return raw[:, 1:].reshape(height, width, 3).copy()
+    except Exception:                                # noqa: BLE001
+        return None
+
+
 def _ocr_overlay(_args):
     """What is on the window: `{open, window, title, controls, surfaces,
     hidden}`. `open` false is the honest answer for every reason at once."""
@@ -1029,6 +1142,10 @@ READ_ONLY = frozenset((
     'window.state', 'titan.processes',
     'app.list', 'app.screen', 'app.sessions', 'app.log',
     'ocr.overlay',
+    # Reading a window with the model on this machine sends nothing
+    # anywhere and costs nothing, so it is served like any other reading.
+    # Installing it is a download and deliberately is NOT here.
+    'ocr.model', 'ocr.read_local',
 ))
 
 
@@ -1134,6 +1251,9 @@ CALLS = {
     'app.close': _app_ui_close,
     'app.sessions': _app_ui_sessions,
     'app.log': _app_ui_log,
+    'ocr.model': _ocr_model_status,
+    'ocr.install_model': _ocr_install_model,
+    'ocr.read_local': _ocr_read_local,
     'ocr.overlay': _ocr_overlay,
     'ocr.overlay_show': _ocr_overlay_show,
     'ocr.overlay_refresh': _ocr_overlay_refresh,

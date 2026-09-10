@@ -80,7 +80,34 @@ def report():
                 'at': _state['at'], 'window': _state['title'],
                 'moves': _state['moves'], 'presses': _state['presses'],
                 'partial': _state['partial'], 'ms': _state['ms'],
-                'why': _state['why']}
+                'why': _state['why'], 'here': _here_report()}
+
+
+def _here_report():
+    """What the cursor is on, for a diagnostic.
+
+    "Enter on the field does nothing" cannot be answered without knowing
+    what this thinks the row IS - the role it was walked as, whether it
+    has a control behind it at all, and whether the rule that decides
+    "type into this" says yes.
+    """
+    row = here()
+    if row is None:
+        return {}
+    try:
+        return {'name': _text(row.get('name'))[:40],
+                'role': _text(row.get('role')),
+                'has_object': row.get('obj') is not None,
+                'is_a_field': bool(_is_a_field(row)),
+                'typing': bool(_state['typing']),
+                # Where Enter would click. "It clicks in the wrong place"
+                # and "it clicks in the right place and the program
+                # ignored it" are different faults and only the point
+                # tells them apart.
+                'rect': list(row.get('rect') or []),
+                'vm': _in_a_virtual_machine()}
+    except Exception as error:                       # noqa: BLE001
+        return {'failed': str(error)}
 
 
 def reviewing():
@@ -754,6 +781,21 @@ def _refusal(why):
     return '%s: %s' % (said, why)
 
 
+#: How long the guest is given to notice where the pointer is before the
+#: button event. Two moves with this between them, because one move plus
+#: an immediate click is acted on at the guest's old position.
+POINTER_SETTLES = 0.05
+
+
+def _in_a_virtual_machine():
+    """Whether the window being walked is another computer's screen."""
+    try:
+        from . import surface
+        return bool(surface.is_virtual_machine(_foreground()))
+    except Exception:                                # noqa: BLE001
+        return False
+
+
 def click_here():
     """Click the middle of the control the cursor is on, then put the
     mouse back where it was.
@@ -809,8 +851,21 @@ def click_here():
         was = winUser.getCursorPos()
     except Exception:                                # noqa: BLE001
         was = None
+    x, y = left + width // 2, top + height // 2
     try:
-        winUser.setCursorPos(left + width // 2, top + height // 2)
+        winUser.setCursorPos(x, y)
+        # **A virtual machine has to be TOLD where the pointer is before
+        # it is told a button went down.** The guest tracks the host
+        # pointer through its own driver, and a button event that arrives
+        # in the same breath as the move is acted on at wherever the
+        # guest's pointer still was - which is exactly "it clicks in the
+        # guest, but not on the thing I am on". So the position is set,
+        # given a moment to be noticed, and set again: the second move is
+        # what makes the first one true.
+        if _in_a_virtual_machine():
+            time.sleep(POINTER_SETTLES)
+            winUser.setCursorPos(x, y)
+            time.sleep(POINTER_SETTLES)
         # **NVDA is deliberately NOT told the mouse moved.**
         # `mouseHandler.executeMouseMoveEvent` exists to make the reader
         # announce whatever is under the pointer, which is the last thing
@@ -821,8 +876,16 @@ def click_here():
         # 'NoneType' has no 'helperLocalBindingHandle') four times per
         # press. The pointer is put back straight afterwards anyway, so
         # there is no move to report.
-        winUser.mouse_event(winUser.MOUSEEVENTF_LEFTDOWN, 0, 0, None, None)
-        winUser.mouse_event(winUser.MOUSEEVENTF_LEFTUP, 0, 0, None, None)
+        # **`dwData` and `dwExtraInfo` are DWORDs, and `None` is not a
+        # DWORD.** Passing them raised `argument 4: TypeError: an integer
+        # is required` on EVERY press - caught by the `except` below,
+        # answered as False, and reported as "Nothing could be done
+        # here". So Enter in a window read as a picture - which is the
+        # whole of pressing anything inside a virtual machine - never
+        # once clicked, and said the least useful true sentence there is
+        # about why. `smart.py` had it right beside it the whole time.
+        winUser.mouse_event(winUser.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        winUser.mouse_event(winUser.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
         icons.play('task-done')
         return True, ''
     except Exception as error:                       # noqa: BLE001

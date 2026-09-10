@@ -72,12 +72,14 @@ TOGGLEABLE = ('check',)
 
 _LOCK = threading.RLock()
 _state = {'on': False, 'session': '', 'name': '', 'screen': {},
-          'at': 0, 'inner': 0, 'moves': 0, 'presses': 0, 'why': ''}
+          'at': 0, 'inner': 0, 'moves': 0, 'presses': 0, 'why': '',
+          'menu': None, 'typing': None}
 
 
 def report():
     with _LOCK:
         return {'reviewing': _state['on'], 'application': _state['name'],
+                'typing': _state.get('typing') or 0,
                 'at': _state['at'], 'inner': _state['inner'],
                 'controls': len(_controls()), 'moves': _state['moves'],
                 'presses': _state['presses'], 'why': _state['why']}
@@ -93,6 +95,10 @@ def session():
         return str(_state['session'])
 
 
+def _text(value):
+    return str(value or '').strip()
+
+
 def _controls(screen=None):
     """The controls of the screen in hand, in the order they were given.
 
@@ -102,9 +108,50 @@ def _controls(screen=None):
     the window.
     """
     if screen is None:
+        # An open menu IS the list while it is open - one list at a time,
+        # as every list in this add-on is.
+        with _LOCK:
+            menu = _state.get('menu')
+        if menu:
+            return list(menu.get('rows') or [])
         screen = _state.get('screen') or {}
-    rows = screen.get('controls') if isinstance(screen, dict) else None
-    return [row for row in (rows or []) if isinstance(row, dict)]
+    if not isinstance(screen, dict):
+        return []
+    rows = [row for row in (screen.get('controls') or [])
+            if isinstance(row, dict)]
+    return _menu_rows(screen) + rows
+
+
+def _menu_rows(screen):
+    """The window's menu bar, as rows, at the top - where it is.
+
+    **A described screen carries its menus BESIDE its controls**
+    (`app_ui.model.screen` has `menus=` of its own), and this walked only
+    the controls - so the menu bar, which is most of what a program can
+    be told to do, was not in the review at all. It is not a control, so
+    each menu becomes a row that opens its own items, and they come first
+    because that is where a menu bar is.
+    """
+    menus = [one for one in (screen.get('menus') or [])
+             if isinstance(one, dict) and _text(one.get('label'))]
+    if not menus:
+        return []
+    rows = []
+    for menu in menus:
+        items = [item for item in (menu.get('items') or [])
+                 if isinstance(item, dict) and item.get('id')]
+        rows.append({'id': menu.get('id') or menu.get('label'),
+                     'kind': 'menu',
+                     'label': _text(menu.get('label')),
+                     'value': '',
+                     # What Enter on it opens. Kept on the row rather than
+                     # looked up again, because the screen it came from is
+                     # replaced whenever the application is read again.
+                     'items': items,
+                     # Translators: how many things are on a menu.
+                     'description': _('{count} items').format(
+                         count=len(items))})
+    return rows
 
 
 # --------------------------------------------------------------------------- #
@@ -344,6 +391,13 @@ def activate():
     kind = str(control.get('kind') or '')
     token = session()
     identifier = control.get('id')
+    if kind == 'menu':
+        return open_menu(control)
+    if kind == 'menuitem':
+        icons.play('button')
+        _act(lambda: titan.press_described(token, identifier))
+        # Translators: said when a menu item is chosen.
+        return True, _('Chosen')
     if kind in PRESSABLE:
         icons.play('button')
         _act(lambda: titan.press_described(token, identifier))
@@ -367,9 +421,61 @@ def activate():
         # Translators: said when a row of a list is opened.
         return True, _('Opened')
     if kind in ('text', 'multiline'):
-        return type_here()
+        return enter_typing()
     _act(lambda: titan.key_described(token, 'enter'))
     return True, _('Opened')
+
+
+def open_menu(control):
+    """Walk into a menu: its items become the list. ``(ok, said)``.
+
+    The review is one list at a time, as every list in this add-on is, so
+    a menu opens IN PLACE and Escape comes back out - a flyout is a menu
+    a keyboard cannot follow, which is the answer Titan's own Start menu
+    arrived at for the same reason.
+    """
+    items = [item for item in (control.get('items') or [])
+             if isinstance(item, dict)]
+    if not items:
+        # Translators: said when a menu has nothing on it.
+        return False, _('That menu is empty')
+    rows = []
+    for item in items:
+        label = _text(item.get('label'))
+        if not label or not item.get('id'):
+            continue                                 # a separator
+        rows.append({'id': item.get('id'), 'kind': 'menuitem',
+                     'label': label, 'value': '',
+                     'description': _text(item.get('key'))})
+    if not rows:
+        return False, _('That menu is empty')
+    with _LOCK:
+        _state['menu'] = {'label': _text(control.get('label')),
+                          'rows': rows}
+        _state['at'] = 0
+        _state['inner'] = 0
+    icons.play('open-object')
+    say_here()
+    return True, ''
+
+
+def close_menu():
+    """Back out of a menu to the controls. ``(ok, said)``."""
+    with _LOCK:
+        was = _state.get('menu')
+        _state['menu'] = None
+        _state['at'] = 0
+        _state['inner'] = 0
+    if not was:
+        return False, ''
+    icons.play('close-object')
+    say_here()
+    return True, ''
+
+
+def in_a_menu():
+    with _LOCK:
+        return bool(_state.get('menu'))
 
 
 def toggle():
@@ -383,6 +489,95 @@ def toggle():
     icons.play('on' if value else 'off')
     _act(lambda: titan.set_described(token, control.get('id'), value))
     return True, _('Checked') if value else _('Unchecked')
+
+
+#: The kinds Enter turns into an edit-field mode.
+FIELDS = ('text', 'multiline')
+
+
+def typing_mode():
+    """Whether the keyboard is being relayed into a field.
+
+    A MODE the user entered by pressing Enter on a field and leaves with
+    Escape - not a question about where the focus happens to be. While it
+    is on, every printable key, every arrow, Backspace and Delete are
+    relayed to the field itself, which is what holds the text and
+    therefore where the caret arithmetic belongs.
+    """
+    with _LOCK:
+        return bool(_state['on'] and _state.get('typing'))
+
+
+def enter_typing():
+    """Give the keyboard to the field the cursor is on. ``(ok, said)``."""
+    control = here()
+    if control is None:
+        return _nothing()
+    if str(control.get('kind') or '') not in FIELDS:
+        # Translators: said when the cursor is not on something to type in.
+        return False, _('This is not a field')
+    if control.get('readonly'):
+        # Translators: said when a field cannot be typed into.
+        return False, _('This cannot be typed into')
+    with _LOCK:
+        _state['typing'] = int(control.get('id') or 0)
+    icons.play('open-object')
+    # Translators: said when the review hands the keyboard to a field.
+    return True, _('Edit field on')
+
+
+def leave_typing():
+    """Take the keyboard back to the controls. ``(ok, said)``."""
+    with _LOCK:
+        was = _state.get('typing')
+        _state['typing'] = None
+    if not was:
+        return False, ''
+    icons.play('close-object')
+    say_here()
+    # Translators: said when the review takes the keyboard back.
+    return True, _('Edit field off')
+
+
+#: NVDA's own key names, in the spelling the wire uses. NVDA says
+#: `leftArrow` and `control`; the shim's field is written against the
+#: names an interface would send, so the translation happens once, here,
+#: rather than in every caller.
+WIRE_KEYS = {'leftarrow': 'left', 'rightarrow': 'right',
+             'uparrow': 'up', 'downarrow': 'down',
+             'pageup': 'pageup', 'pagedown': 'pagedown',
+             'backspace': 'back', 'return': 'enter',
+             'control': 'ctrl'}
+
+
+def wire_key(main, modifiers=()):
+    """``('a', ['shift'])`` -> ``'shift+a'``, in the wire's own spelling."""
+    parts = []
+    for one in (modifiers or []):
+        name = WIRE_KEYS.get(str(one).lower(), str(one).lower())
+        if name not in parts:
+            parts.append(name)
+    bare = str(main or '')
+    parts.append(WIRE_KEYS.get(bare.lower(), bare))
+    return '+'.join(parts)
+
+
+def relay(key):
+    """One key, into the field being typed into. ``(ok, said)``.
+
+    **The field does the editing, not the reader.** It holds the text and
+    the caret, so a character, a Backspace, an arrow and Control with an
+    arrow all mean exactly what they mean in that control - and the value
+    that comes back is what the application really has, rather than a
+    copy this kept and hoped was still right.
+    """
+    with _LOCK:
+        control = _state.get('typing')
+    if not control:
+        return False, ''
+    token = session()
+    _act(lambda: titan.key_described(token, key, control=control))
+    return True, ''
 
 
 def type_here(text=None):

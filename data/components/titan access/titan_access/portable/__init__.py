@@ -20,22 +20,39 @@ them was written to answer honestly when the thing is not there.
 """
 
 from . import anchors            # noqa: F401
+from . import appReview          # noqa: F401
+from . import appScreen          # noqa: F401
 from . import classes            # noqa: F401
+from . import draft              # noqa: F401
 from . import findControl        # noqa: F401
+from . import icons              # noqa: F401
 from . import labels             # noqa: F401
 from . import layers             # noqa: F401
+from . import localOcr           # noqa: F401
 from . import monitors           # noqa: F401
+from . import palette            # noqa: F401
 from . import perProgram         # noqa: F401
 from . import procedures         # noqa: F401
+from . import sceneModel         # noqa: F401
 from . import schemes            # noqa: F401
 from . import shared             # noqa: F401
+from . import surface            # noqa: F401
+from . import titan              # noqa: F401
+from . import titanWindow        # noqa: F401
 from . import toolkit            # noqa: F401
+from . import trackpad           # noqa: F401
 from . import verify             # noqa: F401
 from . import virtualInput       # noqa: F401
+from . import virtualWindow      # noqa: F401
+from . import widgetReview       # noqa: F401
 from . import windowKind         # noqa: F401
 from . import windowsAndActions  # noqa: F401
 
-__all__ = ['anchors', 'classes', 'findControl', 'labels', 'layers',
-           'monitors', 'perProgram', 'procedures', 'schemes', 'shared',
-           'toolkit', 'verify', 'virtualInput', 'windowKind',
-           'windowsAndActions']
+__all__ = [
+    'anchors', 'appReview', 'appScreen', 'classes', 'draft',
+    'findControl', 'icons', 'labels', 'layers', 'localOcr', 'monitors',
+    'palette', 'perProgram', 'procedures', 'sceneModel', 'schemes',
+    'shared', 'surface', 'titan', 'titanWindow', 'toolkit', 'trackpad',
+    'verify', 'virtualInput', 'virtualWindow', 'widgetReview',
+    'windowKind', 'windowsAndActions',
+]

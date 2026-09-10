@@ -730,12 +730,144 @@ class TextCtrl(_Widget):
                              # A page carries where it came from, so an
                              # interface can offer it to its own browser
                              # instead of only reading it out.
-                             url=getattr(self, '_url', None) or None)
+                             url=getattr(self, '_url', None) or None,
+                             # Where the caret is, so an interface reading
+                             # this field by ear can say which character
+                             # and which line the user is on. It is the
+                             # one thing about a field that changes
+                             # without the text changing.
+                             caret=int(self._insertion or 0))
 
     def _set_from_user(self, value):
         self._value = '' if value is None else str(value)
+        self._insertion = len(self._value)
         RUNTIME.changed()
         self._fire(EVT_TEXT)
+
+    # ----------------------------------------------------------- typing
+    #: The keys that MOVE the caret rather than changing the text. Named
+    #: as the wire names them, so an interface sends the key it was
+    #: pressed rather than translating it into an offset.
+    _MOVES = ('left', 'right', 'up', 'down', 'home', 'end',
+              'pageup', 'pagedown')
+
+    def _typed(self, key):
+        """One key, aimed at THIS field. Answers whether it was ours.
+
+        **This is what makes an edit mode possible at all.** Before it,
+        the only way to change a described field was `set` with the whole
+        value, so an interface could offer a dialog to type into and
+        nothing that behaves like a field: no caret, no Backspace, no
+        moving by character, word or line. Every one of those is here
+        because a person editing text by ear needs exactly them, and the
+        arithmetic belongs on the side that holds the text.
+
+        A read-only field takes the movements and refuses the changes,
+        which is what a read-only field does.
+        """
+        name = str(key or '')
+        held, _sep, bare = name.rpartition('+')
+        bare = (bare or name).lower()
+        control = 'ctrl+' in name.lower()
+        shift = 'shift+' in name.lower()
+        where = max(0, min(int(self._insertion or 0), len(self._value)))
+        if bare in self._MOVES:
+            self._insertion = self._move(bare, where, control)
+            RUNTIME.changed()
+            return True
+        if bare in ('back', 'backspace'):
+            return self._remove(where, forwards=False, word=control)
+        if bare == 'delete':
+            return self._remove(where, forwards=True, word=control)
+        if bare in ('return', 'enter'):
+            if not self._style & TE_MULTILINE:
+                return False            # the form's business, not the field's
+            return self._insert('\n', where)
+        if bare == 'space':
+            return self._insert(' ', where)
+        if bare == 'tab':
+            return False                # moving between controls
+        if len(bare) == 1 and not control:
+            return self._insert(bare.upper() if shift else bare, where)
+        return False
+
+    def _move(self, key, where, by_word):
+        text = self._value
+        if key == 'home':
+            return text.rfind('\n', 0, where) + 1
+        if key == 'end':
+            found = text.find('\n', where)
+            return len(text) if found < 0 else found
+        if key == 'left':
+            return self._word_edge(where, -1) if by_word else max(0, where - 1)
+        if key == 'right':
+            return self._word_edge(where, 1) if by_word \
+                else min(len(text), where + 1)
+        if key in ('up', 'down', 'pageup', 'pagedown'):
+            return self._line(where, -1 if key in ('up', 'pageup') else 1,
+                              10 if key in ('pageup', 'pagedown') else 1)
+        return where
+
+    def _word_edge(self, where, direction):
+        """The next word boundary. Ctrl and an arrow, as everywhere else."""
+        text = self._value
+        at = where
+        if direction < 0:
+            while at > 0 and text[at - 1].isspace():
+                at -= 1
+            while at > 0 and not text[at - 1].isspace():
+                at -= 1
+            return at
+        end = len(text)
+        while at < end and not text[at].isspace():
+            at += 1
+        while at < end and text[at].isspace():
+            at += 1
+        return at
+
+    def _line(self, where, direction, count):
+        """Up or down, keeping the column - which is what a caret does."""
+        text = self._value
+        lines = text.split('\n')
+        at_line, seen = 0, 0
+        for index, line in enumerate(lines):
+            if where <= seen + len(line):
+                at_line = index
+                break
+            seen += len(line) + 1
+            at_line = index
+        column = where - seen
+        wanted = max(0, min(len(lines) - 1, at_line + direction * count))
+        start = sum(len(one) + 1 for one in lines[:wanted])
+        return start + min(column, len(lines[wanted]))
+
+    def _insert(self, text, where):
+        if self._style & TE_READONLY:
+            return False
+        self._value = self._value[:where] + text + self._value[where:]
+        self._insertion = where + len(text)
+        RUNTIME.changed()
+        self._fire(EVT_TEXT)
+        return True
+
+    def _remove(self, where, forwards, word=False):
+        if self._style & TE_READONLY:
+            return False
+        if forwards:
+            end = self._word_edge(where, 1) if word \
+                else min(len(self._value), where + 1)
+            if end <= where:
+                return True
+            self._value = self._value[:where] + self._value[end:]
+        else:
+            start = self._word_edge(where, -1) if word else max(0, where - 1)
+            if start >= where:
+                return True
+            self._value = self._value[:start] + self._value[where:]
+            self._insertion = start
+        RUNTIME.changed()
+        self._fire(EVT_TEXT)
+        return True
 
 
 class SearchCtrl(TextCtrl):

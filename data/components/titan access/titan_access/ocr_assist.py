@@ -175,6 +175,104 @@ def forget(hwnd=None):
 # --------------------------------------------------------------------------- #
 # Nodes for the virtual buffer
 # --------------------------------------------------------------------------- #
+def local_lines(hwnd):
+    """Read *hwnd* with the model on THIS machine. ``[]`` when it cannot.
+
+    **The tier between Windows' recogniser and the AI, and here it is the
+    only local one there is**: the Windows path in `portable/localOcr.py`
+    is NVDA's own `contentRecog`, which Titan Access has not got. So this
+    is what makes a drawn window - a game's menu, a virtual machine -
+    readable in this reader without an AI key, without sending a picture
+    of the screen anywhere and without spending anything.
+
+    In-process, because Titan Access is not on the other side of
+    anything: the add-on asks Titan for this over a pipe and this calls
+    the same code directly.
+
+    Answers ``[{'text', 'left', 'top', 'width', 'height', 'score'}]`` in
+    SCREEN pixels - the `Capture` is the only thing that knows how to
+    convert them, so it happens once, here.
+    """
+    try:
+        from src.ai.ocr import capture as capture_module
+        from src.ai.ocr import local_model
+    except Exception:                                # noqa: BLE001
+        return []
+    ok, _why = local_model.available()
+    if not ok:
+        return []
+    try:
+        shot = capture_module.capture_window(int(hwnd or 0))
+        if shot is None or getattr(shot, "blank", False):
+            return []
+        from src.titan_core.bridge_api import _picture_of
+        picture = _picture_of(shot)
+        if picture is None:
+            return []
+        ok, found = local_model.read_array(picture)
+        if not ok:
+            return []
+    except Exception as e:                           # noqa: BLE001
+        if _DBG:
+            print(f"[TitanAccess][ocr] local model failed: {e}", flush=True)
+        return []
+    lines = []
+    for one in found:
+        left, top, width, height = one["box"]
+        where = shot.rect_to_screen([left, top, width, height])
+        lines.append({"text": one["text"], "score": one.get("score", 0.0),
+                      "left": int(where[0]), "top": int(where[1]),
+                      "width": int(where[2]), "height": int(where[3])})
+    return lines
+
+
+def local_nodes(hwnd, node_cls):
+    """The local model's reading of *hwnd*, as buffer nodes. ``[]`` for none.
+
+    The structure comes from `portable/sceneModel.py` - the same one the
+    NVDA add-on uses - so a window read this way is laid out identically
+    in both readers: the menu bar named, the columns of a row together,
+    the status line named, and whatever is highlighted marked.
+    """
+    lines = local_lines(hwnd)
+    if not lines:
+        return []
+    try:
+        from .portable import sceneModel
+        from .portable import virtualInput
+    except Exception:                                # noqa: BLE001
+        return []
+
+    class _Reading:
+        """Only what `virtualInput` reads off a reading."""
+        def __init__(self, rows):
+            self.lines = rows
+            self.highlights = []
+
+    rows = [[{"text": one["text"], "left": one["left"], "top": one["top"],
+              "width": one["width"], "height": one["height"]}]
+            for one in lines]
+    try:
+        pieces = virtualInput.build(_Reading(rows), None)
+        found = sceneModel.scene(pieces)
+    except Exception:                                # noqa: BLE001
+        return []
+    nodes = []
+    for row in found.get("rows") or []:
+        for piece in row.get("cells") or []:
+            text = str(piece.get("text") or "").strip()
+            if not text:
+                continue
+            nodes.append(node_cls(
+                name=text, role="text", level=0, source="ocr", hwnd=hwnd,
+                rect=(piece["left"], piece["top"],
+                      piece["width"], piece["height"])))
+    if _DBG:
+        print(f"[TitanAccess][ocr] the local model built {len(nodes)} "
+              f"node(s) for {hwnd}", flush=True)
+    return nodes
+
+
 def build_nodes(hwnd, node_cls, on_status=None, settings=None, force=False):
     """Read *hwnd* and return its controls as ``node_cls`` buffer nodes.
 
@@ -186,6 +284,13 @@ def build_nodes(hwnd, node_cls, on_status=None, settings=None, force=False):
     how to convert them -- so the conversion happens here, once, and nothing
     downstream ever has to think about the scale factor.
     """
+    # **The model on this machine first.** It is free, private and needs
+    # no AI key, so a window it can read is one nobody has to pay for -
+    # and the AI is left for the question only it can answer: which of
+    # these is a button, and what does that picture show.
+    found = local_nodes(hwnd, node_cls)
+    if found:
+        return found
     screen = read_window(hwnd, force=force, on_status=on_status,
                          settings=settings)
     if screen is None:

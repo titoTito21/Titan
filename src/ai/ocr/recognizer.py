@@ -95,6 +95,18 @@ def read_screen(scope: str = 'window', previous: Optional[model_mod.Screen] = No
             except Exception:
                 pass
 
+    # **Somebody reading a window is the moment to offer the recogniser
+    # that runs here.** Asked once, where the need arises rather than in
+    # a settings page they would have to already know about - and asked
+    # BEFORE the provider is checked, because "there is no AI key" is
+    # exactly the person this helps most: with the local model they can
+    # read the window at all.
+    try:
+        from src.ai.ocr import local_model
+        local_model.offer()
+    except Exception:                                # noqa: BLE001
+        pass
+
     reason = ai_provider.vision_unavailable_reason()
     if reason:
         raise RecognitionError(reason)

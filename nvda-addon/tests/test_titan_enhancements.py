@@ -7315,6 +7315,50 @@ class WindowsOwnRecogniserIsTheFirstTier(unittest.TestCase):
                          ['New game', 'Options'])
         self.assertTrue(all(c.get('rect') for c in controls))
 
+    def test_every_PIECE_is_a_control_not_every_line(self):
+        """A menu bar read as "File Edit View" was ONE control the cursor
+        could not get inside, and a row with a name and a size beside it
+        was one lump of text. `virtualInput` already splits a row where
+        the gaps are; using it is what makes this tier show what is
+        really there rather than the lines it came in."""
+        from titanEnhancements import smart
+        from titanEnhancements import localOcr
+
+        class Wide:
+            data = [[{'text': 'File', 'x': 0, 'y': 0,
+                      'width': 30, 'height': 10},
+                     {'text': 'Edit', 'x': 200, 'y': 0,
+                      'width': 30, 'height': 10}]]
+        reading = localOcr.Reading.of(Wide(), self.Info())
+        names = [one['name'] for one in smart.controls_from(reading)]
+        self.assertIn('File', names)
+        self.assertIn('Edit', names)
+
+    def test_what_the_picture_highlighted_is_marked(self):
+        """In a game's menu and a guest's file list the highlight IS the
+        interface - it is the entry the arrow keys are on."""
+        from titanEnhancements import smart
+        reading = self.reading
+        # The highlight is built from the row's OWN rectangle, padded, so
+        # this asks whether a highlight over a row marks it rather than
+        # whether the test guessed the geometry right.
+        _text, rect = reading.rows()[0]
+        reading.highlights = [(rect[0] - 4, rect[1] - 4,
+                               rect[2] + 8, rect[3] + 8)]
+        controls = smart.controls_from(reading)
+        chosen = smart.selected_in(controls)
+        self.assertTrue(chosen, 'nothing was marked as highlighted')
+        self.assertTrue(chosen[0].get('region'),
+                        'a highlighted control says nothing about being one')
+
+    def test_a_reading_with_no_pieces_still_answers_its_lines(self):
+        """A reading with nothing to split is still a reading: answering
+        that the window is empty would be worse than the lines."""
+        from titanEnhancements import smart
+        controls = smart.controls_from(self.reading)
+        self.assertTrue(controls)
+        self.assertTrue(all(one.get('rect') for one in controls))
+
     def test_a_control_that_knows_where_it_is_presses_itself(self):
         """No Titan, no AI, no request - a click at a place we were told."""
         path = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
@@ -9794,6 +9838,401 @@ class TheCursorKeysAreBoundInEveryModeButAGame(unittest.TestCase):
         at = source.index('def _keep_keys_right(')
         end = source.index('\n    def ', at + 10)
         self.assertIn('!= surface.MODE_GAME', source[at:end])
+
+
+# --------------------------------------------------------------------------- #
+class EveryWin32ArgumentIsAnInteger(unittest.TestCase):
+    """`argument 4: TypeError: an integer is required`, on every press.
+
+    `winUser.mouse_event(flags, 0, 0, None, None)` - and `dwData` and
+    `dwExtraInfo` are DWORDs. NVDA declares argtypes for its bindings
+    (`winBindings/user32.py`), so `None` is refused rather than quietly
+    becoming a null pointer the way a bare `ctypes.windll` call would
+    take it. It raised inside `click_here`, was caught by the `except`
+    there, answered as False and reported as "Nothing could be done
+    here" - so Enter in a window read as a picture, which is the whole of
+    pressing anything inside a virtual machine, never once clicked.
+    `smart.py` had `0, 0` right beside it the whole time.
+    """
+
+    def _clicks(self):
+        for name in ('virtualWindow.py', 'smart.py', 'ocrReview.py',
+                     'widgetReview.py', 'appReview.py'):
+            where = os.path.join(ADDON, 'globalPlugins',
+                                 'titanEnhancements', name)
+            if os.path.exists(where):
+                yield name, io.open(where, encoding='utf-8').read()
+
+    def test_no_click_passes_None_where_a_DWORD_belongs(self):
+        import re
+        pattern = re.compile(r'mouse_event\s*\(([^)]*)\)')
+        seen = 0
+        for name, source in self._clicks():
+            for arguments in pattern.findall(source):
+                seen += 1
+                self.assertNotIn('None', arguments,
+                                 '%s passes None to mouse_event: %s'
+                                 % (name, arguments))
+        self.assertGreater(seen, 0, 'no click was found to check at all')
+
+    def test_the_same_for_keybd_event(self):
+        import re
+        pattern = re.compile(r'keybd_event\s*\(([^)]*)\)')
+        for name, source in self._clicks():
+            for arguments in pattern.findall(source):
+                self.assertNotIn('None', arguments,
+                                 '%s passes None to keybd_event' % name)
+
+    def test_a_click_that_failed_says_why(self):
+        """"Nothing could be done here" is the least useful true sentence
+        there is - it wears a rectangle that was never read, a control
+        off the screen, an NVDA with no mouse handler and a click that
+        really raised, and each is a different thing to do about it."""
+        from titanEnhancements import virtualWindow
+        said = virtualWindow._refusal('the click itself failed: argument 4')
+        self.assertIn('argument 4', said)
+        self.assertIn('why', virtualWindow.report())
+
+
+# --------------------------------------------------------------------------- #
+class TypingIntoADescribedField(unittest.TestCase):
+    """The other half of the edit-field mode: a described application has
+    no control here to focus - it is in another process, behind the
+    Action Bus - so the keys are relayed to the field itself, which holds
+    the text and the caret."""
+
+    def setUp(self):
+        from titanEnhancements import appReview
+        self.app = appReview
+        self.sent = []
+        self._act = appReview._act
+        appReview._act = lambda work: self.sent.append(work)
+        self.addCleanup(lambda: setattr(appReview, '_act', self._act))
+        appReview._state.update({'on': True, 'session': 's1', 'at': 0,
+                                 'inner': 0, 'menu': None, 'typing': None,
+                                 'screen': {'controls': [
+                                     {'id': 7, 'kind': 'text',
+                                      'label': 'Title', 'value': ''}]}})
+        self.addCleanup(lambda: appReview._state.update(
+            {'on': False, 'typing': None, 'screen': {}, 'at': 0}))
+
+    def test_enter_on_a_field_turns_the_mode_on(self):
+        ok, said = self.app.activate()
+        self.assertTrue(ok)
+        self.assertTrue(self.app.typing_mode())
+        self.assertTrue(said)
+
+    def test_escape_turns_it_off_and_the_pair_is_symmetrical(self):
+        _ok, on = self.app.activate()
+        ok, off = self.app.leave_typing()
+        self.assertTrue(ok)
+        self.assertFalse(self.app.typing_mode())
+        self.assertEqual(on.rsplit(' ', 1)[0], off.rsplit(' ', 1)[0])
+
+    def test_a_read_only_field_is_refused_with_a_reason(self):
+        self.app._state['screen']['controls'][0]['readonly'] = True
+        ok, said = self.app.activate()
+        self.assertFalse(ok)
+        self.assertTrue(said)
+        self.assertFalse(self.app.typing_mode())
+
+    def test_the_key_is_aimed_at_the_field(self):
+        self.app.activate()
+        self.sent = []
+        ok, _said = self.app.relay('a')
+        self.assertTrue(ok)
+        self.assertEqual(len(self.sent), 1)
+
+    def test_nothing_is_relayed_when_the_mode_is_off(self):
+        ok, _said = self.app.relay('a')
+        self.assertFalse(ok)
+        self.assertEqual(self.sent, [])
+
+    def test_nvdas_key_names_are_translated_to_the_wires(self):
+        """NVDA says `leftArrow` and `control`; the shim's field is
+        written against the names an interface would send, so the
+        translation happens once rather than in every caller."""
+        self.assertEqual(self.app.wire_key('leftArrow', ['control']),
+                         'ctrl+left')
+        self.assertEqual(self.app.wire_key('a', ['shift']), 'shift+a')
+        self.assertEqual(self.app.wire_key('backspace'), 'back')
+        self.assertEqual(self.app.wire_key('downArrow'), 'down')
+        self.assertEqual(self.app.wire_key('a'), 'a')
+
+    def test_escape_is_not_relayed(self):
+        """It is the way out, and a field that swallowed it would be a
+        mode nobody could leave."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _typing_gestures(')
+        end = source.index('\n    def ', at + 10)
+        block = source[at:end]
+        self.assertIn("wanted['kb:escape'] = 'appLeave'", block)
+
+    def test_every_printable_key_is_held_while_typing(self):
+        """A field that took only the letters would be a field you could
+        not put a number or a full stop in."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('TYPING_CHARACTERS = ')
+        block = source[at:at + 300]
+        for wanted in ('abcdefghijklmnopqrstuvwxyz', '0123456789'):
+            self.assertIn(wanted, block)
+
+
+# --------------------------------------------------------------------------- #
+class WhatAPictureOfAWindowIS(unittest.TestCase):
+    """`sceneModel.py` - the structure, worked out from geometry.
+
+    The recogniser answers words and rectangles, which is enough to make
+    a drawn window navigable and not enough to make it understandable: a
+    menu bar, a list with columns, a status line and the entry the arrow
+    keys are on all arrive as the same flat run of text.
+    """
+
+    def setUp(self):
+        from titanEnhancements import sceneModel
+        self.scene = sceneModel
+        sceneModel.forget()
+
+    @staticmethod
+    def _piece(text, left, top, width=60, height=12, line=0, column=0,
+               selected=False):
+        return {'text': text, 'left': left, 'top': top, 'width': width,
+                'height': height, 'line': line, 'column': column,
+                'selected': selected}
+
+    def test_a_menu_bar_is_recognised_by_SHAPE_not_by_its_words(self):
+        """"File Edit View" is English and the same bar in Polish is
+        "Plik Edycja Widok". What is the same in every language is
+        several short pieces spread across the top."""
+        pieces = [self._piece('Plik', 0, 0, 40),
+                  self._piece('Edycja', 100, 0, 50),
+                  self._piece('Widok', 200, 0, 45),
+                  self._piece('Pomoc', 300, 0, 45)]
+        for index in range(6):
+            pieces.append(self._piece('body %d' % index, 0, 40 + index * 20,
+                                      line=index + 1))
+        found = self.scene.scene(pieces)
+        self.assertTrue(found['menu'], 'the top row was not read as a menu')
+        self.assertEqual(found['rows'][0]['kind'], 'menubar')
+
+    def test_columns_that_repeat_are_a_table(self):
+        """A table is not declared anywhere in a picture; what says so is
+        that the same left edge comes back row after row."""
+        pieces = []
+        for row in range(5):
+            pieces.append(self._piece('name%d' % row, 0, row * 20, line=row))
+            pieces.append(self._piece('%d KB' % row, 300, row * 20, line=row))
+            pieces.append(self._piece('1 Jan', 500, row * 20, line=row))
+        found = self.scene.scene(pieces)
+        self.assertGreaterEqual(len(found['columns']), 2)
+        self.assertIn('cells', [row['kind'] for row in found['rows']])
+
+    def test_two_pieces_that_happen_to_line_up_are_not_a_table(self):
+        """Fewer than COLUMN_ROWS of them is a coincidence."""
+        pieces = [self._piece('a', 0, 0, line=0),
+                  self._piece('b', 300, 0, line=0),
+                  self._piece('c', 0, 20, line=1),
+                  self._piece('d', 300, 20, line=1)]
+        found = self.scene.scene(pieces)
+        self.assertLess(len(found['columns']), 2)
+
+    def test_the_highlight_is_the_selection(self):
+        pieces = [self._piece('One', 0, 0, line=0),
+                  self._piece('Two', 0, 20, line=1, selected=True),
+                  self._piece('Three', 0, 40, line=2)]
+        found = self.scene.scene(pieces)
+        self.assertEqual([one['text'] for one in found['selected']], ['Two'])
+        self.assertEqual(found['rows'][1]['cells'][0]['kind'], 'selected')
+
+    def test_the_bottom_band_is_a_status_line(self):
+        pieces = [self._piece('Title', 0, 0, line=0)]
+        for index in range(6):
+            pieces.append(self._piece('row %d' % index, 0, 20 + index * 20,
+                                      line=index + 1))
+        pieces.append(self._piece('Ready', 0, 200, line=7))
+        found = self.scene.scene(pieces)
+        self.assertEqual(found['rows'][-1]['kind'], 'status')
+
+    def test_nothing_is_invented(self):
+        """A piece's text is exactly what came back; what is added is
+        where it sits and what that position means."""
+        pieces = [self._piece('Only this', 0, 0)]
+        found = self.scene.scene(pieces)
+        said = [one['text'] for row in found['rows'] for one in row['cells']]
+        self.assertEqual(said, ['Only this'])
+
+    def test_an_empty_reading_is_an_empty_scene_not_a_crash(self):
+        for nothing in ([], None, [{'text': ''}]):
+            found = self.scene.scene(nothing)
+            self.assertEqual(found['rows'], [])
+
+    def test_everything_reads_the_window_as_it_is_laid_out(self):
+        pieces = [self._piece('name', 0, 0, line=0),
+                  self._piece('size', 300, 0, line=0)]
+        lines = self.scene.everything(self.scene.scene(pieces))
+        self.assertTrue(any('name' in line and 'size' in line
+                            for line in lines))
+
+
+class TheLocalModelIsATierOfItsOwn(unittest.TestCase):
+    """Between Windows' recogniser and the AI: a modern OCR model running
+    on this machine. Nothing leaves it, nothing is spent, and it reads a
+    game's stylised menu and a low-resolution guest that Windows cannot.
+    """
+
+    def setUp(self):
+        from titanEnhancements import localOcr
+        self.localOcr = localOcr
+
+    def test_it_answers_the_same_Reading_as_windows_own(self):
+        """So everything built on that - the pieces, the scene, the
+        cursor, the virtual window - works on it unchanged."""
+        self.assertTrue(hasattr(self.localOcr, 'read_window_model'))
+        self.assertTrue(hasattr(self.localOcr, 'model_available'))
+
+    def test_a_model_that_is_not_there_answers_None_rather_than_raising(self):
+        from titanEnhancements import link
+        was = link.LINK.bridge
+        link.LINK.bridge = lambda call, **kw: (False, 'Titan is not running')
+        try:
+            self.assertIsNone(self.localOcr.read_window_model(1))
+            ok, _why = self.localOcr.model_available()
+            self.assertFalse(ok)
+        finally:
+            link.LINK.bridge = was
+
+    def test_a_reading_from_the_model_becomes_lines(self):
+        from titanEnhancements import link
+        was = link.LINK.bridge
+
+        def answer(call, **kw):
+            return True, {'ok': True, 'ms': 12, 'lines': [
+                {'text': 'New game', 'left': 10, 'top': 20,
+                 'width': 80, 'height': 14}]}
+        link.LINK.bridge = answer
+        try:
+            reading = self.localOcr.read_window_model(1)
+        finally:
+            link.LINK.bridge = was
+        self.assertIsNotNone(reading)
+        self.assertEqual(reading.text, 'New game')
+        self.assertEqual(reading.rows()[0][1], (10, 20, 80, 14))
+
+    def test_the_model_is_asked_before_the_AI_and_after_windows(self):
+        """The tier order the user asked for, with a free private step in
+        the middle: Windows' recogniser, then this, and the AI only when
+        even it found nothing."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'surface.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _watch_locally(')
+        end = source.index('\ndef ', at + 10)
+        block = source[at:end]
+        self.assertIn('_model_reading', block)
+        model_at = block.index('_model_reading')
+        ai_at = block.rindex('return MODE_APPLICATION')
+        self.assertLess(model_at, ai_at,
+                        'the AI is asked before the model on this machine')
+
+    def test_fetching_it_is_asked_for_and_never_automatic(self):
+        """It is a download of a few hundred megabytes."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'commands.py'),
+                         encoding='utf-8').read()
+        at = source.index('def local_model(')
+        end = source.index('\ndef ', at + 10)
+        block = source[at:end]
+        self.assertIn('dialogs.confirm', block)
+        self.assertIn('install_local_model', block)
+
+
+# --------------------------------------------------------------------------- #
+class TheMenuBarIsInTheListAndAtTheTop(unittest.TestCase):
+    """The menu bar is most of what a program can be told to do, and
+    neither walker had it: the virtual window dropped it because wx gives
+    it no accessible name (the "nothing to call it by" rule), and the
+    application review walked only `controls`, while a described screen
+    carries its `menus` beside them."""
+
+    class Obj:
+        def __init__(self, name='', role='BUTTON', children=()):
+            self.name = name
+            self.value = ''
+            self.description = ''
+            self.role = types.SimpleNamespace(name=role)
+            self.children = list(children)
+            self.location = types.SimpleNamespace(left=0, top=0,
+                                                  width=40, height=20)
+            self.states = set()
+
+    def test_an_unnamed_menu_bar_is_still_a_row(self):
+        from titanEnhancements import virtualWindow
+        window = self.Obj(name='A window', role='WINDOW', children=[
+            self.Obj(name='', role='MENUBAR'),
+            self.Obj(name='Save', role='BUTTON')])
+        rows = virtualWindow.nodes_of(window)
+        roles = [str(row.get('role') or '').upper() for row in rows]
+        self.assertIn('MENUBAR', roles)
+
+    def test_it_comes_first(self):
+        from titanEnhancements import virtualWindow
+        window = self.Obj(name='A window', role='WINDOW', children=[
+            self.Obj(name='Save', role='BUTTON'),
+            self.Obj(name='Open', role='BUTTON'),
+            self.Obj(name='', role='MENUBAR')])
+        rows = virtualWindow.nodes_of(window)
+        self.assertEqual(str(rows[0].get('role') or '').upper(), 'MENUBAR')
+
+    def test_a_described_screens_menus_are_walked_too(self):
+        from titanEnhancements import appReview
+        screen = {'controls': [{'id': 1, 'kind': 'button', 'label': 'Save'}],
+                  'menus': [{'label': 'File', 'items': [
+                      {'id': 10, 'label': 'New'},
+                      {'id': 11, 'label': 'Open'}]}]}
+        rows = appReview._controls(screen)
+        self.assertEqual(rows[0]['kind'], 'menu')
+        self.assertEqual(rows[0]['label'], 'File')
+        self.assertEqual(rows[-1]['label'], 'Save')
+
+    def test_a_menu_opens_in_place_and_escape_comes_back(self):
+        """A flyout is a menu a keyboard cannot follow - the answer
+        Titan's own Start menu arrived at for the same reason."""
+        from titanEnhancements import appReview
+        appReview._state.update({'on': True, 'at': 0, 'inner': 0,
+                                 'menu': None, 'screen': {
+                                     'controls': [{'id': 1, 'kind': 'button',
+                                                   'label': 'Save'}],
+                                     'menus': [{'label': 'File', 'items': [
+                                         {'id': 10, 'label': 'New'}]}]}})
+        self.addCleanup(lambda: appReview._state.update(
+            {'on': False, 'menu': None, 'screen': {}, 'at': 0}))
+        row = appReview._controls()[0]
+        ok, _said = appReview.open_menu(row)
+        self.assertTrue(ok)
+        self.assertTrue(appReview.in_a_menu())
+        self.assertEqual([one['label'] for one in appReview._controls()],
+                         ['New'])
+        appReview.close_menu()
+        self.assertFalse(appReview.in_a_menu())
+        self.assertEqual(appReview._controls()[0]['kind'], 'menu')
+
+    def test_a_separator_is_not_an_item(self):
+        """`app_ui.model.menu` says an item with no id is a separator, and
+        a row somebody arrows onto and is told nothing about is worse than
+        a shorter list."""
+        from titanEnhancements import appReview
+        ok, _said = appReview.open_menu(
+            {'label': 'File', 'items': [{'id': 10, 'label': 'New'},
+                                        {'label': '-'},
+                                        {'id': 11, 'label': 'Exit'}]})
+        self.addCleanup(lambda: appReview._state.update({'menu': None}))
+        self.assertTrue(ok)
+        self.assertEqual([one['label'] for one in appReview._controls()],
+                         ['New', 'Exit'])
 
 
 # --------------------------------------------------------------------------- #

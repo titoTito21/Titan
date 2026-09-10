@@ -616,4 +616,76 @@ class SpeechAdapter(object):
 # --------------------------------------------------------------------------- #
 def get_speech(settings):
     """Build a :class:`SpeechAdapter` for the given settings store."""
-    return SpeechAdapter(settings)
+    made = SpeechAdapter(settings)
+    use(made)
+    return made
+
+
+# --------------------------------------------------------------------------- #
+# The one that is really speaking
+# --------------------------------------------------------------------------- #
+#: The adapter the running reader is using. There is exactly one reader in
+#: a process, and everything that wants to say something is not always
+#: holding it: the modules shared with the NVDA add-on reach speech
+#: through `portable/compat.py`, which is written against NVDA's own
+#: `speech` module and has no engine to ask.
+#:
+#: **Without this they were silent.** `compat` called `speech_adapter.
+#: speak(...)`, which did not exist, inside a bare `except` - so every one
+#: of the ported features said nothing at all in this reader while
+#: working perfectly in NVDA, and nothing anywhere said why.
+_current = None
+
+
+def use(adapter):
+    """Remember the adapter the reader is speaking through."""
+    global _current
+    _current = adapter
+    return adapter
+
+
+def current():
+    """The adapter that is really speaking, or None."""
+    return _current
+
+
+def speak(text, position=0.0, interrupt=True, pitch_offset=0):
+    """Say one thing through the reader's own voice. ``True`` if it went.
+
+    Answers False rather than raising when there is no reader speaking
+    yet - which is a real moment, at start-up and after a teardown, and
+    not one anything should stop for.
+    """
+    adapter = _current
+    if adapter is None:
+        return False
+    try:
+        adapter.speak(str(text or ""), position=position,
+                      interrupt=interrupt, pitch_offset=pitch_offset)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def speak_segments(segments):
+    """The parts at their own pitches - a name, what it is, its state."""
+    adapter = _current
+    if adapter is None:
+        return False
+    try:
+        adapter.speak_segments(segments)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def stop():
+    """Stop the reader speaking. ``True`` if there was one."""
+    adapter = _current
+    if adapter is None:
+        return False
+    try:
+        adapter.stop()
+        return True
+    except Exception:                                # noqa: BLE001
+        return False

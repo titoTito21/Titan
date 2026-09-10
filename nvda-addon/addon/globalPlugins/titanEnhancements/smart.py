@@ -128,14 +128,65 @@ def controls_from(reading):
     A control from here carries its ``rect``, so pressing it is a click at a
     place we were told rather than a name handed back to Titan.
     """
+    if reading is None:
+        return []
+    # **Every PIECE, not every line.** This walked `reading.rows()`, which
+    # is a whole line of the picture - so a menu bar read as
+    # "File Edit View" was one control the cursor could not get inside,
+    # and a row of a list with a name and a size beside it was one lump of
+    # text. `virtualInput` already splits a row where the gaps are and
+    # already knows which pieces sit in a highlighted area; using it is
+    # what makes this tier show what is really there rather than the
+    # lines it came in.
+    from . import virtualInput
+    try:
+        nodes = virtualInput.build(reading,
+                                   getattr(reading, 'highlights', None))
+    except Exception:                                # noqa: BLE001
+        nodes = []
+    # **And what the window IS, not only what is in it.** The scene says
+    # which row is the menu bar, which is the status line, where the
+    # columns are and what has been highlighted - all from the geometry,
+    # so it costs nothing and works in every language.
+    from . import sceneModel
+    try:
+        found_scene = sceneModel.scene(nodes)
+    except Exception:                                # noqa: BLE001
+        found_scene = {'rows': []}
     found = []
-    for text, rect in (reading.rows() if reading else []):
-        name = str(text or '').strip()
-        if not name:
-            continue
-        found.append({'name': name, 'said': name, 'region': '',
-                      'rect': tuple(rect)})
+    for row in found_scene.get('rows') or []:
+        for piece in row.get('cells') or []:
+            name = str(piece.get('text') or '').strip()
+            if not name:
+                continue
+            kind = sceneModel.said_kind(piece.get('kind'))
+            found.append({'name': name, 'said': name,
+                          # What it IS, as far as a picture can say: a
+                          # menu, a status line, a cell of a row, or the
+                          # piece the window has highlighted - which in a
+                          # game's menu and a guest's file list is the
+                          # whole interface.
+                          'region': kind,
+                          'selected': bool(piece.get('selected')),
+                          'kind': str(piece.get('kind') or 'text'),
+                          'line': int(piece.get('line', 0) or 0),
+                          'column': int(piece.get('column', 0) or 0),
+                          'rect': (piece['left'], piece['top'],
+                                   piece['width'], piece['height'])})
+    if not found:
+        # A reading with no pieces in it is still a reading: fall back to
+        # the lines rather than answering that the window is empty.
+        for text, rect in reading.rows():
+            name = str(text or '').strip()
+            if name:
+                found.append({'name': name, 'said': name, 'region': '',
+                              'selected': False, 'rect': tuple(rect)})
     return found
+
+
+def selected_in(controls):
+    """The controls the picture has highlighted, in order."""
+    return [one for one in (controls or []) if one.get('selected')]
 
 
 def take_local(hwnd, reading):

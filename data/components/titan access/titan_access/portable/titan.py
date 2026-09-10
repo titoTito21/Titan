@@ -487,8 +487,16 @@ def set_described(session, control, value):
     return _answer('app.set', session=session, control=control, value=value)
 
 
-def key_described(session, key):
-    return _answer('app.key', session=session, key=key)
+def key_described(session, key, control=None):
+    """One key into a described application.
+
+    ``control`` aims it at a field rather than at the window, which is
+    what the edit-field mode sends: the field holds the text, so the
+    caret arithmetic belongs on that side rather than in the reader.
+    """
+    if control in (None, ''):
+        return _answer('app.key', session=session, key=key)
+    return _answer('app.key', session=session, key=key, control=control)
 
 
 def close_described(session):
@@ -569,6 +577,26 @@ def described_sessions():
     if not ok:
         return False, str(data)
     return True, data if isinstance(data, list) else []
+
+
+def local_model():
+    """What Titan's local recogniser is, and whether it is here."""
+    ok, data = LINK.bridge('ocr.model', timeout=10)
+    return (data if ok and isinstance(data, dict) else {})
+
+
+def install_local_model(timeout=1800):
+    """Fetch the local recogniser onto this machine. ``(ok, sentence)``.
+
+    Minutes, and a download - so it is only ever reached from something
+    the user pressed, never from a reading.
+    """
+    ok, data = LINK.bridge('ocr.install_model', timeout=timeout)
+    if not ok:
+        return False, str(data)
+    if not isinstance(data, dict):
+        return False, 'Titan answered something else'
+    return bool(data.get('ok')), str(data.get('text') or '')
 
 
 def _answer(call, **args):

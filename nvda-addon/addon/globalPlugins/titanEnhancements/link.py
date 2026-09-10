@@ -346,8 +346,12 @@ def diagnostics(**_):
     ask('spoken_log', lambda: [line[1][:60] for line in
                                interject.spoken_log()[-6:]])
 
+    # Every mode that borrows keys is in here, because "I pressed it and
+    # nothing happened" is answerable only by what the mode thought it
+    # was on at the time.
     for name in ('dialog_kind', 'live', 'surface', 'smart', 'trackpad',
-                 'states', 'semantics', 'ancestry'):
+                 'states', 'semantics', 'ancestry', 'virtualWindow',
+                 'appReview', 'palette', 'terminal', 'ocrReview'):
         def get(name=name):
             # **Relative, because the package is not called what it is
             # called.** Inside NVDA this is `globalPlugins.

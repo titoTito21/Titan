@@ -340,6 +340,130 @@ class TheLongTailDegrades(unittest.TestCase):
             'print([one["what"] for one in wx.RUNTIME.refused])'))
 
 
+class AFieldCanReallyBeTypedInto(unittest.TestCase):
+    """Before this, the only way to change a described field was `set`
+    with the WHOLE value - so an interface could offer a dialog to type
+    into and nothing that behaves like a field: no caret, no Backspace,
+    no moving by character, word or line. The text and the caret live in
+    the control, so the arithmetic belongs there rather than in whatever
+    is rendering it.
+
+    Asked in a subprocess, because that is where the shim lives.
+    """
+
+    def ask(self, source):
+        import subprocess
+        shim = os.path.join(TITAN, 'src', 'app_ui', 'shim')
+        code = 'import sys\nsys.path.insert(0, r"%s")\n%s' % (shim, source)
+        answer = subprocess.run([sys.executable, '-c', code],
+                                capture_output=True, text=True, timeout=60,
+                                cwd=TITAN)
+        self.assertEqual(answer.returncode, 0,
+                         'the shim raised:\n%s' % answer.stderr[-1500:])
+        return answer.stdout.strip()
+
+    FIELD = ('import wx\n'
+             'frame = wx.Frame(None, -1, "F")\n'
+             'field = wx.TextCtrl(frame, -1, %r, style=%s)\n'
+             'field.SetInsertionPoint(%d)\n')
+
+    def _run(self, keys, value='abc', caret=3, style='0'):
+        source = self.FIELD % (value, style, caret)
+        for key in keys:
+            source += 'field._typed(%r)\n' % key
+        source += ('print(repr(field.GetValue()), '
+                   'field.GetInsertionPoint())')
+        return self.ask(source)
+
+    def test_a_character_is_inserted_where_the_caret_is(self):
+        self.assertEqual(self._run(['d']), "'abcd' 4")
+
+    def test_backspace_deletes_the_character_before_it(self):
+        self.assertEqual(self._run(['back']), "'ab' 2")
+
+    def test_delete_takes_the_one_after_it(self):
+        self.assertEqual(self._run(['delete'], caret=1), "'ac' 1")
+
+    def test_the_arrows_move_by_one_character(self):
+        self.assertEqual(self._run(['left', 'left']), "'abc' 1")
+        self.assertEqual(self._run(['left', 'right']), "'abc' 3")
+
+    def test_it_stops_at_the_ends(self):
+        self.assertEqual(self._run(['left'] * 9), "'abc' 0")
+        self.assertEqual(self._run(['right'] * 9), "'abc' 3")
+
+    def test_control_and_an_arrow_moves_by_word(self):
+        self.assertEqual(
+            self._run(['ctrl+left'], value='one two three', caret=13),
+            "'one two three' 8")
+
+    def test_control_and_backspace_takes_a_word(self):
+        self.assertEqual(
+            self._run(['ctrl+back'], value='one two three', caret=13),
+            "'one two ' 8")
+
+    def test_home_and_end_are_the_ends_of_the_LINE(self):
+        """Not of the text: a multiline field's Home is the start of the
+        line the caret is on, which is what it is in every editor."""
+        self.assertEqual(
+            self._run(['home'], value='one\ntwo', caret=6,
+                      style='wx.TE_MULTILINE'),
+            "'one\\ntwo' 4")
+        self.assertEqual(
+            self._run(['end'], value='one\ntwo', caret=0,
+                      style='wx.TE_MULTILINE'),
+            "'one\\ntwo' 3")
+
+    def test_up_and_down_keep_the_column(self):
+        self.assertEqual(
+            self._run(['up'], value='abcd\nefgh', caret=7,
+                      style='wx.TE_MULTILINE'),
+            "'abcd\\nefgh' 2")
+
+    def test_enter_is_a_new_line_only_in_a_multiline_field(self):
+        """In a one-line field Enter belongs to the form - it is what
+        presses the default button - so the field says it did not deal
+        with it."""
+        self.assertEqual(
+            self._run(['enter'], value='ab', caret=2,
+                      style='wx.TE_MULTILINE'),
+            "'ab\\n' 3")
+        self.assertEqual(self._run(['enter'], value='ab', caret=2), "'ab' 2")
+
+    def test_a_read_only_field_moves_but_does_not_change(self):
+        self.assertEqual(
+            self._run(['x', 'left'], value='abc', caret=3,
+                      style='wx.TE_READONLY'),
+            "'abc' 2")
+
+    def test_the_caret_travels_with_the_description(self):
+        """It is the one thing about a field that changes without the
+        text changing, so an interface reading it by ear cannot say which
+        character the user is on without it."""
+        self.assertEqual(self.ask(
+            self.FIELD % ('abc', '0', 1) +
+            'frame.Show()\n'
+            'print(field.describe().get("caret"))'), '1')
+
+    def test_a_key_can_be_aimed_at_a_control_rather_than_the_window(self):
+        """`_key` reaches the WINDOW's own handlers, which is where an
+        application binds F5 - and is not where a field is typed into."""
+        source = io.open(os.path.join(TITAN, 'src', 'app_ui', 'shim', 'wx',
+                                      '_titan_runtime.py'),
+                         encoding='utf-8').read()
+        at = source.index("if what == 'key':")
+        block = source[at:at + 1200]
+        self.assertIn("message.get('control')", block)
+        self.assertIn('_typed', block)
+
+    def test_the_doorway_carries_the_target(self):
+        source = io.open(os.path.join(TITAN, 'src', 'titan_core',
+                                      'bridge_api.py'), encoding='utf-8').read()
+        at = source.index('def _app_ui_key(')
+        self.assertIn("args.get('control')", source[at:at + 900])
+
+
+# --------------------------------------------------------------------------- #
 class TheIdTheApplicationAskedFor(unittest.TestCase):
     """**wx lets a control be given a standard id and then bound by that
     id rather than by the object**, and Titan's applications use it

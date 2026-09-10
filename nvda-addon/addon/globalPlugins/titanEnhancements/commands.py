@@ -1400,6 +1400,49 @@ def run_command(name):
     return True, ''
 
 
+def local_model():
+    """Say what the local recogniser is, and offer to fetch it.
+
+    **The tier between Windows' recogniser and the AI**, and the one
+    worth having: a modern OCR model running on this machine, which reads
+    a game's stylised menu and a low-resolution guest that Windows cannot,
+    sends nothing anywhere and spends nothing. It is a download, so it is
+    asked for.
+    """
+    from . import titan
+    found = titan.local_model()
+    if not found:
+        _refused(_('Titan is not answering.'))
+        return
+    if found.get('installed'):
+        # Translators: said when the local recogniser is already here.
+        # {reads} is how many readings it has made.
+        dialogs.report(
+            _('The local recogniser is installed. {reads} reading(s), '
+              'last one {ms} ms.').format(reads=found.get('reads', 0),
+                                          ms=int(found.get('ms') or 0)))
+        return
+
+    def fetch():
+        # Translators: said while the recogniser is being downloaded.
+        dialogs.report(
+            _('Fetching the local recogniser. This takes a few minutes.'))
+        from . import titan as titan_module
+        ok, text = titan_module.install_local_model()
+        dialogs.report(text or (_('Done.') if ok
+                                else _('It could not be fetched.')))
+
+    dialogs.confirm(
+        # Translators: asked before downloading the local recogniser.
+        _('The local recogniser is not installed. It is a download of a '
+          'few hundred megabytes, and after it nothing leaves this '
+          'machine and no reading costs anything. Fetch it now?'),
+        _('Local recogniser'),
+        # A download is minutes, and the thread this is called on is the
+        # one reading the screen.
+        on_yes=lambda: _work(fetch))
+
+
 def check_module():
     """Does the module for this program actually DO anything to it?
 

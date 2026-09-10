@@ -83,11 +83,17 @@ class OneSourceInTwoTrees(unittest.TestCase):
         vendor = self._vendor()
         self.assertGreaterEqual(len(vendor.SHARED), 5)
 
-    #: Everything shared, by the name it has in both trees.
-    PORTABLE = ('anchors', 'classes', 'findControl', 'labels', 'layers',
-                'monitors', 'perProgram', 'procedures', 'schemes', 'shared',
-                'toolkit', 'verify', 'virtualInput', 'windowKind',
-                'windowsAndActions')
+    @property
+    def PORTABLE(self):
+        """Everything shared, READ from the vendoring script.
+
+        **Not a third copy of the list.** It was one, and it went stale
+        the moment a module was added - which is the failure this class
+        exists to catch, arriving as a red test about the wrong thing.
+        The script is where the list lives; the package's `__all__` is
+        what is checked against it.
+        """
+        return tuple(sorted(name[:-3] for name in self._vendor().SHARED))
 
     def test_every_shared_module_really_imports_in_titan_access(self):
         """Byte-identical is worth nothing if it will not load there."""

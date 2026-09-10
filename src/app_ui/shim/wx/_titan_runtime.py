@@ -333,9 +333,27 @@ class Runtime(object):
                 window._closed_by_user()
             return
         if what == 'key':
+            key = str(message.get('key') or '')
+            # **A key can be aimed at a CONTROL, not only at the window.**
+            # `_key` reaches the window's own handlers, which is where an
+            # application binds F5 and its own letters - and it is not
+            # where a field is typed into. Without a target there was no
+            # way at all to put a character into a described text control
+            # (only `set`, which replaces the whole value), so an
+            # interface rendering this application could offer no edit
+            # mode: it had to ask for the text in a dialog of its own.
+            named = message.get('control')
+            if named is not None:
+                target = self.find(named)
+                if target is not None and hasattr(target, '_typed'):
+                    target._typed(key)
+                    return
+                if target is not None:
+                    target._key(key) if hasattr(target, '_key') else None
+                    return
             window = self.showing()
             if window is not None:
-                window._key(str(message.get('key') or ''))
+                window._key(key)
             return
 
     # -------------------------------------------------- what it could not do

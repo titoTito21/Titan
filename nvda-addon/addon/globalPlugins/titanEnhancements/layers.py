@@ -80,6 +80,7 @@ LAYERS = {
             'v': ('voice_classes', lambda: _('Voices and reading order')),
             't': ('status', lambda: _('Is Titan there')),
             's': ('share_names', lambda: _('Share names with Titan Access')),
+            'o': ('local_model', lambda: _('The local recogniser')),
         },
     },
 }

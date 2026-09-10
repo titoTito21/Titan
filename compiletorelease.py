@@ -21,6 +21,21 @@ IS_LINUX = platform.system() == 'Linux'
 DATA_SEP = ';' if IS_WINDOWS else ':'
 
 
+
+#: **The local recogniser is downloaded, never built in.** It is 234 MB
+#: on this machine - onnxruntime, its models and what the pipeline pulls
+#: with it - against a Titan that is a fraction of that, and a user who
+#: never asks to read a game as a picture should not carry any of it.
+#: `src/ai/ocr/local_model.py` imports every one of these inside a call,
+#: so PyInstaller cannot see them by following the code; naming them here
+#: is what stops a build machine that HAS them installed from baking them
+#: in anyway, which is the way this would go wrong silently.
+DOWNLOADED_NOT_BUILT = [
+    'rapidocr', 'rapidocr_onnxruntime', 'onnxruntime', 'onnxruntime_gpu',
+    'cv2', 'opencv-python', 'opencv_python_headless', 'shapely',
+    'pyclipper', 'onnx', 'torch', 'torchvision',
+]
+
 def compile_to_release():
     """Compile TCE Launcher to a directory distribution."""
 
@@ -384,6 +399,11 @@ def compile_to_release():
     print(f"Total hidden imports: {len(hidden_imports)}")
     for imp in hidden_imports:
         cmd.extend(["--hidden-import", imp])
+
+    # **What is downloaded is never built in.** See
+    # `DOWNLOADED_NOT_BUILT` at the top of this file.
+    for name in DOWNLOADED_NOT_BUILT:
+        cmd.extend(["--exclude-module", name])
 
     # Collect all packages to ensure data files are included
     collect_packages = [
