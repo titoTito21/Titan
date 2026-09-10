@@ -24,13 +24,90 @@ that showed one thing while the reader did another would be worse than not
 having one.
 """
 
+from . import compat
 from . import i18n
 from . import icons
+from . import labels
 from . import markers
 from . import monitors
+from . import perProgram
+from . import procedures
 from . import schemes
 
 _ = i18n.install(globals())
+
+
+def _text(value):
+    return str(value or '').strip()
+
+
+def _modules_described():
+    try:
+        from . import readerModules
+        return readerModules.describe() or []
+    except Exception:                                # noqa: BLE001
+        return []
+
+
+def _facts_about(program):
+    """Every line the reader can honestly say about one program.
+
+    A fact that could not be worked out is ABSENT rather than guessed at
+    - the whole value of this page is that each line can be trusted.
+    """
+    lines = []
+    module = None
+    for row in _modules_described():
+        if _text(row.get('id')).lower() == program:
+            module = row
+            break
+    if module:
+        # Translators: a line about a program in the manager. {label} is
+        # the module's name and {source} where it came from.
+        lines.append(_('Reader module: {label} ({source})').format(
+            label=_text(module.get('label')) or _text(module.get('id')),
+            source=_text(module.get('source')) or '?'))
+        # Translators: a line about a program's reader module: how many
+        # rules of each kind it has.
+        lines.append(_('  {lists} list, {regions} region, {controls} '
+                       'control, {live} live rule(s)').format(
+            lists=module.get('lists', 0), regions=module.get('regions', 0),
+            controls=module.get('controls', 0), live=module.get('live', 0)))
+    else:
+        # Translators: a line about a program with no reader module.
+        lines.append(_('Reader module: none'))
+    try:
+        named = labels.for_application(program)
+        described = sum(1 for row in named.values()
+                        if isinstance(row, dict) and row.get('description'))
+        # Translators: a line about a program in the manager.
+        lines.append(_('Named controls: {named}, of which described: '
+                       '{described}').format(named=len(named),
+                                             described=described))
+        icon = labels.application_note(program, 'window_icon')
+        if icon:
+            # Translators: a line about a program: what its icon was read as.
+            lines.append(_('Its icon: {what}').format(what=icon))
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        mine = [row for row in procedures.all_procedures()
+                if _text(row.get('program')).lower() == program]
+        # Translators: a line about a program in the manager.
+        lines.append(_('Recorded scripts: {count}').format(count=len(mine)))
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        answers = perProgram.answers_for(program)
+        if answers:
+            # Translators: a line about a program: the switches it answers
+            # for itself rather than taking the general setting.
+            lines.append(_('Its own answers: {what}').format(
+                what=', '.join('%s=%s' % (name, 'on' if value else 'off')
+                               for name, value in sorted(answers.items()))))
+    except Exception:                                # noqa: BLE001
+        pass
+    return lines
 
 
 def build():
@@ -49,10 +126,18 @@ def build():
                              style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
             main = guiHelper.BoxSizerHelper(self, orientation=wx.VERTICAL)
             self.book = main.addItem(wx.Notebook(self))
-            self._markers_page()
-            self._monitors_page()
-            self._scheme_page()
-            self._icons_page()
+            # **A page that will not build is ONE page.** Every tab was
+            # built straight into `__init__`, so anything that raised in
+            # any of them took the whole manager down - and because the
+            # dialog is put up from a `wx.CallAfter`, the traceback went
+            # to NVDA's log and the user got no window and no sentence at
+            # all. Measured for real: one missing helper in the labels
+            # page and all six tabs were unreachable.
+            for page in (self._programs_page, self._markers_page,
+                         self._monitors_page, self._procedures_page,
+                         self._labels_page, self._scheme_page,
+                         self._icons_page):
+                self._build_page(page)
             main.addDialogDismissButtons(self.CreateButtonSizer(wx.CLOSE))
             self.Bind(wx.EVT_BUTTON, self._close, id=wx.ID_CLOSE)
             self.EscapeId = wx.ID_CLOSE
@@ -134,6 +219,434 @@ def build():
             self._fill_markers(at=at)
             # Translators: said when a place marker is forgotten.
             self._said(_('Marker forgotten'))
+
+        def _build_page(self, build_it):
+            """One page, and its failure is its own.
+
+            The page is named in the log with what went wrong, because a
+            tab that is quietly absent is the failure this add-on keeps
+            taking back out.
+            """
+            try:
+                build_it()
+            except Exception as error:               # noqa: BLE001
+                name = getattr(build_it, '__name__', 'a page')
+                if compat.log is not None:
+                    try:
+                        compat.log.error(
+                            'Titan manager: %s could not be built: %s: %s'
+                            % (name, type(error).__name__, error))
+                    except Exception:                # noqa: BLE001
+                        pass
+
+        # --------------------------------------------------------- programs
+        def _programs_page(self):
+            """Everything the reader knows about one program, in one place.
+
+            **No screen reader has this**, and the reason is that no
+            screen reader has the pieces: what the program is WRITTEN IN,
+            whether a module claims it and whether that module actually
+            fires, how many of its controls have been named, what has
+            been recorded in it, and which switches it answers for
+            itself. Each of those already had a home; a person asking
+            "why does this program read badly" had to visit five of them.
+            """
+            import wx
+            from gui import guiHelper
+            page = wx.Panel(self.book)
+            # Translators: a page of the manager window.
+            self.book.AddPage(page, _('Programs'))
+            helper = guiHelper.BoxSizerHelper(page, orientation=wx.VERTICAL)
+            # Translators: the list of programs the reader knows something
+            # about.
+            self.programs = helper.addLabeledControl(
+                _('P&rograms'), wx.ListBox, style=wx.LB_SINGLE)
+            self.programs.Bind(wx.EVT_LISTBOX, self._program_shown)
+            # Translators: what is known about the chosen program.
+            self.program_facts = helper.addLabeledControl(
+                _('&What is known'), wx.TextCtrl,
+                style=wx.TE_MULTILINE | wx.TE_READONLY)
+            buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
+            # Translators: a button in the manager window.
+            forget = buttons.addButton(page, label=_('Forget e&verything'))
+            forget.Bind(wx.EVT_BUTTON, self._forget_program)
+            helper.addItem(buttons)
+            page.Sizer = helper.sizer
+            self._fill_programs_page()
+
+        def _known_programs(self):
+            """Every program anything is known about, from every store."""
+            found = set()
+            for where in (lambda: labels.everything().keys(),
+                          lambda: perProgram.all_programs(),
+                          lambda: [_text(row.get('program'))
+                                   for row in procedures.all_procedures()],
+                          lambda: [_text(row.get('id'))
+                                   for row in _modules_described()]):
+                try:
+                    found.update(_text(one).lower() for one in where() if one)
+                except Exception:                    # noqa: BLE001
+                    continue
+            return sorted(one for one in found if one)
+
+        def _fill_programs_page(self, at=0):
+            self._program_rows = self._known_programs()
+            self.programs.Set(self._program_rows)
+            if self._program_rows:
+                self.programs.SetSelection(
+                    max(0, min(at, len(self._program_rows) - 1)))
+            self._program_shown()
+
+        def _chosen_program(self):
+            at = self.programs.GetSelection()
+            return self._program_rows[at] \
+                if 0 <= at < len(self._program_rows) else ''
+
+        def _program_shown(self, _event=None):
+            program = self._chosen_program()
+            if not program:
+                self.program_facts.SetValue('')
+                return
+            self.program_facts.SetValue('\n'.join(_facts_about(program)))
+
+        def _forget_program(self, _event):
+            """Take away everything the reader has learned about it.
+
+            Asked first, because it is the one button here that throws
+            something away and there is no undo: the names somebody typed
+            go with it.
+            """
+            import wx
+            program = self._chosen_program()
+            if not program:
+                return
+            answer = wx.MessageBox(
+                # Translators: asked before forgetting what is known about
+                # a program. {program} is its name.
+                _('Forget every name, description and answer for {program}? '
+                  'This cannot be undone.').format(program=program),
+                # Translators: the title of that question.
+                _('Forget everything?'), wx.YES_NO | wx.ICON_QUESTION, self)
+            if answer != wx.YES:
+                return
+            at = self.programs.GetSelection()
+            try:
+                for key in list(labels.for_application(program)):
+                    labels.remove_key(program, key)
+            except Exception:                        # noqa: BLE001
+                pass
+            try:
+                for name in list(perProgram.answers_for(program)):
+                    perProgram.clear(name, program)
+            except Exception:                        # noqa: BLE001
+                pass
+            self._fill_programs_page(at=at)
+            # Translators: said when everything known about a program is
+            # thrown away.
+            self._said(_('Forgotten'))
+
+        # ------------------------------------------------------- procedures
+        def _procedures_page(self):
+            """The recorded procedures, all of them, across every program.
+
+            **A chooser is not a manager**, and until now a procedure had
+            only a chooser: the command lists the ones belonging to the
+            program in front and runs the chosen one. Everything else a
+            person wants after a few months - what have I recorded, what
+            was that one called, read it back, throw that one away - had
+            nowhere to happen, and a recording nobody can find again is a
+            recording nobody makes a second time.
+            """
+            import wx
+            from gui import guiHelper
+            page = wx.Panel(self.book)
+            # Translators: a page of the manager window.
+            self.book.AddPage(page, _('Scripts'))
+            helper = guiHelper.BoxSizerHelper(page, orientation=wx.VERTICAL)
+            # Translators: the list of recorded procedures.
+            self.procedures = helper.addLabeledControl(
+                _('&Scripts'), wx.ListBox, style=wx.LB_SINGLE)
+            buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
+            # Translators: a button in the manager window.
+            run = buttons.addButton(page, label=_('&Run'))
+            run.Bind(wx.EVT_BUTTON, self._run_procedure)
+            # Translators: a button in the manager window - read the steps.
+            steps = buttons.addButton(page, label=_('&Steps'))
+            steps.Bind(wx.EVT_BUTTON, self._read_procedure)
+            # Translators: a button in the manager window.
+            rename = buttons.addButton(page, label=_('Re&name...'))
+            rename.Bind(wx.EVT_BUTTON, self._rename_procedure)
+            # Translators: a button in the manager window.
+            forget = buttons.addButton(page, label=_('&Forget'))
+            forget.Bind(wx.EVT_BUTTON, self._forget_procedure)
+            helper.addItem(buttons)
+            page.Sizer = helper.sizer
+            self._fill_procedures()
+
+        def _fill_procedures(self, at=0):
+            self._procedure_rows = list(procedures.all_procedures() or [])
+            self.procedures.Set([
+                '%s%s (%d)' % (row.get('name') or '',
+                               (' - ' + row['program']) if row.get('program')
+                               else '',
+                               len(row.get('steps') or []))
+                for row in self._procedure_rows])
+            if self._procedure_rows:
+                self.procedures.SetSelection(
+                    max(0, min(at, len(self._procedure_rows) - 1)))
+
+        def _chosen_procedure(self):
+            at = self.procedures.GetSelection()
+            return self._procedure_rows[at] \
+                if 0 <= at < len(self._procedure_rows) else None
+
+        def _run_procedure(self, _event):
+            """Run it - with this window out of the way first.
+
+            A procedure acts on the controls of the program it was
+            recorded in, and this dialog is in front of that program: run
+            from here it would look for them behind itself. So the manager
+            closes and the procedure starts after it has gone.
+            """
+            row = self._chosen_procedure()
+            if row is None:
+                return
+            self.EndModal(0) if self.IsModal() else self.Hide()
+
+            def go():
+                _ok, said = procedures.run(row, say=self._say_outside)
+                self._say_outside(said)
+            # NVDA's own timer, reached the way `focus` reaches it -
+            # `compat` does not carry `core`, and a bare `wx.CallLater`
+            # would run this on a dialog that is on its way out.
+            try:
+                import core
+                core.callLater(400, go)
+            except Exception:                        # noqa: BLE001
+                go()
+
+        def _read_procedure(self, _event):
+            row = self._chosen_procedure()
+            if row is None:
+                return
+            from . import dialogs
+            # Translators: the title of the window showing a script's steps.
+            dialogs.browse(procedures.as_text(row), _('The steps'))
+
+        def _rename_procedure(self, _event):
+            import wx
+            row = self._chosen_procedure()
+            if row is None:
+                return
+            # Translators: asked when renaming a recorded script.
+            dialog = wx.TextEntryDialog(self, _('What should it be called?'),
+                                        # Translators: the title of that box.
+                                        _('Rename'),
+                                        value=row.get('name') or '')
+            try:
+                if dialog.ShowModal() == wx.ID_OK:
+                    procedures.rename(row, dialog.GetValue())
+                    self._fill_procedures(at=self.procedures.GetSelection())
+            finally:
+                dialog.Destroy()
+
+        def _forget_procedure(self, _event):
+            row = self._chosen_procedure()
+            if row is None:
+                return
+            at = self.procedures.GetSelection()
+            procedures.remove(row)
+            self._fill_procedures(at=at)
+            # Translators: said when a recorded script is forgotten.
+            self._said(_('Script forgotten'))
+
+        # ----------------------------------------------------------- labels
+        def _labels_page(self):
+            """Every control that has been given a name, per program.
+
+            JAWS has had this for thirty years and calls it a custom
+            label; what is here besides is the DESCRIPTION - what a
+            picture, an icon or a chart was read as - which is a request
+            paid for once and worth being able to see, correct and throw
+            away like anything else the user has accumulated.
+            """
+            import wx
+            from gui import guiHelper
+            page = wx.Panel(self.book)
+            # Translators: a page of the manager window.
+            self.book.AddPage(page, _('Control names'))
+            helper = guiHelper.BoxSizerHelper(page, orientation=wx.VERTICAL)
+            # Translators: the list of programs that have named controls.
+            self.label_programs = helper.addLabeledControl(
+                _('&Program'), wx.Choice, choices=[])
+            self.label_programs.Bind(wx.EVT_CHOICE, self._program_chosen)
+            # Translators: the list of named controls of that program.
+            self.labels = helper.addLabeledControl(
+                _('&Controls'), wx.ListBox, style=wx.LB_SINGLE)
+            buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
+            # Translators: a button in the manager window.
+            rename = buttons.addButton(page, label=_('Re&name...'))
+            rename.Bind(wx.EVT_BUTTON, self._rename_label)
+            # Translators: a button in the manager window - everything
+            # else that can be decided about a control.
+            more = buttons.addButton(page, label=_('&Everything else...'))
+            more.Bind(wx.EVT_BUTTON, self._customise_label)
+            # Translators: a button in the manager window - read the stored
+            # description of a picture.
+            describe = buttons.addButton(page, label=_('&Description'))
+            describe.Bind(wx.EVT_BUTTON, self._read_description)
+            # Translators: a button in the manager window.
+            forget = buttons.addButton(page, label=_('&Forget'))
+            forget.Bind(wx.EVT_BUTTON, self._forget_label)
+            helper.addItem(buttons)
+            page.Sizer = helper.sizer
+            self._fill_programs()
+
+        def _fill_programs(self, at=0):
+            store = labels.everything()
+            self._label_programs = sorted(store)
+            self.label_programs.Set(self._label_programs)
+            if self._label_programs:
+                self.label_programs.SetSelection(
+                    max(0, min(at, len(self._label_programs) - 1)))
+            self._fill_labels()
+
+        def _program_chosen(self, _event):
+            self._fill_labels()
+
+        def _current_program(self):
+            at = self.label_programs.GetSelection()
+            return self._label_programs[at] \
+                if 0 <= at < len(self._label_programs) else ''
+
+        def _fill_labels(self, at=0):
+            program = self._current_program()
+            rows = labels.for_application(program) if program else {}
+            self._label_rows = sorted(rows.items())
+            said = []
+            for key, row in self._label_rows:
+                if isinstance(row, dict):
+                    name = str(row.get('label') or '')
+                    source = str(row.get('source') or '')
+                    extra = str(row.get('description') or '')
+                else:
+                    name, source, extra = str(row), '', ''
+                # A control with only a description has no name to show, so
+                # the key stands in - it is what the control IS to Windows.
+                shown = name or key
+                if source:
+                    shown = '%s [%s]' % (shown, source)
+                if extra:
+                    # Translators: marks a control whose picture has been
+                    # read and remembered.
+                    shown = '%s - %s' % (shown, _('described'))
+                said.append(shown)
+            self.labels.Set(said)
+            if self._label_rows:
+                self.labels.SetSelection(
+                    max(0, min(at, len(self._label_rows) - 1)))
+
+        def _chosen_label(self):
+            at = self.labels.GetSelection()
+            return self._label_rows[at] \
+                if 0 <= at < len(self._label_rows) else (None, None)
+
+        def _rename_label(self, _event):
+            import wx
+            key, row = self._chosen_label()
+            if key is None:
+                return
+            current = row.get('label', '') if isinstance(row, dict) \
+                else str(row or '')
+            # Translators: asked when renaming a control.
+            dialog = wx.TextEntryDialog(self, _('What should it be called?'),
+                                        # Translators: the title of that box.
+                                        _('Rename'), value=current)
+            try:
+                if dialog.ShowModal() != wx.ID_OK:
+                    return
+                labels.rename_key(self._current_program(), key,
+                                  dialog.GetValue())
+                self._fill_labels(at=self.labels.GetSelection())
+            finally:
+                dialog.Destroy()
+
+        def _customise_label(self, _event):
+            """The rest of what may be decided about the chosen control.
+
+            The same fields the command offers on the control the user is
+            standing on - said, added, the voice, and never announcing it
+            - for a control in another program that may not even be
+            running. Editing here is by KEY, because there is no object.
+            """
+            import wx
+            key, row = self._chosen_label()
+            if key is None:
+                return
+            if not isinstance(row, dict):
+                row = {}
+            program = self._current_program()
+            fields = [
+                # Translators: a field: the word to say instead of the
+                # control type.
+                ('role_word', _('Say it is a'), row.get('role_word', '')),
+                # Translators: a field: something to say after the control.
+                ('note', _('And add'), row.get('note', '')),
+            ]
+            for name, label, value in fields:
+                dialog = wx.TextEntryDialog(self, label,
+                                            # Translators: the title.
+                                            _('This control'), value=value)
+                try:
+                    if dialog.ShowModal() != wx.ID_OK:
+                        return
+                    labels.set_field(program, key, name, dialog.GetValue())
+                finally:
+                    dialog.Destroy()
+            answer = wx.MessageBox(
+                # Translators: asked in the manager about one control.
+                _('Never announce this control?'),
+                # Translators: the title of that question.
+                _('This control'), wx.YES_NO | wx.ICON_QUESTION, self)
+            labels.set_field(program, key, 'silent', answer == wx.YES)
+            self._fill_labels(at=self.labels.GetSelection())
+            # Translators: said when what was decided about a control is
+            # kept.
+            self._said(_('Kept'))
+
+        def _read_description(self, _event):
+            key, row = self._chosen_label()
+            if key is None:
+                return
+            text = row.get('description', '') if isinstance(row, dict) else ''
+            if not text:
+                # Translators: said about a control whose picture has never
+                # been read.
+                self._said(_('That one has no description'))
+                return
+            from . import dialogs
+            # Translators: the title of the window showing what a picture
+            # was read as.
+            dialogs.browse(text, _('What this shows'))
+
+        def _forget_label(self, _event):
+            key, _row = self._chosen_label()
+            if key is None:
+                return
+            at = self.labels.GetSelection()
+            labels.remove_key(self._current_program(), key)
+            self._fill_labels(at=at)
+            # Translators: said when a control's stored name is forgotten.
+            self._said(_('Forgotten'))
+
+        def _say_outside(self, text):
+            """Say something once this window is no longer in front."""
+            try:
+                from . import compat
+                if compat.ui is not None and str(text or '').strip():
+                    compat.ui.message(str(text))
+            except Exception:                        # noqa: BLE001
+                pass
 
         # --------------------------------------------------------- monitors
         def _monitors_page(self):
@@ -388,8 +901,29 @@ def show(parent=None):
             parent = gui.mainFrame
 
         def open_it():
-            dialog = manager(parent)
-            dialog.Show()
+            # **Nothing catches what raises inside a `CallAfter`.** It runs
+            # later, in wx's own loop, long after `show()` has answered -
+            # so a manager that could not be built answered True, said
+            # nothing, and simply did not appear. Whatever happens here
+            # the user is told something.
+            try:
+                dialog = manager(parent)
+                dialog.Show()
+            except Exception as error:               # noqa: BLE001
+                if compat.log is not None:
+                    try:
+                        compat.log.error('Titan manager: %s: %s'
+                                         % (type(error).__name__, error))
+                    except Exception:                # noqa: BLE001
+                        pass
+                try:
+                    from . import dialogs
+                    # Translators: said when the manager window will not open.
+                    dialogs.report(_('The manager could not be opened. If '
+                                     'the add-on was just updated, restart '
+                                     'NVDA rather than reloading plugins.'))
+                except Exception:                    # noqa: BLE001
+                    pass
         wx.CallAfter(open_it)
         return True
     except Exception:                                # noqa: BLE001

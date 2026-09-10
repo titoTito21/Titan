@@ -71,7 +71,10 @@ def _page():
     catalogue is installed rather than at import time."""
     return (
         # Translators: a group of settings in the Titan panel.
-        (_('How a control is read'), '', (
+        (_('Announcing controls'),
+         # Translators: what the 'Announcing controls' category is for.
+         _('How a control is read out: its name, what it is, its state, '
+           'and what a picture or a dialog is called.'), (
             # Translators: a setting in the Titan enhancements panel.
             ('pitchedFocus',
              _('Read Titan\'s controls the way Titan Access does: the name, '
@@ -104,6 +107,11 @@ def _page():
              _('Say what kind of dialog it is - a question, a warning, an '
                'error - anywhere in Windows'), ''),
             # Translators: a setting in the Titan enhancements panel.
+            # Translators: a setting in the Titan enhancements panel.
+            ('windowKinds',
+             _('Say what kind of window you have arrived in - an '
+               'application, a game, a small window, the desktop - and '
+               'what its icon is'), ''),
             ('menuLeaving', _('Say when the keyboard leaves a menu'), ''),
             # Translators: a setting in the Titan enhancements panel.
             ('soundScheme',
@@ -117,7 +125,10 @@ def _page():
                'their own (set them under Voices and reading order)'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('What changes while you are looking elsewhere'), '', (
+        (_('Changes elsewhere'),
+         # Translators: what the 'Changes elsewhere' category is for.
+         _('What is said about something that changed while you were '
+           'looking somewhere else.'), (
             # Translators: a setting in the Titan enhancements panel.
             ('liveRegions',
              _('Announce live regions - anything a reader module or Titan '
@@ -142,7 +153,9 @@ def _page():
                'and go to what said it'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('Sounds, and where the voice comes from'), '', (
+        (_('Sound'),
+         # Translators: what the 'Sound' category is for.
+         _('Sounds, and where in the stereo image the voice comes from.'), (
             # Translators: a setting in the Titan enhancements panel.
             ('position',
              _('Place the voice where the control is, in Titan'), ''),
@@ -171,7 +184,10 @@ def _page():
                'Titan\'s own windows'), 'auditoryIcons'),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('What Titan may say through NVDA'), '', (
+        (_('Titan\'s announcements'),
+         # Translators: what the 'Titan's announcements' category is for.
+         _('What Titan may say through NVDA, and how much of it may '
+           'replace NVDA\'s own words.'), (
             # Translators: a setting in the Titan enhancements panel.
             ('announcements',
              _('Let Titan make its own announcements through NVDA'), ''),
@@ -198,7 +214,7 @@ def _page():
                'can be about that program'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('What Titan may do to NVDA'),
+        (_('Permissions'),
          # Translators: text on the Titan enhancements panel.
          _('What NVDA can see is always answered: it is your own screen, '
            'described to your own desktop, and it is what lets Titan read the '
@@ -214,7 +230,7 @@ def _page():
              'letTitanDrive'),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('A window that shows a screen reader nothing'),
+        (_('Unreadable windows'),
          # Translators: text on the Titan enhancements panel.
          _('These need Titan running with its AI features on, and both send a '
            'picture of part of your screen to your AI provider - which is why '
@@ -239,7 +255,7 @@ def _page():
              ''),
         )),
         # Translators: a group of settings in the Titan panel.
-        (_('The terminal'),
+        (_('Terminal'),
          # Translators: text on the Titan enhancements panel.
          _('Numpad minus turns the review on and off. While it is on the '
            'plain arrow keys walk the buffer - lines with up and down, '
@@ -247,7 +263,7 @@ def _page():
            'page down - and each line is marked by a short beep pitched by '
            'where it is on the screen. Escape leaves.'), ()),
         # Translators: a group of settings in the Titan panel.
-        (_('The touchpad'),
+        (_('Touchpad'),
          # Translators: text on the Titan enhancements panel.
          _('NVDA and the wheel to the right turns it on, to the left turns it '
            'off - which a touchpad can do with two fingers.'), (
@@ -362,6 +378,23 @@ def build():
             switches = [row for row in rows if not _options_for(row[0])[0]]
             others = [row for row in rows if _options_for(row[0])[0]]
 
+            # **What the category is FOR is said before its switches, and in
+            # something a reader can land on.** It used to be a
+            # `wx.StaticText` added after everything else: a static text
+            # cannot take the keyboard and a screen reader cannot reach one,
+            # so the sentence explaining that two of these switches send a
+            # picture of your screen to a provider was, to the people this
+            # add-on is for, not on the page at all. A read-only text
+            # control is focusable and carries the reader's own cursor -
+            # the same answer `Static` got in the Elten port.
+            if note:
+                explain = wx.TextCtrl(
+                    self.page, value=note,
+                    style=wx.TE_READONLY | wx.TE_MULTILINE | wx.NO_BORDER)
+                explain.SetMinSize((-1, 44))
+                a11y_name(explain, label)
+                self.pageSizer.Add(explain, 0, wx.EXPAND | wx.BOTTOM, 6)
+
             if switches:
                 # Translators: the list of switches for the chosen category.
                 self.pageSizer.Add(wx.StaticText(
@@ -394,8 +427,6 @@ def build():
                 if depends:
                     self._depends.setdefault(depends, []).append(key)
 
-            if note:
-                self.pageSizer.Add(wx.StaticText(self.page, label=note), 0)
             self.page.Layout()
             self.Layout()
             self._follow(None)

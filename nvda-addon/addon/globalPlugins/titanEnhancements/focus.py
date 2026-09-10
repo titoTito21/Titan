@@ -31,6 +31,9 @@ import threading
 import time
 
 from . import compat
+from . import i18n
+
+_ = i18n.install(globals())
 
 _LOCK = threading.RLock()
 _replace_until = 0.0
@@ -737,20 +740,51 @@ def _maybe_label(obj):
     # and one global switch answers it for the whole machine.
     if not perProgram.value('autoLabel', obj):
         return False
+    # **There has to be somebody to ask.** Reading a control with AI is
+    # Titan's work - Titan holds the provider and the key - so with Titan
+    # not running there is no request to make, only a thread to start and
+    # a refusal to log. Measured on a real session: eight ERROR lines
+    # saying "Titan is not running", one per unnamed control the user
+    # walked past, each with a thread behind it, on a machine where Titan
+    # had never been started. A feature that cannot work stands down
+    # quietly; it does not keep asking.
+    try:
+        from .link import LINK
+        if not LINK.connected():
+            return False
+    except Exception:                                # noqa: BLE001
+        return False
     try:
         from . import labels
         if not labels.needs_one(obj) or labels.get(obj):
             return False
     except Exception:                                # noqa: BLE001
         return False
+    # One at a time, spaced out, and not at all once it has stood down.
+    if not _label_may_ask():
+        return False
     import threading
 
     def look():
         try:
             from . import graphics
-            ok, said = graphics.label_with_ai(obj)
+            # **Windows' own recogniser first, and for the AUTOMATIC path
+            # it is the only one.** It is local, private, free, and
+            # answers in about a tenth of a second; the AI is a picture of
+            # the user's screen sent to a provider and an answer that has
+            # been measured taking longer than the bus waits for it -
+            # "Titan did not answer within 12s", in the log, over and
+            # over, from controls the reader chose to look at by itself.
+            #
+            # A reading somebody ASKED for still goes to the AI, which
+            # understands what it reads. One the reader decided to make
+            # on its own may not cost that.
+            ok, said = graphics.label_locally(obj)
+            if not ok and _label_ai_wanted():
+                ok, said = graphics.label_with_ai(obj)
         except Exception as error:                   # noqa: BLE001
             ok, said = False, str(error)
+        _label_done(bool(ok and said))
         if ok and said:
             try:
                 from . import live
@@ -769,6 +803,77 @@ def _maybe_label(obj):
     return True
 
 
+#: **One AI label at a time, and not for ever.**
+#:
+#: `_maybe_label` started a thread per unnamed control, and each one made
+#: a bus call that waits up to twelve seconds. The Action Bus is ONE pipe:
+#: tab through ten unnamed controls and that is ten calls queued nose to
+#: tail, with every other call behind them - including the ones NVDA makes
+#: on its own main thread. Seen in the log as "Titan did not answer within
+#: 12s", and felt as a reader that has stopped.
+#:
+#: So: one in flight, a pause between them, and after a few failures in a
+#: row the layer stands down for the session and says so. A Titan that
+#: just failed to answer in twelve seconds will fail the next one too, and
+#: asking anyway is how a feature that cannot work takes the reader with
+#: it. Same discipline as the semantic layer, which measures itself and
+#: stops.
+_label_lock = threading.RLock()
+_label_busy = False
+_label_last = 0.0
+_label_failures = 0
+
+#: No more often than this, however many unnamed controls go past.
+LABEL_GAP = 3.0
+
+#: This many failures in a row and the layer is done for the session.
+LABEL_GIVE_UP = 3
+
+
+def _label_ai_wanted():
+    """Whether the AI may be asked to name a control by ITSELF.
+
+    Off unless the user has said the AI tier is what they want, which is
+    the same switch that decides which recogniser reads an unreadable
+    window - one answer to one question, rather than two switches that
+    can disagree about whether a picture of the screen may be sent.
+    """
+    try:
+        from . import configSpec
+        return str(configSpec.read().get('ocrTier') or '').strip() == 'ai'
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def label_layer_stood_down():
+    with _label_lock:
+        return _label_failures >= LABEL_GIVE_UP
+
+
+def _label_may_ask():
+    """Whether to ask Titan for a name right now. Never blocks."""
+    with _label_lock:
+        if _label_busy:
+            return False
+        if _label_failures >= LABEL_GIVE_UP:
+            return False
+        if time.time() - _label_last < LABEL_GAP:
+            return False
+        globals()['_label_busy'] = True
+        globals()['_label_last'] = time.time()
+        return True
+
+
+def _label_done(worked):
+    with _label_lock:
+        globals()['_label_busy'] = False
+        globals()['_label_last'] = time.time()
+        if worked:
+            globals()['_label_failures'] = 0
+        else:
+            globals()['_label_failures'] = _label_failures + 1
+
+
 #: Why the last attempt to work out a name failed, and how many have.
 #: Read by the diagnostics command, and said ONCE - the first time it
 #: happens in a session - because a reader that explained it on every
@@ -782,9 +887,17 @@ def label_trouble():
 
 def _label_failed(why):
     said = str(why or '').strip()
+    first = not _label_trouble['said']
     _label_trouble['why'] = said
     _label_trouble['failed'] += 1
-    if compat.log is not None:
+    # **Logged once, like it is said once.** The reason a name cannot be
+    # worked out is a standing condition - no Titan, no key, the feature
+    # switched off over there - so it is the same sentence every time, and
+    # an ERROR per unnamed control turns the log into something nobody
+    # reads at the moment it is most worth reading. The count is what says
+    # how often it happened; `label_trouble()` and the diagnostics command
+    # both carry it.
+    if first and compat.log is not None:
         try:
             compat.log.error('Titan could not work out a name: %s' % said)
         except Exception:                            # noqa: BLE001
@@ -792,6 +905,11 @@ def _label_failed(why):
     if _label_trouble['said'] or not said:
         return
     _label_trouble['said'] = True
+    if label_layer_stood_down():
+        # Say WHY it will not try again, once: a feature that quietly
+        # stopped is the thing this add-on keeps taking back out.
+        said = _('{why} Working out names has been switched off for now.') \
+            .format(why=said)
     try:
         from . import live
         live.announce(said, 'polite')

@@ -2613,30 +2613,6 @@ class KlangoFrame(wx.Frame):
             speak_klango(_("Could not open network settings"))
         self.close_menu()
     
-    def _load_stereo_settings(self):
-        """Load stereo settings from configuration."""
-        try:
-            # Load stereo sound setting (from sound section)
-            self._stereo_sound_enabled = get_setting('stereo_sound', 'False', section='sound').lower() in ['true', '1']
-            
-            # Load stereo speech setting (from invisible_interface section) 
-            self._stereo_speech_enabled = get_setting('stereo_speech', 'False', section='invisible_interface').lower() in ['true', '1']
-        except:
-            self._stereo_sound_enabled = False
-            self._stereo_speech_enabled = False
-    
-    def is_stereo_sound_enabled(self):
-        """Check if stereo sound is enabled in settings."""
-        if self._stereo_sound_enabled is None:
-            self._load_stereo_settings()
-        return self._stereo_sound_enabled
-    
-    def is_stereo_speech_enabled(self):
-        """Check if stereo speech is enabled in settings."""
-        if self._stereo_speech_enabled is None:
-            self._load_stereo_settings()
-        return self._stereo_speech_enabled
-    
     def exit_program(self):
         """Exit the program using exactly same method as GUI."""
         try:

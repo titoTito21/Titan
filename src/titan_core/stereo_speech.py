@@ -2303,7 +2303,14 @@ class StereoSpeech:
         Returns:
             pydub.AudioSegment or None
         """
-        if not ELEVENLABS_AVAILABLE or not self.elevenlabs:
+        # **The engine object IS the availability**, and the flag this used
+        # to read was never defined anywhere in the module - so the first
+        # line of this function raised `NameError` for every caller, which
+        # is a TTS engine that cannot speak at all rather than one that is
+        # merely absent. `self.elevenlabs` is set from the registry, or
+        # left None when the engine is not there, which is the same
+        # question asked of something that exists.
+        if not self.elevenlabs:
             return None
         if not PYDUB_AVAILABLE:
             return None
@@ -2327,7 +2334,9 @@ class StereoSpeech:
         Returns:
             pydub.AudioSegment or None
         """
-        if not MILENA_AVAILABLE or not self.milena:
+        # The same undefined flag as ElevenLabs above, with the same
+        # effect: `NameError` on the first line, for every caller.
+        if not self.milena:
             return None
         if not PYDUB_AVAILABLE:
             return None

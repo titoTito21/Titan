@@ -366,8 +366,21 @@ def build(plugin):
     builder.item(reader, _('Where am I'), lambda: _run_command('where_am_i'))
     builder.item(reader, _('Name this control...'),
                  lambda: _run_command('label_control'))
+    # Translators: an entry in the Titan menu.
+    builder.item(reader, _('Customise this control...'),
+                 lambda: _run_command('customise_control'))
+    # Translators: an entry in the Titan menu - share what has been named
+    # with Titan's own screen reader.
+    builder.item(reader, _('Share names with Titan Access'),
+                 lambda: _run_command('share_names'))
     builder.item(reader, _('What does this show?'),
                  lambda: _run_command('describe_control'))
+    # Translators: an entry in the Titan menu.
+    builder.item(reader, _('What is this written in?'),
+                 lambda: _run_command('what_is_this_written_in'))
+    # Translators: an entry in the Titan menu.
+    builder.item(reader, _('Does this module work?'),
+                 lambda: _run_command('check_module'))
     builder.item(reader, _('Read this window'),
                  lambda: _run_command('read_locally'))
     # Translators: an entry in the Titan menu.

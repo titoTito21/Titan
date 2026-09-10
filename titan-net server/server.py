@@ -38,25 +38,15 @@ import os
 import re
 os.makedirs('logs', exist_ok=True)
 
-# Configure logging
-# server.log is rotated by SIZE, not truncated. A plain FileHandler grew it to
-# 41 MB in a single uptime here, and the only thing that ever shortened it was
-# a manual truncation - which is the worst of both, an unbounded file that
-# occasionally loses everything. Rotation bounds each file and keeps the
-# history: 32 MB x 20 is about 640 MB of ceiling, and the disk this runs on has
-# room for it.
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.handlers.RotatingFileHandler(
-            'logs/server.log', maxBytes=32 * 1024 * 1024, backupCount=20,
-            encoding='utf-8',
-        ),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger('TitanNetServer')
+# Configure logging.
+#
+# Rotated by SIZE rather than truncated: a plain FileHandler grew this to
+# 41 MB in a single uptime, and the only thing that ever shortened it was a
+# manual truncation - the worst of both, an unbounded file that
+# occasionally loses everything. `logging_setup` also answers the reason
+# the OTHER two logs here were empty for five months.
+import logging_setup
+logger = logging_setup.configure('TitanNetServer', 'server.log')
 
 
 # Substrings that indicate the SQLCipher in-memory cipher state is dead
@@ -821,8 +811,21 @@ class TitanNetServer:
             if motd:
                 response["motd"] = motd
 
+            # **Written down where it can be read months later.** The
+            # server keeps `users.last_login` and overwrites it every
+            # time, so "has anybody else been signing in as this account"
+            # had no answer at all - which is exactly the question that
+            # was asked about one, and the reason there was nothing to
+            # answer it with. One line per sign-in: who, from where,
+            # when. No password and no token ever goes in it.
+            logging_setup.audit('login', username=user['username'],
+                                user_id=user['id'], ip=client_ip,
+                                hardware_id=hardware_id)
+
             return response
         else:
+            logging_setup.audit('login_failed', username=username,
+                                ip=client_ip, hardware_id=hardware_id)
             return {
                 "type": "login_response",
                 "success": False,

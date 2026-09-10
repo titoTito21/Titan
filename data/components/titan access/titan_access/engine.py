@@ -1190,6 +1190,13 @@ class TitanAccessEngine:
         g.register("sayAll", "a", self.action_say_all)
         g.register("readerMenu", "c", self.action_screen_reader_menu)
 
+        # **The virtual window, and the touchpad** - the two the NVDA
+        # add-on has and this reader did not. `minus` is Insert+minus,
+        # which is free here and is what the user asked for; the virtual
+        # window is on `w`, beside the other reading commands.
+        g.register("virtualWindow", "w", self.action_toggle_virtual_window)
+        g.register("trackpad", "minus", self.action_toggle_trackpad)
+
         # (Ctrl+Alt+C/W/L/P review shortcuts removed: on a Polish keyboard
         # Ctrl+Alt == AltGr, so they collided with typing diacritics. Caret
         # tracking on the arrow keys already reads char/word/line live.)
@@ -1202,6 +1209,64 @@ class TitanAccessEngine:
                                    ("numpad5", "current"), ("numpadenter", "activate")):
                 g.register(f"objnav_{direction}", key,
                            (lambda d: (lambda *a: self._object_nav(d)))(direction))
+
+    # ------------------------------------------------------------------ #
+    # The virtual window and the touchpad
+    # ------------------------------------------------------------------ #
+    def action_toggle_virtual_window(self, *_args):
+        """Any window as a flat list the arrows walk.
+
+        The same subsystem the NVDA add-on has, shared as one file - and
+        the same fallback: a window that exposes nothing at all, which a
+        virtual machine's guest screen is, is READ by Windows' own
+        recogniser and its lines become the rows. Enter then clicks where
+        the words really are, which is the only way to press anything
+        inside somebody else's computer.
+        """
+        try:
+            from .portable import virtualWindow
+        except Exception as error:                   # noqa: BLE001
+            self._say("Virtual window: %s" % error)
+            return False
+        try:
+            ok, said = virtualWindow.toggle()
+        except Exception as error:                   # noqa: BLE001
+            self._say("Virtual window: %s" % error)
+            return False
+        if said:
+            self._say(str(said))
+        return bool(ok)
+
+    def action_toggle_trackpad(self, *_args):
+        """The laptop's touchpad as a touch screen.
+
+        Every Windows laptop made in the last decade has a multi-touch
+        surface under the user's hands and to a screen reader it is a
+        mouse. It is a HID digitizer: every contact has an identifier and
+        a position, and mapping the pad onto the screen absolutely is what
+        makes it a touch screen rather than a pointer.
+        """
+        try:
+            from .portable import trackpad
+        except Exception as error:                   # noqa: BLE001
+            self._say("Touchpad: %s" % error)
+            return False
+        try:
+            ok, said = trackpad.toggle()
+        except Exception as error:                   # noqa: BLE001
+            self._say("Touchpad: %s" % error)
+            return False
+        if said:
+            self._say(str(said))
+        return bool(ok)
+
+    def _say(self, text):
+        """One sentence, through this reader's own speech."""
+        try:
+            from . import speech_adapter
+            speech_adapter.speak(str(text or ""))
+        except Exception:                            # noqa: BLE001
+            pass
 
     def _object_nav(self, direction):
         if self.object_nav is None:

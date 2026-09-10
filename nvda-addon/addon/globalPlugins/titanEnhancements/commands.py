@@ -980,20 +980,88 @@ def label_control():
                      default=existing if source == 'user' else '')
 
 
-def describe_control():
-    """Read the control the keyboard is on, and say what it shows."""
-    from . import graphics
+#: The control the last description was answered from memory for. Pressing
+#: the key again on the SAME one is what asks for a fresh reading - which
+#: is the only way to re-read a picture that has changed, and the answer to
+#: an animation, whose remembered description is a moment rather than a
+#: fact.
+_described_from_memory = ''
+
+
+def what_is_this_written_in():
+    """Say what the window in front is built with, and what that means.
+
+    The first thing anybody writing an app module works out by hand, and
+    the machine will simply answer it: the libraries the process has
+    loaded say what toolkit it is running on, and a program cannot run on
+    one whose library it has not loaded. Worth saying out loud because it
+    is also the answer to "why does this program read so badly" - a Java
+    frame answers nothing until the Access Bridge is on, a Qt list
+    reports no columns, a window that paints itself has nothing to walk.
+    """
+    from . import toolkit
     obj = _focused()
     if obj is None:
         _refused(_('NVDA is not reporting a focus.'))
         return
+    said = toolkit.describe(obj)
+    if not said:
+        # Translators: said when the toolkit of a window cannot be told.
+        _refused(_('This window will not say what it is written in - which '
+                   'usually means it is running as another user.'))
+        return
+    dialogs.report(said) if len(said) <= _A_SENTENCE \
+        else dialogs.browse(said, _('What this is written in'))
+
+
+def describe_control():
+    """Read the control the keyboard is on, and say what it shows.
+
+    **Remembered, because a reading is a request.** A picture, an icon, a
+    chart or an animation read with AI costs a call to the user's own
+    provider and a picture of part of their screen sent to it. It is kept
+    against the control's own identity, per program, in the same file as
+    the labels - so the second time the key is pressed on that icon the
+    answer is instant, costs nothing, and is there with Titan switched
+    off, uninstalled, or on a machine that has never had it.
+
+    Pressing the key AGAIN on the same control re-reads it. That is what
+    makes a remembered answer safe to give: nothing is stuck with a
+    description that has gone stale, and an animation - whose answer is
+    what it showed at a moment - is one keypress from now.
+    """
+    global _described_from_memory
+    from . import graphics
+    from . import labels
+    obj = _focused()
+    if obj is None:
+        _refused(_('NVDA is not reporting a focus.'))
+        return
+    key, _strong = labels.key_of(obj)
+    remembered, _kind = labels.description_of(obj)
+    if remembered and key and _described_from_memory != key:
+        # Said as it was said before, and the key is armed: press it again
+        # and it is read afresh.
+        _described_from_memory = key
+        dialogs.report(remembered) if len(remembered) <= _A_SENTENCE \
+            else dialogs.browse(remembered, _('What this shows'))
+        return
+    _described_from_memory = ''
     ready, why = graphics.ai_available()
     if not ready:
+        # A remembered answer is better than a refusal, and is the whole
+        # point of remembering it: with Titan not running this is all
+        # there is, and it is a real answer.
+        if remembered:
+            dialogs.report(remembered) if len(remembered) <= _A_SENTENCE \
+                else dialogs.browse(remembered, _('What this shows'))
+            return
         _refused(why)
         return
     dialogs.report(_('Reading this control.'))
+    kind = graphics.kind_of(obj)
     question = graphics.QUESTION_PICTURE \
-        if graphics.kind_of(obj) in ('picture', 'chart', 'animation') \
+        if kind in ('picture', 'chart', 'animation') \
         else graphics.QUESTION
 
     def read():
@@ -1002,6 +1070,15 @@ def describe_control():
         if not ok or not said:
             dialogs.report(said or _('It could not be read.'))
             return
+        # Kept only when it really IS a reading. Titan answers a refusal
+        # as ordinary prose with the call reported as having worked, and
+        # `graphics.read` is what tells the two apart - remembering a
+        # refusal would answer "AI OCR is switched off" for ever as what
+        # the picture shows.
+        try:
+            labels.remember_description(obj, said, kind)
+        except Exception:                            # noqa: BLE001
+            pass
         dialogs.report(said) if len(said) <= _A_SENTENCE \
             else dialogs.browse(said, _('What this shows'))
     _work(read)
@@ -1119,6 +1196,240 @@ def reader_modules():
         _refused(_('There are no reader modules.'))
         return
     _page(lines, _('Reader modules'))
+
+
+def share_names():
+    """Share control names with Titan Access, both ways, now.
+
+    It happens by itself when Titan connects; this is for the moment
+    somebody has just named a dozen controls and wants the other reader to
+    know before they switch to it.
+    """
+    from . import shared
+
+    def work():
+        ok, said = shared.sync_labels()
+        dialogs.report(said if said else (
+            # Translators: said when control names have been shared.
+            _('Shared.') if ok else _('Nothing was shared.')))
+    _work(work)
+
+
+def customise_control():
+    """Everything the user may decide about the control they are on.
+
+    JAWS' customised control, which is thirty years old and still the
+    thing users of every other reader ask for: a control the program got
+    wrong is mended once, by the person it is wrong for, and stays mended.
+
+    One window rather than four commands, because these are four answers
+    to one question - "what should this be to me?" - and a user who has to
+    remember which key sets which is a user who sets none of them.
+    """
+    from . import classes
+    from . import labels
+    obj = _focused()
+    if obj is None:
+        _refused(_('NVDA is not reporting a focus.'))
+        return
+    key, _strong = labels.key_of(obj)
+    if not key:
+        # Translators: said about a control that cannot be recognised again.
+        _refused(_('This control has nothing stable to remember it by, so '
+                   'nothing set on it would be found again.'))
+        return
+    custom = labels.custom_of(obj)
+    label, source = labels.described(obj)
+    voices = [''] + sorted(classes.labels())
+    words = [_('as the reader says it')] + \
+        [classes.label_of(tag) for tag in voices[1:]]
+
+    def keep(answers):
+        if answers is None:
+            return
+        labels.customise(
+            obj,
+            silent=answers.get('silent'),
+            role_word=answers.get('role_word'),
+            note=answers.get('note'),
+            voice=voices[answers.get('voice', 0)]
+            if 0 <= answers.get('voice', 0) < len(voices) else '')
+        typed = str(answers.get('label') or '').strip()
+        if typed != str(label or '').strip():
+            if typed:
+                labels.put(obj, typed, source='user')
+            else:
+                labels.remove(obj)
+        # Translators: said when what the user decided about a control is
+        # kept.
+        dialogs.report(_('Kept'))
+
+    try:
+        voice_at = voices.index(str(custom.get('voice') or ''))
+    except ValueError:
+        voice_at = 0
+    dialogs.customise(
+        # Translators: the title of the window for customising one control.
+        _('This control'),
+        [
+            # Translators: a field: the name to read instead of the
+            # control's own.
+            {'id': 'label', 'kind': 'text', 'label': _('Call it'),
+             'value': label or ''},
+            # Translators: a field: the word to say instead of the control
+            # type.
+            {'id': 'role_word', 'kind': 'text',
+             'label': _('Say it is a'), 'value': custom.get('role_word', '')},
+            # Translators: a field: something to say after the control,
+            # every time.
+            {'id': 'note', 'kind': 'text', 'label': _('And add'),
+             'value': custom.get('note', '')},
+            # Translators: a field: the voice its name is spoken in.
+            {'id': 'voice', 'kind': 'choice', 'label': _('In the voice for'),
+             'choices': words, 'value': voice_at},
+            # Translators: a field: never announce this control at all.
+            {'id': 'silent', 'kind': 'check',
+             'label': _('Never announce it'),
+             'value': bool(custom.get('silent'))},
+        ], keep)
+
+
+def command_palette(open_layer=None):
+    """Open the palette: the layers, walked.
+
+    **A list in the same shape as the virtual window, not a dialog.** A
+    modal dialog takes the keyboard away from the reader, is read by NVDA
+    as a dialog rather than by this add-on in the user's own voice
+    classes, and plays none of the auditory icons every other list here
+    plays - so the one thing somebody opens twenty times a day was the
+    one thing that did not feel like the rest of the add-on. The arrows
+    walk it, Enter runs what the cursor is on, and Escape goes back one
+    level before it closes.
+
+    ``open_layer`` is the old fast path - arm the layer and wait for its
+    key - offered as the last row rather than being what choosing a layer
+    does, because somebody who has just found the palette does not know
+    the letters yet.
+    """
+    from . import layers
+    from . import palette
+    names = layers.names()
+    if not names:
+        return False, ''
+    rows = []
+    for name in names:
+        rows.append({
+            'label': '%s (%d)' % (layers.label(name),
+                                  len(layers.keys_of(name))),
+            # Translators: what a row of the palette's first list is.
+            'role': _('layer'),
+            'icon': 'open-object',
+            'run': (lambda chosen=name: layer_commands(chosen, open_layer)),
+        })
+    # Translators: the title of the command palette.
+    return palette.show(rows, _('Commands'))
+
+
+def layer_commands(layer, open_layer=None):
+    """One layer's commands, walked. Enter runs the one the cursor is on."""
+    from . import layers
+    from . import palette
+    keys = layers.keys_of(layer)
+    if not keys:
+        return False, ''
+    rows = []
+    for key in sorted(keys):
+        command, said = keys[key]
+        try:
+            text = said() if callable(said) else str(command)
+        except Exception:                            # noqa: BLE001
+            text = str(command)
+        rows.append({
+            # The key is named beside the command rather than instead of
+            # it: this list is where somebody LEARNS the letter, and a
+            # list of bare letters would teach nothing.
+            'label': '%s (%s)' % (text, key),
+            # Translators: what a row of a layer's command list is.
+            'role': _('command'),
+            'run': (lambda name=command: run_command(name)),
+        })
+    # **The fast path stays reachable from the slow one.** Somebody who
+    # knows the letters should not have to walk a list to use them, and a
+    # way in that exists and cannot be found is the failure this whole
+    # palette was built to answer.
+    if open_layer is not None:
+        rows.append({
+            # Translators: the last row of a layer's command list.
+            'label': _('Press a layer key instead'),
+            'role': _('command'),
+            'run': (lambda: _arm_layer(open_layer, layer)),
+        })
+    # Escape goes back to the layers rather than out: the two lists are
+    # one thing to walk, and picking the wrong layer should cost one
+    # keystroke rather than the whole palette.
+    return palette.show(rows, layers.label(layer),
+                        back=lambda: command_palette(open_layer))
+
+
+def _arm_layer(open_layer, layer):
+    from . import palette
+    palette.stop()
+    open_layer(layer)
+    return True, ''
+
+
+def run_command(name):
+    """Run one of this module's own commands by the name a layer gives it.
+
+    ``(ok, why)``. The name comes from :data:`layers.LAYERS`, which is a
+    table in this add-on rather than anything a caller supplies - so this
+    is a lookup in one module's own globals and never a way to name an
+    attribute of something else.
+
+    **The palette is closed BEFORE the command runs**, and that is not
+    tidiness: a command puts a window up, says something, or borrows keys
+    of its own, and a palette still holding the arrows underneath it
+    would swallow the first thing the user pressed in whatever it opened.
+    """
+    from . import palette
+    function = globals().get(str(name or ''))
+    palette.stop()
+    if not callable(function):
+        return False, 'there is no command called %r' % name
+    function()
+    return True, ''
+
+
+def check_module():
+    """Does the module for this program actually DO anything to it?
+
+    The one question a user has about a module that somebody - or the AI -
+    wrote for them, and the one the module's own format cannot answer. A
+    module can be well formed in every respect and fire not once, and from
+    the outside that is exactly a module that was never written. This runs
+    it against the controls that are really on the screen and names the
+    rules that matched nothing.
+    """
+    from . import readerModules
+    from . import verify
+    obj = _focused()
+    if obj is None:
+        _refused(_('NVDA is not reporting a focus.'))
+        return
+    module = readerModules.for_object(obj)
+    if not module:
+        # Translators: said when no reader module claims this program.
+        _refused(_('No reader module claims this program.'))
+        return
+    report = verify.check(module, obj)
+    lines = [verify.sentence(report)]
+    for row in report.get('rules') or []:
+        lines.append('  %s: %s' % (
+            row['said'],
+            # Translators: how many controls a module's rule matched.
+            _('{count} matched').format(count=row['matched'])
+            + ((' - ' + row['example']) if row.get('example') else '')))
+    _page(lines, _('Does this module work?'))
 
 
 def draft_module():
@@ -1577,13 +1888,13 @@ def _controls_of(window):
         def chosen(index):
             if index is None or not 0 <= index < len(found):
                 return
-            _actions_of(found[index])
+            _control_actions_of(found[index])
         # Translators: the title of the list of controls in a window.
         dialogs.choose(labels, _('Controls'), on_chosen=chosen)
     _work(work)
 
 
-def _actions_of(row):
+def _control_actions_of(row):
     """What this control offers, plus the two things any control allows.
 
     Focus and the review cursor are not the control's own actions and are

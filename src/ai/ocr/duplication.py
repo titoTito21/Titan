@@ -1,24 +1,3 @@
-def _duplication(device):
-    """The duplication for the monitor the desktop starts on.
-
-    **The device is ASKED for its DXGI face, never cast to it.** An
-    `ID3D11Device` is not an `IDXGIDevice`; they are two interfaces on one
-    object with entirely different vtables, so casting one to the other and
-    calling `GetAdapter` jumps to whatever function pointer sits at that
-    slot - which is not a wrong answer but a wild call, and arrived here as
-    an access violation at 0x10.
-    """
-    dxgi_device = device.QueryInterface(IDXGIDevice)
-    adapter = dxgi_device.GetAdapter()
-    output = adapter.EnumOutputs(0)
-    output1 = output.QueryInterface(IDXGIOutput1)
-    where = output.GetDesc().DesktopCoordinates
-    duplication = output1.DuplicateOutput(device)
-    return duplication, (int(where.left), int(where.top),
-                         int(where.right - where.left),
-                         int(where.bottom - where.top))
-
-
 # -*- coding: utf-8 -*-
 """The desktop as the compositor sees it - the only way to photograph a game.
 

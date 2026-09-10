@@ -69,20 +69,94 @@ SKIP = frozenset({
 
 _LOCK = threading.RLock()
 _state = {'on': False, 'nodes': [], 'at': 0, 'inner': 0, 'hwnd': 0,
-          'title': '', 'moves': 0, 'presses': 0, 'partial': '', 'ms': 0}
+          'title': '', 'moves': 0, 'presses': 0, 'partial': '', 'ms': 0,
+          'typing': False, 'why': ''}
 
 
 def report():
     with _LOCK:
-        return {'reviewing': _state['on'], 'controls': len(_state['nodes']),
+        return {'reviewing': _state['on'], 'typing': _state['typing'],
+                'controls': len(_state['nodes']),
                 'at': _state['at'], 'window': _state['title'],
                 'moves': _state['moves'], 'presses': _state['presses'],
-                'partial': _state['partial'], 'ms': _state['ms']}
+                'partial': _state['partial'], 'ms': _state['ms'],
+                'why': _state['why']}
 
 
 def reviewing():
     with _LOCK:
         return bool(_state['on'])
+
+
+def typing_mode():
+    """Whether the keyboard has been handed to a field on purpose.
+
+    Different from :func:`typing_now`, which ASKS NVDA where the focus
+    happens to be. This is a mode the user entered by pressing Enter on a
+    field and leaves by pressing Escape - and while it is on, the virtual
+    window borrows no keys at all except that Escape, so every letter,
+    every arrow and Enter itself are the application's.
+    """
+    with _LOCK:
+        return bool(_state['on'] and _state['typing'])
+
+
+def enter_typing():
+    """Give the keyboard to the field the cursor is on. ``(ok, said)``."""
+    node = here()
+    if node is None:
+        return _nothing()
+    if not _is_a_field(node):
+        return False, ''
+    ok, _why = focus_here()
+    if not ok:
+        # A row read off the screen has no control to focus, and clicking
+        # a rectangle is not the same promise: say so rather than turning
+        # a mode on that nothing is behind.
+        # Translators: said when a field could not be typed into.
+        return False, _('This cannot be typed into')
+    with _LOCK:
+        _state['typing'] = True
+    icons.play('open-object')
+    # Translators: said when the virtual window hands the keyboard to a
+    # field. The pair has to be symmetrical with 'Edit field off'.
+    return True, _('Edit field on')
+
+
+def leave_typing():
+    """Take the keyboard back to the virtual window. ``(ok, said)``."""
+    with _LOCK:
+        was = _state['typing']
+        _state['typing'] = False
+    if not was:
+        return False, ''
+    icons.play('close-object')
+    say_here()
+    # Translators: said when the virtual window takes the keyboard back.
+    return True, _('Edit field off')
+
+
+def _is_a_field(node):
+    """Whether Enter on this row means "type into it".
+
+    The role the walk recorded first, and then what the control itself
+    says: a toolkit that calls its field something else still reports an
+    editable state, and a row this got wrong is a row whose Enter does
+    the wrong thing.
+    """
+    if not node:
+        return False
+    if str(node.get('role') or '').upper() in TYPING:
+        return True
+    obj = node.get('obj')
+    if obj is None:
+        return False
+    try:
+        from . import elements
+        states = elements._states_of(obj)
+    except Exception:                                # noqa: BLE001
+        return False
+    return any('edit' in str(state).lower() for state in states)
 
 
 # --------------------------------------------------------------------------- #
@@ -130,6 +204,28 @@ def nodes_of(window, note=None):
     if window is None:
         return []
     started = time.time()
+    # **A virtual machine is walked at its GUEST's screen, always.**
+    # Reading it was written as the answer to "this window exposes
+    # nothing", and a VMware frame exposes plenty - a menu bar, a
+    # toolbar, a tab strip, the library tree - so the walk below found
+    # all of that, the fallback was never reached, and turning the
+    # virtual window on in a virtual machine gave the user VMware's own
+    # interface instead of the computer inside it. NVDA reads the host's
+    # chrome perfectly well already; what somebody turns this on for is
+    # what is INSIDE the window.
+    try:
+        from . import surface
+        if surface.is_virtual_machine(window):
+            rows = _read_the_screen(window, note)
+            if rows:
+                note['ms'] = int((time.time() - started) * 1000)
+                return rows
+            # Nothing could be read of the guest - a display that cannot
+            # be photographed, no OCR language installed. The host's own
+            # controls are worth less than the guest and more than
+            # nothing, so it falls through rather than answering empty.
+    except Exception:                                # noqa: BLE001
+        pass
     found, seen = [], 0
     queue = [(window, 0)]
     while queue and seen < MAX_SEEN and len(found) < MAX_NODES:
@@ -150,12 +246,43 @@ def nodes_of(window, note=None):
         value = _text(getattr(obj, 'value', ''))
         described = _text(getattr(obj, 'description', ''))
         if not name and not value and not described:
-            # Nothing to call it by. A blank row is a row somebody arrows
-            # onto and is told nothing about, which is worse than a shorter
-            # list.
-            continue
+            # **A menu bar is the exception, because it is the one
+            # unnamed control somebody is looking for.** wxWidgets and
+            # most toolkits give it no accessible name at all, so the
+            # rule below dropped it and a window walked this way had no
+            # menus in it - the one part of a program a user most wants
+            # to reach without hunting for the key that opens it.
+            if role.upper() != 'MENUBAR':
+                # Nothing to call it by. A blank row is a row somebody
+                # arrows onto and is told nothing about, which is worse
+                # than a shorter list.
+                continue
+            # Translators: the row for a window's menu bar.
+            name = _('Menu bar')
         found.append({'name': name, 'value': value, 'description': described,
                       'role': role, 'level': level, 'obj': obj})
+    # **The menu bar first, because that is where it is.** The walk is
+    # breadth first over the accessibility tree, whose order is the order
+    # a toolkit happened to build its children in - so the menus turned
+    # up in the middle of a window's controls, which for somebody who
+    # cannot see it is the menu bar being somewhere else every time.
+    if found:
+        bars = [row for row in found
+                if str(row.get('role') or '').upper() == 'MENUBAR']
+        if bars and found[:len(bars)] != bars:
+            rest = [row for row in found if row not in bars]
+            found = bars + rest
+    if not found:
+        # **A window that exposes nothing still has a screen.** A virtual
+        # machine, a program on a toolkit nobody wired up: the walk above
+        # finds nothing because there is nothing to find, and a virtual
+        # window with no rows in it is the reader saying "there is nothing
+        # here" about a screen full of things. So it is READ - by Windows'
+        # own recogniser, locally, with nothing sent anywhere - and the
+        # lines become the rows. Each keeps its rectangle, so Enter
+        # presses it by clicking where it really is, which is the only way
+        # to press anything in somebody else's computer.
+        found = _read_the_screen(window, note)
     note['seen'] = seen
     note['ms'] = int((time.time() - started) * 1000)
     if not note['ran_out']:
@@ -164,6 +291,60 @@ def nodes_of(window, note=None):
         elif len(found) >= MAX_NODES:
             note['ran_out'] = 'controls'
     return found
+
+
+def _read_the_screen(window, note):
+    """The window as a picture, as virtual-window rows. ``[]`` when it
+    cannot be read.
+
+    Deliberately Windows' own recogniser and not the AI: this happens by
+    itself, on arriving in a window, and an automatic feature may not cost
+    somebody a picture of their screen at a provider. The AI is what a
+    keypress asks for.
+    """
+    try:
+        from . import localOcr
+        from . import surface
+        from . import virtualInput
+    except Exception:                                # noqa: BLE001
+        return []
+    handle = 0
+    try:
+        handle = int(getattr(window, 'windowHandle', 0) or 0)
+    except (TypeError, ValueError):
+        handle = 0
+    if not handle:
+        return []
+    # A virtual machine is read at its GUEST's screen: the frame's own
+    # menu bar is the host's interface, is readable already, and reading
+    # it as part of the guest puts "File Machine View" at the top of
+    # somebody's console.
+    try:
+        if surface.is_virtual_machine(window):
+            display = surface.display_of(window)
+            inner = int(getattr(display, 'windowHandle', 0) or 0)
+            if inner:
+                handle = inner
+                note['guest'] = True
+    except Exception:                                # noqa: BLE001
+        pass
+    ready, why = localOcr.available()
+    if not ready:
+        note['ran_out'] = _text(why)
+        return []
+    reading = localOcr.read_window(handle)
+    if reading is None:
+        note['ran_out'] = _text(localOcr.report().get('why', ''))
+        return []
+    rows = []
+    for node in virtualInput.build(reading,
+                                   getattr(reading, 'highlights', None)):
+        rows.append({'name': node.text, 'value': '', 'description': '',
+                     'role': 'text', 'level': 0, 'obj': None,
+                     'rect': (node.left, node.top, node.width, node.height),
+                     'selected': node.selected})
+    note['read'] = len(rows)
+    return rows
 
 
 def start(hwnd=0):
@@ -184,6 +365,7 @@ def start(hwnd=0):
                         'instead.')
     with _LOCK:
         _state.update({'on': True, 'nodes': nodes, 'at': 0, 'inner': 0,
+                       'typing': False,
                        'partial': str(note.get('ran_out') or ''),
                        'ms': int(note.get('ms') or 0),
                        'title': _text(getattr(window, 'name', '')),
@@ -212,7 +394,7 @@ def stop():
     with _LOCK:
         was = _state['on']
         _state.update({'on': False, 'nodes': [], 'at': 0, 'inner': 0,
-                       'hwnd': 0})
+                       'hwnd': 0, 'typing': False})
     if was and not icons.play('close-object'):
         _cue(False)
     # Translators: said when the virtual window is turned off.
@@ -268,14 +450,22 @@ def consider():
     return start()[0]
 
 
-def refresh():
+def refresh(keep_place=True):
+    """Build it again. ``(ok, said)``.
+
+    ``keep_place`` is what tells "read this window again" from "the
+    window has become a different window": F5 puts the cursor back where
+    it was, and going up a folder must not - the row that was third in
+    the folder you left has nothing to do with the third row of the one
+    you arrived in.
+    """
     if not reviewing():
         return False, _('Virtual window off')
     with _LOCK:
         at = _state['at']
     stop()
     ok, said = start()
-    if ok:
+    if ok and keep_place:
         with _LOCK:
             _state['at'] = max(0, min(at, len(_state['nodes']) - 1))
         say_here()
@@ -500,6 +690,28 @@ def activate():
     obj = node.get('obj')
     with _LOCK:
         _state['presses'] += 1
+    # **Enter on a field means "type into it".** Pressing a field is not
+    # a thing anybody wants done to it: its own action is usually nothing
+    # at all, so Enter fell through to a click, which put the caret there
+    # and left the virtual window still holding every letter - a field
+    # the user was in and could not type a word into.
+    if _is_a_field(node):
+        ok, said = enter_typing()
+        if ok or said:
+            return ok, said
+    if obj is None:
+        # A row read off the screen: there is no control to ask what it
+        # can do, so Enter is a click at the place the words are.
+        ok, why = click_here()
+        if ok:
+            return True, _('Clicked')
+        # **And when it could not, it says which of the four reasons it
+        # was.** "Nothing could be done here" is the least useful true
+        # sentence there is - it wears a rectangle that was never read,
+        # a control off the screen, an NVDA with no mouse handler and a
+        # click that really failed, and each of those is a different
+        # thing to do about it.
+        return False, _refusal(why)
     try:
         count = int(getattr(obj, 'actionCount', 0) or 0)
     except Exception:                                # noqa: BLE001
@@ -519,43 +731,79 @@ def activate():
     # The mouse is put back afterwards, which is what makes a click safe to
     # do on somebody's behalf: the pointer is theirs and where they left it
     # may matter.
-    if click_here()[0]:
+    ok, why = click_here()
+    if ok:
         # Translators: said when a control has been clicked.
         return True, _('Clicked')
     if focus_here()[0]:
         # Translators: said when the keyboard has been moved to a control.
         return True, _('Moved to it')
     icons.play('warn-user')
+    return False, _refusal(why)
+
+
+def _refusal(why):
+    """What to say when Enter could do nothing, with the reason in it."""
     # Translators: said when nothing at all could be done with a control.
-    return False, _('Nothing could be done here')
+    said = _('Nothing could be done here')
+    why = _text(why)
+    if not why:
+        return said
+    with _LOCK:
+        _state['why'] = why
+    return '%s: %s' % (said, why)
 
 
 def click_here():
     """Click the middle of the control the cursor is on, then put the
     mouse back where it was.
 
-    Through NVDA's own `mouseHandler` and `winUser`, so it is the same
-    click NVDA's own "click where the review cursor is" makes.
+    Through NVDA's own `winUser`, so it is the same click NVDA's own
+    "click where the review cursor is" makes - and without telling
+    NVDA the pointer moved, which is what makes it a press rather
+    than a press followed by the reader narrating whatever the mouse
+    landed on.
     """
     node = here()
     if node is None:
         return _nothing()
-    try:
-        location = node['obj'].location
-        left, top = int(location.left), int(location.top)
-        width, height = int(location.width), int(location.height)
-    except Exception:                                # noqa: BLE001
-        return False, ''
+    # **A row READ off the screen has no object, and a rectangle instead.**
+    # That is the whole of pressing something inside a virtual machine:
+    # there is no control to ask, only a place on the screen where the
+    # words are, and clicking there is what a person with a mouse would
+    # do. The rectangle came from Windows' own recogniser, so it is a
+    # place we were told rather than one worked out.
+    rect = node.get('rect')
+    if rect:
+        try:
+            left, top, width, height = (int(rect[0]), int(rect[1]),
+                                        int(rect[2]), int(rect[3]))
+        except Exception:                            # noqa: BLE001
+            return False, 'the rectangle it was read at is not a rectangle'
+    else:
+        try:
+            location = node['obj'].location
+            left, top = int(location.left), int(location.top)
+            width, height = int(location.width), int(location.height)
+        except Exception:                            # noqa: BLE001
+            return False, 'this control will not say where it is'
     if width <= 0 or height <= 0:
         # A rectangle with no width is not a small control, it is one that
         # is not on the screen - and clicking its corner clicks whatever
         # is underneath it.
-        return False, ''
+        return False, 'it has no place on the screen'
     try:
-        import mouseHandler
         import winUser
-    except Exception:                                # noqa: BLE001
-        return False, ''
+    except Exception as error:                       # noqa: BLE001
+        return False, 'this NVDA has no winUser: %s' % error
+    # **The window is brought forward before it is clicked.** A click into
+    # a window that is not the active one is spent activating it - which
+    # in a virtual machine is the whole of "it goes to the guest and
+    # nothing happens": the guest only takes input once its own window
+    # has it, so the first press woke VMware up and the second would have
+    # been the one that landed. Doing it here means one press does what
+    # the user asked for.
+    _bring_forward(_point_owner(left + width // 2, top + height // 2))
     was = None
     try:
         was = winUser.getCursorPos()
@@ -563,20 +811,90 @@ def click_here():
         was = None
     try:
         winUser.setCursorPos(left + width // 2, top + height // 2)
-        mouseHandler.executeMouseMoveEvent(left + width // 2,
-                                           top + height // 2)
+        # **NVDA is deliberately NOT told the mouse moved.**
+        # `mouseHandler.executeMouseMoveEvent` exists to make the reader
+        # announce whatever is under the pointer, which is the last thing
+        # anybody wants from a click made on their behalf: it read out
+        # the object the pointer happened to land on instead of what was
+        # pressed, and inside a window whose objects come and go it
+        # raised in NVDA's own event handler (`_get__storyFieldsAndRects`,
+        # 'NoneType' has no 'helperLocalBindingHandle') four times per
+        # press. The pointer is put back straight afterwards anyway, so
+        # there is no move to report.
         winUser.mouse_event(winUser.MOUSEEVENTF_LEFTDOWN, 0, 0, None, None)
         winUser.mouse_event(winUser.MOUSEEVENTF_LEFTUP, 0, 0, None, None)
         icons.play('task-done')
         return True, ''
-    except Exception:                                # noqa: BLE001
-        return False, ''
+    except Exception as error:                       # noqa: BLE001
+        return False, 'the click itself failed: %s' % error
     finally:
         if was is not None:
             try:
                 winUser.setCursorPos(*was)
             except Exception:                        # noqa: BLE001
                 pass
+
+
+def _point_owner(x, y):
+    """The top-level window that owns that point on the screen.
+
+    Asked of the POINT rather than taken from the window this was built
+    for, because they are not the same window in the case that matters: a
+    virtual machine is walked at its guest's screen, and the guest is a
+    child several levels under the frame.
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        user32.WindowFromPoint.restype = ctypes.c_void_p
+        user32.WindowFromPoint.argtypes = [wintypes.POINT]
+        found = int(user32.WindowFromPoint(
+            wintypes.POINT(int(x), int(y))) or 0)
+    except Exception:                                # noqa: BLE001
+        found = 0
+    if not found:
+        with _LOCK:
+            return int(_state['hwnd'] or 0)
+    try:
+        import ctypes
+        root = ctypes.windll.user32.GetAncestor(ctypes.c_void_p(int(found)),
+                                                2)      # GA_ROOT
+        return int(root or found)
+    except Exception:                                # noqa: BLE001
+        return int(found)
+
+
+def _bring_forward(hwnd):
+    """Make that window the active one, so a click into it is a click.
+
+    ``AttachThreadInput`` first, because Windows refuses
+    ``SetForegroundWindow`` from a process that is not already the
+    foreground one - which NVDA never is. It is the same move Titan's own
+    shell makes for the same reason.
+    """
+    hwnd = int(hwnd or 0)
+    if not hwnd:
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        front = int(user32.GetForegroundWindow() or 0)
+        if front == hwnd:
+            return True
+        mine = user32.GetCurrentThreadId()
+        theirs = user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd), None)
+        attached = bool(theirs) and bool(
+            user32.AttachThreadInput(mine, theirs, True))
+        try:
+            user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        finally:
+            if attached:
+                user32.AttachThreadInput(mine, theirs, False)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
 
 
 def focus_here():

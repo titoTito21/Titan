@@ -80,6 +80,30 @@ def _module_file(dotted):
     return None
 
 
+def _writes_globals(node):
+    """Whether this `globals()` call is being written to rather than read.
+
+    `globals()['x'] = 1`, `globals().update(...)` and `exec(..., globals())`
+    build a namespace; `globals().get('x')` merely looks in one.
+    """
+    function = node.func
+    if isinstance(function, ast.Attribute) \
+            and isinstance(function.value, ast.Call) \
+            and isinstance(function.value.func, ast.Name) \
+            and function.value.func.id == 'globals':
+        return function.attr in ('update', 'setdefault', 'pop', 'clear')
+    if isinstance(function, ast.Name) and function.id == 'exec':
+        return True
+    for argument in list(node.args) + [kw.value for kw in node.keywords]:
+        if isinstance(argument, ast.Call) \
+                and isinstance(argument.func, ast.Name) \
+                and argument.func.id == 'globals' \
+                and isinstance(function, ast.Name) \
+                and function.id in ('exec', 'eval'):
+            return True
+    return False
+
+
 def _module_names(dotted):
     """Every name `from <dotted> import ...` could legally ask for.
 
@@ -127,12 +151,25 @@ def _module_names(dotted):
                 else:
                     names.add(alias.asname or alias.name)
         elif isinstance(node, ast.Call):
-            # A module that builds its own namespace cannot be judged by
+            # A module that BUILDS its own namespace cannot be judged by
             # what is written in it.
+            #
+            # **Reading `globals()` is not building anything**, and taking
+            # it for that switched this whole check off for the one module
+            # it matters most for: `src/titan_core/sound.py` has a single
+            # `globals().get('_spatial_set_pitch')` in it, so
+            # `_module_names` answered "cannot tell" and every invented
+            # `sound.something` a model wrote was accepted in silence -
+            # which is precisely the failure this file exists to prevent,
+            # and `sound.play_notification` is the example its own tests
+            # are written around. So a `globals()` call counts only when
+            # it is WRITTEN to: subscripted, `.update(...)`, or handed to
+            # `exec`. `setattr` and `exec` still count on their own.
             function = node.func
-            if isinstance(function, ast.Name) and function.id in ('globals',
-                                                                  'setattr',
+            if isinstance(function, ast.Name) and function.id in ('setattr',
                                                                   'exec'):
+                dynamic = True
+            elif _writes_globals(node):
                 dynamic = True
     # Submodules of a package are importable names too.
     package_dir = os.path.dirname(_module_file(dotted) or '')

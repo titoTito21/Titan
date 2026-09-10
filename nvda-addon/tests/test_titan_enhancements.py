@@ -3814,7 +3814,7 @@ class EveryFeatureIsWiredToAnEvent(unittest.TestCase):
         source = self._plugin_source()
         for call in ('dialog_kind.announce(', 'live.changed(',
                      'surface.consider(', 'focus.handle_gain_focus(',
-                     'tce.crossing('):
+                     'windowKind.announce(', 'tce.crossing('):
             self.assertIn(call, source, call + ' is never called')
 
     def test_the_plugin_imports_everything_it_calls(self):
@@ -3833,9 +3833,1533 @@ class EveryFeatureIsWiredToAnEvent(unittest.TestCase):
                 # forgot to import - which is an error only at the moment
                 # the user presses the key.
                 self.assertNotIn(used, ('dialog_kind', 'live', 'surface', 'tce',
-                                        'states', 'trackpad', 'focus'),
+                                        'states', 'trackpad', 'focus',
+                                        'windowKind'),
                                  used + ' is used but not imported')
 
+
+
+
+
+
+# --------------------------------------------------------------------------- #
+def _guiHelper_stub():
+    """NVDA's `gui.guiHelper`, enough of it to build a real dialog.
+
+    The manager is built with NVDA's own helper, which exists only inside
+    NVDA. Standing in for it is what lets the REAL wx dialog be built here
+    - and building it for real is the only thing that would have caught
+    the bug this class exists for.
+    """
+    import wx
+    if 'gui' in sys.modules and hasattr(sys.modules['gui'], 'guiHelper'):
+        return sys.modules['gui'].guiHelper
+
+    class BoxSizerHelper:
+        def __init__(self, parent, orientation=None, sizer=None):
+            self.parent = parent
+            self.sizer = sizer or wx.BoxSizer(orientation or wx.VERTICAL)
+
+        def addItem(self, item, **kw):
+            # A ButtonHelper carries a sizer; NVDA's own helper unwraps it.
+            real = getattr(item, 'sizer', item)
+            self.sizer.Add(real, **{key: value for key, value in kw.items()
+                                    if key in ('flag', 'proportion',
+                                               'border')})
+            return item
+
+        def addLabeledControl(self, label, cls, **kw):
+            box = wx.BoxSizer(wx.HORIZONTAL)
+            box.Add(wx.StaticText(self.parent, label=label))
+            control = cls(self.parent, **kw)
+            box.Add(control, 1)
+            self.sizer.Add(box, 0, wx.EXPAND)
+            return control
+
+        def addDialogDismissButtons(self, buttons, **kw):
+            self.sizer.Add(buttons)
+            return buttons
+
+    class ButtonHelper:
+        def __init__(self, orientation):
+            self.sizer = wx.BoxSizer(orientation)
+
+        def addButton(self, parent, label='', **kw):
+            button = wx.Button(parent, label=label)
+            self.sizer.Add(button)
+            return button
+
+    gui = types.ModuleType('gui')
+    helper = types.ModuleType('gui.guiHelper')
+    helper.BoxSizerHelper = BoxSizerHelper
+    helper.ButtonHelper = ButtonHelper
+    gui.guiHelper = helper
+    gui.mainFrame = None
+    sys.modules.setdefault('gui', gui)
+    sys.modules.setdefault('gui.guiHelper', helper)
+    return helper
+
+
+class TheManagerIsBuiltForREAL(unittest.TestCase):
+    """Not "the source mentions a Notebook" - built, with every button pressed.
+
+    The manager shipped with a labels page that called a helper which was
+    not there, and because the dialog is put up from a `wx.CallAfter`
+    nothing caught it: the traceback went to NVDA's log, `show()` had
+    already answered True, and the user pressed the menu entry and got no
+    window and no sentence. Every tab was unreachable because of one line
+    on one of them.
+
+    Nothing here is shown on the screen; the dialog is built, driven and
+    destroyed.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import wx
+        except Exception:                            # noqa: BLE001
+            raise unittest.SkipTest('no wxPython here')
+        _guiHelper_stub()
+        cls.app = wx.App(False) if wx.GetApp() is None else wx.GetApp()
+
+    def _no_modals(self):
+        """Every modal answered NO or cancelled, for the length of a test.
+
+        **A test never puts a window in front of whoever runs it**, and
+        the button sweep presses buttons that ask: a confirmation, and
+        two text boxes on the way to customising a control. It passed on
+        a machine whose lists happen to be empty and would have sat
+        waiting for a click on anybody else's - which is exactly how it
+        cost 131 seconds the first time. Answering them is also what
+        makes this the test that they ASK.
+        """
+        import wx
+        asked = []
+        real_box = wx.MessageBox
+        real_entry = wx.TextEntryDialog
+        real_choice = wx.SingleChoiceDialog
+
+        def box(*args, **kw):
+            asked.append(str(args[0]) if args else '')
+            return wx.NO
+
+        class _Cancelled:
+            def __init__(self, *args, **kw):
+                asked.append(str(args[1]) if len(args) > 1 else '')
+
+            def ShowModal(self):
+                return wx.ID_CANCEL
+
+            def GetValue(self):
+                return ''
+
+            def GetSelection(self):
+                return -1
+
+            def Destroy(self):
+                pass
+
+        wx.MessageBox = box
+        wx.TextEntryDialog = _Cancelled
+        wx.SingleChoiceDialog = _Cancelled
+        self.addCleanup(setattr, wx, 'MessageBox', real_box)
+        self.addCleanup(setattr, wx, 'TextEntryDialog', real_entry)
+        self.addCleanup(setattr, wx, 'SingleChoiceDialog', real_choice)
+        return asked
+
+    def _built(self):
+        import wx
+        from titanEnhancements import managerGui
+        made = managerGui.build()
+        self.assertIsNotNone(made, 'the manager class would not build')
+        frame = wx.Frame(None)
+        self.addCleanup(frame.Destroy)
+        dialog = made(frame)
+        self.addCleanup(dialog.Destroy)
+        return dialog
+
+    #: Every tab the manager must have. Named rather than counted: a
+    #: count fails when a tab is ADDED, which is not a fault, and passes
+    #: when one is renamed into nonsense, which is.
+    TABS = ('Programs', 'Place markers', 'Watched areas', 'Scripts',
+            'Control names', 'Sound scheme', 'Auditory icons')
+
+    def test_every_tab_is_there(self):
+        dialog = self._built()
+        pages = [dialog.book.GetPageText(index)
+                 for index in range(dialog.book.GetPageCount())]
+        for wanted in self.TABS:
+            self.assertIn(wanted, pages)
+
+    def test_every_button_on_every_tab_presses_without_raising(self):
+        """Every button, including the ones that ask before they act.
+
+        **A test never puts a window in front of whoever runs it.** The
+        first version of this pressed "Forget everything", which raises a
+        real confirmation - and the suite sat for 131 seconds with a
+        modal dialog on the user's own desktop waiting for a click nobody
+        knew to give. So the question is answered NO here, which also
+        makes this the test that the destructive button asks at all.
+        """
+        import wx
+        asked = self._no_modals()
+        dialog = self._built()
+        pressed = 0
+        for index in range(dialog.book.GetPageCount()):
+            dialog.book.SetSelection(index)
+            page = dialog.book.GetPage(index)
+            for child in page.GetChildren():
+                if not isinstance(child, wx.Button):
+                    continue
+                event = wx.CommandEvent(wx.EVT_BUTTON.typeId, child.GetId())
+                event.SetEventObject(child)
+                child.GetEventHandler().ProcessEvent(event)
+                pressed += 1
+        self.assertGreater(pressed, 8, 'almost nothing was pressed')
+        # Every modal that did appear was answered here rather than on
+        # somebody's desktop. With empty lists most buttons return early,
+        # so this is "no more than a handful", not a count.
+        self.assertLessEqual(len(asked), 6, asked)
+
+    def test_a_page_that_will_not_build_is_ONE_page(self):
+        """The whole of the fix, proved by putting the bug back."""
+        from titanEnhancements import labels
+        gone = labels.everything
+        del labels.everything
+        try:
+            dialog = self._built()
+            self.assertEqual(dialog.book.GetPageCount(), len(self.TABS),
+                             'one broken page took the others with it')
+        finally:
+            labels.everything = gone
+
+    def test_the_sweep_is_safe_with_things_really_stored(self):
+        """The sweep passed on a machine whose lists are empty. With rows
+        in them every asking button really asks - and none of it may
+        reach the desktop of whoever runs the suite."""
+        import wx
+        from titanEnhancements import labels, procedures, markers
+        rows = {'SomeApp|BUTTON|save': {'label': 'Save', 'source': 'user'}}
+        real = (labels.everything, labels.for_application, labels.set_field,
+                labels.rename_key, labels.remove_key,
+                procedures.all_procedures, markers.all_markers)
+        labels.everything = lambda: {'someapp': dict(rows)}
+        labels.for_application = lambda name: dict(rows) \
+            if name == 'someapp' else {}
+        labels.set_field = lambda *a, **kw: True
+        labels.rename_key = lambda *a, **kw: True
+        labels.remove_key = lambda *a, **kw: True
+        procedures.all_procedures = lambda: [
+            {'name': 'A script', 'program': 'someapp', 'steps': []}]
+        markers.all_markers = lambda: [{'name': 'A marker',
+                                        'program': 'someapp'}]
+        asked = self._no_modals()
+        try:
+            dialog = self._built()
+            for index in range(dialog.book.GetPageCount()):
+                dialog.book.SetSelection(index)
+                page = dialog.book.GetPage(index)
+                for child in page.GetChildren():
+                    if not isinstance(child, wx.Button):
+                        continue
+                    event = wx.CommandEvent(wx.EVT_BUTTON.typeId,
+                                            child.GetId())
+                    event.SetEventObject(child)
+                    child.GetEventHandler().ProcessEvent(event)
+        finally:
+            (labels.everything, labels.for_application, labels.set_field,
+             labels.rename_key, labels.remove_key,
+             procedures.all_procedures, markers.all_markers) = real
+        # It really did ask - which is the point - and every question was
+        # answered here.
+        self.assertGreater(len(asked), 0, 'nothing asked, so nothing acted')
+
+    def test_forgetting_a_program_asks_first_and_no_means_no(self):
+        """There is no undo: the names somebody typed go with it."""
+        import wx
+        from titanEnhancements import labels
+        removed = []
+        rows = {'SomeApp|BUTTON|save': {'label': 'Save', 'source': 'user'}}
+        real_all, real_one = labels.everything, labels.for_application
+        real_remove = labels.remove_key
+        labels.everything = lambda: {'someapp': dict(rows)}
+        labels.for_application = lambda name: dict(rows) \
+            if name == 'someapp' else {}
+        labels.remove_key = lambda program, key: removed.append((program, key))
+        asked = self._no_modals()
+        try:
+            dialog = self._built()
+            index = list(dialog.programs.GetString(at) for at
+                         in range(dialog.programs.GetCount())).index('someapp')
+            dialog.programs.SetSelection(index)
+            event = wx.CommandEvent(wx.EVT_BUTTON.typeId)
+            dialog._forget_program(event)
+        finally:
+            labels.everything, labels.for_application = real_all, real_one
+            labels.remove_key = real_remove
+        self.assertEqual(len(asked), 1, 'it did not ask')
+        self.assertIn('someapp', asked[0])
+        self.assertEqual(removed, [], 'it threw things away after a no')
+
+    def test_a_program_page_says_what_is_known_and_nothing_else(self):
+        from titanEnhancements import labels, procedures
+        rows = {'SomeApp|BUTTON|save': {'label': 'Save', 'source': 'user',
+                                        'description': 'A floppy disk.'}}
+        real_all, real_one = labels.everything, labels.for_application
+        real_note = labels.application_note
+        real_procs = procedures.all_procedures
+        labels.everything = lambda: {'someapp': dict(rows)}
+        labels.for_application = lambda name: dict(rows) \
+            if name == 'someapp' else {}
+        labels.application_note = lambda a, f: 'a green leaf' \
+            if a == 'someapp' else ''
+        procedures.all_procedures = lambda: [{'name': 'x',
+                                              'program': 'someapp',
+                                              'steps': []}]
+        try:
+            dialog = self._built()
+            index = list(dialog.programs.GetString(at) for at
+                         in range(dialog.programs.GetCount())).index('someapp')
+            dialog.programs.SetSelection(index)
+            dialog._program_shown()
+            said = dialog.program_facts.GetValue()
+        finally:
+            labels.everything, labels.for_application = real_all, real_one
+            labels.application_note = real_note
+            procedures.all_procedures = real_procs
+        self.assertIn('1', said)                 # one named control
+        self.assertIn('a green leaf', said)      # what its icon was read as
+        self.assertIn('someapp', ''.join(
+            dialog.programs.GetString(at)
+            for at in range(dialog.programs.GetCount())))
+
+    def test_the_scripts_page_lists_what_was_recorded(self):
+        from titanEnhancements import procedures
+        real = procedures.all_procedures
+        procedures.all_procedures = lambda: [
+            {'name': 'Weekly report', 'program': 'tedit',
+             'steps': [{'do': 'press'}, {'do': 'type'}]}]
+        try:
+            dialog = self._built()
+        finally:
+            procedures.all_procedures = real
+        rows = [dialog.procedures.GetString(at)
+                for at in range(dialog.procedures.GetCount())]
+        self.assertEqual(len(rows), 1)
+        self.assertIn('Weekly report', rows[0])
+        self.assertIn('tedit', rows[0])
+        self.assertIn('2', rows[0])          # how many steps
+
+    def test_the_names_page_lists_a_program_and_its_controls(self):
+        from titanEnhancements import labels
+        rows = {'SomeApp|BUTTON|save': {'label': 'Save', 'source': 'ai',
+                                        'description': 'A floppy disk.'}}
+        real_all = labels.everything
+        real_one = labels.for_application
+        labels.everything = lambda: {'someapp': dict(rows)}
+        labels.for_application = lambda name: dict(rows) \
+            if name == 'someapp' else {}
+        try:
+            dialog = self._built()
+        finally:
+            labels.everything = real_all
+            labels.for_application = real_one
+        self.assertEqual(dialog.label_programs.GetString(0), 'someapp')
+        row = dialog.labels.GetString(0)
+        self.assertIn('Save', row)
+        self.assertIn('ai', row)
+
+
+
+
+
+
+
+# --------------------------------------------------------------------------- #
+class AVirtualMachineIsAnotherComputersScreen(unittest.TestCase):
+    """The case this whole tier exists for, and the one it was getting wrong.
+
+    A virtual machine's window really does expose things - a menu bar, a
+    status line, the host's own chrome - so "no children at all" answered
+    no, and the guest's screen, which exposes nothing at all, was never
+    read. Reported twice as "the accessible virtual machine window still
+    does not work".
+    """
+
+    def setUp(self):
+        from titanEnhancements import surface
+        self.surface = surface
+
+    @staticmethod
+    def _window(klass='', program='', children=(), handle=1,
+                location=(0, 0, 800, 600)):
+        return types.SimpleNamespace(
+            windowClassName=klass, windowHandle=handle,
+            children=list(children), location=tuple(location),
+            role=types.SimpleNamespace(name='WINDOW'),
+            appModule=types.SimpleNamespace(appName=program))
+
+    def test_vmware_workstation_is_recognised_by_its_program(self):
+        for program in ('vmware', 'vmware-vmx', 'vmplayer', 'vmrc'):
+            self.assertTrue(
+                self.surface.is_virtual_machine(self._window(program=program)),
+                program)
+
+    def test_vmware_is_recognised_by_its_window_class_too(self):
+        """Two ways, so a user running it under a name the list has not
+        got is still recognised."""
+        self.assertTrue(
+            self.surface.is_virtual_machine(self._window(klass='VMUIFrame')))
+        self.assertTrue(
+            self.surface.is_virtual_machine(self._window(klass='MKSEmbedded')))
+
+    def test_the_others_are_recognised(self):
+        for program in ('virtualboxvm', 'vmconnect', 'mstsc', 'vncviewer'):
+            self.assertTrue(
+                self.surface.is_virtual_machine(self._window(program=program)),
+                program)
+
+    def test_an_ordinary_qt_program_is_NOT_a_virtual_machine(self):
+        """`QWidget` is what VirtualBox paints the guest onto AND the class
+        of every Qt program on the machine. Putting it in the recognising
+        set made all of them virtual machines."""
+        self.assertFalse(self.surface.is_virtual_machine(
+            self._window(klass='QWidget', program='someqtapp')))
+        self.assertFalse(self.surface.is_virtual_machine(
+            self._window(klass='Notepad', program='notepad')))
+
+    def test_a_vm_looks_drawn_even_though_it_has_controls(self):
+        """The whole fix: the measurement below it answers "this has an
+        interface", because the host's chrome is an interface."""
+        chrome = self._window(klass='ToolbarWindow32', handle=2)
+        self.assertTrue(self.surface.looks_drawn(
+            self._window(klass='VMUIFrame', children=[chrome])))
+
+    def test_the_guest_screen_is_what_is_found(self):
+        """Reading the whole window gives somebody "File Machine View"
+        across the top of their Linux console."""
+        guest = self._window(klass='MKSEmbedded', handle=99)
+        chrome = self._window(klass='ToolbarWindow32', handle=2)
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', children=[chrome, guest]))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 99)
+
+    def test_virtualbox_guest_is_found_by_being_inside_one(self):
+        """Its guest surface is a plain QWidget, which is safe to look for
+        only inside a window already known to be a virtual machine."""
+        guest = self._window(klass='QWidget', handle=77)
+        found = self.surface.display_of(
+            self._window(klass='VirtualBoxVM', children=[guest]))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 77)
+
+    def test_with_no_display_child_the_window_itself_is_read(self):
+        window = self._window(klass='VMUIFrame', handle=5)
+        self.assertIs(self.surface.display_of(window), window)
+
+    def test_the_guest_is_found_however_deep_it_is_buried(self):
+        """Measured on the user's own VMware Workstation: `MKSEmbedded`
+        sits under the frame, a `VMUIView`, a `CVMUIStatusPane` and two
+        containers. Looking only at the frame's own children never
+        reached it, so the class match - the one certain answer there is -
+        never fired at all."""
+        guest = self._window(klass='MKSEmbedded', handle=790808,
+                             location=(497, 474, 640, 480))
+        buried = guest
+        for depth, klass in enumerate(('xui::TWinContainer', '#32770',
+                                       'CVMUIStatusPane', 'VMUIView')):
+            buried = self._window(klass=klass, handle=100 + depth,
+                                  children=[buried],
+                                  location=(496, 409, 642, 546))
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', children=[buried]))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 790808)
+
+    def test_the_parked_console_is_not_the_one_to_read(self):
+        """VMware keeps more than one `MKSEmbedded` and parks the spare at
+        (-31797, -31820) - the same trick Titan's own offscreen bridge
+        frame uses. Matched on class alone the parked one won, and what
+        was then read was a console nobody can see: a picture that never
+        changes, no words in it, and a reader saying nothing while
+        reporting that it had found the guest."""
+        parked = self._window(klass='MKSEmbedded', handle=2755056,
+                              location=(-31797, -31820, 640, 480))
+        real = self._window(klass='MKSEmbedded', handle=790808,
+                            location=(497, 474, 640, 480))
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', children=[parked, real],
+                         location=(296, 341, 846, 702)))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 790808)
+
+    def test_a_check_that_cannot_see_does_not_refuse(self):
+        """A candidate with no rectangle at all is still the console: a
+        test that cannot tell must not be the thing that says no."""
+        guest = self._window(klass='MKSEmbedded', handle=3)
+        guest.location = None
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', children=[guest]))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 3)
+
+    def test_a_one_pixel_strip_is_never_the_screen(self):
+        """VMware's `unibar.ahTarget` is the auto-hide strip along the top
+        of the window - 1894 by 1 pixels, and with no children, so it won
+        "the biggest child that exposes nothing" outright while the real
+        console (which has children above it) never qualified. What was
+        then watched was a one-pixel line: the recogniser read no words in
+        it, ever, the picture never changed, and the whole feature was
+        silent while reporting that it was working."""
+        strip = self._window(klass='unibar.ahTarget', handle=2558612,
+                             location=(296, 341, 1894, 1))
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', handle=5, children=[strip]))
+        self.assertNotEqual(getattr(found, 'windowHandle', 0), 2558612)
+
+    def test_the_biggest_childless_child_is_still_the_fallback(self):
+        """The measurement is not gone - it is only refused a rectangle
+        that could not be a screen."""
+        strip = self._window(klass='unibar.ahTarget', handle=7,
+                             location=(0, 0, 1894, 1))
+        screen = self._window(klass='SomethingDrawn', handle=8,
+                              location=(0, 0, 640, 480))
+        found = self.surface.display_of(
+            self._window(klass='VMUIFrame', children=[strip, screen]))
+        self.assertEqual(getattr(found, 'windowHandle', 0), 8)
+
+    def test_looking_for_the_guest_is_bounded(self):
+        """It runs on arriving in a window, and a window with thousands of
+        controls must not make that expensive."""
+        window = self._window(klass='VMUIFrame')
+        deep = window
+        for _ in range(40):
+            deep.children = [self._window(klass='Filler',
+                                          children=[], handle=1)]
+            deep = deep.children[0]
+        seen = self.surface._descendants(window)
+        self.assertLessEqual(len(seen), self.surface.DISPLAY_BUDGET)
+        self.assertLessEqual(len(seen), self.surface.DISPLAY_DEPTH)
+
+    def test_the_watcher_really_switches_to_the_guest(self):
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'surface.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _begin(')
+        block = source[at:at + 1800]
+        self.assertIn('is_virtual_machine(obj)', block)
+        self.assertIn('display_of(obj)', block)
+
+
+# --------------------------------------------------------------------------- #
+class AnAutomaticReadingMayNotCostAProviderCall(unittest.TestCase):
+    """Windows' recogniser is what the reader may use by ITSELF.
+
+    Local, private, free, about a tenth of a second - against a picture of
+    the user's screen sent to a provider and an answer measured taking
+    longer than the bus waits for it. "Titan did not answer within 12s",
+    in the log, over and over, from controls the reader chose to look at
+    on its own.
+    """
+
+    def test_the_automatic_path_reads_locally(self):
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'focus.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _maybe_label(')
+        block = source[at:at + 4000]
+        local = block.index('graphics.label_locally')
+        ai = block.index('graphics.label_with_ai')
+        self.assertLess(local, ai, 'the AI is asked first')
+        self.assertIn('_label_ai_wanted()', block,
+                      'the AI is asked without the user having said so')
+
+    def test_the_ai_is_only_for_a_user_who_asked_for_it(self):
+        from titanEnhancements import configSpec, focus
+        before = configSpec.read
+        try:
+            for answer, wanted in (('local', False), ('both', False),
+                                   ('ai', True)):
+                configSpec.read = lambda a=answer: dict(configSpec.defaults(),
+                                                        ocrTier=a)
+                self.assertEqual(focus._label_ai_wanted(), wanted, answer)
+        finally:
+            configSpec.read = before
+
+    def test_a_local_label_needs_a_place_on_the_screen(self):
+        from titanEnhancements import graphics
+        obj = types.SimpleNamespace(name='', value='', description='',
+                                    windowClassName='X', UIAAutomationId='a',
+                                    role=types.SimpleNamespace(name='BUTTON'),
+                                    location=None,
+                                    appModule=types.SimpleNamespace(
+                                        appName='someapp'))
+        ok, said = graphics.label_locally(obj)
+        self.assertFalse(ok)
+        self.assertTrue(said)
+
+    def test_the_timeout_really_reaches_the_bridge(self):
+        """`surface.read(hwnd, timeout=45.0)` took a timeout it never
+        passed on, so every AI reading answered "did not answer within
+        12s" while Titan was answering a few seconds later."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'link.py'),
+                         encoding='utf-8').read()
+        at = source.index('def run_action(')
+        block = source[at:at + 1400]
+        self.assertIn('timeout=CALL_TIMEOUT', block)
+        self.assertIn('timeout=timeout', block)
+        for name in ('surface.py', 'graphics.py'):
+            other = io.open(os.path.join(ADDON, 'globalPlugins',
+                                         'titanEnhancements', name),
+                            encoding='utf-8').read()
+            self.assertIn('timeout=timeout', other, name)
+
+# --------------------------------------------------------------------------- #
+class MSAAForAWindowThatHasNone(unittest.TestCase):
+    """Titan Virtual Input Accessibility.
+
+    A virtual machine's screen, a program on a toolkit nobody wired up, an
+    installer that paints its own widgets: one rectangle with nothing
+    inside it. There is no accessibility to read because the program never
+    exposed any - but there is a picture, and a picture has structure.
+    """
+
+    def setUp(self):
+        from titanEnhancements import virtualInput
+        self.vi = virtualInput
+        virtualInput.forget()
+        self.addCleanup(virtualInput.forget)
+
+    class _Reading:
+        def __init__(self, lines):
+            self.lines = lines
+
+    @staticmethod
+    def _word(text, left, top, width=40, height=16):
+        return {'text': text, 'left': left, 'top': top,
+                'width': width, 'height': height}
+
+    def _menu_bar_and_two_rows(self):
+        w = self._word
+        return self._Reading([
+            [w('File', 10, 10), w('Edit', 200, 10), w('View', 400, 10)],
+            [w('document.txt', 10, 40), w('12 KB', 300, 40)],
+            [w('picture.png', 10, 60), w('340 KB', 300, 60)],
+        ])
+
+    def test_a_row_of_widely_spaced_words_is_SEVERAL_things(self):
+        """"File Edit View" is three menus, not a sentence - and without
+        that a VM's menu bar is one node nobody can move through."""
+        nodes = self.vi.build(self._menu_bar_and_two_rows())
+        first = [node.text for node in nodes if node.line == 0]
+        self.assertEqual(first, ['File', 'Edit', 'View'])
+
+    def test_words_are_grouped_by_where_they_REALLY_are(self):
+        """The recogniser's idea of a line and a grid's own row are not
+        the same thing."""
+        w = self._word
+        # Two words the recogniser put on different "lines", on one row.
+        reading = self._Reading([[w('left', 10, 100)], [w('right', 500, 102)]])
+        nodes = self.vi.build(reading)
+        self.assertEqual(len({node.line for node in nodes}), 1)
+
+    def test_a_highlighted_row_is_marked_selected(self):
+        """In a virtual machine the highlight IS the interface."""
+        nodes = self.vi.build(self._menu_bar_and_two_rows(),
+                              highlights=[(0, 55, 800, 20)])
+        chosen = [node.text for node in self.vi.selected_in(nodes)]
+        self.assertEqual(chosen, ['picture.png', '340 KB'])
+        for node in nodes:
+            if node.text == 'document.txt':
+                self.assertFalse(node.selected)
+
+    def test_a_selected_node_SAYS_it_is(self):
+        nodes = self.vi.build(self._menu_bar_and_two_rows(),
+                              highlights=[(0, 55, 800, 20)])
+        parts = self.vi.describe(self.vi.selected_in(nodes)[0])
+        self.assertEqual(parts[0][1], 'name')
+        self.assertEqual(parts[-1][1], 'state')
+
+    def test_with_no_highlight_nothing_is_guessed_at(self):
+        nodes = self.vi.build(self._menu_bar_and_two_rows())
+        self.assertEqual(self.vi.selected_in(nodes), [])
+
+    def test_only_what_is_NEW_comes_back(self):
+        """A screen re-read from the top on every poll is a reader nobody
+        can use - and it is what a terminal in a VM most needs right."""
+        first = self.vi.build(self._menu_bar_and_two_rows())
+        self.vi.changed(7, first)
+        w = self._word
+        after = self.vi.build(self._Reading([
+            [w('File', 10, 10), w('Edit', 200, 10), w('View', 400, 10)],
+            [w('document.txt', 10, 40), w('12 KB', 300, 40)],
+            [w('picture.png', 10, 60), w('340 KB', 300, 60)],
+            [w('a new line of output', 10, 90)],
+        ]))
+        new, gone = self.vi.changed(7, after)
+        self.assertEqual([node.text for node in new], ['a new line of output'])
+        self.assertEqual(gone, [])
+
+    def test_a_line_reads_as_one_thing(self):
+        nodes = self.vi.build(self._menu_bar_and_two_rows())
+        self.assertEqual(self.vi.line_of(nodes, 0), 'File Edit View')
+
+    def test_it_never_raises_on_nonsense(self):
+        """It is the only thing a window like this has; an exception here
+        takes that away."""
+        self.assertEqual(self.vi.build(None), [])
+        self.assertEqual(self.vi.build(self._Reading(None)), [])
+        self.assertEqual(self.vi.build(self._Reading([[{'no': 'text'}]])), [])
+        self.assertEqual(self.vi.describe(None), [])
+
+    # -- the colours ------------------------------------------------------- #
+    class _Picture:
+        """A bitmap with the two methods anything here needs of one."""
+
+        def __init__(self, width, height, ground=(0, 0, 0), band=None,
+                     band_colour=(255, 255, 255)):
+            self.size = (width, height)
+            self._ground = ground
+            self._band = band
+            self._band_colour = band_colour
+
+        def getpixel(self, where):
+            _x, y = where
+            if self._band and self._band[0] <= y < self._band[1]:
+                return self._band_colour
+            return self._ground
+
+    def test_an_inverted_row_is_found(self):
+        """Nothing in a picture says which entry the arrows are on except
+        that its background is inverted."""
+        picture = self._Picture(400, 200, ground=(0, 0, 0),
+                                band=(80, 100), band_colour=(255, 255, 255))
+        found = self.vi.highlights(picture)
+        self.assertTrue(found, 'the inverted row was not found')
+        _left, top, _width, height = found[0]
+        self.assertLessEqual(abs(top - 80), 4)
+        self.assertGreaterEqual(height, 12)
+
+    def test_a_plain_screen_has_no_highlight(self):
+        """A false highlight is worse than none: it would tell somebody
+        they are on a line they are not on."""
+        self.assertEqual(
+            self.vi.highlights(self._Picture(400, 200, ground=(0, 0, 0))), [])
+
+    def test_a_picture_it_cannot_read_answers_nothing(self):
+        class Broken:
+            size = (400, 200)
+
+            def getpixel(self, where):
+                raise RuntimeError('no')
+        self.assertEqual(self.vi.highlights(Broken()), [])
+        self.assertEqual(self.vi.highlights(None), [])
+
+    def test_the_local_reader_hands_the_highlights_over_in_SCREEN_places(self):
+        """A highlight in the picture's coordinates compared against a
+        word in the screen's matches nothing - or the wrong line, by a
+        margin that changes with the window's size."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'localOcr.py'),
+                         encoding='utf-8').read()
+        self.assertIn('def _highlighted(', source)
+        at = source.index('def _highlighted(')
+        block = source[at:at + 1200]
+        self.assertIn('_screen_y(info', block)
+        self.assertIn('info.screenLeft', block)
+
+    def test_windows_reading_nothing_is_what_asks_the_AI(self):
+        """"Windows' own recogniser first, the AI when it cannot" was
+        documented in `_not_a_game` and only ever happened when the
+        recogniser RAISED - so a window Windows read as blank was watched
+        for ever, in silence, and never promoted."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'surface.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _watch_locally(')
+        end = source.index('\ndef ', at + 10)
+        block = source[at:end]
+        self.assertIn('if not reading.lines:', block)
+        self.assertIn('EMPTY_ENOUGH', block)
+        from titanEnhancements import surface
+        self.assertGreater(surface.EMPTY_ENOUGH, 1,
+                           'a screen is blank for a moment while it '
+                           'repaints; one reading is not an answer')
+
+    def test_what_the_watcher_said_is_written_down(self):
+        """"It reads the window and says nothing" wears four different
+        faults and only a record of what it decided to say tells them
+        apart."""
+        from titanEnhancements import surface
+        for field in ('said', 'last_said', 'empty'):
+            self.assertIn(field, surface.report())
+
+    def test_the_watcher_says_the_highlight_instead_of_the_diff(self):
+        """When the highlight moves the whole screen "changes", and
+        reading the new lines would recite the menu instead of saying
+        which item the user is on."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'surface.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _watch_locally(')
+        # To the end of the function rather than a fixed number of
+        # characters: a comment added above the line being looked for
+        # would otherwise push it out of the slice and fail a test about
+        # something else entirely.
+        end = source.index('\ndef ', at + 10)
+        block = source[at:end]
+        self.assertIn('virtualInput.selected_in', block)
+        self.assertIn('if not said_it:', block,
+                      'the diff is read even when the highlight was said')
+
+# --------------------------------------------------------------------------- #
+class AnAutomaticFeatureMayNotStopTheReader(unittest.TestCase):
+    """The Action Bus is ONE pipe, and that is what makes this a rule.
+
+    `_maybe_label` started a thread per unnamed control, each making a
+    call that waits up to twelve seconds. Tab through ten of them and
+    that is ten calls nose to tail with every other call queued behind -
+    including the ones NVDA makes on its own main thread. In the log:
+    "Titan did not answer within 12s". To the user: a reader that has
+    stopped.
+    """
+
+    def setUp(self):
+        from titanEnhancements import focus
+        self.focus = focus
+        focus._label_busy = False
+        focus._label_last = 0.0
+        focus._label_failures = 0
+        self.addCleanup(setattr, focus, '_label_busy', False)
+        self.addCleanup(setattr, focus, '_label_last', 0.0)
+        self.addCleanup(setattr, focus, '_label_failures', 0)
+
+    def test_only_one_is_asked_for_at_a_time(self):
+        self.assertTrue(self.focus._label_may_ask())
+        self.assertFalse(self.focus._label_may_ask(),
+                         'a second went out while the first was in flight')
+
+    def test_they_are_spaced_out(self):
+        """However many unnamed controls go past."""
+        self.assertTrue(self.focus._label_may_ask())
+        self.focus._label_done(True)
+        self.assertFalse(self.focus._label_may_ask(),
+                         'the next one went out immediately')
+
+    def test_after_a_few_failures_it_stands_down(self):
+        """A Titan that just failed to answer in twelve seconds will fail
+        the next one too, and asking anyway is how a feature that cannot
+        work takes the reader with it."""
+        for _try in range(self.focus.LABEL_GIVE_UP):
+            self.focus._label_last = 0.0
+            self.assertTrue(self.focus._label_may_ask())
+            self.focus._label_done(False)
+        self.assertTrue(self.focus.label_layer_stood_down())
+        self.focus._label_last = 0.0
+        self.assertFalse(self.focus._label_may_ask())
+
+    def test_one_that_works_puts_the_count_back(self):
+        self.focus._label_failures = self.focus.LABEL_GIVE_UP - 1
+        self.focus._label_done(True)
+        self.assertEqual(self.focus._label_failures, 0)
+        self.assertFalse(self.focus.label_layer_stood_down())
+
+    def test_standing_down_is_SAID(self):
+        """A feature that quietly stopped is the thing this add-on keeps
+        taking back out."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'focus.py'),
+                         encoding='utf-8').read()
+        self.assertIn('label_layer_stood_down()', source)
+        self.assertIn('switched off for now', source)
+
+    def test_nothing_is_asked_before_the_guard(self):
+        """The guard is worth nothing if the thread starts anyway."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'focus.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _maybe_label(')
+        block = source[at:at + 4000]
+        guard = block.index('_label_may_ask()')
+        thread = block.index('threading.Thread')
+        self.assertLess(guard, thread,
+                        'the thread is started before the guard is asked')
+
+# --------------------------------------------------------------------------- #
+class OneControlMendedForGood(unittest.TestCase):
+    """JAWS' customised control: mended once, by the person it is wrong for.
+
+    A label replaces the name; these are the other four answers to "what
+    should this be to me?" - what it is SAID to be, what is added after
+    it, the voice its name is spoken in, and never announcing it at all.
+    """
+
+    def setUp(self):
+        from titanEnhancements import labels
+        self.labels = labels
+        self.store = {}
+        self._real_load = labels._load
+        labels._load = lambda: self.store
+        self._real_save = labels.save
+        labels.save = lambda: True
+        self.addCleanup(setattr, labels, '_load', self._real_load)
+        self.addCleanup(setattr, labels, 'save', self._real_save)
+
+    def _obj(self):
+        return types.SimpleNamespace(
+            windowHandle=0, windowClassName='SomeApp',
+            UIAAutomationId='saveButton', name='',
+            role=types.SimpleNamespace(name='BUTTON'),
+            appModule=types.SimpleNamespace(appName='someapp'))
+
+    def test_nothing_is_decided_until_it_is(self):
+        self.assertEqual(self.labels.custom_of(self._obj()), {})
+
+    def test_each_field_is_kept_and_read_back(self):
+        obj = self._obj()
+        self.labels.customise(obj, role_word='toolbar', note='read only',
+                              voice='detail', silent=False)
+        found = self.labels.custom_of(obj)
+        self.assertEqual(found.get('role_word'), 'toolbar')
+        self.assertEqual(found.get('note'), 'read only')
+        self.assertEqual(found.get('voice'), 'detail')
+        self.assertNotIn('silent', found, 'a false switch is stored')
+
+    def test_an_empty_answer_takes_the_field_OFF(self):
+        """So "put it back to normal" is the same call as any other, and
+        there is no third state to get wrong."""
+        obj = self._obj()
+        self.labels.customise(obj, role_word='toolbar')
+        self.labels.customise(obj, role_word='')
+        self.assertNotIn('role_word', self.labels.custom_of(obj))
+
+    def test_a_silent_control_is_read_as_nothing_at_all(self):
+        from titanEnhancements import elements
+        obj = self._obj()
+        obj.name = 'Save'
+        self.assertTrue(elements.describe(obj), 'it said nothing to begin with')
+        self.labels.customise(obj, silent=True)
+        self.assertEqual(elements.describe(obj), [])
+
+    def test_what_the_user_calls_its_KIND_is_what_is_said(self):
+        from titanEnhancements import elements
+        obj = self._obj()
+        obj.name = 'Save'
+        self.labels.customise(obj, role_word='toolbar')
+        kinds = [text for text, voice in elements.describe(obj)
+                 if voice == 'kind']
+        self.assertEqual(kinds, ['toolbar'])
+
+    def test_a_note_is_ADDED_rather_than_replacing_anything(self):
+        """The whole difference between a note and a label."""
+        from titanEnhancements import elements
+        obj = self._obj()
+        obj.name = 'Save'
+        self.labels.customise(obj, note='read only')
+        said = [text for text, _voice in elements.describe(obj)]
+        self.assertIn('Save', said)
+        self.assertIn('read only', said)
+        self.assertLess(said.index('Save'), said.index('read only'))
+
+    def test_the_voice_it_is_spoken_in_is_the_users(self):
+        from titanEnhancements import elements
+        obj = self._obj()
+        obj.name = 'Save'
+        self.labels.customise(obj, voice='detail')
+        for text, voice in elements.describe(obj):
+            if text == 'Save':
+                self.assertEqual(voice, 'detail')
+                return
+        self.fail('the name was not read at all')
+
+    def test_a_control_with_no_stable_key_keeps_nothing(self):
+        """Anything set on it would never be found again, and a setting
+        that lands on the wrong control is worse than none."""
+        obj = types.SimpleNamespace(
+            windowHandle=0, windowClassName='', name='',
+            role=types.SimpleNamespace(name=''), indexInParent=-1,
+            appModule=types.SimpleNamespace(appName='someapp'))
+        self.assertFalse(self.labels.customise(obj, note='x'))
+
+    def test_it_lives_beside_the_label_of_the_same_control(self):
+        """One question about one control; two files would drift."""
+        obj = self._obj()
+        self.labels.put(obj, 'Save', source='user')
+        self.labels.customise(obj, note='read only')
+        rows = self.labels.for_application('someapp')
+        row = list(rows.values())[0]
+        self.assertEqual(row.get('label'), 'Save')
+        self.assertEqual(row.get('note'), 'read only')
+
+    def test_every_field_the_editor_offers_is_one_the_store_knows(self):
+        """A field the editor sets and the store drops is a setting that
+        silently does not happen."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'commands.py'),
+                         encoding='utf-8').read()
+        at = source.index('def customise_control(')
+        block = source[at:at + 4000]
+        for field in ('role_word', 'note', 'voice', 'silent'):
+            self.assertIn("'%s'" % field, block, field)
+            self.assertIn(field, self.labels.CUSTOM, field)
+
+# --------------------------------------------------------------------------- #
+class LayersInsteadOfAMillionShortcuts(unittest.TestCase):
+    """A hundred and sixteen commands, and a keyboard without that many chords.
+
+    JAWS' answer, and it is better than a longer list of shortcuts because
+    of what it does for memory: the letters inside a layer only have to be
+    unique within it, so they can be the obvious ones.
+    """
+
+    def setUp(self):
+        from titanEnhancements import layers
+        self.layers = layers
+        layers.forget()
+        self.addCleanup(layers.forget)
+
+    def test_every_key_of_every_layer_names_a_real_command(self):
+        """A layer that offers something that does not exist is a key that
+        does nothing, which is the failure of every hidden shortcut."""
+        from titanEnhancements import commands
+        for name in self.layers.names():
+            for key, (command, _said) in self.layers.keys_of(name).items():
+                self.assertTrue(hasattr(commands, command),
+                                '%s/%s -> %s' % (name, key, command))
+
+    def test_every_key_has_words_saying_what_it_does(self):
+        for name in self.layers.names():
+            for key, (_command, said) in self.layers.keys_of(name).items():
+                text = said() if callable(said) else said
+                self.assertTrue(str(text or '').strip(),
+                                '%s/%s' % (name, key))
+
+    def test_a_layer_lasts_for_exactly_one_key(self):
+        self.layers.enter('reading')
+        self.assertEqual(self.layers.open_layer(), 'reading')
+        self.layers.chose('w')
+        self.assertEqual(self.layers.open_layer(), '',
+                         'the layer stayed open and would eat the next key')
+
+    def test_a_layer_lets_go_by_itself(self):
+        """A layer entered by accident must be gone before the user types
+        anything they meant for the program."""
+        self.layers.enter('reading')
+        self.layers.__dict__['_opened_at'] = time.time() - \
+            (self.layers.SECONDS + 1)
+        self.assertEqual(self.layers.open_layer(), '')
+        self.assertEqual(self.layers.report()['timed_out'], 1)
+
+    def test_a_key_pressed_after_it_closed_is_the_programs(self):
+        """Not eaten, and not run: it belongs to whatever is in front."""
+        what, _value = self.layers.chose('w')
+        self.assertEqual(what, 'closed')
+
+    def test_a_key_the_layer_does_not_know_says_so(self):
+        self.layers.enter('reading')
+        what, which = self.layers.chose('q')
+        self.assertEqual(what, 'unknown')
+        self.assertEqual(which, 'reading')
+        self.assertTrue(self.layers.unknown_sentence(which))
+
+    def test_question_mark_and_h_both_ask_for_help(self):
+        for key in self.layers.HELP_KEYS:
+            self.layers.enter('reading')
+            what, which = self.layers.chose(key)
+            self.assertEqual(what, 'help', key)
+            self.assertEqual(which, 'reading')
+
+    def test_the_help_is_built_from_what_is_really_bound(self):
+        """So it cannot describe a command the layer has not got."""
+        lines = self.layers.help_for('program')
+        self.assertEqual(len(lines), len(self.layers.keys_of('program')))
+        for key in self.layers.keys_of('program'):
+            self.assertTrue(any(line.startswith(key + ' ') for line in lines),
+                            key)
+
+    def test_a_letter_may_mean_different_things_in_different_layers(self):
+        """The whole reason a layer is worth having."""
+        reading = self.layers.keys_of('reading')
+        program = self.layers.keys_of('program')
+        self.assertIn('w', reading)
+        self.assertIn('w', program)
+        self.assertNotEqual(reading['w'][0], program['w'][0])
+
+    def test_no_layer_offers_one_letter_twice(self):
+        for name in self.layers.names():
+            keys = list(self.layers.keys_of(name))
+            self.assertEqual(len(keys), len(set(keys)), name)
+
+    def test_every_layer_has_a_name_a_person_would_recognise(self):
+        for name in self.layers.names():
+            self.assertTrue(self.layers.label(name), name)
+
+    def test_the_palette_is_reachable_by_the_two_gestures_asked_for(self):
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('def script_titanPalette(')
+        before = source[max(0, at - 700):at]
+        self.assertIn('kb:NVDA+shift+space', before)
+        self.assertIn('kb:NVDA+`', before)
+
+    def test_the_layer_keys_are_borrowed_and_given_back(self):
+        """A reader still holding the alphabet in the next window is a
+        machine that has stopped answering."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        self.assertIn('def _borrow_layer_keys', source)
+        self.assertIn('removeGestureBinding', source)
+        at = source.index('def _borrow_layer_keys')
+        block = source[at:at + 800]
+        self.assertIn('removeGestureBinding', block,
+                      'the keys are taken and never given back')
+
+# --------------------------------------------------------------------------- #
+class AModuleCanBePerfectAndCompletelyDEAD(unittest.TestCase):
+    """The check the schema cannot make.
+
+    A reader module whose match blocks name a class spelled slightly
+    differently, or a column the program calls something else, is well
+    formed by every rule the schema has and fires not once. It loads, it
+    is listed, it can be switched on, and from the outside it is exactly a
+    module that was never written.
+    """
+
+    def setUp(self):
+        from titanEnhancements import verify
+        self.verify = verify
+
+    def _control(self, role='BUTTON', name='', cls='SomeApp', children=()):
+        node = types.SimpleNamespace(
+            windowHandle=1, windowClassName=cls, name=name,
+            role=types.SimpleNamespace(name=role), children=list(children),
+            parent=None)
+        return node
+
+    def _window(self, children):
+        top = self._control(role='WINDOW', name='A window', children=children)
+        top.appModule = types.SimpleNamespace(appName='someapp')
+        return top
+
+    def test_a_rule_that_matches_something_is_alive(self):
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'BUTTON'}, 'say': 'x'}]}
+        report = self.verify.check(module, window)
+        self.assertTrue(report['works'])
+        self.assertEqual(report['alive'], 1)
+        self.assertEqual(report['dead'], [])
+
+    def test_a_rule_that_matches_nothing_is_NAMED(self):
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'SLIDER'}, 'say': 'x'}]}
+        report = self.verify.check(module, window)
+        self.assertFalse(report['works'])
+        self.assertEqual(len(report['dead']), 1)
+        self.assertIn('SLIDER', report['dead'][0])
+
+    def test_a_module_that_does_not_claim_the_window_says_so(self):
+        """Every rule would be reported dead for the wrong reason."""
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'other', 'match': {'executable': 'somethingelse'},
+                  'controls': [{'match': {'role': 'BUTTON'}, 'say': 'x'}]}
+        report = self.verify.check(module, window)
+        self.assertFalse(report.get('matches_this_window'))
+        self.assertTrue(report['why'])
+
+    def test_a_module_with_no_rules_does_nothing_and_says_so(self):
+        window = self._window([self._control('BUTTON', 'Save')])
+        report = self.verify.check(
+            {'id': 'someapp', 'match': {'executable': 'someapp'}}, window)
+        self.assertFalse(report['works'])
+        self.assertTrue(report['why'])
+
+    def test_the_walk_is_bounded(self):
+        """A window with three thousand controls must not cost a second."""
+        many = [self._control('BUTTON', 'b%d' % n) for n in range(50)]
+        window = self._window(many)
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'BUTTON'}, 'say': 'x'}]}
+        report = self.verify.check(module, window, limit=10)
+        self.assertLessEqual(report['controls'], 10)
+
+    def test_what_the_MODEL_is_told_names_the_rules(self):
+        """A model handed "it does not work" writes a different module;
+        one handed the rules that matched nothing mends this one."""
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'SLIDER'}, 'say': 'x'}]}
+        complaint = self.verify.complaint(self.verify.check(module, window))
+        self.assertIn('SLIDER', complaint)
+        self.assertIn('matched nothing', complaint)
+
+    def test_a_module_that_works_has_nothing_to_complain_about(self):
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'BUTTON'}, 'say': 'x'}]}
+        self.assertEqual(
+            self.verify.complaint(self.verify.check(module, window)), '')
+
+    def test_the_sentence_is_something_a_person_can_be_told(self):
+        window = self._window([self._control('BUTTON', 'Save')])
+        module = {'id': 'someapp', 'match': {'executable': 'someapp'},
+                  'controls': [{'match': {'role': 'BUTTON'}, 'say': 'x'},
+                               {'match': {'role': 'SLIDER'}, 'say': 'y'}]}
+        said = self.verify.sentence(self.verify.check(module, window))
+        self.assertIn('1', said)
+        self.assertIn('SLIDER', said)
+
+    def test_it_presses_nothing_and_writes_nothing(self):
+        """It reads. A control that is asked to act would be a check that
+        changes the thing it is checking."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'verify.py'),
+                         encoding='utf-8').read()
+        for forbidden in ('doDefaultAction', 'setFocus', 'BM_CLICK',
+                          'save(', 'put('):
+            self.assertNotIn(forbidden, source, forbidden)
+
+# --------------------------------------------------------------------------- #
+class WhatAWindowIsWrittenIn(unittest.TestCase):
+    """The first thing anybody writing an app module works out by hand.
+
+    A program cannot be running on a toolkit whose library it has not
+    loaded, so the module list is the one piece of evidence here that
+    cannot be a coincidence - as long as it is matched exactly.
+    """
+
+    def setUp(self):
+        from titanEnhancements import toolkit
+        self.toolkit = toolkit
+        toolkit.forget()
+
+    def _obj(self, cls='', pid=0, uia=''):
+        obj = types.SimpleNamespace(windowHandle=0, windowClassName=cls,
+                                    processID=pid)
+        if uia:
+            obj.UIAElement = types.SimpleNamespace(CurrentFrameworkId=uia)
+        return obj
+
+    def _with_modules(self, modules):
+        real = self.toolkit.modules_of
+        self.toolkit.modules_of = lambda pid: list(modules)
+        self.addCleanup(setattr, self.toolkit, 'modules_of', real)
+
+    def test_a_library_is_proof(self):
+        self._with_modules(['ntdll.dll', 'qt6core.dll', 'user32.dll'])
+        self.assertEqual(self.toolkit.of(self._obj(pid=1))[:2], ('qt', 'library'))
+
+    def test_a_three_letter_fragment_is_not_evidence(self):
+        """`vcl` appears in `srvcli.dll`, which half the programs on the
+        machine have loaded - and every one of them was reported as
+        Delphi. Matched by prefix now, never by substring."""
+        self._with_modules(['srvcli.dll', 'comctl32.dll', 'ntdll.dll'])
+        framework, how, _evidence = self.toolkit.of(self._obj(pid=2))
+        self.assertNotEqual(framework, 'vcl')
+        self.assertEqual((framework, how), ('win32', 'library'))
+
+    def test_delphi_is_told_by_its_packages(self):
+        self._with_modules(['vcl280.bpl', 'rtl280.bpl', 'ntdll.dll'])
+        self.assertEqual(self.toolkit.of(self._obj(pid=3))[0], 'vcl')
+
+    def test_the_more_specific_answer_wins(self):
+        """An Electron program has loaded Chromium too, and calling it
+        Chromium would be true and useless."""
+        self._with_modules(['chrome_elf.dll', 'libcef.dll', 'ntdll.dll'])
+        self.assertEqual(self.toolkit.of(self._obj(pid=4))[0], 'cef')
+
+    def test_ui_automation_answers_when_the_libraries_do_not(self):
+        self._with_modules([])
+        obj = self._obj(pid=5, uia='WPF')
+        self.assertEqual(self.toolkit.of(obj)[:2], ('wpf', 'uia'))
+
+    def test_the_window_class_is_the_last_resort(self):
+        self._with_modules([])
+        self.assertEqual(self.toolkit.of(self._obj('UnityWndClass', pid=6))[:2],
+                         ('unity', 'class'))
+
+    def test_a_process_that_will_not_say_is_not_guessed_at(self):
+        """Nothing read and nothing else to go on is an honest 'cannot
+        tell' - reporting it as native would be a guess wearing the
+        clothes of evidence."""
+        self._with_modules([])
+        self.assertEqual(self.toolkit.of(self._obj('SomethingOdd', pid=7)),
+                         ('', '', ''))
+
+    def test_native_is_only_claimed_when_the_modules_were_really_read(self):
+        self._with_modules(['comctl32.dll', 'ntdll.dll', 'user32.dll'])
+        self.assertEqual(self.toolkit.of(self._obj('SomethingOdd', pid=8))[0],
+                         'win32')
+
+    def test_it_is_asked_once_per_process(self):
+        """Reading a module list is tens of milliseconds and a program
+        cannot change what it is written in."""
+        asked = []
+        real = self.toolkit.modules_of
+        self.toolkit.modules_of = lambda pid: asked.append(pid) or ['qt6core.dll']
+        try:
+            obj = self._obj(pid=9)
+            self.toolkit.of(obj)
+            self.toolkit.of(obj)
+            self.toolkit.of(obj)
+        finally:
+            self.toolkit.modules_of = real
+        self.assertEqual(len(asked), 1)
+
+    def test_every_framework_it_can_answer_has_a_word(self):
+        """A framework with no word is one that is named to nobody."""
+        every = {name for _prefix, name in self.toolkit.BY_LIBRARY}
+        every |= set(self.toolkit.BY_UIA.values())
+        every |= {name for _prefix, name in self.toolkit.BY_CLASS}
+        every.add('vcl')
+        for framework in sorted(every):
+            self.assertTrue(self.toolkit.word(framework), framework)
+
+    def test_a_note_says_what_to_DO_about_it(self):
+        """Naming a toolkit is worth little; knowing that Java answers
+        nothing until the Access Bridge is on is the useful half."""
+        self.assertIn('Access Bridge', self.toolkit.note('java'))
+        self.assertTrue(self.toolkit.note('unity'))
+        self.assertEqual(self.toolkit.note('nonsense'), '')
+
+    def test_the_sentence_names_the_evidence(self):
+        """An answer that cannot be checked is one that has to be
+        believed."""
+        self._with_modules(['qt6core.dll'])
+        said = self.toolkit.describe(self._obj(pid=10))
+        self.assertIn('Qt', said)
+        self.assertIn('qt6core.dll', said)
+
+    def test_the_observed_draft_carries_it(self):
+        """It is what an app module is written FROM."""
+        from titanEnhancements import draft
+        self._with_modules(['qt6core.dll'])
+        obj = self._obj('QWidget', pid=11)
+        obj.name = 'Something'
+        obj.appModule = types.SimpleNamespace(appName='someprogram')
+        seen = draft.observe(obj)
+        self.assertEqual(seen.get('framework'), 'qt')
+        self.assertEqual(seen.get('framework_how'), 'library')
+        self.assertTrue(seen.get('framework_note'))
+
+# --------------------------------------------------------------------------- #
+class WhatKindOfWindowYouHaveArrivedIn(unittest.TestCase):
+    """`dialog_kind` answers four kinds of dialog and nothing about the rest.
+
+    Nearly every window is one of the rest, and a reader that says only the
+    title says nothing a sighted person gets for free: whether this is an
+    application, a little box that will go away again, a game that has
+    painted its own screen, or the desktop.
+    """
+
+    def setUp(self):
+        from titanEnhancements import windowKind
+        self.windowKind = windowKind
+        windowKind.forget()
+
+    def _obj(self, cls='SomeClass', role='WINDOW', hwnd=0):
+        return types.SimpleNamespace(
+            windowHandle=hwnd, windowClassName=cls,
+            role=types.SimpleNamespace(name=role))
+
+    def test_a_game_engines_class_is_a_game(self):
+        """Not a heuristic: UnityWndClass is Unity and nothing else."""
+        kind, how = self.windowKind.kind_of(self._obj('UnityWndClass'))
+        self.assertEqual((kind, how), ('game', 'class'))
+
+    def test_the_game_list_is_surfaces_own(self):
+        """One list, read twice - a class added there is known here."""
+        from titanEnhancements import surface
+        for name in list(surface.GAME_CLASSES)[:4]:
+            self.assertTrue(self.windowKind.is_game(self._obj(name)), name)
+
+    def test_a_dialog_is_a_dialog(self):
+        kind, how = self.windowKind.kind_of(self._obj('#32770', 'DIALOG'))
+        self.assertEqual((kind, how), ('dialog', 'role'))
+
+    def test_the_desktop_is_not_a_small_window(self):
+        """Progman is a popup with no minimise and no maximise box, which is
+        true of the bits and wrong about the thing."""
+        for name in ('Progman', 'WorkerW'):
+            kind, how = self.windowKind.kind_of(self._obj(name))
+            self.assertEqual((kind, how), ('desktop', 'class'), name)
+
+    def test_nothing_is_answered_about_nothing(self):
+        self.assertEqual(self.windowKind.kind_of(None), ('', ''))
+        self.assertEqual(self.windowKind.kind_of(self._obj('X', hwnd=0)),
+                         ('', ''))
+
+    def test_every_kind_has_a_word(self):
+        """A kind with no word is a kind that is silently not said."""
+        for kind in ('application', 'window', 'game', 'tool', 'desktop',
+                     'dialog'):
+            self.assertTrue(self.windowKind.word(kind), kind)
+
+    def test_a_kind_nobody_has_is_no_word_rather_than_a_wrong_one(self):
+        self.assertEqual(self.windowKind.word('nonsense'), '')
+
+    def test_the_kind_is_said_at_the_tone_a_control_type_is_said_at(self):
+        """It IS what the thing you arrived in is, which everywhere else in
+        this add-on is the 'kind' voice."""
+        parts = self.windowKind.parts_for(self._obj('UnityWndClass'))
+        self.assertTrue(parts)
+        self.assertEqual(parts[0][1], 'kind')
+
+    def test_it_is_said_once_per_window_and_not_once_per_control(self):
+        """The bug the region layer had, which must not come back."""
+        said = []
+        obj = self._obj('UnityWndClass', hwnd=4242)
+        import titanEnhancements.interject as interject
+        original = interject.prefix_next
+        interject.prefix_next = lambda text, voice='context': said.append(text)
+        try:
+            self.assertEqual(self.windowKind.announce(obj), 'game')
+            self.assertEqual(self.windowKind.announce(obj), '')
+            self.assertEqual(self.windowKind.announce(obj), '')
+        finally:
+            interject.prefix_next = original
+        self.assertEqual(len(said), 1)
+
+    def test_the_switch_being_off_means_nothing_is_said(self):
+        from titanEnhancements import configSpec
+        obj = self._obj('UnityWndClass', hwnd=99)
+        original = configSpec.read
+        configSpec.read = lambda: {'windowKinds': False}
+        try:
+            self.assertEqual(self.windowKind.announce(obj), '')
+        finally:
+            configSpec.read = original
+
+    def test_the_switch_is_in_the_spec_and_on_the_page(self):
+        from titanEnhancements import configSpec, settingsPanel
+        self.assertIn('windowKinds', configSpec.SPEC)
+        self.assertIn('windowKinds', settingsPanel.keys_on_the_page())
+
+    def test_an_icon_is_never_read_with_ai_twice_for_one_program(self):
+        """A program somebody opens fifty times a day costs one request in
+        its life - the shape the label path already has."""
+        obj = self._obj('UnityWndClass', hwnd=7)
+        obj.appModule = types.SimpleNamespace(appName='somegame')
+        asked = []
+        original = self.windowKind._may_describe
+        self.windowKind._may_describe = lambda o: asked.append(1) or False
+        try:
+            self.windowKind.describe_icon_later(obj)
+            self.windowKind.describe_icon_later(obj)
+            self.windowKind.describe_icon_later(obj)
+        finally:
+            self.windowKind._may_describe = original
+        self.assertEqual(len(asked), 1)
+
+    def test_nothing_is_asked_of_a_titan_that_is_not_there(self):
+        """The bug this add-on has already fixed once on the label path: a
+        thread started for every window, to be told Titan is not running."""
+        from titanEnhancements import perProgram
+        obj = self._obj('UnityWndClass', hwnd=8)
+        original = perProgram.value
+        perProgram.value = lambda name, o=None: True
+        try:
+            # No bus in a test run, so LINK.connected() is false.
+            self.assertFalse(self.windowKind._may_describe(obj))
+        finally:
+            perProgram.value = original
+
+    def test_unknown_is_recognised_as_the_absence_of_an_answer(self):
+        """And in the user's own language, which is the whole difficulty:
+        a list of English spellings works on an English NVDA and nowhere
+        else - which is the machine this was reported from."""
+        self.assertTrue(self.windowKind.is_unknown_word('unknown'))
+        self.assertTrue(self.windowKind.is_unknown_word('UNKNOWN'))
+        self.assertFalse(self.windowKind.is_unknown_word('button'))
+        self.assertFalse(self.windowKind.is_unknown_word(''))
+        self.assertFalse(self.windowKind.is_unknown_word(None))
+
+    def test_a_window_read_as_unknown_is_read_as_what_it_is(self):
+        """Measured live before this: "ELTEN 3.0.3, nieznane"."""
+        from titanEnhancements import elements, context
+        obj = self._obj('UnityWndClass', 'UNKNOWN', hwnd=11)
+        obj.name = 'Some Game'
+        original = context.role_name
+        context.role_name = lambda role: 'unknown'
+        try:
+            parts = elements.describe(obj)
+        finally:
+            context.role_name = original
+        kinds = [text for text, voice in parts if voice == 'kind']
+        self.assertEqual(kinds, [self.windowKind.word('game')])
+        self.assertNotIn('unknown', [k.lower() for k in kinds])
+
+    def test_a_role_nvda_DOES_know_is_left_exactly_as_it_was(self):
+        """The word is REPLACED, not added to - so a control NVDA can
+        classify must come through untouched."""
+        from titanEnhancements import elements, context
+        obj = self._obj('UnityWndClass', 'BUTTON', hwnd=12)
+        obj.name = 'Save'
+        original = context.role_name
+        context.role_name = lambda role: 'button'
+        try:
+            parts = elements.describe(obj)
+        finally:
+            context.role_name = original
+        self.assertIn(('button', 'kind'), parts)
+
+    def test_a_window_icon_is_remembered_for_good(self):
+        """A reading is a REQUEST, so it is paid for once in a program's
+        life - not once per session."""
+        from titanEnhancements import labels
+        obj = self._obj('UnityWndClass', hwnd=21)
+        obj.appModule = types.SimpleNamespace(appName='someprogram')
+        kept = {}
+        real_set = labels.set_application_note
+        real_get = labels.application_note
+        def _keep(a, f, t):
+            kept[(a, f)] = t
+            return True
+        labels.set_application_note = _keep
+        labels.application_note = lambda a, f: kept.get((a, f), '')
+        try:
+            self.assertTrue(self.windowKind.remember_icon(obj, 'a blue cat'))
+            self.assertEqual(kept[('someprogram', self.windowKind.ICON_NOTE)],
+                             'a blue cat')
+            # A new session: nothing in memory, everything in the file.
+            self.windowKind.forget()
+            self.assertEqual(self.windowKind.described_icon(obj), 'a blue cat')
+            # And it is never asked for again.
+            self.assertFalse(self.windowKind.describe_icon_later(obj))
+        finally:
+            labels.set_application_note = real_set
+            labels.application_note = real_get
+
+    def test_looking_it_up_is_not_asking_for_it(self):
+        """Reading the file must not count as having asked, or a program
+        whose icon has never been read is never read."""
+        from titanEnhancements import labels, perProgram
+        obj = self._obj('UnityWndClass', hwnd=22)
+        obj.appModule = types.SimpleNamespace(appName='freshprogram')
+        asked = []
+        real_note = labels.application_note
+        real_value = perProgram.value
+        real_may = self.windowKind._may_describe
+        labels.application_note = lambda a, f: ''
+        perProgram.value = lambda name, o=None: True
+        self.windowKind._may_describe = lambda o: asked.append(1) or False
+        try:
+            self.assertEqual(self.windowKind.described_icon(obj), '')
+            self.windowKind.describe_icon_later(obj)
+            self.assertEqual(len(asked), 1, 'it never asked')
+            self.windowKind.describe_icon_later(obj)
+            self.assertEqual(len(asked), 1, 'it asked twice')
+        finally:
+            labels.application_note = real_note
+            perProgram.value = real_value
+            self.windowKind._may_describe = real_may
+
+    def test_the_report_says_what_it_has_really_done(self):
+        self.windowKind.kind_of(self._obj('UnityWndClass'))
+        report = self.windowKind.report()
+        self.assertEqual(report['game'], 1)
+        self.assertIn('enabled', report)
 
 
 # --------------------------------------------------------------------------- #
@@ -3880,11 +5404,24 @@ class AGameAndAnInaccessibleApplicationAreDifferentProblems(unittest.TestCase):
                          self.surface.MODE_LOCAL)
 
     def test_the_user_chooses_which_recogniser_reads_it(self):
+        """And "both" means the FREE one first.
+
+        It used to mean the AI first, and both halves of that were wrong.
+        The cheap half: Windows' recogniser is local, private and answers
+        in a tenth of a second, while the AI is a picture of the screen
+        sent to a provider. The expensive half is what it does to the
+        READER - the Action Bus is one pipe, and a call measured taking
+        longer than the bus waits ("Titan did not answer within 12s", in
+        the log, from a window this started reading by itself) is that
+        long with every other call queued behind it, including NVDA's
+        own. An automatic feature that can do that does not read a
+        window, it stops the screen reader.
+        """
         from titanEnhancements import configSpec
         before = configSpec.read
         try:
             for answer, wanted in (('ai', self.surface.MODE_NATIVE),
-                                   ('both', self.surface.MODE_NATIVE),
+                                   ('both', self.surface.MODE_LOCAL),
                                    ('local', self.surface.MODE_LOCAL)):
                 configSpec.read = lambda a=answer: dict(configSpec.defaults(),
                                                         ocrTier=a)
@@ -3893,6 +5430,19 @@ class AGameAndAnInaccessibleApplicationAreDifferentProblems(unittest.TestCase):
                     wanted, answer)
         finally:
             configSpec.read = before
+
+    def test_the_ai_is_still_there_as_the_fallback(self):
+        """Windows first is only right if the AI still catches what
+        Windows cannot read - otherwise it is not an order, it is a
+        feature taken away."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'surface.py'),
+                         encoding='utf-8').read()
+        at = source.index('if mode == MODE_LOCAL:')
+        block = source[at:at + 700]
+        self.assertIn('MODE_APPLICATION', block,
+                      'a local reading that fails now goes nowhere')
+        self.assertIn('with AI instead', block)
 
     def test_a_reader_module_may_simply_say(self):
         from titanEnhancements.readerModules import schema
@@ -8213,6 +9763,227 @@ class AToggleSaysWhichStateAndNothingElse(unittest.TestCase):
                       _source_of('virtualWindow.py'))
 
 
+class TheCursorKeysAreBoundInEveryModeButAGame(unittest.TestCase):
+    """"Native TCE cursor on", and Tab does nothing.
+
+    The keys were borrowed only in `MODE_APPLICATION` - and that is not
+    the mode most windows are read in. Windows' own recogniser goes
+    first, which leaves the watch in `MODE_LOCAL`, where the cursor is
+    built exactly the same way by `smart.take_local`. So the mode change
+    was announced, the controls were there to walk, and not one key was
+    bound to walk them with.
+    """
+
+    def test_the_rule_is_everything_but_a_game(self):
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _keep_keys_right(')
+        end = source.index('\n    def ', at + 10)
+        block = source[at:end]
+        self.assertIn('MODE_GAME', block)
+        self.assertNotIn('== surface.MODE_APPLICATION', block,
+                         'the cursor is built in MODE_LOCAL too')
+
+    def test_a_game_still_keeps_its_own_keys(self):
+        """Its menu is what the arrows are for, and a second cursor over
+        it would break the thing this is for while appearing to help."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _keep_keys_right(')
+        end = source.index('\n    def ', at + 10)
+        self.assertIn('!= surface.MODE_GAME', source[at:end])
+
+
+# --------------------------------------------------------------------------- #
+class ThePaletteIsWalkedLikeAWindow(unittest.TestCase):
+    """A modal dialog is the one interaction here that is not like the
+    others: it takes the keyboard from the reader, NVDA reads it as a
+    dialog rather than this add-on reading it in the user's own voice
+    classes, and it plays none of the auditory icons every other list
+    plays. The palette is opened twenty times a day and was the one thing
+    that did not feel like the rest of the add-on."""
+
+    def setUp(self):
+        from titanEnhancements import palette
+        self.palette = palette
+        palette.forget()
+        self.addCleanup(palette.forget)
+
+    def _rows(self, count=3):
+        self.ran = []
+        return [{'label': 'Row %d' % n, 'role': 'command',
+                 'run': (lambda n=n: (self.ran.append(n) or (True, '')))}
+                for n in range(count)]
+
+    def test_it_is_a_list_and_not_a_dialog(self):
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', 'commands.py'),
+                         encoding='utf-8').read()
+        at = source.index('def command_palette(')
+        end = source.index('\ndef ', at + 10)
+        block = source[at:end]
+        self.assertIn('palette.show', block)
+        self.assertNotIn('dialogs.choose', block,
+                         'the palette is walked, not shown as a dialog')
+
+    def test_the_arrows_walk_it(self):
+        self.palette.show(self._rows(), 'Commands')
+        self.assertEqual(self.palette.here()['label'], 'Row 0')
+        self.palette.move(1)
+        self.assertEqual(self.palette.here()['label'], 'Row 1')
+        self.palette.move(-1)
+        self.assertEqual(self.palette.here()['label'], 'Row 0')
+
+    def test_it_stops_at_the_ends_rather_than_wrapping(self):
+        self.palette.show(self._rows(), 'Commands')
+        self.palette.move(-1)
+        self.assertEqual(self.palette.here()['label'], 'Row 0')
+        self.palette.move_end(True)
+        self.palette.move(1)
+        self.assertEqual(self.palette.here()['label'], 'Row 2')
+
+    def test_enter_runs_what_the_cursor_is_on(self):
+        self.palette.show(self._rows(), 'Commands')
+        self.palette.move(1)
+        self.palette.activate()
+        self.assertEqual(self.ran, [1])
+
+    def test_escape_goes_back_one_level_before_it_closes(self):
+        """Picking the wrong layer should cost one keystroke rather than
+        the whole palette."""
+        went = []
+        self.palette.show(self._rows(), 'Second',
+                          back=lambda: (went.append(True), (True, ''))[1])
+        self.palette.back()
+        self.assertEqual(went, [True])
+        self.palette.show(self._rows(), 'First')
+        self.palette.back()
+        self.assertFalse(self.palette.walking())
+
+    def test_it_is_one_of_the_reviews_that_share_the_arrows(self):
+        """NVDA binds a gesture to one script per plugin, so two of these
+        up at once means the second one's bindings replaced the first's -
+        and the first is a review that still says it is running and
+        answers no key at all."""
+        from titanEnhancements import reviews
+        self.assertIn('palette', reviews._ALL)
+        self.assertTrue(hasattr(self.palette, 'reviewing'))
+        self.palette.show(self._rows(), 'Commands')
+        self.assertTrue(self.palette.reviewing())
+
+    def test_a_row_with_no_label_is_not_a_row(self):
+        ok, _said = self.palette.show([{'label': '', 'run': lambda: None}],
+                                      'Commands')
+        self.assertFalse(ok)
+
+
+# --------------------------------------------------------------------------- #
+class TypingIntoAFieldFromTheVirtualWindow(unittest.TestCase):
+    """Enter on a field means "type into it", and Escape comes back.
+
+    Pressing a field is not a thing anybody wants done to it - its own
+    action is usually nothing at all, so Enter fell through to a click,
+    which put the caret in the field and left the virtual window still
+    holding every letter, every arrow and Enter itself. The user was in
+    a field they could not type a word into.
+    """
+
+    class Obj:
+        def __init__(self, role='EDITABLETEXT', states=()):
+            self.name = 'Title'
+            self.value = ''
+            self.description = ''
+            self.role = types.SimpleNamespace(name=role)
+            self.children = []
+            self.states = set(states)
+            self.focused = False
+
+        def setFocus(self):
+            self.focused = True
+
+    def setUp(self):
+        from titanEnhancements import virtualWindow
+        self.vw = virtualWindow
+        virtualWindow._state.update({'on': True, 'at': 0, 'inner': 0,
+                                     'typing': False})
+        self.addCleanup(lambda: virtualWindow._state.update(
+            {'on': False, 'nodes': [], 'at': 0, 'inner': 0,
+             'typing': False}))
+
+    def _field(self, role='EDITABLETEXT'):
+        obj = self.Obj(role=role)
+        self.vw._state['nodes'] = [{'name': 'Title', 'value': '',
+                                    'description': '', 'role': role,
+                                    'level': 0, 'obj': obj}]
+        return obj
+
+    def test_a_field_is_recognised_by_its_role(self):
+        self.assertTrue(self.vw._is_a_field(
+            {'role': 'EDITABLETEXT', 'obj': None}))
+        self.assertFalse(self.vw._is_a_field(
+            {'role': 'BUTTON', 'obj': None}))
+
+    def test_enter_hands_the_keyboard_over(self):
+        obj = self._field()
+        ok, said = self.vw.activate()
+        self.assertTrue(ok)
+        self.assertTrue(obj.focused, 'the real field never took the focus')
+        self.assertTrue(self.vw.typing_mode())
+        self.assertTrue(said)
+
+    def test_escape_takes_it_back(self):
+        self._field()
+        self.vw.activate()
+        ok, said = self.vw.leave_typing()
+        self.assertTrue(ok)
+        self.assertFalse(self.vw.typing_mode())
+        self.assertTrue(said)
+
+    def test_the_pair_is_symmetrical(self):
+        """A toggle says which state it is in; somebody should not have to
+        listen to work out which one they are now in."""
+        self._field()
+        _ok, on = self.vw.activate()
+        _ok, off = self.vw.leave_typing()
+        self.assertNotEqual(on, off)
+        self.assertEqual(on.rsplit(' ', 1)[0], off.rsplit(' ', 1)[0])
+
+    def test_leaving_the_window_leaves_the_field(self):
+        self._field()
+        self.vw.activate()
+        self.vw.stop()
+        self.assertFalse(self.vw.typing_mode())
+
+    def test_typing_mode_is_off_when_the_window_is(self):
+        """It is read as a mode of the virtual window, so it cannot be on
+        while the virtual window is not."""
+        self._field()
+        self.vw.activate()
+        self.vw._state['on'] = False
+        self.assertFalse(self.vw.typing_mode())
+
+    def test_while_typing_the_addon_holds_only_escape(self):
+        """Every letter, every arrow, Backspace and Enter belong to the
+        program being typed into - Up and Down are its lines, Left and
+        Right its characters, Control and an arrow its words. Holding one
+        key rather than none is the whole of what makes the mode
+        leavable."""
+        source = io.open(os.path.join(ADDON, 'globalPlugins',
+                                      'titanEnhancements', '__init__.py'),
+                         encoding='utf-8').read()
+        at = source.index('def _virtual_wants(')
+        end = source.index('\n    def ', at + 10)
+        self.assertIn("'escape'", source[at:end])
+        at = source.index('def _keep_virtual_keys_right(')
+        end = source.index('\n    def ', at + 10)
+        block = source[at:end]
+        self.assertIn("kb:escape", block)
+        self.assertIn("'all'", block)
+
+
+# --------------------------------------------------------------------------- #
 class OpenMeansTheVirtualWindow(unittest.TestCase):
     """The Open button in the Titan window.
 

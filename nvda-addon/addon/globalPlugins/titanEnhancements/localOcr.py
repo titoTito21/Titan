@@ -146,10 +146,63 @@ def read(left, top, width, height):
     if isinstance(result, Exception):
         return _note('the recogniser failed: %s' % result)
     reading = Reading.of(result, info)
+    # **What is HIGHLIGHTED, from the same picture, at no extra cost.**
+    # In a virtual machine the highlight IS the interface - the menu entry
+    # the arrows are on, the selected file, the line the cursor is in -
+    # and nothing in the picture says so except the colours. The words
+    # were just read out of these pixels; reading the colours out of them
+    # as well is one pass over a few hundred sampled points and needs no
+    # second capture.
+    try:
+        reading.highlights = _highlighted(pixels, info)
+    except Exception:                                # noqa: BLE001
+        reading.highlights = []
     with _LOCK:
         _state['reads'] += 1
         _state['ms'] = round((time.time() - started) * 1000.0, 1)
     return reading
+
+
+class _Pixels(object):
+    """NVDA's captured bitmap, with the two methods a reader of it needs.
+
+    `screenBitmap` answers a two-dimensional ctypes array of RGBQUAD, and
+    everything that looks at a picture here wants `size` and
+    `getpixel((x, y))`. This is that and nothing else - deliberately not a
+    PIL image, because bringing PIL in for a dozen sampled points would be
+    a dependency for nothing.
+    """
+
+    __slots__ = ('_rows', 'size')
+
+    def __init__(self, rows, width, height):
+        self._rows = rows
+        self.size = (int(width), int(height))
+
+    def getpixel(self, where):
+        x, y = where
+        pixel = self._rows[int(y)][int(x)]
+        return (int(pixel.rgbRed), int(pixel.rgbGreen), int(pixel.rgbBlue))
+
+
+def _highlighted(pixels, info):
+    """The highlighted rows of this capture, in SCREEN coordinates.
+
+    Screen coordinates because that is what every rectangle in a
+    ``Reading`` is in, and a highlight in the picture's own coordinates
+    compared against a word in the screen's would match nothing - or,
+    worse, match the wrong line by a margin that changes with the window's
+    size.
+    """
+    from . import virtualInput
+    picture = _Pixels(pixels, info.recogWidth, info.recogHeight)
+    found = []
+    for _left, top, _width, height in virtualInput.highlights(picture):
+        found.append((info.screenLeft,
+                      _screen_y(info, top),
+                      info.screenWidth,
+                      _scaled(info, height)))
+    return found
 
 
 def read_window(hwnd):
@@ -189,6 +242,11 @@ class Reading:
     def __init__(self, lines=None):
         #: ``[[{'text', 'left', 'top', 'width', 'height'}, ...], ...]``
         self.lines = lines or []
+        #: ``[(left, top, width, height)]`` in SCREEN coordinates - the
+        #: rows whose background is unlike the window's own. Empty when it
+        #: could not be told, which leaves every line plain rather than
+        #: guessing at one.
+        self.highlights = []
 
     @classmethod
     def of(cls, result, info):

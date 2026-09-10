@@ -45,6 +45,13 @@ NAME_PITCH = 0
 ROLE_PITCH = -4
 STATE_PITCH = 4
 
+#: A note the user asked to have said after a control. Said a little
+#: higher, like a state, because that is what it is: something true about
+#: this control that nothing else was going to say. The NVDA add-on says
+#: it in its own 'detail' class at the same offset - one desktop, one
+#: sound for one thing.
+DETAIL_PITCH = STATE_PITCH
+
 # Offscreen has no contracts constant but localization understands the literal.
 _STATE_OFFSCREEN = "offscreen"
 
@@ -115,6 +122,78 @@ def _state_segment(obj: AccessibleObject) -> str:
 # --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
+def _shared_key(obj) -> Tuple[str, str]:
+    """``(program, key)`` for the store both readers share, or ``("", "")``.
+
+    The program is the executable, and the key is the identity Windows
+    itself keeps - spelled EXACTLY as the NVDA add-on spells it, because
+    almost the same is two stores that happen to share a file.
+    `tests/test_shared_names.py` pins the two spellings together.
+    """
+    try:
+        from . import shared_names
+    except Exception:                                # noqa: BLE001
+        return "", ""
+    program = _program_of(obj)
+    key = shared_names.key_of(
+        getattr(obj, "class_name", "") or "",
+        getattr(obj, "role", "") or "",
+        automation_id=getattr(obj, "automation_id", "") or "",
+        control_id=int(getattr(obj, "control_id", 0) or 0),
+        index_in_parent=int(getattr(obj, "pos_in_set", 0) or 0) - 1)
+    return program, key
+
+
+def _program_of(obj) -> str:
+    """The executable this control belongs to, lower-cased, or ``""``."""
+    for name in ("app_name", "process_name", "executable"):
+        said = str(getattr(obj, name, "") or "").strip()
+        if said:
+            return said.lower().replace(".exe", "")
+    pid = int(getattr(obj, "process_id", 0) or 0)
+    if not pid:
+        return ""
+    try:
+        import ctypes
+        import ctypes.wintypes as wintypes
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return ""
+        try:
+            buffer = ctypes.create_unicode_buffer(260)
+            size = wintypes.DWORD(260)
+            if ctypes.windll.kernel32.QueryFullProcessImageNameW(
+                    handle, 0, buffer, ctypes.byref(size)):
+                import os
+                return os.path.splitext(
+                    os.path.basename(buffer.value))[0].lower()
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    except Exception:                                # noqa: BLE001
+        pass
+    return ""
+
+
+def _custom_for(obj) -> dict:
+    """What the user decided about this control, in either reader."""
+    try:
+        from . import shared_names
+        program, key = _shared_key(obj)
+        return shared_names.custom_for(program, key) if key else {}
+    except Exception:                                # noqa: BLE001
+        return {}
+
+
+def _shared_name_for(obj) -> str:
+    """The name somebody gave this control, in either reader."""
+    try:
+        from . import shared_names
+        program, key = _shared_key(obj)
+        return shared_names.name_for(program, key) if key else ""
+    except Exception:                                # noqa: BLE001
+        return ""
+
+
 def describe(obj: Optional[AccessibleObject], settings,
              for_navigation: bool = False,
              role_label_override: Optional[str] = None
@@ -134,6 +213,16 @@ def describe(obj: Optional[AccessibleObject], settings,
     if obj is None:
         return [(L("element.none"), NAME_PITCH)]
 
+    # **What the user decided about THIS control, in EITHER reader.**
+    # A name they typed, a word to say instead of the control type, a note
+    # to add, or never announcing it at all - kept in a file both this
+    # reader and the NVDA add-on write, so naming a control once names it
+    # in both. `silent` is asked first and answers with nothing: a control
+    # somebody switched off must not be described and then thrown away.
+    custom = _custom_for(obj)
+    if custom.get("silent"):
+        return []
+
     segments: List[Tuple[str, int]] = []
 
     want_name = settings.get_bool("Verbosity", "ElementName", True)
@@ -146,11 +235,20 @@ def describe(obj: Optional[AccessibleObject], settings,
 
     # 1) Name (+ value) at the neutral pitch.
     name = _name_segment(obj)
+    if not name:
+        # A control the program never named, that somebody named
+        # themselves - here or in the other reader.
+        name = _shared_name_for(obj)
     if want_name and name:
         segments.append((name, NAME_PITCH))
 
     # 2) Control type at a lower pitch.
-    if role_label_override:
+    if custom.get("role_word"):
+        # What the user calls it wins: a "pane" the program uses as a
+        # toolbar is a toolbar to the person using it, and they are the one
+        # who hears it on every arrival.
+        segments.append((str(custom["role_word"]), ROLE_PITCH))
+    elif role_label_override:
         # The host pinned an exact control-type label for this announcement;
         # speak it regardless of the verbosity flags.
         segments.append((role_label_override, ROLE_PITCH))
@@ -194,6 +292,13 @@ def describe(obj: Optional[AccessibleObject], settings,
     # 6) Parameter (e.g. a link URL).
     if want_param and obj.parameter:
         segments.append((obj.parameter, NAME_PITCH))
+
+    # A note the user asked to have said after this control, every time.
+    # It ADDS; a name replaces - that is the whole difference between the
+    # two, and it is why this is last and is not gated on a verbosity
+    # flag: it is there because somebody put it there.
+    if custom.get("note"):
+        segments.append((str(custom["note"]), DETAIL_PITCH))
 
     # Make sure we always say *something* (e.g. all verbosity off, no name).
     if not segments:

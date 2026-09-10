@@ -23,21 +23,55 @@ def bitmap_from_icon_handle(handle, size=16):
     """Turn an HICON into something wx can draw, and own it.
 
     Every part of the shell that shows a real Windows icon - the quick
-    launch buttons, the window buttons, the notification area - needs this,
-    and it is worth having in one place because the ownership rule is easy
-    to get wrong: `wx.Icon.SetHandle` takes the handle over, so the icon
-    must not also be destroyed here.
+    launch buttons, the window buttons, the notification area, the desktop
+    - needs this, and it is worth having in one place because two things
+    about it are easy to get wrong.
+
+    **The ownership rule**: `wx.Icon.SetHandle` takes the handle over, so
+    the icon must not also be destroyed here.
+
+    **And an icon with no size is a bitmap with no pixels.** This used to
+    be `SetWidth`/`SetHeight` and then `CopyFromIcon`, which is right for
+    the wxPython it was written against and raises `AttributeError` on
+    wxPython 4.3 (wxWidgets 3.3), where `wx.Icon` has only `SetHandle` and
+    `SetRefData` left. The `except` here then answered None - so on that
+    wxPython EVERY real Windows icon in the whole shell was silently
+    missing, which is the worst shape a bug can have: nothing in the log,
+    nothing raised, and a taskbar and a desktop of blank squares.
+    Dropping the two calls is not the fix either: `CopyFromIcon` on a
+    sized-nothing icon answers `IsOk()` true and a bitmap of 0 x 0
+    (measured). So the icon is DRAWN, at the size the caller asked for,
+    which needs nothing of `wx.Icon` but the handle and works on both.
     """
     if not handle:
         return None
     try:
         icon = wx.Icon()
         icon.SetHandle(handle)
-        icon.SetWidth(size)
-        icon.SetHeight(size)
-        bitmap = wx.Bitmap()
-        bitmap.CopyFromIcon(icon)
-        return bitmap if bitmap.IsOk() else None
+    except Exception:
+        return None
+    # The old way first, where wx still offers it: it is one call and it
+    # keeps the icon's own alpha exactly as Windows drew it.
+    try:
+        if hasattr(icon, 'SetWidth'):
+            icon.SetWidth(size)
+            icon.SetHeight(size)
+            bitmap = wx.Bitmap()
+            bitmap.CopyFromIcon(icon)
+            if bitmap.IsOk() and bitmap.GetWidth() > 0:
+                return bitmap
+    except Exception:
+        pass
+    try:
+        bitmap = wx.Bitmap(size, size, 32)
+        dc = wx.MemoryDC(bitmap)
+        try:
+            dc.SetBackground(wx.Brush(wx.Colour(0, 0, 0, wx.ALPHA_TRANSPARENT)))
+            dc.Clear()
+            dc.DrawIcon(icon, 0, 0)
+        finally:
+            dc.SelectObject(wx.NullBitmap)
+        return bitmap if bitmap.IsOk() and bitmap.GetWidth() > 0 else None
     except Exception:
         return None
 

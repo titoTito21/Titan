@@ -1,0 +1,41 @@
+=== window ok=True ===
+{
+ "hwnd": 127205910,
+ "title": "◑ Automatyczne etykiety i dostępność czytników ekranu",
+ "app": "windowsterminal",
+ "process": 25328,
+ "foreground": 127205910,
+ "focus": 4916170
+}
+=== context ok=True ===
+{
+ "reader": "nvda",
+ "available": true,
+ "focus": {
+  "name": "Command Prompt",
+  "role": "terminal",
+  "states": [
+   "możliwy fokus",
+   "ma fokus"
+  ],
+  "description": "◑ Automatyczne etykiety i dostępność czytników ekranu",
+  "app": "windowsterminal",
+  "class": "Windows.UI.Input.InputSite.WindowClass",
+  "hwnd": 4916170,
+  "process": 25328
+ },
+ "foreground": {
+  "name": "◑ Automatyczne etykiety i dostępność czytników ekranu",
+  "role": "okno",
+  "states": [
+   "możliwy fokus"
+  ],
+  "app": "windowsterminal",
+  "window": "◑ Automatyczne etykiety i dostępność czytników ekranu",
+  "class": "CASCADIA_HOSTING_WINDOW_CLASS",
+  "hwnd": 127205910,
+  "process": 25328
+ },
+ "review": "     for _ in ra…                                                                                                       \r\n",
+ "synth": "espeak"
+}

@@ -91,6 +91,11 @@ SPEC = {
     # Titan has always said this for its own dialogs; this is the rest of
     # the machine, and it needs neither Titan nor Titan Access.
     'dialogKinds': 'boolean(default=True)',
+    # What KIND of window you have just arrived in - an application, a
+    # game, a little box, the desktop - which `dialogKinds` answers for
+    # the four kinds of dialog and for nothing else, and nothing else
+    # answered at all.
+    'windowKinds': 'boolean(default=True)',
     # What a picture IS: an icon, a picture, an animation - instead of the
     # one word "graphic" for all three.
     'graphicKinds': 'boolean(default=True)',

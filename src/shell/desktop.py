@@ -33,6 +33,7 @@ from src.platform_utils import IS_WINDOWS, get_user_data_dir
 from src.shell import addons as shell_addons
 from src.shell import fileops, luna, win_shell
 from src.shell import keyboard_handover as handover
+from src.shell.controls import bitmap_from_icon_handle
 from src.shell.deferred import call_after
 from src.system import key_state
 from src.shell.a11y import edge_cue, name_control, shell_setting
@@ -134,7 +135,7 @@ class DesktopFrame(wx.Frame):
         else:
             self.refresh()
 
-        self.list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_activate)
+        self.list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self._on_item_activated)
         self.list.Bind(wx.EVT_LIST_END_LABEL_EDIT, self._on_rename)
         self.list.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self._on_item_menu)
         # Dragging an icon somewhere else is the one desktop behaviour the
@@ -597,20 +598,12 @@ class DesktopFrame(wx.Frame):
         handle = win_shell.file_icon_handle(path, large=True)
         if not handle:
             return None
-        try:
-            icon = wx.Icon()
-            icon.SetHandle(handle)
-            icon.SetWidth(ICON_SIZE)
-            icon.SetHeight(ICON_SIZE)
-            bitmap = wx.Bitmap()
-            bitmap.CopyFromIcon(icon)
-            return bitmap if bitmap.IsOk() else None
-        except Exception:
-            return None
-        finally:
-            # wx.Icon took ownership of the handle through SetHandle; the
-            # icon object destroys it, so it must not be destroyed here.
-            pass
+        # **One implementation, in `controls`.** This was a second copy of
+        # it, with the same `SetWidth`/`SetHeight` that raises on wxPython
+        # 4.3 - so the desktop had no icons at all, for the same reason
+        # and at the same moment as the taskbar. `wx.Icon.SetHandle` takes
+        # the handle over there, so it must not be destroyed here either.
+        return bitmap_from_icon_handle(handle, ICON_SIZE)
 
     def selected_index(self):
         return self.list.GetFirstSelected()
@@ -818,7 +811,18 @@ class DesktopFrame(wx.Frame):
         from src.shell.shutdown_dialog import shell_alt_f4
         return shell_alt_f4(self)
 
-    def _on_activate(self, event):
+    def _on_item_activated(self, event):
+        """An icon was opened - double-clicked, or Enter on the list.
+
+        **Its own name, because `_on_activate` is the WINDOW's.**  Both
+        were called `_on_activate` and both were bound, so the second
+        definition replaced the first and the list's binding reached the
+        window-activation handler: opening an icon with the mouse asked a
+        `wx.ListEvent` for `GetActive()`, which it has not got, and raised
+        inside wx's own event loop where nothing catches it.  Enter went on
+        working only because `_on_key` answers it first and does not skip -
+        which is exactly what made this look like a mouse problem.
+        """
         self.open_selected()
 
     def _on_rename(self, event):

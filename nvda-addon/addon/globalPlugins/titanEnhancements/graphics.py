@@ -221,7 +221,10 @@ def read(obj, question='', timeout=30.0):
     if not handle:
         return False, _('This control has no window of its own to read.')
     from .link import LINK
-    ok, text = LINK.run_action('ocr', 'ask', hwnd=handle,
+    # A picture sent to a provider and a model's answer back is not a
+    # question about a window: twelve seconds is the bus's ordinary
+    # patience and far too little for this one.
+    ok, text = LINK.run_action('ocr', 'ask', timeout=timeout, hwnd=handle,
                                question=question or QUESTION)
     if not ok:
         return False, _text(text)
@@ -230,6 +233,54 @@ def read(obj, question='', timeout=30.0):
         # A sentence, not a reading: Titan saying it will not, or cannot.
         return False, said
     return True, answer_in(said)
+
+
+def label_locally(obj):
+    """The caption printed ON this control, read by WINDOWS. ``(ok, text)``.
+
+    **The free half, and the one an automatic feature may use.** Windows
+    has a recogniser built in: it is local, private, costs nothing and
+    answers in about a tenth of a second, where the AI is a picture of the
+    user's screen sent to a provider and an answer that has been measured
+    taking longer than the bus waits for it - "Titan did not answer within
+    12s", in the log, from a control the reader chose to look at by
+    itself.
+
+    So this is what the automatic path asks, and the AI is what the user
+    asks for by pressing a key. It reads only what is printed on the
+    control, which for the thing this is for - a toolbar button with a
+    word on it - is the whole answer.
+    """
+    from . import labels
+    from . import localOcr
+    if not labels.needs_one(obj):
+        return False, ''
+    stored = labels.get(obj)
+    if stored:
+        return True, stored
+    ready, why = localOcr.available()
+    if not ready:
+        return False, why
+    try:
+        location = getattr(obj, 'location', None)
+        left, top, width, height = (int(location[0]), int(location[1]),
+                                    int(location[2]), int(location[3]))
+    except Exception:                                # noqa: BLE001
+        return False, _('This control has no place on the screen to read.')
+    if width < 4 or height < 4:
+        return False, ''
+    reading = localOcr.read(left, top, width, height)
+    if reading is None:
+        return False, _text(localOcr.report().get('why', ''))
+    said = ' '.join(_text(word.get('text')) for line in reading.lines
+                    for word in line).strip()
+    first = said.strip(' .:-')
+    if not first or len(first) > labels.MAX_LENGTH:
+        # A name is a name, not a paragraph - and a control whose reading
+        # is a paragraph is one the recogniser found a whole panel in.
+        return False, ''
+    labels.put(obj, first, source='ai')
+    return True, first
 
 
 def label_with_ai(obj):

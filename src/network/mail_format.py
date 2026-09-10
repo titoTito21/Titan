@@ -246,7 +246,16 @@ class _HtmlToBlocks(HTMLParser):
         self._pre = 0
         self._lists: List[List] = []
         self._anchors: List[Tuple[str, int]] = []
-        self._pending = (KIND_PARAGRAPH, 0)
+        # **Not `_pending`.** Python 3.14's own `HTMLParser` keeps a list of
+        # that name and appends to it in `feed`, so a subclass calling it
+        # something else broke the base class on the very first chunk:
+        # `'tuple' object has no attribute 'append'`, swallowed by
+        # `html_to_blocks`, which then fell back to tags-stripped text. The
+        # result was every HTML message read with no headings, no lists, no
+        # quotes and - because the anchors are collected during the parse -
+        # no links at all, which is a mail reader that cannot tell you
+        # where a link goes.
+        self._block_kind = (KIND_PARAGRAPH, 0)
 
     # -- helpers ------------------------------------------------------------
     def _current_text(self) -> str:
@@ -265,11 +274,11 @@ class _HtmlToBlocks(HTMLParser):
             text = text.strip('\n').rstrip()
         else:
             text = re.sub(r'\s+', ' ', text).strip()
-        kind, level = self._pending
+        kind, level = self._block_kind
         links = list(self._buffer_links)
         self._buffer = []
         self._buffer_links = []
-        self._pending = self._default_pending()
+        self._block_kind = self._default_pending()
         if not text:
             return
         if self._pre and kind == KIND_CODE:
@@ -314,7 +323,7 @@ class _HtmlToBlocks(HTMLParser):
             return
         if tag in _HEADINGS:
             self._flush()
-            self._pending = (KIND_HEADING, _HEADINGS[tag])
+            self._block_kind = (KIND_HEADING, _HEADINGS[tag])
             return
         if tag in ('ul', 'ol'):
             self._flush()
@@ -323,7 +332,7 @@ class _HtmlToBlocks(HTMLParser):
         if tag == 'li':
             self._flush()
             depth = max(1, len(self._lists))
-            self._pending = (KIND_LIST, depth)
+            self._block_kind = (KIND_LIST, depth)
             if self._lists and self._lists[-1][0] == 'ol':
                 self._lists[-1][1] += 1
                 self._buffer.append(f"{self._lists[-1][1]}. ")
@@ -331,16 +340,16 @@ class _HtmlToBlocks(HTMLParser):
         if tag == 'blockquote':
             self._flush()
             self._quote += 1
-            self._pending = self._default_pending()
+            self._block_kind = self._default_pending()
             return
         if tag in ('pre', 'code') and tag == 'pre':
             self._flush()
             self._pre += 1
-            self._pending = self._default_pending()
+            self._block_kind = self._default_pending()
             return
         if tag == 'tr':
             self._flush()
-            self._pending = (KIND_TABLE, 0)
+            self._block_kind = (KIND_TABLE, 0)
             return
         if tag in ('td', 'th'):
             if self._current_text().strip():
@@ -379,12 +388,12 @@ class _HtmlToBlocks(HTMLParser):
         if tag == 'blockquote':
             self._flush()
             self._quote = max(0, self._quote - 1)
-            self._pending = self._default_pending()
+            self._block_kind = self._default_pending()
             return
         if tag == 'pre':
             self._flush()
             self._pre = max(0, self._pre - 1)
-            self._pending = self._default_pending()
+            self._block_kind = self._default_pending()
             return
         if tag in _HEADINGS or tag in ('li', 'tr') or tag in _FLUSH_TAGS:
             self._flush()

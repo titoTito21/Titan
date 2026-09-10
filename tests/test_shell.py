@@ -1538,14 +1538,29 @@ class GroupAnnouncementTests(unittest.TestCase):
         bar = _bar_with(windows=('Notepad',),
                         icons=(FakeTrayIcon('Volume'),))
         said = []
+        places = []
+        # **Two arguments, because the group is spoken from WHERE it is.**
+        # A one-argument stand-in raises `TypeError` inside
+        # `focus_in_group`, which swallows it - so the test recorded
+        # nothing and read exactly like an announcement that had gone.
+        def _recorder(label, position=0.0):
+            said.append(label)
+            places.append(position)
         real = taskbar_module.announce_group
-        taskbar_module.announce_group = lambda label: said.append(label)
+        taskbar_module.announce_group = _recorder
         try:
             bar.start_button.SetFocus()
             bar._move_between_groups(1)      # into the quick launch band
             bar._move_between_groups(1)      # into the window buttons
             self.assertEqual(said, [taskbar_module.group_label('quicklaunch'),
                                     taskbar_module.group_label('tasks')])
+            # And it really carries a place, in the -1 .. 1 the focus cue
+            # is panned by - a position nothing fills in is the bug this
+            # feature was shipped with once already.
+            self.assertEqual(len(places), 2)
+            for where in places:
+                self.assertGreaterEqual(where, -1.0)
+                self.assertLessEqual(where, 1.0)
             # The arrows move inside a group, which is not an arrival.
             said[:] = []
             bar._move_within_group(1)

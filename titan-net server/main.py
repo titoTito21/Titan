@@ -17,16 +17,18 @@ from hackback import HackBackProtocol
 from config import Config
 from models import Database
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/main.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger('TitanNetMain')
+# Configure logging.
+#
+# **Not `basicConfig`.** It configures the root logger the first time it is
+# called and never again, while the `FileHandler` in its argument list is
+# constructed - and opened - regardless. Three modules here each called it
+# with a file of their own, so the two that lost the race created their log
+# files and then had their handlers thrown away: `logs/main.log` and
+# `logs/http_server.log` sat at 0 bytes from April to September, and the
+# only reason anybody noticed was a question about a possibly broken-into
+# account that there was nothing to answer with.
+import logging_setup
+logger = logging_setup.configure('TitanNetMain', 'main.log')
 
 
 class TitanNetMain:

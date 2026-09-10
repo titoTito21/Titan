@@ -79,7 +79,13 @@ def client():
         if _client is not None:
             return _client
         try:
-            from src.eltenlink_client.elten_client import EltenClient
+            # **The class is `EltenLinkClient`.** It was asked for as
+            # `EltenClient`, which exists nowhere - so the `except` below
+            # caught the ImportError and every application reaching for
+            # EltenLink through this bridge was told Titan has no client
+            # at all. The whole `EltenLink.*` surface was dead, and said
+            # something plausible while it was.
+            from src.eltenlink_client.elten_client import EltenLinkClient
         except Exception as error:
             raise EltenUnavailable('Titan has no EltenLink client: %s' % error)
         try:
@@ -92,7 +98,7 @@ def client():
             raise EltenUnavailable(
                 'nobody is signed in to EltenLink. Sign in through Titan IM '
                 'and this application can use the network.')
-        found = EltenClient()
+        found = EltenLinkClient()
         # The token the user already has, first; the saved password only if
         # that token has expired. Neither is ever shown to the application.
         signed_in = False

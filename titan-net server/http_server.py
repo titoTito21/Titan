@@ -27,16 +27,9 @@ import remote_ui
 import os
 os.makedirs('logs', exist_ok=True)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/http_server.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger('TitanNetHTTP')
+# Configure logging - see logging_setup for why this is not basicConfig.
+import logging_setup
+logger = logging_setup.configure('TitanNetHTTP', 'http_server.log')
 
 
 class TitanNetHTTPServer:

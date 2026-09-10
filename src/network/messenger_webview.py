@@ -2744,7 +2744,14 @@ class MessengerWebViewFrame(wx.Frame):
         """Start video call with specific contact"""
         if not hasattr(self, 'webview') or not self.webview:
             return False
-        
+
+        # Imported here as everywhere else in this file. It was missing
+        # from this one function alone, so reading the result of a video
+        # call raised `NameError` on `json.loads` - inside a `try` that
+        # catches `json.JSONDecodeError` and not that, so the call was
+        # reported as failed however well it had gone.
+        import json
+
         try:
             # Escape quotes and special characters in the chat name
             escaped_chat_name = chat_name.replace("'", "\\'").replace('"', '\\"')

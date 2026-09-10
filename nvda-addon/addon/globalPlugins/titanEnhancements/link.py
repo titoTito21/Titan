@@ -193,10 +193,20 @@ class Link:
                 pass
         return True, payload.get('data')
 
-    def run_action(self, addon, action, **args):
-        """An add-on's action, through the bridge. (ok, text)."""
-        ok, data = self.bridge('addons.run', addon=addon, action=action,
-                               args=args)
+    def run_action(self, addon, action, timeout=CALL_TIMEOUT, **args):
+        """An add-on's action, through the bridge. (ok, text).
+
+        **The timeout is the caller's, because twelve seconds is right for
+        a question about a window and wrong for one that reaches an AI
+        provider.** It used to be fixed at `CALL_TIMEOUT`, and
+        `surface.read(hwnd, timeout=45.0)` took a timeout it then never
+        passed on - a dead parameter, and every AI reading answered
+        "Titan did not answer within 12s" while Titan was answering
+        perfectly well, a few seconds later, into a caller that had
+        stopped listening. Seen in the log on a real session, repeatedly.
+        """
+        ok, data = self.bridge('addons.run', timeout=timeout, addon=addon,
+                               action=action, args=args)
         if not ok:
             return False, data
         if isinstance(data, dict):

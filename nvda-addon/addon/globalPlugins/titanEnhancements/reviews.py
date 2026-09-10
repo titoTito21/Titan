@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """One review at a time.
 
-Four things in this add-on walk something with the same arrow keys - a
+Several things in this add-on walk something with the same arrow keys - a
 terminal (:mod:`terminal`), a recognised screen (:mod:`ocrReview`), a Titan
-application (:mod:`appReview`) and any window at all
-(:mod:`virtualWindow`). Sharing the keys is deliberate: a user should learn
-Up, Down, Left, Right, Home, End, Enter, F5 and Escape once, not four
-times.
+application (:mod:`appReview`), a widget (:mod:`widgetReview`), any window
+at all (:mod:`virtualWindow`) and the command palette (:mod:`palette`).
+Sharing the keys is deliberate: a user should learn Up, Down, Left, Right,
+Home, End, Enter, F5 and Escape once, not six times.
 
 What that costs is this module. NVDA binds a gesture to ONE script per
 plugin, so two reviews up at once means the second one's bindings replaced
@@ -20,7 +20,7 @@ quietly grow a fifth.
 """
 
 _ALL = ('terminal', 'ocrReview', 'appReview', 'virtualWindow',
-        'widgetReview')
+        'widgetReview', 'palette')
 
 
 def stop_others(keep):

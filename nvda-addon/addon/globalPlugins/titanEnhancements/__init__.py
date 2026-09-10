@@ -35,6 +35,9 @@ from . import commands
 from . import compat
 from . import configSpec
 from . import dialog_kind
+from . import layers
+from . import shared      # noqa: F401
+from . import windowKind
 from . import dialogs
 from . import earcons
 from . import focus
@@ -48,6 +51,7 @@ from . import monitors
 from . import appReview
 from . import ocrReview
 from . import reporting
+from . import palette
 from . import virtualWindow
 from . import widgetReview
 from . import journal
@@ -269,6 +273,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     link.LINK.introduce()
                 except Exception:                    # noqa: BLE001
                     pass
+                # **What the user taught the other reader.** Titan being
+                # there means Titan Access's own folder is there, and a
+                # control they named in one reader should be named in the
+                # other. On THIS thread, which is the watcher's own and
+                # not the focus path: reading and writing a JSON file is
+                # milliseconds, and milliseconds on every arrival is a
+                # reader that got slower for no reason anybody can see.
+                try:
+                    ok, said = shared.sync_labels()
+                    if compat.log is not None:
+                        compat.log.info('Titan shared names: %s'
+                                        % (said if ok else 'not shared: '
+                                           + str(said)))
+                except Exception:                    # noqa: BLE001
+                    pass
                 # Titan is there: ask it what it can do, so a Titan with
                 # something installed since last time is bindable without
                 # either program being restarted. On its own worker; the
@@ -331,6 +350,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._keep_ocr_keys_right()
             if virtualWindow.left_the_window():
                 self._keep_virtual_keys_right()
+            self._keep_palette_keys_right()
         except Exception:                            # noqa: BLE001
             pass
         try:
@@ -363,7 +383,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         layer announce "dialog" in front of every button.
         """
         try:
-            dialog_kind.announce(obj)
+            # **The kind of window, when the kind of DIALOG is not the
+            # question.** `dialog_kind` answers four kinds of dialog well
+            # and says nothing about every other window, which is nearly
+            # all of them; `windowKind` is the rest of that sentence. It
+            # is asked only when the first said nothing, so a warning is
+            # never also announced as "a small window".
+            if not dialog_kind.announce(obj):
+                windowKind.announce(obj)
         except Exception:                            # noqa: BLE001
             pass
         try:
@@ -512,6 +539,89 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     #: control, because outside Titan there is no description - there is a
     #: control on the screen, and clicking it is what a sighted person
     #: would do.
+    #: The palette's keys - the virtual window's, minus everything that
+    #: has no meaning in a list of commands. Held only while it is really
+    #: up, and given back the moment it is not, which is the discipline
+    #: every borrowed key in this add-on follows.
+    PALETTE_KEYS = {
+        'kb:upArrow': 'paletteUp',
+        'kb:downArrow': 'paletteDown',
+        'kb:home': 'paletteHome',
+        'kb:end': 'paletteEnd',
+        'kb:enter': 'paletteActivate',
+        'kb:escape': 'paletteBack',
+    }
+
+    def _borrow_palette_keys(self, borrow=True):
+        for gesture, script_name in self.PALETTE_KEYS.items():
+            try:
+                if borrow:
+                    self.bindGesture(gesture, script_name)
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._palette_bound = bool(borrow)
+
+    def _keep_palette_keys_right(self):
+        try:
+            want = palette.walking()
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want != getattr(self, '_palette_bound', False):
+            self._borrow_palette_keys(want)
+
+    def _palette_key(self, gesture, act):
+        if not palette.walking():
+            self._keep_palette_keys_right()
+            gesture.send()
+            return
+        try:
+            _ok, said = act()
+        except Exception:                            # noqa: BLE001
+            gesture.send()
+            return
+        # Running a command, or going back, changes whether these keys are
+        # ours at all.
+        self._keep_palette_keys_right()
+        if said:
+            dialogs.report(said)
+
+    @script(description=_('In the command palette: the command above'),
+            category=CATEGORY)
+    def script_paletteUp(self, gesture):
+        self._palette_key(gesture, lambda: palette.move(-1))
+
+    @script(description=_('In the command palette: the command below'),
+            category=CATEGORY)
+    def script_paletteDown(self, gesture):
+        self._palette_key(gesture, lambda: palette.move(1))
+
+    @script(description=_('In the command palette: the first command'),
+            category=CATEGORY)
+    def script_paletteHome(self, gesture):
+        self._palette_key(gesture, lambda: palette.move_end(False))
+
+    @script(description=_('In the command palette: the last command'),
+            category=CATEGORY)
+    def script_paletteEnd(self, gesture):
+        self._palette_key(gesture, lambda: palette.move_end(True))
+
+    @script(description=_('In the command palette: run this command'),
+            category=CATEGORY)
+    def script_paletteActivate(self, gesture):
+        self._palette_key(gesture, palette.activate)
+
+    @script(description=_('In the command palette: back one level, or '
+                          'close it'), category=CATEGORY)
+    def script_paletteBack(self, gesture):
+        self._palette_key(gesture, palette.back)
+
+    #: How long the program is given to act on a key of its own before
+    #: the virtual window is built again. Long enough for a folder to be
+    #: read, short enough that the rebuild feels like part of the press.
+    BACK_SETTLES_MS = 500
+
     VIRTUAL_KEYS = {
         'kb:upArrow': 'virtualUp',
         'kb:downArrow': 'virtualDown',
@@ -522,6 +632,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:home': 'virtualHome',
         'kb:end': 'virtualEnd',
         'kb:enter': 'virtualActivate',
+        'kb:backspace': 'virtualBack',
         'kb:f5': 'virtualRefresh',
         'kb:escape': 'virtualLeave',
     }
@@ -550,15 +661,40 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     self.removeGestureBinding(gesture)
             except Exception:                        # noqa: BLE001
                 pass
-        self._virtual_bound = bool(borrow)
+
+    def _virtual_wants(self):
+        """Which keys the virtual window should be holding right now.
+
+        ``''`` none, ``'all'`` the whole set, ``'escape'`` that key alone
+        - which is the edit-field mode: the user pressed Enter on a field
+        and every letter, every arrow and Enter itself now belong to the
+        program they are typing into. Holding one key rather than none is
+        the whole of what makes the mode leavable.
+        """
+        try:
+            if not virtualWindow.reviewing():
+                return ''
+            return 'escape' if virtualWindow.typing_mode() else 'all'
+        except Exception:                            # noqa: BLE001
+            return ''
 
     def _keep_virtual_keys_right(self):
-        try:
-            want = virtualWindow.reviewing()
-        except Exception:                            # noqa: BLE001
-            want = False
-        if want != getattr(self, '_virtual_bound', False):
-            self._borrow_virtual_keys(want)
+        want = self._virtual_wants()
+        have = getattr(self, '_virtual_bound', '')
+        if want == have:
+            return
+        # Let go of whatever is held before taking anything, or the two
+        # sets overlap and a key is left bound to the wrong script.
+        if have:
+            self._borrow_virtual_keys(False)
+        if want == 'all':
+            self._borrow_virtual_keys(True)
+        elif want == 'escape':
+            try:
+                self.bindGesture('kb:escape', 'virtualLeave')
+            except Exception:                        # noqa: BLE001
+                want = ''
+        self._virtual_bound = want
 
     #: A widget's keys. Fewer than the others because a widget answers
     #: one element at a time and nothing answers how many there are, so
@@ -636,14 +772,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         """Borrow the navigation keys, or give them back. Cheap; called on
         the events that can change the answer.
 
-        Only for an inaccessible APPLICATION. A game keeps its own keys -
-        its menu is what the arrows are for, and the reader's job there is
-        to say what has become highlighted, not to run a second cursor.
+        Everything except a GAME. A game keeps its own keys - its menu is
+        what the arrows are for, and the reader's job there is to say what
+        has become highlighted, not to run a second cursor.
+
+        **It asked for `MODE_APPLICATION` alone, and that is not the mode
+        most windows are read in.** Windows' own recogniser reads them
+        first - that is the tier order - and it leaves the watch in
+        `MODE_LOCAL`, where the cursor is built exactly the same way by
+        `smart.take_local`. So the mode change was announced, the
+        controls were there to walk, and not one key was bound to walk
+        them with: "Native TCE cursor on, and Tab does nothing" - which
+        is a feature that reports success and cannot be used, the shape
+        this add-on keeps paying for.
         """
         try:
-            want = (smart.active()
-                    and surface.report().get('mode')
-                    == surface.MODE_APPLICATION)
+            mode = surface.report().get('mode')
+            want = bool(smart.active()) and mode != surface.MODE_GAME
         except Exception:                            # noqa: BLE001
             want = False
         if want != self._smart_bound:
@@ -1204,8 +1349,35 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             gesture.send()
             return
         _ok, said = virtualWindow.activate()
+        # Enter on a field hands the keyboard over, so which keys this
+        # holds has just changed.
+        self._keep_virtual_keys_right()
         if said:
             dialogs.report(said)
+
+    @script(description=_('In the virtual window: the program\'s own '
+                          'Backspace - up one folder - and then build the '
+                          'window again'),
+            category=CATEGORY)
+    def script_virtualBack(self, gesture):
+        if not virtualWindow.reviewing():
+            self._keep_virtual_keys_right()
+            gesture.send()
+            return
+        # **The key is the program's; the rebuild is ours.** Backspace in
+        # a file manager goes up a folder, and it always reached the
+        # program perfectly well - what did not happen is the virtual
+        # window noticing, so the user was walking the folder they had
+        # just left. This is the same fault the Elten renderer had: what
+        # counts as "the screen changed" decides whether anything the
+        # user does is ever seen.
+        gesture.send()
+        try:
+            import wx
+            wx.CallLater(self.BACK_SETTLES_MS,
+                         lambda: virtualWindow.refresh(keep_place=False))
+        except Exception:                            # noqa: BLE001
+            virtualWindow.refresh(keep_place=False)
 
     @script(description=_('In the virtual window: build it again'),
             category=CATEGORY)
@@ -1217,11 +1389,21 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         _ok, said = virtualWindow.refresh()
         dialogs.report(said)
 
-    @script(description=_('Leave the virtual window'), category=CATEGORY)
+    @script(description=_('Leave the virtual window, or the field being '
+                          'typed into'), category=CATEGORY)
     def script_virtualLeave(self, gesture):
         if not virtualWindow.reviewing():
             self._keep_virtual_keys_right()
             gesture.send()
+            return
+        # **One level at a time.** Escape in a field comes back to the
+        # controls; Escape in the controls leaves the window. Closing the
+        # whole thing from inside a field would make one keystroke undo
+        # two decisions.
+        if virtualWindow.typing_mode():
+            _ok, said = virtualWindow.leave_typing()
+            self._keep_virtual_keys_right()
+            dialogs.report(said)
             return
         _on, said = virtualWindow.stop()
         self._keep_virtual_keys_right()
@@ -1560,6 +1742,156 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         category=CATEGORY, gesture='kb:NVDA+alt+l')
     def script_titanLabel(self, gesture):
         commands.label_control()
+
+    #: The keys a layer borrows while it is open. Every printable key the
+    #: layers use, plus the two that ask for help and the one that leaves -
+    #: bound only while a layer is really open, and taken back the moment
+    #: it is not, which is the same discipline the drawn-window cursor and
+    #: the terminal review already follow. A reader still holding a letter
+    #: in the next window is a machine that has stopped answering.
+    @property
+    def LAYER_KEYS(self):
+        wanted = {'kb:escape'}
+        for name in layers.names():
+            for key in layers.keys_of(name):
+                wanted.add('kb:%s' % key)
+        for key in layers.HELP_KEYS:
+            wanted.add('kb:%s' % key)
+        return wanted
+
+    def _borrow_layer_keys(self, borrow=True):
+        for gesture in self.LAYER_KEYS:
+            try:
+                if borrow:
+                    self.bindGesture(gesture, 'titanLayerKey')
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._layer_bound = bool(borrow)
+
+    def _keep_layer_keys_right(self):
+        """A layer that has timed out has let its keys go.
+
+        Asked rather than remembered, because the layer closes itself
+        after a few seconds and nothing runs when it does - a layer still
+        holding the alphabet is exactly the fault this bounds.
+        """
+        try:
+            want = bool(layers.open_layer())
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want != getattr(self, '_layer_bound', False):
+            self._borrow_layer_keys(want)
+
+    def _open_layer(self, name):
+        ok, said = layers.enter(name)
+        if not ok:
+            return
+        self._borrow_layer_keys(True)
+        try:
+            from . import dialogs
+            dialogs.report(said)
+        except Exception:                            # noqa: BLE001
+            pass
+        # And let go by itself, so a layer entered by accident is gone
+        # before the user types anything they meant for the program.
+        try:
+            import core
+            core.callLater(int(layers.SECONDS * 1000) + 100,
+                           self._keep_layer_keys_right)
+        except Exception:                            # noqa: BLE001
+            pass
+
+    @script(
+        # Translators: an NVDA command. It is bound to the layers' own
+        # letters while a layer is open and to nothing the rest of the
+        # time.
+        description=_('In an open command layer: the key that chooses'),
+        category=CATEGORY)
+    def script_titanLayerKey(self, gesture):
+        """One key, inside whatever layer is open."""
+        from . import dialogs
+        pressed = ''
+        try:
+            pressed = str(getattr(gesture, 'mainKeyName', '') or '')
+        except Exception:                            # noqa: BLE001
+            pressed = ''
+        if pressed == 'escape':
+            layers.leave()
+            self._keep_layer_keys_right()
+            return
+        what, value = layers.chose(pressed)
+        self._keep_layer_keys_right()
+        if what == 'closed':
+            # The layer went while the key was in the air: the key is the
+            # program's, not ours.
+            try:
+                gesture.send()
+            except Exception:                        # noqa: BLE001
+                pass
+            return
+        if what == 'help':
+            dialogs.browse('\n'.join(layers.help_for(value)),
+                           layers.label(value))
+            return
+        if what == 'unknown':
+            dialogs.report(layers.unknown_sentence(value))
+            return
+        run = getattr(commands, value, None)
+        if run is None:
+            return
+        try:
+            run()
+        except Exception as error:                   # noqa: BLE001
+            if compat.log is not None:
+                compat.log.error('Titan layer: %s: %s'
+                                 % (type(error).__name__, error))
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Everything you may decide about the control you are '
+                      'on: what it is called, what it is said to be, what '
+                      'is added after it, its voice, or never announcing '
+                      'it'),
+        category=CATEGORY)   # no gesture: `c` in the reading layer
+    def script_titanCustomise(self, gesture):
+        commands.customise_control()
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Opens the command palette: one key opens a layer, '
+                      'the next key chooses in it, and ? says what is in '
+                      'it'),
+        category=CATEGORY,
+        gestures=['kb:NVDA+shift+space', 'kb:NVDA+`'])
+    def script_titanPalette(self, gesture):
+        if palette.walking():
+            # Pressed again while it is up: that is "close it", the same
+            # answer every other mode in this add-on gives its own key.
+            _ok, said = palette.stop()
+            self._keep_palette_keys_right()
+            dialogs.report(said)
+            return
+        commands.command_palette(self._open_layer)
+        self._keep_palette_keys_right()
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Checks whether the reader module for this program '
+                      'really does anything to it, and names the rules '
+                      'that match nothing'),
+        category=CATEGORY)
+    def script_titanCheckModule(self, gesture):
+        commands.check_module()
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Says what this program is written in - the toolkit '
+                      'it runs on, and what that means for reading it'),
+        category=CATEGORY)
+    def script_titanWrittenIn(self, gesture):
+        commands.what_is_this_written_in()
 
     @script(
         # Translators: an NVDA command.

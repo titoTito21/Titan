@@ -233,6 +233,20 @@ def describe(obj):
     """
     if obj is None:
         return []
+    # **What the user has decided about THIS control, first.** JAWS'
+    # customised control, and the reason it comes before everything else
+    # is `silent`: a control somebody has switched off must not be
+    # described by the reader module, by Titan, or by anything below -
+    # asking later would mean working out an announcement in order to
+    # throw it away, and would let one of the paths above answer first.
+    custom = {}
+    try:
+        from . import labels
+        custom = labels.custom_of(obj)
+    except Exception:                                # noqa: BLE001
+        custom = {}
+    if custom.get('silent'):
+        return []
     # Which Titan add-on's window this is, if any - worked out once and used
     # twice, because asking it is a lookup and an unbound name here would
     # silently cost the status-bar wording below.
@@ -282,8 +296,10 @@ def describe(obj):
             # with the VOICE: a control that cannot be used is heard as
             # unusable before the word arrives, and in a menu of twenty
             # items that is twenty times the word is not needed.
-            return [(name, 'disabled' if _unavailable(obj) else 'name')] \
-                if name else []
+            voice = str(custom.get('voice') or '').strip()
+            if not voice:
+                voice = 'disabled' if _unavailable(obj) else 'name'
+            return [(name, voice)] if name else []
 
         def _the_kind():
             role = context.role_name(getattr(obj, 'role', None))
@@ -299,6 +315,30 @@ def describe(obj):
                 role = tce.role_word(obj, _application, role)
             except Exception:                        # noqa: BLE001
                 pass
+            try:
+                # **"Unknown" is not a kind of control, it is the absence
+                # of an answer.** NVDA spells a top-level window it cannot
+                # classify `Role.UNKNOWN`, whose displayString is the word
+                # "unknown" in the user's own language - measured live on
+                # a real session: "ELTEN 3.0.3, nieznane". That tells the
+                # user nothing at the one moment they most need telling,
+                # and something IS knowable: Windows will say whether this
+                # is an application, a game, a little box that will go
+                # away again, the desktop, or a dialog. So the word is
+                # replaced rather than added to - two type words for one
+                # control is worse than the wrong one.
+                from . import windowKind
+                if windowKind.is_unknown_word(role):
+                    kind, _how = windowKind.kind_of(obj)
+                    role = windowKind.word(kind) or role
+            except Exception:                        # noqa: BLE001
+                pass
+            # **What the user calls it wins.** A "pane" the program uses
+            # as a toolbar is a toolbar to the person using it, and they
+            # are the one who has to hear it on every arrival.
+            said = str(custom.get('role_word') or '').strip()
+            if said:
+                role = said
             return [(role, 'kind')] if role else []
 
         def _the_state():
@@ -335,6 +375,13 @@ def describe(obj):
         segments = []
         for chosen in wanted:
             segments.extend(made.get(chosen) or [])
+        # **A note ADDS; a label replaces.** That is the whole difference
+        # between the two, and it is why a note is said last and always:
+        # it is what somebody wanted said about this control that nothing
+        # else was going to say.
+        note = str(custom.get('note') or '').strip()
+        if note:
+            segments.append((note, 'detail'))
         if not segments:
             # Something has to be said. A control with no name, and whose
             # every other part the user has switched off, would otherwise

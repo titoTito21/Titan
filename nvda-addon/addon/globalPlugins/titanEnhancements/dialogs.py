@@ -99,12 +99,18 @@ def browse(text, title=None):
         report(text)
 
 
-def choose(rows, title, prompt=None, on_chosen=None):
+def choose(rows, title, prompt=None, on_chosen=None, on_cancel=None):
     """Pick one of ``rows`` (label strings). ``on_chosen(index)`` afterwards.
 
     Asynchronous, because a gesture handler must return: NVDA's main thread
     is the one reading the screen, and a modal loop entered from inside a
     script is a reader that has stopped answering.
+
+    ``on_cancel`` is what Escape does, and it is what makes a list of
+    lists walkable: **Escape goes back one level before it closes**, which
+    is how every other list in Titan behaves and the only way a chooser
+    that opens another chooser can be left without starting again. A list
+    with nothing behind it passes None and Escape simply closes it.
     """
     gui = _gui()
     wx = _wx()
@@ -118,8 +124,111 @@ def choose(rows, title, prompt=None, on_chosen=None):
                                            prompt or _('Choose:'),
                                            title, list(rows))
             try:
-                if dialog.ShowModal() == wx.ID_OK and on_chosen is not None:
-                    on_chosen(dialog.GetSelection())
+                pressed = dialog.ShowModal()
+                chosen = dialog.GetSelection()
+            finally:
+                dialog.Destroy()
+        finally:
+            gui.mainFrame.postPopup()
+        # **Outside the popup, and after the dialog has gone.** What
+        # either of these does is usually to put another window up, and
+        # raising one from inside `prePopup`/`postPopup` nests NVDA's own
+        # bookkeeping about which dialog it is in.
+        if pressed == wx.ID_OK:
+            if on_chosen is not None:
+                on_chosen(chosen)
+        elif on_cancel is not None:
+            on_cancel()
+    wx.CallAfter(show)
+
+
+def customise(title, fields, on_kept=None):
+    """A small form: several answers about one thing, in one window.
+
+    ``fields`` is ``[{'id', 'kind', 'label', 'value', 'choices'}]`` where
+    ``kind`` is 'text', 'check' or 'choice'. ``on_kept`` is called with
+    ``{id: answer}``, or with ``None`` when the user cancelled - which is
+    a different thing from every field being empty and has to stay
+    tellable apart.
+
+    **Every control is the real one for its kind**, which is the rule the
+    whole add-on follows: a check box is a `wx.CheckBox` Windows itself
+    reports as a check box with a state, a choice is a `wx.Choice` whose
+    arrows announce the new value themselves. Nothing here is drawn, and
+    nothing here says out loud what the platform already says.
+
+    Asynchronous, like everything else in this module: a modal loop
+    entered from inside a script is a reader that has stopped answering.
+    """
+    gui = _gui()
+    wx = _wx()
+    if gui is None or wx is None or not fields:
+        return
+
+    def show():
+        gui.mainFrame.prePopup()
+        try:
+            dialog = wx.Dialog(gui.mainFrame, title=title,
+                               style=wx.DEFAULT_DIALOG_STYLE
+                               | wx.RESIZE_BORDER)
+            outer = wx.BoxSizer(wx.VERTICAL)
+            panel = wx.Panel(dialog)
+            box = wx.BoxSizer(wx.VERTICAL)
+            made = {}
+            for field in fields:
+                kind = str(field.get('kind') or 'text')
+                label = str(field.get('label') or '')
+                if kind == 'check':
+                    control = wx.CheckBox(panel, label=label)
+                    control.SetValue(bool(field.get('value')))
+                    box.Add(control, 0, wx.ALL, 5)
+                else:
+                    box.Add(wx.StaticText(panel, label=label), 0,
+                            wx.LEFT | wx.TOP, 5)
+                    if kind == 'choice':
+                        control = wx.Choice(
+                            panel, choices=[str(one) for one
+                                            in field.get('choices') or []])
+                        try:
+                            control.SetSelection(int(field.get('value') or 0))
+                        except Exception:            # noqa: BLE001
+                            control.SetSelection(0)
+                    else:
+                        control = wx.TextCtrl(
+                            panel, value=str(field.get('value') or ''))
+                    # The label is the static above it, which wx does not
+                    # pass on to the platform for these - so it is given
+                    # to the control itself as well.
+                    try:
+                        control.SetName(label)
+                    except Exception:                # noqa: BLE001
+                        pass
+                    box.Add(control, 0, wx.EXPAND | wx.LEFT | wx.RIGHT
+                            | wx.BOTTOM, 5)
+                made[str(field.get('id') or label)] = (kind, control)
+            panel.SetSizer(box)
+            outer.Add(panel, 1, wx.EXPAND)
+            buttons = dialog.CreateButtonSizer(wx.OK | wx.CANCEL)
+            if buttons is not None:
+                outer.Add(buttons, 0, wx.ALL | wx.ALIGN_RIGHT, 8)
+            dialog.SetSizer(outer)
+            outer.Fit(dialog)
+            dialog.CentreOnScreen()
+            try:
+                if dialog.ShowModal() != wx.ID_OK:
+                    if on_kept is not None:
+                        on_kept(None)
+                    return
+                answers = {}
+                for name, (kind, control) in made.items():
+                    if kind == 'check':
+                        answers[name] = bool(control.GetValue())
+                    elif kind == 'choice':
+                        answers[name] = int(control.GetSelection())
+                    else:
+                        answers[name] = str(control.GetValue())
+                if on_kept is not None:
+                    on_kept(answers)
             finally:
                 dialog.Destroy()
         finally:
