@@ -517,6 +517,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'gamepad_mode_guide_pl.md': ('Tryby gamepada', 'Twórz własne tryby sterowania gamepadem dla TCE'),
         'shell_addon_guide_pl.md': ('Dodatki powłoki', 'Dokładaj do pulpitu, paska zadań, menu Start i przeglądarki plików - albo zastąp menu Start własnym'),
         'settings_interface_guide_pl.md': ('Interfejsy ustawień', 'Zastąp okno ustawień Titana własnym - stroną HTML, konsolą, czymkolwiek'),
+        'cling_guide_pl.md': ('Aplikacje Cling (Klango)', 'Uruchamiaj aplikacje Klango w Titanie - i pisz własne na tej samej platformie'),
         'action_api_guide_pl.md': ('Action API', 'Jak jedna część Titana prosi drugą o zrobienie czegoś - i jak Twój dodatek udostępnia swoje funkcje'),
         'client_api_guide_pl.md': ('Klienci Titana (własny program)', 'Jak dołączyć własny program do Titana jak równy z równym - tak, jak robi to dodatek do NVDA i most eltenowy'),
     }
@@ -533,6 +534,7 @@ def create_index_page(output_dir, all_files, language='pl'):
         'gamepad_mode_guide_en.md': ('Gamepad Modes', 'Build custom gamepad control modes for TCE'),
         'shell_addon_guide_en.md': ('Shell Add-ons', 'Add to the desktop, taskbar, Start menu and file browser - or replace the Start menu with your own'),
         'settings_interface_guide_en.md': ('Settings Interfaces', "Replace Titan's settings window with your own - an HTML page, a console, anything"),
+        'cling_guide_en.md': ('Cling Applications (Klango)', 'Run Klango applications inside Titan - and write your own on the same platform'),
         'action_api_guide_en.md': ('Action API', 'How one part of Titan asks another to do something - and how your add-on offers its own functions'),
         'client_api_guide_en.md': ('Titan clients (your own program)', 'How your own program joins Titan as an equal - the way the NVDA add-on and the Elten bridge do'),
     }

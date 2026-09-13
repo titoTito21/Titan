@@ -81,6 +81,9 @@ LAYERS = {
             't': ('status', lambda: _('Is Titan there')),
             's': ('share_names', lambda: _('Share names with Titan Access')),
             'o': ('local_model', lambda: _('The local recogniser')),
+            'w': ('titan_actions', lambda: _('Everything Titan offers')),
+            'n': ('titan_menu', lambda: _('The Titan menu')),
+            'i': ('titan_window', lambda: _('Titan itself')),
         },
     },
 }

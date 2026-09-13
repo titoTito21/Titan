@@ -134,6 +134,16 @@ def run_menu(entry):
     return _did('menu.run', entry=entry)
 
 
+def macros():
+    """The user's own macros. `[{'name', 'shortcut', 'kind'}]`."""
+    return _rows('macros.list', 'macros')
+
+
+def run_macro(name):
+    """Run one of them. Titan answers what it did."""
+    return LINK.run_action('macros', 'run_macro', name=name)
+
+
 def views():
     """The lists Titan's own window is showing."""
     return _rows('views.list', 'views')
@@ -142,14 +152,20 @@ def views():
 # --------------------------------------------------------------------------- #
 # Titan's settings, as data
 # --------------------------------------------------------------------------- #
-def settings():
+def settings(category=''):
     """Every category and every control in Titan's settings window.
 
     Titan reads this off the window itself (`src/settings/ui_model.py`), so
     a setting added to Titan is here the same day with no table on this
     side to fall out of step - which is the whole reason it is worth
     rendering rather than re-listing.
+
+    ``category`` asks for one of them by name, which is what re-reading a
+    page after a setting was changed wants: the whole window is a hundred
+    and fifty controls to build a list nobody is looking at.
     """
+    if category:
+        return _rows('settings.screen', 'categories', category=category)
     return _rows('settings.screen', 'categories')
 
 

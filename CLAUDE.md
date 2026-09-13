@@ -5362,7 +5362,7 @@ another program has taken hold of it.
   switch on it is a real check item rather than "(on)" written into a
   label. Same rule the Titan shell and the Elten bridge each arrived at
   independently.
-- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376). Build with
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (1121). Build with
   `python nvda-addon/build.py`, which refuses a manifest NVDA could not
   read or a module `__init__.py` imports and the zip has not got - the two
   ways to ship an add-on that installs and is then simply absent.
@@ -5849,7 +5849,7 @@ name. That is what a sighted person reads off the layout before a word
 arrives. Everything else is left to NVDA, which knows about tables,
 landmarks and browse mode and is better at all of them than this is.
 
-- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376).
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (1121).
   `nvda-addon/tests/check_live_nvda.py` is the other half - it joins the
   bus, waits for the add-on, and asks the NVDA that is really running what
   it can take, what it has really done and how it would read the control
@@ -6562,11 +6562,688 @@ Nothing here invents a gesture vocabulary.
     is allowed to read the screen and speak. That is NVDA's own design, and
     it is what makes a double tap, a hold and a tap-and-hold possible.
 
-- Tests: `nvda-addon/tests/test_titan_enhancements.py` (376). Nothing in
+#### A gesture is called what NVDA binds it as
+
+Reported as "the touchpad is broken, the gestures still do not work" - after
+every earlier fault in it had been found and fixed, and with the numbers
+saying the pad was perfect: **4306 contacts and 539 gestures recognised**.
+
+The live NVDA's log said the rest in one line: `first gesture:
+ts(TouchMode.OBJECT):hoverdown`. NVDA binds its touch gestures as
+`ts(object):hoverdown` - the mode's VALUE - and `touchHandler.TouchMode` is
+an enum whose `str()` on this Python is its repr. So every gesture this
+add-on emitted carried a name **no binding in NVDA could match**,
+`executeGesture` raised `NoInputGestureAction` every single time, and the
+handler swallowed it with a comment saying that most gestures are bound to
+nothing. A pad that ran nothing looked exactly like a pad that worked.
+
+- **The gesture is built and then ASKED what it is called**
+  (`_named_as_nvda_binds_them`). Deciding which of the two NVDA wants is a
+  question about somebody else's Python version; a name with `TouchMode.` in
+  it is made again with the plain string, and what worked is remembered for
+  the session (`mode_as`), so it is one probe per session rather than one per
+  finger.
+- **"Nothing is bound to it" and "it broke" are different answers**, and the
+  handler counted neither. `ran`, `unbound` and `failed` are in the report
+  now, with the reason for a failure - which is the number that would have
+  said this in a second.
+- **And it can be checked without a finger.** `selftest`'s `the touchpad's
+  gestures` asks NVDA what the mode is, what its value is, how NVDA's own
+  map spells a touch gesture, and what the pad has really done. Every
+  earlier touchpad fault needed a real drag; this one is a name.
+- Verified live after the fix: `contacts 764, gestures 32, **ran 20**,
+  unbound 12, failed 0` - where it had been 0 of 539.
+
+#### The Polish said the wrong thing, and now says the right one
+
+Reported by somebody reading it: "the Polish seems nonsense in places, like
+`Titan w ustawieniach`, a grammatical error, use a dictionary". All of it was
+true, and the four faults were four different kinds:
+
+- **`Titan's own settings` -> `Titan w ustawieniach`** - "Titan in the
+  settings", which is not what that group of settings is. Now `Ustawienia
+  samego Titana`.
+- **`recogniser` -> `rozpoznawacz`**, in nine places: a word that is in no
+  dictionary and nowhere else in this repository. Windows' OCR is
+  `rozpoznawanie tekstu`; the model that is downloaded is a `model
+  rozpoznawania`.
+- **`strzalkami`** - a missing letter, in the very sentence under the group
+  that was named wrongly.
+- **Sentences translated word by word**: `To śledzi zamiast tego wskaźnik`
+  ("this follows instead the pointer"), `Nic jeszcze nie pytano`, `Mów, na co
+  ustawienie jest ustawione`, `Okna nie do odczytania`, and a `(AI)` in a
+  menu whose other entries said `(SI)` - Titan's own Polish says SI 218 times
+  and AI only in the product name AI OCR. Forty entries were rewritten, and
+  every form that addressed the reader as a man (`Co utworzyłeś`, `gdy
+  patrzyłeś`, `gdzie go wybrałeś`) is now genderless, which is what NVDA's
+  own Polish does.
+- `przy pomocy` -> `za pomocą` throughout: the first is for a person's help.
+
+**The machine-checkable half is now checked**
+(`.claude/skills/bug-fixer/scripts/check_translation.py <file.po>`): a
+placeholder that changed name (`{count}` written as `{ilosc}` raises
+`KeyError` in front of the user), a string left in English or untranslated, a
+lost keyboard accelerator, a sentence that lost its full stop, a word written
+without its diacritics, and a gendered form. It runs from the suite
+(`ThePolishSaysWhatTheEnglishSays`) so none of it can come back.
+
+**Every rule in it was earned by a wrong report**, which is the only reason it
+is worth running: the first version flagged `klawisz`, `wiersz`, `polecenie`
+and `uruchom` as missing their diacritics (they have none), `{what}` as
+English left in a Polish sentence (it is a placeholder name), and `właśnie`
+and `modułem` as gendered verbs (they are not verbs). It now reports nothing
+on 1082 entries.
+
+Run against Titan's own catalogues it finds no placeholder faults - nothing
+crashes - and **about 250 strings with no Polish at all**: `network.po` 95,
+`system.po` 47, `telegram.po` 29, `gui.po` 25, `accessibility.po` 21,
+`settings.po` 15, plus 45 in `network.po` left as the English. Those are a
+translator's afternoon rather than a bug, and they are where a Polish user
+still sees English. One slip of the same kind as the add-on's was fixed
+there: `Error` was `Blad`.
+
+#### Titan's settings, walked - and the level that was missing
+
+Reported as "in the walked settings window the categories are bugged, it
+says to say which control you want to press", with one instruction:
+**look in `settingsgui.py`**. That is where the answer was.
+
+Titan's settings window is a list of **categories** down one side and the
+controls of the chosen one beside it, and `settings.screen` answers
+exactly that shape - `{'categories': [{'name', 'items'}]}`. The walked
+page (`nvda-addon/.../titanWalk.py`) read a category **as a control**:
+it was announced as "Ogólne, setting", and Enter sent
+`_label_of(row, 'id', 'label')` of a dict that carries neither, so Titan
+was asked to press a control called nothing and answered
+**"Say which control to press."** - for every category there is. The page
+was one level short, and the message the user heard was Titan being
+perfectly correct about a question nobody meant to ask.
+
+- **A category is a category, and it is walked INTO.** `Ogólne (12)` says
+  how much is behind it, Enter opens the controls, Escape comes back.
+  Measured against the running Titan: 15 categories, 153 controls, every
+  one of them with an id.
+- **Enter on a control does the one obvious thing to that kind**, and the
+  kinds are the nine `ui_model.py` already names. A tick box is set to the
+  opposite of what it holds; a choice or a list opens its answers as
+  another level, with the one in force marked `now`; a tick list opens its
+  options and Enter ticks one **in place** - the level is not put up again,
+  because that would say the title and then the row, which is two
+  announcements for one keystroke; a field is asked for in a real box; a
+  button is pressed; something to read is read again. A kind this reader
+  has not been taught says so rather than doing nothing.
+- **One keystroke, one announcement, and the row is true when it is
+  re-read.** The value that was set is known here, so the row is relabelled
+  before it is spoken; Titan is then asked for that category again on a
+  worker and the rows follow **silently** - one setting can move another,
+  and a row re-read on top of an announcement erases it.
+- **Setting something does not close the list.** `_on_a_thread` stops the
+  walker, which is right for "start that application" and wrong here:
+  somebody setting one thing in a category is nearly always setting the
+  next one too. `_without_closing` is the same round trip that leaves the
+  level where it is, and `palette.show` grew an `at` so that coming back
+  out of a setting lands on the setting rather than on the top of forty.
+- **Save is at the end of the categories**, with Put them back beside it.
+  Titan's own answer to setting one is "Nothing is written until you save",
+  so a walker with no save was a window in which every answer the user gave
+  was thrown away when they left it. The first change says so, once, joined
+  to the line rather than said after it; the Save row then carries it.
+- **A field is asked for with the walk CLOSED**, because the palette
+  borrows the arrow keys and a text box opened over it would have its own
+  arrows taken away. `dialogs.ask_text` grew an `on_cancel` for the other
+  half of that: cancelling is an answer, and a caller that cannot hear it
+  leaves somebody with neither the box nor the list. Where there is no wx
+  to ask with, the walk is not closed at all.
+- **A tick list is said as WORDS, never as the list it is** - and this was
+  wrong in three places at once, on both sides of the wire. Its value
+  really is a list, and a list put into a row or a sentence through `str()`
+  is `['tNotes', 'tEdit']`: brackets, quotes and commas, read out one
+  punctuation mark at a time. The window's own `_setting_line` did it, the
+  walked row did it, and **Titan's own success sentence did it** -
+  `_set_value` answered "Add-ons the AI may drive is now ['tWeb']", which
+  is what every client of that action then reads aloud. `_said()` is the
+  one place a value becomes words now.
+- **And `_set_value` could not take a real list at all.** It stringifies
+  whatever arrives before it parses it, so a JSON array - which is what a
+  list IS over the bridge, and the obvious thing for a client to send -
+  came back through `str()` in Python's own spelling, did not parse, fell
+  through to the `|` split, and left the setting holding one entry whose
+  text was the repr of the whole list. Nothing raised. It takes either
+  shape now.
+- **Three switches, in a group of their own** (Settings -> Titan
+  enhancements -> Titan itself): say what a setting is set to, say how many
+  are in a list, and save Titan's settings straight away. The last is off
+  and deliberately so - saving is Titan's own `OnSave` with the SAPI
+  registration, the system monitor, the shell and the menu bar hanging off
+  it, which is a great deal to do on every keystroke.
+- Tests: `TitansSettingsAreWalkedCategoryFirst` (34) in the add-on's own
+  suite, proved by putting the bug back and watching them name it, and
+  `TickListOverTheActionsTests` (5) in `tests/test_settings_interfaces.py`
+  for Titan's half. Live-verified against the running Titan: all 153
+  controls built a row, none of them read as Python and none of them was
+  missing an id.
+
+- Tests: `nvda-addon/tests/test_titan_enhancements.py` (1121). Nothing in
   them speaks, opens a window, reaches the bus or touches the user's own
   NVDA configuration - the stores are exercised against a temporary
   configuration folder of their own, because a test that wrote into the
   real one would change the reader of whoever ran it.
+
+#### A voice belongs to the synthesizer it came from
+
+Reported as "I set a voice on another synthesizer, save, and NVDA fills
+up with errors". Two faults, and each one alone was enough.
+
+- **The manager CRASHED on a synthesizer with no variants.**
+  `getattr(synth, 'availableVariants', None)` looks safe and is not:
+  these are `AutoPropertyObject` properties, so reading one CALLS the
+  getter, and `synthDriverHandler._getAvailableVariants` raises
+  `NotImplementedError` - which `getattr`'s default does not catch,
+  because it catches `AttributeError` and nothing else. Choosing a voice
+  on such a synthesizer ended in an unhandled exception with the dialog
+  half filled in; over a bridged driver the same thing arrives as an
+  `rpyc` remote traceback. `speaking._ask` is now the one way a driver's
+  property is read.
+- **A voice id means nothing outside the synthesizer it came from**, and
+  it was being pushed onto whichever driver NVDA was using. In the user's
+  own table `controller` was sapi5_32's
+  `HKEY_LOCAL_MACHINE\...\RHVoice\Natan` while NVDA ran eSpeak:
+  **261 `espeak_SetVoiceByName: code 2` in four minutes**, and not one of
+  them audible. It cannot be caught after the fact either - NVDA's eSpeak
+  driver queues the change onto a thread of its own, so the failure is
+  logged THERE and `try` around the assignment catches nothing. So the
+  driver is ASKED first (`has_setting`): a voice or a variant it has not
+  got is not set, which is what the module's own docstring had always
+  promised.
+- **And the setting had never once worked.** NVDA has speech commands for
+  pitch, rate and volume and none at all for a synthesizer, so a class
+  naming one could only ever have its voice pushed at the current driver.
+  `voices.say_whole` had existed for this since it was written and only
+  `dialogs.report` used it. Now `interject._elsewhere` does: a class that
+  IS a whole utterance and names another synthesizer is taken away from
+  NVDA (`[]`, which `speak()` answers by returning at once - checked
+  against NVDA's own source) and said by a driver of ours.
+  - **Braille is fed by hand there**, because `speak()` feeds none:
+    `ui.message` brailles separately and what another program says
+    through the controller is not brailled by anybody, so a message
+    spoken elsewhere would be one a braille reader never gets.
+  - **And the key that shuts the reader up reaches it.** A driver of ours
+    is not in NVDA's speech queue - that is the point of it - so
+    `speaking.follow_cancel` wraps `cancelSpeech`, the way `origin` wraps
+    the speech functions and for the same reason, and puts back only what
+    it put there.
+  - `nvda.diagnostics` carries `said_elsewhere`, `cancel_followed`,
+    `our_drivers` and `drivers_refused`: a class set to another
+    synthesizer and a count that never moves is this fault seen from
+    outside, which is the only way it was ever going to be noticed.
+- **"When there is new content in the terminal there is an NVDA error" is
+  the same fault, and the chain was read out of NVDA rather than guessed
+  from a timestamp.** A console is `NVDAObjects.behaviors.Terminal`,
+  which is a `LiveText`; `LiveText._reportNewText` announces new output
+  with **`speech.speakText`**; `origin.MARKS` marks `speakText` as the
+  **controller** class; and that is the class the user had set to another
+  synthesizer. So every line the terminal produced set a voice eSpeak has
+  not got - one error per LINE, which is why a build or a test run filled
+  the log. The add-on's own terminal review was never the fault: it is
+  `speakMessage`, a different class.
+  - Reproduced through the REAL speech filter and proved by putting both
+    halves of the bug back: 20 lines of output gave 20
+    `espeak_SetVoiceByName: code 2` and no braille, and the same 20 now
+    give none, are spoken by the synthesizer the class names, and reach
+    the braille display.
+- Tests: `AVoiceBelongsToItsOwnSynthesizer` (15) and
+  `NewTextInATerminalIsNotAnErrorPerLine` (6).
+
+#### Inside a guest: the pointer is the reader
+
+`nvda-addon/.../guest.py`. A virtual machine's window is another
+computer's screen, and a screen is pixels. `surface` answers "what is on
+this screen" by photographing the whole of it, which is right for
+arriving in a window and wrong for the question somebody working IN a
+guest asks all day: **what am I on now**.
+
+So: the pointer, and two things about it that the HOST knows exactly.
+
+- **What it is SHOWING names the control.** An I-beam is a text field, a
+  hand is something to press, an hourglass is a guest that is busy.
+  `iconNames.cursor_now` compares HANDLES, which is exact and free - and
+  answers nothing at all inside a guest, because the virtual machine
+  builds its cursor out of the guest's own bitmap and the handle is one
+  nobody has ever seen. **That is why a reader was silent in a VM.** So
+  where the handle is unknown the cursor is DRAWN and compared against
+  the standard shapes drawn the same way - `dialog_kind`'s own technique,
+  the third feature to use it. Measured: **14 of 14 shapes named from the
+  picture alone, ~5 ms each**, proved by naming a COPY of each standard
+  cursor, which is exactly a handle nobody has seen.
+- **Where it IS names the one strip worth reading** - the full width of
+  the guest and 46 pixels tall, because what a row SAYS is very often not
+  under the pointer: a tick, a shortcut and a label all sit away from it.
+- **The model is the second question, and it reads the WHOLE guest.** A
+  guest is what Windows' own recogniser is worst at - somebody else's
+  screen, at somebody else's resolution, scaled into a window - so when
+  the strip comes back empty, Titan's local model is asked. Once, for the
+  whole screen, and kept: the model is a second or two whatever it is
+  given, so asking it per row would answer the pointer later than the
+  pointer moved, and asking it once leaves every row in hand.
+- **There is no key**, which is the whole design. Ctrl+G is VMware's own
+  and belongs to VMware; what a reader has to do is notice that the
+  window in front is another computer's screen, which it can do by
+  itself. `event_foreground` is the only thing that starts it.
+- **The host's own half of the window is left alone.** A virtual
+  machine's menu bar, tabs and status line are ordinary controls and NVDA
+  reads them properly already, so nothing is said unless the pointer is
+  really on the guest's rectangle.
+- **The arrows and Tab, which the pointer says nothing about.** Following
+  the pointer answers "what is under my mouse"; moving through a guest's
+  icons, its Start menu or a game's options is done with the KEYBOARD and
+  the mouse never moves. Nothing on the host changes when it happens -
+  no focus event, no caret, no object - so the only thing that can be
+  read is the picture, and the only cheap moment to read it is just after
+  a key that could have moved something. This is what the patent
+  literature calls active-element detection and what Jieshuo's "virtual
+  screen" does on Android: **a key, then the frame, then what CHANGED.**
+  Three questions in order, first answer wins:
+  1. **What is highlighted.** `virtualInput.highlights` finds the row
+     whose background is unlike the window's own, which in a drawn
+     interface IS the selection - there is nothing else in a picture that
+     says which entry the arrows are on. `localOcr` has marked every
+     reading with it since it was written and nothing had ever read it.
+  2. **What changed** - for a game that marks its choice with an arrow or
+     a colour rather than a bar. More than `CHANGED_AT_MOST` new rows is
+     a screen that has been replaced, not a key, and is left to the
+     watcher.
+  3. **Nothing**, which is the commonest answer and the right one: an
+     arrow inside a text field moves a caret and no rows, and a reader
+     that spoke on every keystroke would be unusable exactly where people
+     type most.
+  - Every one of those keys is **sent on first and unconditionally** -
+    they belong to the guest, or to the game - bound only while such a
+    window is really in front and given straight back. Enter is among
+    them because it is where a new screen appears; Space is not, because
+    it is typing.
+- **A guest, a game and a window that draws its own interface are one
+  problem**, which is what the user asked for in as many words. All three
+  are a picture with a highlight in it and no focus event behind it.
+  `surface.looks_drawn` already decides the second and third carefully (a
+  terminal, a browser and a dialog all have controls and are none of this
+  layer's business), and nothing is said at all while `surface`'s own
+  watcher is watching that window - two readers saying the same row is
+  worse than one.
+- **A name that does not exist is the bug this shipped with, TWICE**, and
+  it is worth writing down because it is invisible both times: `guest.py`
+  read `surface.is_vm` where the function is
+  `surface.is_virtual_machine` (four places), and the plugin read
+  `compat.core` where `compat` had no `core` at all. Every one was inside
+  a `try/except`, so it imported cleanly, passed every test, and the
+  whole reader was dead while reporting itself as working.
+  - **The checker for exactly this already existed and was not run.**
+    `.claude/skills/bug-fixer/scripts/check_names.py` asks question two -
+    "does every `module.attribute` read off a module of this package
+    exist in that module" - and names both in a second. The lesson is
+    about when it is run: these checkers are for code being WRITTEN, not
+    only for code being audited.
+  - **And a second checker written here was measurably worse.** A
+    hand-rolled sweep found `surface.is_vm` and was **blind to
+    `compat.core`** - a check passing for the wrong reason, which is the
+    failure it existed to prevent. It was thrown away;
+    `EveryNameReadAcrossModulesExists` runs the repository's own script,
+    so there is one implementation and the suite makes it run. Proved by
+    putting each bug back and watching it named.
+- **A guest is a SCREEN, and a screen is not a list** - which is what
+  "it still is not right" turned out to mean. `virtualInput.highlights`
+  finds a whole ROW whose background is unlike the window's own: right
+  for a menu, wrong for a desktop. Measured on the real Windows 95
+  guest, the most highlighted-looking thing on it is the **taskbar** - a
+  grey band across the bottom of a teal screen - so arrowing between
+  icons was answered "Start", every time, because the taskbar never
+  moves and a selected icon's label is a sixth of a row wide.
+  - So the first question is **what CHANGED**, which is the method the
+    patent literature calls active-element detection. Pressing Down
+    changes exactly two small places - the label that lost the selection
+    and the one that gained it - and the one that gained it is the one
+    that is now unlike the background (`virtualInput.fingerprint`,
+    `changed_blocks`, `regions_of`, `unlikeness`). Nothing in that
+    depends on the theme, the language, the layout, or on the selection
+    being an inverted bar at all. The row detector is the fallback, for
+    the first key of all and for a menu.
+  - Measured on the layout that caused this: the row detector answers
+    the taskbar; the new one answers **two regions** - `My Computer`
+    (unlikeness 96, it lost the selection) and `Network Neighborhood`
+    (143, it gained it) - and picks the second. On the LIVE guest's own
+    pixels, a selection-sized patch is found at the right place in 34 ms.
+  - **Only the changed region is read**, so `localOcr.from_window` grew a
+    `source` rectangle and `read(..., hwnd=)` works out where that screen
+    rectangle is inside the window.
+- **The keys may never reach the reader at all**, which is the other half
+  of why this watches the picture. A virtual machine that has grabbed the
+  keyboard has a low-level hook of its OWN, and whichever hook was
+  installed last is called first - so inside a grabbed guest NVDA may not
+  see the arrows. The screen changing is the one thing that is always
+  true, so the watcher asks `after_key` on its own tick and a key, when
+  it does arrive, only makes the same question be asked sooner. Measured:
+  a tick is 7-14 ms and `BLOCKS_ACROSS` holds it there whatever the size
+  of the guest - 640x480, 1280x800 and a maximised 2358x1285 all cost
+  about the same.
+- **A picture that is MOSTLY one colour is not blank**, and getting that
+  wrong made the whole feature silent on the user's own machine. `_blank`
+  sampled a twelve-by-twelve grid and refused anything with two colours
+  or fewer in it - and a Windows 95 desktop is **97% one colour**, so
+  every capture of a maximised guest was thrown away and the reader fell
+  back to photographing the SCREEN, which is whatever is in front of the
+  guest. It now refuses only a capture that is one colour and nothing
+  else, which is what a window that will not draw itself really gives.
+  Measured: 132 colours in the very picture it was calling blank.
+- **Arriving is not the only way to be somewhere.** It started from
+  `event_foreground` alone, so switching it on WHILE looking at a guest -
+  which is exactly what somebody does - fired no event and nothing ever
+  began: the setting appeared to do nothing at all. It is asked on the
+  focus path as well now, where refusing costs one class check. Found by
+  trying to drive it from outside and discovering that **Windows will not
+  let a background process change the foreground window**
+  (`SetForegroundWindow` returns 0), which is also why the user's own
+  machine would have shown it.
+- **It takes the window over from `surface` rather than standing aside.**
+  Both read the guest and they answer different questions: the watcher
+  polls and announces what CHANGED, which on the live guest meant it said
+  "start Window-Eyes 2:50 AM" - the clock ticking - while the arrows moved
+  through icons and were told nothing about. This answers the key and says
+  the highlighted row. The first rule written here was the opposite
+  ("never on top of the watcher") and it was the bug: the watcher being
+  busy with a clock kept the better reader from running at all.
+- **Verified in the real NVDA, on the live guest.** After a restart, with
+  the switch on: `asked: 43`, `entered: 4`, `took_over: 1`, **`keys: 24`**,
+  `read: 15`, **`said: 33`**, **`how: "highlight"`** - twenty-four
+  navigation keys answered and thirty-three announcements, the last
+  decided by the highlight, with `surface` standing down behind it.
+- **`NVDA+control+f3` reloads NEITHER the code nor the catalogue**, which
+  is worth knowing before an afternoon goes into it: it re-imports the
+  package and every module is already in `sys.modules`. A file that never
+  existed before DOES load, so half the add-on is new and half is the copy
+  from start-up - and the new half then reports the old half as broken.
+  Launching `nvda.exe` with no arguments replaces the running instance,
+  which is what NVDA's own `core.restart` does.
+- Off by default (Settings -> Titan enhancements -> Virtual machines), and
+  everything it uses is local: the host's pointer and a strip of a window
+  the host already owns. Nothing is installed in the guest and the guest's
+  memory is never read.
+- **A screen capture reads whatever is IN FRONT, and that was wrong for
+  the one case this exists for.** Verified against a live VMware guest
+  (Windows 95, `MKSEmbedded` 640x480) sitting BEHIND a terminal, with the
+  add-on's own code:
+  - a screen capture of the guest's rectangle came back as the
+    **terminal's text** - and Titan's own `ocr.read_local`, asked about
+    the guest, answered with the terminal's words, which would have been
+    announced as though they were the guest;
+  - `PrintWindow` **failed outright on all three of its flags**, pure
+    black, which is what a surface drawn by Direct3D gives;
+  - the window's **own device context** gave the real thing in **9 ms**:
+    92% of the points the teal of a Windows 95 desktop, 5% the grey of
+    its taskbar, `virtualInput.highlights` finding the taskbar at
+    y=452..480, and `guest.selected_in` answering **'Start'**.
+  So `localOcr.from_window` is what a guest is read through
+  (`read(..., hwnd=)`), and a FLAT capture is refused rather than
+  returned - which is what makes a window that will not draw itself fall
+  back to the screen, where it belongs.
+- **And the whole chain was then run on that guest, end to end, with the
+  production modules**: `from_window` 8 ms, the picture as an
+  `(h, w, 3)` array 2 ms, `local_model.read_array` **4 615 ms for 17
+  lines, every one of them right** - `My Computer`, `Network
+  Neighborhood`, `Recycle Bin`, `Inbox`, `Outlook Express`, `Internet
+  Explorer`, `Online Services`, `Start`, `2:37 AM`, and the `JAWS 5.10`
+  and `Window-Eyes` shortcuts that guest has on its desktop - then
+  `virtualInput.highlights` finding one highlight at y=452..480 and
+  `guest.selected_in` answering **'Start'**. That measurement is also
+  what set `MODEL_KEPT`: a reading that takes 4.6 seconds and is kept for
+  4 expires before another could be asked for, so nothing is ever reused;
+  it is 8 now.
+- VMware Workstation is what this was measured against, on a real
+  Windows 95 guest. VirtualBox and QEMU are recognised as virtual
+  machines (`surface` already knew their window classes) and get the same
+  treatment; that half is written and not yet live-verified.
+- Tests: `ThePointerIsTheReaderInsideAGuest` (13),
+  `TheArrowKeysAreReadInAPicture` (12) and
+  `EveryNameReadAcrossModulesExists` (1), plus `the guest's pointer` in
+  `selftest.py`, which names a copied cursor and reads the pointer's own
+  row with the real recogniser inside the running NVDA.
+
+#### No agent in the guest, because there cannot be one
+
+Asked for as a low-level hook inside the guest, and then settled by one
+sentence: **"during an operating system's installation you cannot run an
+agent"**. That is right, and it is the case a reader is needed for most - an
+installer painting text on a screen, with no guest system yet, no
+accessibility layer, no tools and nothing to run a program in. An answer
+that needs something inside the guest is an answer that is missing exactly
+when it matters. So nothing inside the guest is required, and **the guest's
+operating system does not matter at all**: Windows, Linux, macOS, a BSD, a
+partition tool, a BIOS menu - it is a picture with a highlight in it, and
+that is what is read.
+
+- **The picture comes from the virtual machine's own window** - its device
+  context, 9 ms, measured (`localOcr.from_window`) - and it is read by the
+  local model and by `virtualInput`'s change detection, which is what
+  answers the arrow keys. That whole chain was already live-verified on a
+  real Windows 95 guest and needs no agent, no network and no tools.
+- **The screen review reads the GUEST, not VMware's window**
+  (`ocrReview._the_guest_in`). The foreground window is the machine's FRAME,
+  whose top is VMware's own menu bar, tab strip and status line - controls
+  NVDA reads properly already, and a recogniser reading them again is thirty
+  lines of somebody else's furniture in front of the installer. The guest is
+  painted on a child window of its own, which `surface.display_of` already
+  finds. Every rectangle stays in screen coordinates, so **Enter still
+  clicks where the words are** - which in a graphical installer is how Next
+  is pressed.
+- **Only what CHANGED is said.** Reported as "Start, Start, Start without a
+  break", and that is what it did: `after_key`'s de-duplication was `the
+  same words AND less than 0.35 s ago`, and the loop that calls it runs on a
+  tick - so a pointer resting anywhere, or a guest repainting under a still
+  pointer, said the same row three times a second for as long as it was left
+  alone. A time window is the wrong instrument: what makes a row worth
+  saying is that it is not what it was. `report()['unchanged']` counts the
+  silence, because a reader saying nothing and a reader that has stopped are
+  the same thing from outside.
+
+**And VMware itself is asked** (`vmware.py`), because `vmrun` ships with
+Workstation and the hypervisor knows what the host's accessibility layer
+cannot. Measured against a live Windows 95 guest on this machine:
+
+- `list` - which machines are running, by `.vmx`. **0.30 s.**
+- `readVariable <vmx> runtimeConfig displayName` - **"Windows 95"**, which
+  is what the reader now says on arriving rather than "VMware": somebody
+  with a Windows 95 and a Debian open needs to know which they are in.
+- `checkToolsState` - `running`, on a guest from 1995.
+- `readVariable <vmx> guestVar <name>` - a guest variable, with **no login,
+  no port, no socket, no address and no firewall**. Something in the guest
+  that runs `vmware-rpctool "info-set guestinfo.titan.say 4|pointer|Start"`
+  reaches this reader through the hypervisor. Verified end to end in the
+  running NVDA: written, read, said once, and **not said twice** - a
+  variable holds what it was last set to for ever, so a counter in front is
+  how a guest repeats itself and the reader takes it off again.
+
+What VMware will NOT do, which is why none of it is on a timer: **`vmrun
+captureScreen` is a guest operation** (`Anonymous guest operations are not
+allowed... You must call VixVM_LoginInGuest`), so the picture does not come
+from VMware and does not need to; and **`runProgramInGuest` never answered
+at all** on that guest - tools reporting `running`, killed by hand at 120 s.
+So every call has a hard deadline, the answers are cached, and anything
+needing the guest is asked once and remembered as unavailable. Nothing here
+is on the reading path either: a `vmrun` call is a PROCESS, 0.3 s, twenty
+times what the layer that reads a control may cost, so `vmware.name_now`
+answers only what is already known (0.9 ms) and `vmware.warm` finds out on a
+thread beside it.
+
+**The agent channel still exists, off, for the one thing pixels cannot
+give**: exact text. `agentLink` listens for `{"token", "kind", "say",
+"rect"}` lines (`agents/guest_agent.py`, which reads a guest through UI
+Automation, MSAA, AT-SPI or the macOS Accessibility API depending on what
+the guest has; `agents/guest_agent.sh` for a guest with no Python;
+`agents/unity/TitanUnityAgent.cs`, a BepInEx plugin that reads
+`TextMeshPro`/`UnityEngine.UI.Text` and `EventSystem`'s own selection, which
+is the only way to get real strings out of an engine that draws its text as
+meshes). It is opt-in, token-checked, and bound to 127.0.0.1 unless a second
+switch says an agent may come from outside. Four traps in that socket, each
+found by measuring rather than by reading:
+
+- **`SO_REUSEADDR` on Windows is not what it is on Unix**: it lets a SECOND
+  process bind a port that is already bound, and connections go to
+  whichever - for a socket whose purpose is to make a screen reader speak,
+  that is another program taking over the user's ear.
+  `SO_EXCLUSIVEADDRUSE` is Windows' answer.
+- **It was started twice**, from the plugin and from `configSpec.apply`:
+  both passed a check that only looked at `_server`, and the first socket -
+  replaced and closed - came out of `accept` and wrote `listening: False`
+  over a channel that was open.
+- **`accept()` timed out.** Something else in the process has called
+  `socket.setdefaulttimeout`, which applies to every socket made
+  afterwards, so the channel gave up a few seconds after opening and
+  reported itself shut while netstat showed it listening. It waits in short
+  turns now and a timeout is the ordinary case. The only reason this was
+  findable is that the loop says why it stopped.
+- **Taking the network back now, not at the next restart**: unticking the
+  guest switch used to leave the socket on 0.0.0.0 until NVDA restarted.
+- The key is never in the diagnostics, which are something a user pastes
+  into a bug report; it is shown in the panel's own **The agent's key...**
+  dialog, in a read-only field, so it can be copied.
+
+Tests: `ASilentGuestIsBetterThanARepeatedOne` (3),
+`VMwareItselfIsAskedRatherThanTheGuest` (9),
+`TheAgentChannelIsOptInAndExclusive` (10),
+`TheScreenReviewReadsTheGuestAndNotVMwaresWindow` (2) - 1148 in the file.
+Live-verified in the running NVDA: the channel listening on 127.0.0.1, a
+line with the wrong key **refused and not answered**, and a guest variable
+read through VMware and spoken once.
+
+#### The guest was never read at all, and a C++ tier so that it is read exactly
+
+Reported as **"but it has to read the VM guest"**, and it was right: the
+reading had been dead the whole time, in the one way this repository keeps
+paying for. `localOcr.from_window` - the whole point of which is that a
+guest must be read from the WINDOW's own device context rather than from a
+screen capture, which reads whatever is in front of it - began with
+
+    from screenBitmap import RGBQUAD
+
+and this NVDA answers `cannot import name 'RGBQUAD' from 'screenBitmap'`: it
+lives in `winGDI` here. So every capture returned None, on a silent path
+among **ten** unexplained `return None`s, and the guest read as an empty
+screen for as long as that line has existed. The reading measured in the
+section above was measured in a standalone probe, where the import happened
+to resolve - which is exactly how a fault like this survives a measurement.
+
+Three things came out of it, and the third is the one worth keeping:
+
+- **The pixel type is taken from where it really lives, or brought.**
+  `_pixel_type()` asks `winGDI`, then `screenBitmap`, and otherwise declares
+  the four bytes itself - it is BGRA, documented since 1990, and a reader
+  must not go blind over the spelling of a class name in somebody else's
+  module.
+- **Every refusal says which one it was** (`_no_picture`), and
+  `localOcr.report()['capture']` carries it. The fault was found by making
+  the ten returns speak, and by nothing else.
+- **A check that reads a guest whatever is in front**, in the running NVDA:
+  `selftest`'s `the guest's screen` finds a virtual machine's own window by
+  class, takes its picture, reads it and reports the lines and the
+  highlighted row. Waiting for the user to be looking at the guest is how a
+  reading fault goes unnoticed for a week. Live: `its own picture came back
+  in 46 ms; 4 lines in 90 ms; highlighted: 'start'`.
+  - **And the window it reads has to be the VISIBLE one.** Measured on this
+    machine: VMware keeps a SPARE `MKSEmbedded` - two children of one frame,
+    both 2358 by 1281, at the same place, one of them invisible and drawing
+    nothing - and a parked Remote Desktop `IHWindowClass` at the full size of
+    the screen. "The biggest child" chose the Remote Desktop one; the spare
+    console answers every rectangle test the real one does. `IsWindowVisible`
+    is the exact question, it costs nothing, and `surface._is_visible` asks
+    `IsWindow` first so an object carrying a handle Windows never heard of -
+    which is every object in the tests - is not refused.
+
+**And then the exact tier, in C++** (`nvda-addon/helper/guestscreen/`,
+`guestscreen.cpp` + `build.bat`, loaded by `guestNative.py`). Asked for as
+"even write the hook in C++ yourself", and there is one honest thing for
+native code to do here. A guest in a TEXT mode - a BIOS menu, DOS, a
+partition tool, the text half of an operating system's installer, which is
+the case an agent can never answer - is not a picture of words: it is 80 by
+25 character CELLS, each one of 256 shapes that have not changed since 1987.
+So it is read by MATCHING, exactly:
+
+- **The glyphs are Windows' own.** `%WINDIR%\Fonts\dosapp.fon` is the
+  Terminal font and holds real FNT resources - 4x6, 5x12, 6x8, 7x12, 10x18,
+  12x16 and 8x12 on this machine - each a full 256-glyph CP437 set, parsed by
+  `vgaFont.py` (a documented format from 1990, about thirty lines). Writing
+  4096 bytes of font into a source file is four thousand chances to be wrong
+  about somebody else's screen, and **the guest cannot be asked**: measured,
+  guest physical `0xB8000` in a running machine's own `.vmem` - which is the
+  guest's whole RAM, on disk, readable from the host in 8 ms - is a hole of
+  zeros, because the VGA aperture is the emulated adapter's memory and not
+  the guest's DRAM.
+  - A table with no ink in it is refused and the next resource tried: the
+    first 12x16-looking header in that file parses to 256 empty glyphs, and a
+    blank font reads every screen as a screen of spaces - the one answer this
+    tier must never give. `sizes()` lists only the sizes `table()` will
+    really answer.
+- **What the C++ does**, and none of it touches another process: `guest_capture`
+  (the window's own DC, with "the window drew one flat colour" reported
+  rather than hidden), `guest_fingerprint` + `guest_changed` (the block
+  arithmetic behind active-element detection - **1.1 ms** for 1920 blocks and
+  **0.01 ms** to find the changed region, measured on this machine's own
+  guest), and `guest_text` (every cell against every glyph). The first
+  version of the matcher took **125 ms** for an 80x25 screen and the row-mask
+  version takes **4**, which is the difference between a tier that can run on
+  a tick and one that cannot.
+- **What makes it safe is what it REFUSES.** A wrong exact reading is worse
+  than no exact reading, so: a cell of one colour is a blank and is neither a
+  hit nor a miss (counting blanks as hits made every cell size score about
+  one - most of a text screen is spaces - so the wrong grid read a screen of
+  nothing and reported it as certain); a cell whose two commonest colours do
+  not cover 95% of it is not a character at all (random pixels have a
+  commonest colour that covers almost nothing, so nearly every pixel counts
+  as ink and the glyph that matches "almost everything set" is the solid
+  block - noise was read as a screenful of blocks); and the grid is believed
+  only when 92% of the INKED cells matched and there are at least 24 of them.
+  A guest VMware has stretched into a big window is filtered, matches
+  nothing, and is left to the model - which is the honest answer.
+- **The rectangles are the characters' own.** `guestNative.reading_of` builds
+  an ordinary `localOcr.Reading` out of the grid, so everything that already
+  walks a reading - the arrow keys, the screen review, Enter to click - works
+  on it, and pressing what was read lands on the character it was read from
+  rather than on a recogniser's guess. The highlighted row comes from the
+  ATTRIBUTE: the row whose background is unlike the rest of the screen is the
+  row the arrow keys are on, which in a text screen is a fact rather than an
+  inference.
+- `guest._read_now` asks the exact tier first and the model behind it. The
+  library is optional by construction - every call answers None without it
+  and Python does the same work more slowly - because a reader must never
+  lose the reading over a build step.
+
+Tests: `AGuestInATextModeIsReadExactly` (8) and
+`TheVgaGlyphsComeFromWindowsOwnFont` (4) - 1159 in the file. They render an
+installer's screen with the real glyphs, read it back, and assert every line,
+the grid, the highlighted entry, and that noise, a flat picture and a missing
+library are each refused.
+
+#### Two words on one picture is worse than no picture
+
+Measured against Windows' own stock icons: **48 of 57 named correctly, 0
+named wrongly, and 9 answering nothing**. The nine were not a threshold
+problem. Windows 11 hands back the SAME ARTWORK for several of its
+`SHGetStockIconInfo` icons - `folder` and `open folder` differ by
+**0.000**, and so do `drive` and `removable drive`, `disc` and `shield`,
+`music` and `computer` - and `_closest` refuses anything whose nearest
+rival is close, which is right and cannot help when the rival is
+identical.
+
+So it is dealt with where the references are built (`iconNames._collapse`),
+and there are exactly two cases:
+
+- the words mean the same thing (`SAME_THING`: an open folder is a
+  folder, a removable drive is a drive) and the general one is the
+  answer, which is what a listener wanted anyway;
+- they do not, and the picture is **dropped** - naming `disc` or `shield`
+  when they are one piece of generic artwork would be inventing a fact
+  about the user's screen, and dropping it also saves comparing against
+  it.
+
+After: **51 named, 0 wrongly, 4 honest refusals.** Tests:
+`AnIconSaysWhichKindItIs` (4).
 
 #### Anybody can write one of these
 

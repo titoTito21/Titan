@@ -46,6 +46,7 @@ os.makedirs('logs', exist_ok=True)
 # occasionally loses everything. `logging_setup` also answers the reason
 # the OTHER two logs here were empty for five months.
 import logging_setup
+from logging_setup import describe_error
 logger = logging_setup.configure('TitanNetServer', 'server.log')
 
 
@@ -883,7 +884,7 @@ class TitanNetServer:
             logger.error(f"[REGISTER] Exception during create_user: {e}", exc_info=True)
             result = {
                 "success": False,
-                "error": f"Server error: {str(e)}"
+                "error": f"Server error: {describe_error(e)}"
             }
 
         # If registration successful, broadcast welcome message
@@ -1944,7 +1945,7 @@ class TitanNetServer:
             return {"type": "submit_app_response", "success": True, "app_id": app_id}
         except Exception as e:
             logger.error(f"Error submitting app: {e}")
-            return {"type": "submit_app_response", "success": False, "error": str(e)}
+            return {"type": "submit_app_response", "success": False, "error": describe_error(e)}
 
     async def handle_approve_app(self, session_id: str, data: Dict) -> Dict:
         """Approve application in repository (moderator/developer only)"""
@@ -1995,7 +1996,7 @@ class TitanNetServer:
             return {"type": "approve_app_response", "success": True}
         except Exception as e:
             logger.error(f"Error approving app: {e}")
-            return {"type": "approve_app_response", "success": False, "error": str(e)}
+            return {"type": "approve_app_response", "success": False, "error": describe_error(e)}
 
     # ================================================================
     # FEEDBACK HUB

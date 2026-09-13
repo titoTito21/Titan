@@ -572,6 +572,26 @@ class TitanAccessHabitsReachEveryReader(unittest.TestCase):
         self.assertFalse(channel.state_suffix('checked'))
 
 
+class TheTabSwitchIsAnnouncedBeforeTheFocusMoves(unittest.TestCase):
+    """"Gry, 2 z 13, gry 2 z 13": the row read by the reader and then
+    Titan's own sentence about it. The announcement REPLACES the reader's
+    report of the row, and a reader can only stand its report down if it
+    was told before the focus event reached it - so the announcement has
+    to go out before `SetFocus`, not after."""
+
+    def test_announce_view_switched_precedes_set_focus(self):
+        import io as _io, os as _os
+        here = _os.path.dirname(_os.path.abspath(__file__))
+        source = _io.open(_os.path.join(here, '..', 'src', 'ui', 'gui.py'),
+                          encoding='utf-8').read()
+        at = source.index('def _cycle_tab_bar') if 'def _cycle_tab_bar' in source \
+            else source.index("new_view = self.registered_views[new_idx]")
+        block = source[at:source.index('vibrate_focus_change()', at)]
+        announced = block.index('self._announce_view_switched(new_view')
+        focused = block.index('ctrl.SetFocus()')
+        self.assertLess(announced, focused)
+
+
 class NothingHereMayRaise(unittest.TestCase):
     """An announcement is made from a focus handler."""
 

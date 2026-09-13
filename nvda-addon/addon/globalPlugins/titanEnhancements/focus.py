@@ -782,6 +782,14 @@ def _maybe_label(obj):
             ok, said = graphics.label_locally(obj)
             if not ok and _label_ai_wanted():
                 ok, said = graphics.label_with_ai(obj)
+            elif not ok:
+                # Which of the two it stopped at matters: the tier order
+                # is the user's own setting, and "Windows read nothing,
+                # and the AI was never asked" is a different situation
+                # from "both tried and neither could".
+                said = ('%s, and the AI was not asked because Windows\''
+                        ' recogniser goes first'
+                        % (str(said or '').strip() or 'it could not be read'))
         except Exception as error:                   # noqa: BLE001
             ok, said = False, str(error)
         _label_done(bool(ok and said))

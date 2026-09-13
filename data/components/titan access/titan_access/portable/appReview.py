@@ -73,7 +73,7 @@ TOGGLEABLE = ('check',)
 _LOCK = threading.RLock()
 _state = {'on': False, 'session': '', 'name': '', 'screen': {},
           'at': 0, 'inner': 0, 'moves': 0, 'presses': 0, 'why': '',
-          'menu': None, 'typing': None}
+          'menu': None, 'typing': None, 'field': None, 'letter': 0}
 
 
 def report():
@@ -186,7 +186,7 @@ def start(name, then=None):
             _state.update({'on': True, 'session': token, 'at': 0, 'inner': 0,
                            'name': str(data.get('application') or name),
                            'screen': data.get('screen') or {}, 'why': ''})
-        said = str(data.get('said') or '')
+        said = ' '.join(announcements(data))
         if data.get('mirror'):
             # A mirror is what Windows can see of the window, which is a
             # weaker thing than the application's own account of itself,
@@ -251,6 +251,64 @@ def refresh():
     return True, _('Reading it again')
 
 
+def _arrived_somewhere(screen):
+    """What to say when the application has moved us. ``''`` for nothing.
+
+    **A sub-window has to be announced.** An application that opens one
+    replaces everything the cursor was walking, and a reader that says
+    only the first control leaves somebody working in a window nobody
+    told them they were in. It is said once, on arriving - not per
+    control - which is the rule the dialog and ancestry layers already
+    follow.
+    """
+    if not isinstance(screen, dict):
+        return ''
+    with _LOCK:
+        before = _state.get('screen') or {}
+    if before.get('id') == screen.get('id') \
+            and bool(before.get('modal')) == bool(screen.get('modal')):
+        return ''
+    title = _text(screen.get('title'))
+    if screen.get('modal'):
+        # Translators: said on arriving in an application's sub-window.
+        # {title} is what the sub-window is called.
+        return _('{title}, sub-window').format(title=title) if title \
+            else _('Sub-window')
+    if not before:
+        return ''
+    # Back out of one, which is news of the same kind: the keys mean
+    # something different again.
+    return title
+
+
+def announcements(answer):
+    """What the application ANNOUNCED, as sentences. ``[]`` for none.
+
+    **`said` is a list, not a string.** The shim sends what the
+    application announced with the position, pitch and interrupt it asked
+    for - `[{'text': ..., 'position': ..., 'pitch': ..., 'interrupt': ...}]`
+    - and reading it with `str()` speaks the repr of that list at
+    somebody: "[{'text': 'Notatka zostala zapisana!', 'position': 0.0,
+    'pitch': 0, 'interrupt': True}]", said aloud, in place of the
+    sentence. The older shape - a bare string - is still read, because a
+    Titan older than the change sends one.
+    """
+    found = (answer or {}).get('said') if isinstance(answer, dict) else None
+    if not found:
+        return []
+    if isinstance(found, str):
+        return [found] if found.strip() else []
+    rows = []
+    for one in found:
+        if isinstance(one, dict):
+            text = str(one.get('text') or '').strip()
+        else:
+            text = str(one or '').strip()
+        if text:
+            rows.append(text)
+    return rows
+
+
 def _took(answer):
     """Keep a screen that came back, and say anything the application said.
 
@@ -260,20 +318,28 @@ def _took(answer):
     """
     if not isinstance(answer, dict):
         return
-    said = str(answer.get('said') or '')
     screen = answer.get('screen')
-    if said:
-        # News first. The screen behind a save usually looks exactly as it
-        # did before, so somebody handed only the screen is told nothing
-        # at all about what happened.
-        _say(said)
+    # News first. The screen behind a save usually looks exactly as it
+    # did before, so somebody handed only the screen is told nothing at
+    # all about what happened.
+    for sentence in announcements(answer):
+        _say(sentence)
     if not isinstance(screen, dict):
         return
+    arrived = _arrived_somewhere(screen)
     with _LOCK:
         count = len(_controls(screen))
         _state['screen'] = screen
         if _state['at'] >= count:
             _state['at'] = max(0, count - 1)
+        if arrived:
+            # A new screen is walked from the top; keeping the cursor
+            # where it was would land somebody in the middle of a window
+            # they have only just arrived in.
+            _state['at'] = 0
+            _state['inner'] = 0
+    if arrived:
+        _say(arrived)
         _state['inner'] = 0
 
 
@@ -311,6 +377,43 @@ def move_end(to_end):
     return say_here(beep=True)
 
 
+def move_corner(dx_sign, dy_sign):
+    """A corner of the screen - the numpad diagonals, as everywhere.
+
+    A described screen has controls in an order and no geometry, so its
+    corners are its ends: the first control at the top, the last at the
+    bottom, and the RIGHT corners are the end of what is inside that
+    control - the last row of its list, the last option of its choice -
+    which is where a finger would land. The corner's name is said first.
+    """
+    with _LOCK:
+        controls = _controls()
+        if not controls:
+            return _nothing()
+        _state['at'] = len(controls) - 1 if dy_sign > 0 else 0
+        _state['inner'] = _where_inside(controls[_state['at']])
+        _state['moves'] += 1
+    try:
+        from . import virtualWindow
+        name = virtualWindow.corner_name(dx_sign, dy_sign)
+    except Exception:                                # noqa: BLE001
+        name = ''
+    prefix = [(name, 'place')] if name else []
+    control = here()
+    rows = _inside(control) if dx_sign > 0 else []
+    if rows:
+        with _LOCK:
+            _state['inner'] = len(rows) - 1
+        said = str(rows[-1])
+        _send_inside(control, len(rows) - 1)
+        _say_parts(prefix + [(said, 'name'),
+                             (_('{at} of {count}').format(at=len(rows),
+                                                         count=len(rows)),
+                              'place')])
+        return True, said
+    return say_here(beep=True, prefix=prefix)
+
+
 def move_inside(delta):
     """Left and Right: the rows of a list, the options of a choice.
 
@@ -323,7 +426,14 @@ def move_inside(delta):
         return _nothing()
     rows = _inside(control)
     if not rows:
-        return say_here(beep=False)
+        # **Nothing inside it, so Left and Right are the letters.** A
+        # control with no rows and no options still has TEXT, and reading
+        # it a character at a time is how a spelling, a number or a path
+        # is checked by ear. Saying the whole thing again - which is what
+        # this did - answers a different question from the one the key
+        # asked. The same rule the virtual window follows, so the two
+        # walkers behave alike.
+        return _by_character(delta)
     with _LOCK:
         at = _state['inner'] + delta
         if at < 0 or at >= len(rows):
@@ -348,6 +458,26 @@ def _where_inside(control):
     if isinstance(index, int) and index >= 0:
         return index
     return 0
+
+
+def _by_character(delta):
+    """One character of the row, and say it. ``(ok, said)``."""
+    control = here()
+    if control is None:
+        return _nothing()
+    text = row_text(control)
+    if not text:
+        return say_here(beep=False)
+    with _LOCK:
+        at = int(_state.get('letter') or 0) + int(delta)
+        if at < 0 or at >= len(text):
+            _edge()
+            at = max(0, min(at, len(text) - 1))
+        _state['letter'] = at
+        _state['moves'] += 1
+    said = text[at]
+    _say(said)
+    return True, said
 
 
 def _inside(control):
@@ -519,11 +649,27 @@ def enter_typing():
     if control.get('readonly'):
         # Translators: said when a field cannot be typed into.
         return False, _('This cannot be typed into')
+    # **The field's own text becomes the window**, exactly as it does in
+    # the virtual window - one implementation (`textField`), so the two
+    # cannot drift apart about what Backspace or Control and an arrow
+    # mean in a field.
+    from . import textField
     with _LOCK:
         _state['typing'] = int(control.get('id') or 0)
+        _state['field'] = textField.Field(
+            text=str(control.get('value') or ''),
+            multiline=str(control.get('kind') or '') == 'multiline',
+            readonly=bool(control.get('readonly')))
     icons.play('open-object')
     # Translators: said when the review hands the keyboard to a field.
-    return True, _('Edit field on')
+    said = _('Edit field on')
+    _say_parts(_state['field'].parts())
+    return True, said
+
+
+def field():
+    with _LOCK:
+        return _state.get('field')
 
 
 def leave_typing():
@@ -531,6 +677,7 @@ def leave_typing():
     with _LOCK:
         was = _state.get('typing')
         _state['typing'] = None
+        _state['field'] = None
     if not was:
         return False, ''
     icons.play('close-object')
@@ -563,21 +710,77 @@ def wire_key(main, modifiers=()):
 
 
 def relay(key):
-    """One key, into the field being typed into. ``(ok, said)``.
+    """One key against the field being walked. ``(ok, said)``.
 
-    **The field does the editing, not the reader.** It holds the text and
-    the caret, so a character, a Backspace, an arrow and Control with an
-    arrow all mean exactly what they mean in that control - and the value
-    that comes back is what the application really has, rather than a
-    copy this kept and hoped was still right.
+    The field decides what the key means - :mod:`textField` is the one
+    place that knows - and what changed is written back to the real
+    control with `app.set`, which is the only way a described
+    application's field can be changed at all.
+
+    A key the field does not want (Tab, and Enter in a one-line field,
+    which presses the form's default button) goes to the application as a
+    key instead.
     """
     with _LOCK:
         control = _state.get('typing')
-    if not control:
+        found = _state.get('field')
+    if not control or found is None:
         return False, ''
+    from . import textField
     token = session()
-    _act(lambda: titan.key_described(token, key, control=control))
+    was = found.text
+    what, said = textField.press(found, key)
+    if not what:
+        _act(lambda: titan.key_described(token, key, control=control))
+        return True, ''
+    if what == 'edge':
+        icons.play('warn-user')
+        return True, ''
+    if found.text != was:
+        # Written back quietly: `_act` re-announces the whole control
+        # after every call, which is right for a press and would read
+        # "Title, edit, abc" back at somebody for every letter.
+        text = found.text
+
+        def write():
+            ok, answer = titan.set_described(token, control, text)
+            if ok:
+                _took_quietly(answer)
+            return ok, answer
+        threading.Thread(target=write, name='TitanAppType',
+                         daemon=True).start()
+    if said:
+        _say(said)
     return True, ''
+
+
+def _value_of(control):
+    """What that control holds right now, as far as the review knows."""
+    for row in _controls():
+        if row.get('id') == control:
+            return str(row.get('value') or '')
+    return ''
+
+
+def _took_quietly(answer):
+    """Keep the screen that came back without re-reading the control.
+
+    What the application ANNOUNCED is still said: it is news, and a
+    keystroke that made the program say something is exactly when
+    somebody needs to hear it.
+    """
+    if not isinstance(answer, dict):
+        return
+    for sentence in announcements(answer):
+        _say(sentence)
+    screen = answer.get('screen')
+    if not isinstance(screen, dict):
+        return
+    with _LOCK:
+        count = len(_controls(screen))
+        _state['screen'] = screen
+        if _state['at'] >= count:
+            _state['at'] = max(0, count - 1)
 
 
 def type_here(text=None):
@@ -729,7 +932,8 @@ def kind_word(kind):
     }.get(str(kind or ''), str(kind or ''))
 
 
-def say_here(beep=True):
+def say_here(beep=True, prefix=None):
+    """``prefix`` is ``[(text, class)]`` said in front, in one utterance."""
     control = here()
     if control is None:
         return _nothing()
@@ -747,7 +951,8 @@ def say_here(beep=True):
         # turning them off.
         if not icons.play(icons.for_control(control.get('kind'))):
             _beep(at, count)
-    parts = parts_of(control, at=at, count=count, inner=inner)
+    parts = list(prefix or []) + parts_of(control, at=at, count=count,
+                                          inner=inner)
     _say_parts(parts)
     return True, ', '.join(text for text, _voice in parts)
 

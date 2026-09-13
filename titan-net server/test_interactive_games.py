@@ -34,6 +34,48 @@ import tempfile
 import textwrap
 import unittest
 
+import atexit
+
+#: Temporary roots, cleaned at the START of a run rather than the end.
+#:
+#: `Database` keeps a pooled SQLite connection PER THREAD and offers no way to
+#: close them all: the writer has an executor of its own and the async tests
+#: open more on asyncio's default one. So Windows still holds `games.db` when
+#: `tearDownClass` runs, `rmtree(ignore_errors=True)` does nothing - silently,
+#: which is why 189 `titan-games-test-*` directories had accumulated - and
+#: even an `atexit` handler is too early.
+#:
+#: What IS true is that the file is free once the process has gone. So each run
+#: removes what earlier runs left: the litter is bounded by one run instead of
+#: growing for ever, with nothing hacked into the production pool to achieve
+#: it. The end-of-run attempt is kept as well, for the platforms where it works.
+_ROOTS = []
+
+
+def _sweep_old_roots():
+    """Remove the roots of runs that have already finished."""
+    here = tempfile.gettempdir()
+    try:
+        names = os.listdir(here)
+    except OSError:
+        return
+    for name in names:
+        if not name.startswith('titan-games-test-'):
+            continue
+        path = os.path.join(here, name)
+        if path in _ROOTS:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+
+
+_sweep_old_roots()
+
+
+@atexit.register
+def _clear_roots():
+    while _ROOTS:
+        shutil.rmtree(_ROOTS.pop(), ignore_errors=True)
+
 # The Fernet key is what the game's API key is encrypted at rest with.
 # Generated per run so the tests never touch a real configuration.
 from cryptography.fernet import Fernet
@@ -220,6 +262,7 @@ class GameTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(prefix='titan-games-test-')
+        _ROOTS.append(cls.tmp)
         cls.db = models.Database(os.path.join(cls.tmp, 'games.db'))
         cls.attachment_dir = os.path.join(cls.tmp, 'attachments')
         os.makedirs(cls.attachment_dir, exist_ok=True)
@@ -231,6 +274,27 @@ class GameTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        # **Close the database FIRST.** Windows will not remove a file that is
+        # still open, and `Database` keeps a pooled connection per thread - so
+        # `rmtree(ignore_errors=True)` silently did nothing and 189
+        # `titan-games-test-*` directories had accumulated, each holding a live
+        # `games.db`. Ignoring the error is what made it silent.
+        try:
+            # The pool is PER THREAD, so closing it here closes only this
+            # thread's. The writer runs on an executor of its own and holds a
+            # connection too - that is the handle Windows refuses to delete
+            # under, and why `rmtree(ignore_errors=True)` did nothing at all.
+            cls.db._writer_executor.submit(cls.db.close_all).result(timeout=10)
+        except Exception:
+            pass
+        try:
+            cls.db._writer_executor.shutdown(wait=True)
+        except Exception:
+            pass
+        try:
+            cls.db.close_all()
+        except Exception:
+            pass
         try:
             shutil.rmtree(cls.tmp, ignore_errors=True)
         except Exception:

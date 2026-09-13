@@ -61,7 +61,41 @@ STATES = {
     'UNAVAILABLE': 'error.ogg',
     'READONLY': 'system_item.ogg',
     'BUSY': 'ellipses.ogg',
+    'HASPOPUP': 'sr_menu.ogg',
+    'REQUIRED': 'notification.ogg',
+    'PROTECTED': 'keyoff.ogg',
 }
+
+#: The add-on's own icon that says the same thing, for a state whose
+#: sound comes from the BUILT-IN set: there on a machine with no Titan.
+BUILTIN = {
+    'CHECKED': 'on',
+    'HALFCHECKED': 'item',
+    'SELECTED': 'item',
+    'EXPANDED': 'open-object',
+    'COLLAPSED': 'close-object',
+    'PRESSED': 'button',
+    'UNAVAILABLE': 'warn-user',
+    'READONLY': 'ellipses',
+    'BUSY': 'progress',
+    'HASPOPUP': 'open-object',
+    'REQUIRED': 'alert-user',
+    'PROTECTED': 'mark-object',
+}
+
+#: Where a state's sound comes from - the same three answers an auditory
+#: icon has (:mod:`icons`). The reader's own set is Titan's, so a state
+#: starts on Titan's sound; a machine with no Titan running plays the
+#: built-in one instead rather than nothing.
+SOURCE_BUILTIN = 'builtin'
+SOURCE_TITAN = 'titan'
+SOURCE_EXTERNAL = 'external'
+SOURCES = (SOURCE_TITAN, SOURCE_BUILTIN, SOURCE_EXTERNAL)
+
+
+def source_names():
+    from . import icons
+    return icons.source_names()
 
 
 def state_names():
@@ -76,6 +110,12 @@ def state_names():
         'UNAVAILABLE': _('unavailable'),
         'READONLY': _('read only'),
         'BUSY': _('busy'),
+        # Translators: a control state - a menu item that opens a submenu.
+        'HASPOPUP': _('has a submenu'),
+        # Translators: a control state - a field that must be filled in.
+        'REQUIRED': _('required'),
+        # Translators: a control state - a password field.
+        'PROTECTED': _('protected'),
     }
 
 
@@ -150,9 +190,13 @@ def _load():
                         if not isinstance(row, dict):
                             continue
                         way = str(row.get('way') or AS_WORD)
+                        source = str(row.get('source') or SOURCE_TITAN)
                         _scheme[str(state).upper()] = {
                             'way': way if way in WAYS else AS_WORD,
                             'sound': str(row.get('sound') or ''),
+                            'source': source if source in SOURCES
+                            else SOURCE_TITAN,
+                            'file': str(row.get('file') or ''),
                         }
             except Exception:                        # noqa: BLE001
                 _scheme = {}
@@ -171,7 +215,9 @@ def save():
         return False
     with _LOCK:
         data = {state: dict(row) for state, row in _load().items()
-                if row.get('way') != AS_WORD}
+                if row.get('way') != AS_WORD
+                or row.get('source', SOURCE_TITAN) != SOURCE_TITAN
+                or row.get('file')}
     try:
         with open(where, 'w', encoding='utf-8') as handle:
             json.dump(data, handle, ensure_ascii=False, indent=1,
@@ -200,9 +246,36 @@ def set_way(state, way, sound=''):
     if way not in WAYS:
         return False
     with _LOCK:
-        _load()[name] = {'way': way,
-                         'sound': str(sound or STATES.get(name, ''))}
+        row = dict(_load().get(name) or {})
+        row.update({'way': way,
+                    'sound': str(sound or row.get('sound')
+                                 or STATES.get(name, ''))})
+        row.setdefault('source', SOURCE_TITAN)
+        row.setdefault('file', '')
+        _load()[name] = row
     return save()
+
+
+def source_of(state):
+    """``(source, file)`` for one state."""
+    row = _load().get(str(state).upper()) or {}
+    return row.get('source', SOURCE_TITAN), row.get('file', '')
+
+
+def set_source(state, source, file=''):
+    """Choose where one state's sound comes from. Answers what it is now."""
+    name = str(state).upper()
+    source = str(source or SOURCE_TITAN)
+    if source not in SOURCES:
+        return SOURCE_TITAN
+    with _LOCK:
+        row = dict(_load().get(name) or {})
+        row.setdefault('way', AS_WORD)
+        row.setdefault('sound', STATES.get(name, ''))
+        row.update({'source': source, 'file': str(file or '')})
+        _load()[name] = row
+    save()
+    return source
 
 
 def reset(state=None):
@@ -220,15 +293,23 @@ def described():
     words = state_names()
     rows = []
     for state in sorted(STATES):
+        source, chosen = source_of(state)
         rows.append({'state': state, 'label': words.get(state, state),
                      'way': way_of(state), 'sound': sound_of(state),
+                     'source': source, 'external': chosen,
+                     'builtin': BUILTIN.get(state, ''),
                      'changed': state in _load()})
     return rows
 
 
 def wanted():
-    from . import configSpec
-    return bool(configSpec.read().get('soundScheme', True))
+    """The scheme's own switch. A tree with no `configSpec` - Titan
+    Access - has no switch yet, and absent means yes."""
+    try:
+        from . import configSpec
+        return bool(configSpec.read().get('soundScheme', True))
+    except Exception:                                # noqa: BLE001
+        return True
 
 
 # --------------------------------------------------------------------------- #
@@ -256,7 +337,11 @@ def answer(states):
         if not sound:
             words.append(state)
             continue
-        sounds.append(sound)
+        # The STATE goes back, not the file: which sound it is and where it
+        # comes from is decided when it is played (`play`), so a state
+        # whose source is the built-in set or a file of the user's own is
+        # answered the same way as one on Titan's.
+        sounds.append(name)
         if way == AS_BOTH:
             words.append(state)
     with _LOCK:
@@ -265,18 +350,54 @@ def answer(states):
     return words, sounds
 
 
-def play(sounds):
-    """The sounds for one control, in order, through the reader's own set."""
-    if not sounds:
+def play(states):
+    """The sounds for one control's states, in order, each from where the
+    user said it comes from - Titan's set, the built-in one, or a file.
+
+    ``states`` may also be file names, which is what a caller written
+    before the sources were here still passes; those go to Titan's set as
+    they always did.
+    """
+    if not states:
         return
+    for one in states:
+        try:
+            _play_one(one)
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def _reader_sound(name):
+    """One of the reader's own set (`sfx/<theme>/SRE/`), through Titan -
+    in-process where this runs inside Titan, over the bus from NVDA.
+    `earcons` is the add-on's own module and is not in Titan Access."""
+    from . import icons
+    if icons.play_titan('reader/' + str(name)):
+        return True
     try:
         from . import earcons
-        for name in sounds:
-            earcons.play_named(name)
+        return bool(earcons.play_named(str(name)))
     except Exception:                                # noqa: BLE001
-        pass
+        return False
+
+
+def _play_one(state):
+    from . import icons
+    name = str(state).upper()
+    if name not in STATES:
+        # A file name from an older caller: the reader's own set.
+        _reader_sound(str(state))
+        return
+    source, chosen = source_of(name)
+    if source == SOURCE_EXTERNAL and icons.play_file(chosen):
+        return
+    if source == SOURCE_TITAN:
+        if _reader_sound(sound_of(name)):
+            return
+    # Titan not there, or the built-in set asked for: the add-on's own.
+    icons.play_file(icons.path_of(BUILTIN.get(name, '')))
 
 
 def try_it(state):
     """Play what this state would sound like, for the manager."""
-    play([sound_of(state)])
+    play([str(state).upper()])

@@ -221,6 +221,15 @@ def add_settings_category(component_manager):
     print(f"[TIPS] component_manager: {component_manager}")
     print(f"[TIPS] settings_frame: {component_manager.settings_frame if component_manager else 'None'}")
 
+    # Shared by all three callbacks below. It used to be a local of
+    # create_tips_settings_panel, which load_tips_settings and
+    # save_tips_settings cannot see - they are its siblings, not nested in
+    # it - so both raised NameError: loading could not select the interval
+    # in force (and `except ValueError` does not catch a NameError) and
+    # saving could not write the chosen one at all. The choice control was
+    # built correctly, which is why it looked like it worked.
+    interval_keys = list(INTERVAL_OPTIONS.keys())
+
     def create_tips_settings_panel(parent):
         print(f"[TIPS] create_tips_settings_panel called with parent: {parent}")
         """Create tips settings panel"""
@@ -228,7 +237,6 @@ def add_settings_category(component_manager):
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         interval_label = wx.StaticText(panel, label=_("Speak tips:"))
-        interval_keys = list(INTERVAL_OPTIONS.keys())
         interval_labels = [INTERVAL_LABELS.get(k, k) for k in interval_keys]
         interval_choice = wx.Choice(panel, choices=interval_labels)
 

@@ -23,12 +23,22 @@ from . import anchors            # noqa: F401
 from . import appReview          # noqa: F401
 from . import appScreen          # noqa: F401
 from . import classes            # noqa: F401
+from . import commands           # noqa: F401
+from . import dialog_kind        # noqa: F401
+from . import dialogs            # noqa: F401
 from . import draft              # noqa: F401
 from . import findControl        # noqa: F401
+from . import gestures           # noqa: F401
+from . import iconNames          # noqa: F401
 from . import icons              # noqa: F401
+from . import journal            # noqa: F401
 from . import labels             # noqa: F401
 from . import layers             # noqa: F401
 from . import localOcr           # noqa: F401
+from . import managerWalk        # noqa: F401
+from . import markers            # noqa: F401
+from . import menu               # noqa: F401
+from . import menuWalk           # noqa: F401
 from . import monitors           # noqa: F401
 from . import palette            # noqa: F401
 from . import perProgram         # noqa: F401
@@ -37,7 +47,9 @@ from . import sceneModel         # noqa: F401
 from . import schemes            # noqa: F401
 from . import shared             # noqa: F401
 from . import surface            # noqa: F401
+from . import textField          # noqa: F401
 from . import titan              # noqa: F401
+from . import titanWalk          # noqa: F401
 from . import titanWindow        # noqa: F401
 from . import toolkit            # noqa: F401
 from . import trackpad           # noqa: F401
@@ -49,10 +61,13 @@ from . import windowKind         # noqa: F401
 from . import windowsAndActions  # noqa: F401
 
 __all__ = [
-    'anchors', 'appReview', 'appScreen', 'classes', 'draft',
-    'findControl', 'icons', 'labels', 'layers', 'localOcr', 'monitors',
+    'anchors', 'appReview', 'appScreen', 'classes', 'commands',
+    'dialog_kind', 'dialogs', 'draft', 'findControl', 'gestures',
+    'iconNames', 'icons', 'journal', 'labels', 'layers', 'localOcr',
+    'managerWalk', 'markers', 'menu', 'menuWalk', 'monitors',
     'palette', 'perProgram', 'procedures', 'sceneModel', 'schemes',
-    'shared', 'surface', 'titan', 'titanWindow', 'toolkit', 'trackpad',
-    'verify', 'virtualInput', 'virtualWindow', 'widgetReview',
-    'windowKind', 'windowsAndActions',
+    'touchWalk',
+    'shared', 'surface', 'textField', 'titan', 'titanWalk',
+    'titanWindow', 'toolkit', 'trackpad', 'verify', 'virtualInput',
+    'virtualWindow', 'widgetReview', 'windowKind', 'windowsAndActions'
 ]

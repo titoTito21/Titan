@@ -103,6 +103,15 @@ def _write_over(target, package):
                 with archive.open(name) as source, \
                         open(where, 'wb') as handle:
                     shutil.copyfileobj(source, handle)
+            except PermissionError as error:
+                # **A library NVDA has LOADED cannot be overwritten**, and
+                # what that ships is the old one with nothing saying so. The
+                # only cure is to stop NVDA first, so say that rather than
+                # printing an error number.
+                could_not.append(
+                    '%s - NVDA has it open. Close NVDA (NVDA+q), install '
+                    'again, then start it: a native library cannot be '
+                    'replaced while it is loaded (%s)' % (name, error))
             except OSError as error:
                 could_not.append('%s (%s)' % (name, error))
     keep = {os.path.normcase(os.path.join(target, *name.split('/')))

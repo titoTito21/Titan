@@ -105,9 +105,49 @@ def _name_segment(obj: AccessibleObject) -> str:
     return name
 
 
+#: Titan Access's state names in the sound scheme's spelling (NVDA's,
+#: upper-cased), which is how `portable/schemes.py` keys its rows so that
+#: the same scheme file serves both readers.
+_SCHEME_NAMES = {
+    'checked': 'CHECKED', 'partially_checked': 'HALFCHECKED',
+    'selected': 'SELECTED', 'expanded': 'EXPANDED', 'collapsed': 'COLLAPSED',
+    'pressed': 'PRESSED', 'unavailable': 'UNAVAILABLE', 'readonly': 'READONLY',
+    'required': 'REQUIRED', 'protected': 'PROTECTED', 'busy': 'BUSY',
+    'haspopup': 'HASPOPUP',
+}
+
+
+def _through_the_sound_scheme(states):
+    """The states still to be SAID, after the sound scheme has had its say.
+
+    The scheme (`portable/schemes.py`, the same file as the NVDA add-on's)
+    lets the user answer a state with a sound instead of a word - a tick
+    for "checked" on every row of a list. It was vendored here and reached
+    by nothing, so a scheme set up under NVDA did nothing in Titan Access.
+    A state the user has not touched comes back exactly as it went in.
+    """
+    try:
+        from .portable import schemes
+        keys = [_SCHEME_NAMES.get(str(s), str(s).upper()) for s in states]
+        words, sounds = schemes.answer(keys)
+        if sounds:
+            schemes.play(sounds)
+        kept = list(words)
+        out = []
+        for state, key in zip(states, keys):
+            if key in kept:
+                kept.remove(key)
+                out.append(state)
+        return out
+    except Exception:                                # noqa: BLE001
+        return list(states)
+
+
 def _state_segment(obj: AccessibleObject) -> str:
     """Comma-joined localized state labels (focus is implied, so omitted)."""
-    parts = [state_label(s) for s in _STATE_ORDER if obj.has(s)]
+    present = _through_the_sound_scheme(
+        [s for s in _STATE_ORDER if obj.has(s)])
+    parts = [state_label(s) for s in present]
     # A check box that is neither checked nor indeterminate carries no state from
     # the provider, so its state would be silent. Announce it explicitly as
     # "unchecked" so the user always hears the box's state.

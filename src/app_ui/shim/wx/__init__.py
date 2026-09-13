@@ -767,9 +767,16 @@ class TextCtrl(_Widget):
         """
         name = str(key or '')
         held, _sep, bare = name.rpartition('+')
-        bare = (bare or name).lower()
+        # **The character's own case is kept.** A reader sends `shift+n`,
+        # because that is what its key names are - but a caller sending
+        # the character it means, `N`, should get an N rather than an n
+        # silently. Everything else is matched lower-cased, since a key
+        # NAME has no case.
+        typed = bare or name
+        bare = typed.lower()
         control = 'ctrl+' in name.lower()
-        shift = 'shift+' in name.lower()
+        shift = 'shift+' in name.lower() or (len(typed) == 1
+                                             and typed.isupper())
         where = max(0, min(int(self._insertion or 0), len(self._value)))
         if bare in self._MOVES:
             self._insertion = self._move(bare, where, control)
@@ -788,7 +795,7 @@ class TextCtrl(_Widget):
         if bare == 'tab':
             return False                # moving between controls
         if len(bare) == 1 and not control:
-            return self._insert(bare.upper() if shift else bare, where)
+            return self._insert(typed.upper() if shift else bare, where)
         return False
 
     def _move(self, key, where, by_word):
@@ -1709,7 +1716,27 @@ class _Window(_Widget):
         menus = self._menubar.describe() if self._menubar is not None else []
         return model.screen(self._id, self._screen_kind, self.label(),
                             controls, menus, self._focus,
-                            modal=self._modal_ended is not None)
+                            modal=self._is_modal())
+
+    def _is_modal(self):
+        """Whether this screen is a sub-window sitting ON another one.
+
+        **It asked `self._modal_ended is not None`, which is backwards.**
+        `_modal_ended` is None WHILE a modal is up and is set to a result
+        when it ends - so every sub-window reported itself as not modal
+        for the whole time it was on the screen, and as modal only once
+        it had gone. An interface reading that could never say "you are
+        in a sub-window", which is the one thing somebody who cannot see
+        it needs to be told.
+
+        What really says so is the runtime's own stack: a screen with
+        something under it is a sub-window.
+        """
+        try:
+            screens = RUNTIME.screens
+        except Exception:                            # noqa: BLE001
+            return False
+        return self in screens and screens[0] is not self
 
     def _flatten(self):
         """Every control on this screen, in the order it is READ in.

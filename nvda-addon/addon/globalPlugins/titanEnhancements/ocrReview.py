@@ -77,7 +77,7 @@ def start(hwnd=0):
     if not ok:
         return False, why
     if not hwnd:
-        hwnd = _foreground()
+        hwnd = _the_guest_in(_foreground())
     if not hwnd:
         # Translators: said when there is no window to read.
         return False, _('There is no window to read')
@@ -130,6 +130,44 @@ def refresh():
     # Translators: said when the screen has been read again. {n} is how many
     # lines it found.
     return True, _('{n} lines').format(n=len(reading.rows()))
+
+
+def _the_guest_in(hwnd):
+    """On a virtual machine, review the GUEST's screen, not VMware's window.
+
+    **This is what a reader has to do while an operating system is being
+    installed**, and it is the case no agent can ever answer: there is no
+    guest operating system yet, no accessibility layer, no tools and nothing
+    to run a program in - there is an installer painting text on a screen.
+    From here that screen is a picture, and a picture is exactly what this
+    review walks.
+
+    The foreground window is the virtual machine's FRAME, whose top is
+    VMware's own menu bar, tab strip and status line - controls NVDA reads
+    properly already, and a recogniser reading them again is thirty lines of
+    somebody else's furniture in front of the installer. The guest is
+    painted on a child window of its own (`MKSEmbedded`), which
+    `surface.display_of` already knows how to find, and reading THAT is 9 ms
+    of the window's own device context.
+
+    Every rectangle stays in screen coordinates, so Enter still clicks where
+    the words really are - which in a graphical installer is how Next is
+    pressed.
+    """
+    if not hwnd:
+        return hwnd
+    try:
+        from . import compat
+        from . import guest
+        from . import surface
+        api = compat.api
+        obj = api.getForegroundObject() if api is not None else None
+        if obj is None or not surface.is_virtual_machine(obj):
+            return hwnd
+        _where, handle = guest.display_of(obj)
+        return handle or hwnd
+    except Exception:                                # noqa: BLE001
+        return hwnd
 
 
 def _foreground():
@@ -239,6 +277,88 @@ def here():
         return word['text'], (word['left'], word['top'],
                               word['width'], word['height'])
     return rows[row]
+
+
+def explore(x, y):
+    """A finger at a point: the word drawn there, said. ``(ok, said)``.
+
+    The line whose rectangle holds the point first, then the word on it
+    under the finger; the line alone where the finger is between words.
+    Said only when the finger has moved onto something else.
+    """
+    with _LOCK:
+        rows = list(_state['rows'])
+    found_row = None
+    for index, (_text_, rect) in enumerate(rows):
+        try:
+            l, t, w, h = rect
+        except Exception:                            # noqa: BLE001
+            continue
+        if l <= x < l + w and t <= y < t + h:
+            found_row = index
+            break
+    if found_row is None:
+        return False, ''
+    found_word = 0
+    for index, word in enumerate(_words(found_row)):
+        try:
+            if word['left'] <= x < word['left'] + word['width']:
+                found_word = index
+                break
+        except Exception:                            # noqa: BLE001
+            continue
+    with _LOCK:
+        same = (_state.get('explored') == (found_row, found_word)
+                and _state['row'] == found_row
+                and _state['word'] == found_word)
+        if same:
+            return True, ''
+        _state['explored'] = (found_row, found_word)
+        _state['row'] = found_row
+        _state['word'] = found_word
+        _state['moves'] += 1
+    words = _words(found_row)
+    if words and found_word > 0:
+        _say(words[found_word]['text'])
+        return True, words[found_word]['text']
+    return True, say_line(beep=True)
+
+
+def move_corner(dx_sign, dy_sign):
+    """A corner of what was read - the numpad diagonals, as everywhere.
+
+    The first or the last line, at its first or its last word, with the
+    corner's name said first.
+    """
+    with _LOCK:
+        rows = _state['rows']
+        if not rows:
+            return False, ''
+        _state['row'] = len(rows) - 1 if dy_sign > 0 else 0
+        _state['word'] = 0
+        _state['moves'] += 1
+    try:
+        from . import virtualWindow
+        name = virtualWindow.corner_name(dx_sign, dy_sign)
+    except Exception:                                # noqa: BLE001
+        name = ''
+    words = _words()
+    if dx_sign > 0 and words:
+        with _LOCK:
+            _state['word'] = len(words) - 1
+        said = words[-1]['text']
+    else:
+        with _LOCK:
+            row = _state['row']
+        said = rows[row][0] if 0 <= row < len(rows) else ''
+    _beep(_state['row'])
+    _say((name + ', ' + said) if name else said)
+    return True, said
+
+
+def reviewing_cursor():
+    with _LOCK:
+        return _state['row'], _state['word']
 
 
 def click():

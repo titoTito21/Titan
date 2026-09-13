@@ -592,6 +592,16 @@ def build():
             # Translators: the list of Titan's widgets.
             self.widgets = helper.addLabeledControl(
                 _('&Widgets'), wx.ListBox, style=wx.LB_SINGLE)
+            # **Entering a widget puts you IN it.** There were three
+            # buttons under this list, and what somebody arriving at a
+            # widget wants is the widget - walked with the arrow keys,
+            # the way everything else on this desktop is walked. So Enter
+            # and a double click open it, which is what Enter means on a
+            # row everywhere else, and the button that only repeated that
+            # is gone. Read and Press stay: they are different VERBS and
+            # cannot both be Enter.
+            self.widgets.Bind(wx.EVT_LISTBOX_DCLICK, self._walk_widget)
+            self.widgets.Bind(wx.EVT_CHAR_HOOK, self._widget_key)
             buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
             # Translators: a button in the Titan window.
             read = buttons.addButton(page, label=_('&Read it'))
@@ -599,10 +609,6 @@ def build():
             # Translators: a button in the Titan window.
             press = buttons.addButton(page, label=_('&Press it'))
             press.Bind(wx.EVT_BUTTON, self._press_widget)
-            # Translators: a button in the Titan window - it walks the
-            # widget with the arrow keys, like everything else here.
-            walk = buttons.addButton(page, label=_('&Walk it'))
-            walk.Bind(wx.EVT_BUTTON, self._walk_widget)
             helper.addItem(buttons)
             page.Sizer = helper.sizer
             self._do(titan.widgets, self._widgets_are)
@@ -623,6 +629,14 @@ def build():
             rows = getattr(self, '_widget_rows', [])
             return _label_of(rows[at], 'id', 'name') \
                 if 0 <= at < len(rows) else ''
+
+        def _widget_key(self, event):
+            """Enter opens the widget; everything else is the list's."""
+            import wx
+            if event.GetKeyCode() in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER):
+                self._walk_widget(event)
+                return
+            event.Skip()
 
         def _read_widget(self, _event):
             widget = self._chosen_widget()
@@ -714,6 +728,16 @@ def _setting_line(item):
         value = item.get('value')
         # Translators: how a password or key is shown - never its value.
         return '%s: %s' % (label, _('set') if value else _('not set'))
+    if kind == 'multi':
+        # **A tick list is said as WORDS, never as the list it is.** Its
+        # value really is a list, and a list put into a row through `str()`
+        # is `['tNotes', 'tEdit']` - brackets, quotes and commas, which a
+        # screen reader then reads out one punctuation mark at a time.
+        # Titan learned this about a character sheet and it is the same
+        # mistake one field smaller.
+        ticked = [str(one) for one in (item.get('value') or [])]
+        # Translators: a tick list with nothing ticked in it.
+        return '%s: %s' % (label, ', '.join(ticked) if ticked else _('none'))
     value = item.get('value')
     if value in (None, ''):
         return label

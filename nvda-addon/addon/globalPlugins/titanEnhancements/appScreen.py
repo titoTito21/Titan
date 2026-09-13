@@ -353,8 +353,8 @@ def build():
             if not ok:
                 self._say(str(answer))
                 return
-            said = str(answer.get('said') or '') if isinstance(answer, dict) \
-                else ''
+            from . import appReview
+            said = ' '.join(appReview.announcements(answer))
             screen = answer.get('screen') if isinstance(answer, dict) else None
             if said:
                 # News first: the screen behind a save usually looks exactly
@@ -535,7 +535,8 @@ def open_application(name, parent=None):
                 # application's interface.
                 dialogs.message(_('Titan did not open that application.'))
                 return
-            said = str(data.get('said') or '')
+            from . import appReview
+            said = ' '.join(appReview.announcements(data))
             if data.get('mirror'):
                 # **A mirror is a weaker thing and says so.** A described
                 # screen is the application's own account of itself; a

@@ -26,6 +26,30 @@ import tempfile
 import threading
 import unittest
 
+import atexit as _atexit
+
+#: Temporary directories this run made, removed when it ends.
+#:
+#: Measured: this suite left 37 directories behind per run, one per `mkdtemp` that
+#: nothing removed, and they accumulate for ever - thousands had built up in
+#: %TEMP%. Registered at exit rather than per test so a FAILING test cleans
+#: up too.
+_SCRATCH = []
+
+
+def scratch(prefix=None):
+    """A temporary directory that is removed when the run ends."""
+    path = tempfile.mkdtemp(**({'prefix': prefix} if prefix else {}))
+    _SCRATCH.append(path)
+    return path
+
+
+@_atexit.register
+def _clear_scratch():
+    while _SCRATCH:
+        shutil.rmtree(_SCRATCH.pop(), ignore_errors=True)
+
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -110,7 +134,7 @@ class ThePackageFormat(unittest.TestCase):
     """`.eltenapp` - worked out from the bytes, so it is tested that way."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='elten-pkg-')
+        self.root = scratch('elten-pkg-')
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -211,7 +235,7 @@ class PathsAreConfined(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='elten-paths-')
+        self.root = scratch('elten-paths-')
         self.paths = host.Paths(os.path.join(self.root, 'asset'),
                                 os.path.join(self.root, 'data'),
                                 os.path.join(self.root, 'cache'))
@@ -319,7 +343,7 @@ class SoundsAreBounded(unittest.TestCase):
             pass
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='elten-snd-')
+        self.root = scratch('elten-snd-')
         self.file = os.path.join(self.root, 'a.ogg')
         with open(self.file, 'wb') as handle:
             handle.write(b'x')
@@ -490,7 +514,7 @@ class AChannelIsNotSharedBehindOurBack(unittest.TestCase):
             self.mixer = Mixer
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='elten-chan-')
+        self.root = scratch('elten-chan-')
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -635,7 +659,7 @@ class TheDispatchTable(unittest.TestCase):
             entry = catalogue.Application('x.eltenapp', dict(MANIFEST), None,
                                           'test')
             entry.localise('en')
-            root = tempfile.mkdtemp(prefix='elten-disp-')
+            root = scratch('elten-disp-')
             paths = host.Paths(os.path.join(root, 'a'),
                                os.path.join(root, 'd'),
                                os.path.join(root, 'c'))
@@ -789,7 +813,7 @@ class AnApplicationReallyRuns(unittest.TestCase):
             runtime.find()
         except runtime.RubyMissing as error:
             self.skipTest(str(error))
-        self.root = tempfile.mkdtemp(prefix='elten-run-')
+        self.root = scratch('elten-run-')
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
@@ -1247,13 +1271,21 @@ require 'eapi'
 require 'program'
 require 'controls'
 """ % repr(os.path.join(COMPONENT, 'eapi')).replace("'", '"')
-        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
-        io.open(path, 'w', encoding='utf-8').write(preamble + source)
-        answer = subprocess.run([self.ruby.path, path], capture_output=True,
-                                timeout=60, env=self.ruby.environment())
-        self.assertEqual(answer.returncode, 0,
-                         answer.stderr.decode('utf-8', 'replace'))
-        return answer.stdout.decode('utf-8', 'replace').strip()
+        # The directory is REMOVED again. Each `ask` made one and left it:
+        # 5 694 `elten-ask-*` directories had accumulated in %TEMP%, one per
+        # call across every run of this suite, each holding one `ask.rb`. A
+        # test that litters is a test nobody can run often.
+        home = scratch('elten-ask-')
+        try:
+            path = os.path.join(home, 'ask.rb')
+            io.open(path, 'w', encoding='utf-8').write(preamble + source)
+            answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                    timeout=60, env=self.ruby.environment())
+            self.assertEqual(answer.returncode, 0,
+                             answer.stderr.decode('utf-8', 'replace'))
+            return answer.stdout.decode('utf-8', 'replace').strip()
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
 
     def test_a_sound_answers_everything_a_game_asks_before_using_it(self):
         """Skeet asks `closed?` on every frame of every throw, inside its
@@ -1477,13 +1509,232 @@ require 'network'
     def ask(self, source):
         preamble = self.PREAMBLE % repr(
             os.path.join(COMPONENT, 'eapi')).replace("'", '"')
-        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
-        io.open(path, 'w', encoding='utf-8').write(preamble + source)
-        answer = subprocess.run([self.ruby.path, path], capture_output=True,
-                                timeout=120, env=self.ruby.environment())
-        self.assertEqual(answer.returncode, 0,
-                         answer.stderr.decode('utf-8', 'replace'))
-        return answer.stdout.decode('utf-8', 'replace').strip()
+        # The directory is REMOVED again. Each `ask` made one and left it:
+        # 5 694 `elten-ask-*` directories had accumulated in %TEMP%, one per
+        # call across every run of this suite, each holding one `ask.rb`. A
+        # test that litters is a test nobody can run often.
+        home = scratch('elten-ask-')
+        try:
+            path = os.path.join(home, 'ask.rb')
+            io.open(path, 'w', encoding='utf-8').write(preamble + source)
+            answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                    timeout=120, env=self.ruby.environment())
+            self.assertEqual(answer.returncode, 0,
+                             answer.stderr.decode('utf-8', 'replace'))
+            return answer.stdout.decode('utf-8', 'replace').strip()
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+
+class SpeakTakesEltensOwnKeywords(_RubyAsk):
+    """Elten's signature, or it is nothing.
+
+    Elten's own is
+
+        speak(text, stop: true, use_dictionary: true, id: nil,
+              break_sequence: true, pan: 50, limit: nil)
+
+    and the port took `interrupt`, `position`, `pitch`, `wait` - its own
+    invention, with not one name in common. So every application writing what
+    Elten documents got `ArgumentError: unknown keywords: :stop,
+    :break_sequence`: the ELTEN Game Room narrates that way at ten call sites
+    and reads its board at an eleventh (`speak(value, pan: position)`), so the
+    whole of what it says aloud raised instead of being said.
+    """
+
+    SAY = (
+        "$said = nil\n"
+        "module EltenBridge\n"
+        "  class << self\n"
+        "    alias_method :__call_before_say, :call\n"
+        "    def call(op, args = {})\n"
+        "      $said = args if op == 'speak'\n"
+        "      __call_before_say(op, args)\n"
+        "    end\n"
+        "  end\n"
+        "end\n"
+    )
+
+    def test_the_game_rooms_own_call_does_not_raise(self):
+        answer = self.ask(self.SAY + """
+speak('hello', stop: false, break_sequence: false)
+puts $said['interrupt'].inspect
+""")
+        self.assertEqual(answer, 'false',
+                         'stop: false must mean "do not interrupt"')
+
+    def test_stop_true_interrupts_as_eltens_default_does(self):
+        answer = self.ask(self.SAY + """
+speak('hello', stop: true)
+puts $said['interrupt'].inspect
+""")
+        self.assertEqual(answer, 'true')
+
+    def test_pan_is_converted_from_eltens_scale(self):
+        """Elten's pan is 0..100 about a centre of 50; this port takes
+        -1.0..1.0. Handing one straight to the other is the bug that already
+        put Titan's shell sounds in the left speaker."""
+        answer = self.ask(self.SAY + """
+[0, 50, 100].each do |pan|
+  speak('x', pan: pan)
+  print $said['position'].round(2), ' '
+end
+puts
+""")
+        self.assertEqual(answer, '-1.0 0.0 1.0')
+
+    def test_every_keyword_elten_has_is_accepted(self):
+        """A keyword this build cannot honour must still be accepted -
+        refusing one is refusing the application for asking precisely."""
+        answer = self.ask(self.SAY + """
+begin
+  speak('x', stop: false, use_dictionary: false, id: 3,
+        break_sequence: false, pan: 20, limit: 5)
+  puts 'ok'
+rescue => e
+  puts "#{e.class}: #{e.message}"
+end
+""")
+        self.assertEqual(answer, 'ok')
+
+    def test_the_ports_own_keywords_still_work(self):
+        """`alert` passes `wait:`, and anything already written against them
+        must not be broken to gain Elten's."""
+        answer = self.ask(self.SAY + """
+speak('x', interrupt: false, position: -0.5, pitch: 2.0, wait: true)
+puts [$said['interrupt'], $said['position'], $said['pitch'], $said['wait']].inspect
+""")
+        self.assertEqual(answer, '[false, -0.5, 2.0, true]')
+
+
+class TheBareHelpersEltensApplicationsCall(_RubyAsk):
+    """Bare functions Elten has, an installed application calls, and the port
+    had not - each one a `NoMethodError` inside somebody else's program,
+    usually swallowed by its own `rescue` and seen as a feature that quietly
+    does nothing.
+
+    Found by reading what the installed `.eltenapp`s really call and asking
+    Elten's own source (`elten3@main`) whether it has it.
+    """
+
+    def test_process_notification_plays_and_says(self):
+        """`eapi/common/activity.rb`. Tyflopodcast announces every new
+        episode with it."""
+        answer = self.ask("""
+$calls = []
+process_notification('alert' => 'A new episode', 'sound' => 'new')
+puts $calls.map { |one| one[0] }.inspect
+""")
+        self.assertIn('speak', answer)
+
+    def test_process_notification_survives_a_hash_it_did_not_expect(self):
+        answer = self.ask("""
+puts process_notification(nil).inspect
+puts process_notification({}).inspect
+""")
+        self.assertEqual(answer.split(), ['nil', 'nil'])
+
+    def test_process_url_opens_an_ordinary_address(self):
+        """`eapi/common/url.rb`. BopIt offers its beta group with it.
+
+        What is asserted is what was ASKED of Titan: `process_url` answers
+        whatever the browser did, and a refusal is honestly false rather than
+        Elten's unconditional true.
+        """
+        answer = self.ask("""
+$calls = []
+process_url('https://example.org')
+asked = $calls.find { |one| one[0] == 'open_url' }
+puts asked.nil? ? 'nothing was asked' : asked[1]['url']
+""")
+        self.assertEqual(answer, 'https://example.org')
+
+    def test_an_elten_address_is_refused_rather_than_raising(self):
+        """`elten://` names a SCENE inside Elten and there are none here.
+        Elten's own code answers false for a path it cannot follow."""
+        answer = self.ask("""
+puts process_url('elten://forum/group/3').inspect
+puts process_url(nil).inspect
+puts process_url(42).inspect
+""")
+        self.assertEqual(answer.split(), ['false', 'false', 'false'])
+
+    def test_getkeychar_answers_what_was_typed(self):
+        """`eapi/common/input.rb`. Tyflopodcast reads its search box with
+        `getkeychar(nil, true)`."""
+        answer = self.ask("""
+EltenLoop.instance_variable_set(:@pressed, {'key_h' => true})
+EltenLoop.instance_variable_set(:@held, {})
+print getkeychar.inspect, ' '
+EltenLoop.instance_variable_set(:@pressed, {'key_h' => true, 'key_i' => true})
+print getkeychar(nil, true).inspect, ' '
+EltenLoop.instance_variable_set(:@pressed, {'key_space' => true})
+print getkeychar.inspect, ' '
+EltenLoop.instance_variable_set(:@pressed, {'key_left' => true})
+puts getkeychar.inspect
+""")
+        self.assertEqual(answer, '"h" "hi" " " ""')
+
+    def test_shift_is_read_from_the_frame_not_over_the_bridge(self):
+        """`key_held?` asks TITAN for the live keyboard; this is called once a
+        FRAME by anything with a text field, and a round trip per frame is the
+        trap that made moving a sound three hundred blocking calls a second.
+        `raw_key_held?` is the frame's own state, which is also the right
+        answer: the shift that was down THIS frame."""
+        answer = self.ask("""
+$calls = []
+EltenLoop.instance_variable_set(:@pressed, {'key_h' => true})
+EltenLoop.instance_variable_set(:@held, {'key_shift' => true})
+print getkeychar.inspect, ' '
+puts $calls.any? { |one| one[0] == 'key_held' }.inspect
+""")
+        self.assertEqual(answer, '"H" false')
+
+    def test_the_ini_pair_round_trips(self):
+        """`readini` / `writeini` from `eapi/core/base.rb`, which
+        `readconfig` / `writeconfig` are built on."""
+        # `Dir.mktmpdir` with no block does NOT clean up - this test left a
+        # `d<date>-<pid>-*` directory per run, which is the same fault it is
+        # here to check for elsewhere.
+        answer = self.ask("""
+require 'tmpdir'
+Dir.mktmpdir do |home|
+file = File.join(home, 'probe.ini')
+writeini(file, 'Group', 'Key', 'value')
+print readini(file, 'Group', 'Key', 'none').inspect, ' '
+print readini(file, 'group', 'key', 'none').inspect, ' '
+print readini(file, 'Nope', 'Key', 'none').inspect, ' '
+writeini(file, 'Group', 'Key', 'second')
+print readini(file, 'Group', 'Key').inspect, ' '
+writeini(file, 'Other', 'K', '1')
+puts [readini(file, 'Other', 'K'), readini(file, 'Group', 'Key')].inspect
+end
+""")
+        # the case-insensitive read is asked BEFORE the value is replaced
+        self.assertEqual(
+            answer, '"value" "value" "none" "second" ["1", "second"]')
+
+    def test_a_missing_file_answers_the_default(self):
+        answer = self.ask("""
+puts readini(File.join(Dir.tmpdir, 'nothing-here-at-all.ini'),
+             'G', 'K', 'fallback').inspect
+""")
+        self.assertEqual(answer, '"fallback"')
+
+    def test_the_config_pair_never_writes_into_the_working_directory(self):
+        """`Dirs.eltendata` is empty when Elten is not installed beside Titan,
+        and joining an empty directory gives the bare name `elten.ini` - which
+        would write a configuration file into whatever folder the process
+        happened to start in and read it back from somewhere else next time.
+        """
+        answer = self.ask("""
+puts send(:_elten_ini_path).inspect
+puts readconfig('G', 'K', 'fallback').inspect
+puts writeconfig('G', 'K', 'x').inspect
+puts File.file?(File.join(Dir.pwd, 'elten.ini')).inspect
+""")
+        self.assertEqual(answer.splitlines(),
+                         ['nil', '"fallback"', 'false', 'false'])
 
 
 class LiveSessionsAreEltensOwn(_RubyAsk):
@@ -2663,13 +2914,13 @@ class TheAccountCanComeFromEltenItself(unittest.TestCase):
         self.module = elten_account
 
     def test_a_file_that_is_not_eltens_is_no_account(self):
-        folder = tempfile.mkdtemp(prefix='elten-login-')
+        folder = scratch('elten-login-')
         path = os.path.join(folder, 'login.dat')
         io.open(path, 'wb').write(b'not an elten file at all')
         self.assertEqual(self.module.read_login_dat(path), ('', ''))
 
     def test_an_unencrypted_key_is_read(self):
-        folder = tempfile.mkdtemp(prefix='elten-login-')
+        folder = scratch('elten-login-')
         path = os.path.join(folder, 'login.dat')
         name, token = b'somebody', b'a-token'
         raw = (self.module.MAGIC + bytes([3])
@@ -2681,7 +2932,7 @@ class TheAccountCanComeFromEltenItself(unittest.TestCase):
                          ('somebody', 'a-token'))
 
     def test_a_key_behind_a_pin_is_left_alone(self):
-        folder = tempfile.mkdtemp(prefix='elten-login-')
+        folder = scratch('elten-login-')
         path = os.path.join(folder, 'login.dat')
         name, token = b'somebody', b'ciphertext'
         raw = (self.module.MAGIC + bytes([3])
@@ -2692,7 +2943,7 @@ class TheAccountCanComeFromEltenItself(unittest.TestCase):
         self.assertEqual(self.module.read_login_dat(path), ('', ''))
 
     def test_a_truncated_file_is_no_account_rather_than_a_crash(self):
-        folder = tempfile.mkdtemp(prefix='elten-login-')
+        folder = scratch('elten-login-')
         path = os.path.join(folder, 'login.dat')
         io.open(path, 'wb').write(self.module.MAGIC + b'\x03\x08')
         self.assertEqual(self.module.read_login_dat(path), ('', ''))
@@ -2988,13 +3239,21 @@ require 'live_sessions'
 require 'eltenapi'
 require 'network'
 ''' % repr(os.path.join(COMPONENT, 'eapi')).replace("'", '"')
-        path = os.path.join(tempfile.mkdtemp(prefix='elten-ask-'), 'ask.rb')
-        io.open(path, 'w', encoding='utf-8').write(stub + source)
-        answer = subprocess.run([self.ruby.path, path], capture_output=True,
-                                timeout=120, env=self.ruby.environment())
-        self.assertEqual(answer.returncode, 0,
-                         answer.stderr.decode('utf-8', 'replace'))
-        return answer.stdout.decode('utf-8', 'replace').strip()
+        # The directory is REMOVED again. Each `ask` made one and left it:
+        # 5 694 `elten-ask-*` directories had accumulated in %TEMP%, one per
+        # call across every run of this suite, each holding one `ask.rb`. A
+        # test that litters is a test nobody can run often.
+        home = scratch('elten-ask-')
+        try:
+            path = os.path.join(home, 'ask.rb')
+            io.open(path, 'w', encoding='utf-8').write(stub + source)
+            answer = subprocess.run([self.ruby.path, path], capture_output=True,
+                                    timeout=120, env=self.ruby.environment())
+            self.assertEqual(answer.returncode, 0,
+                             answer.stderr.decode('utf-8', 'replace'))
+            return answer.stdout.decode('utf-8', 'replace').strip()
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
 
     def test_a_refused_score_goes_to_the_shared_board_and_reads_back(self):
         source = ('class Prot < Program; end\n'

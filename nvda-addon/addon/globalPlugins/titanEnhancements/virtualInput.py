@@ -435,3 +435,150 @@ def report():
         found = dict(_counted)
     found['windows_remembered'] = len(_last)
     return found
+
+
+# --------------------------------------------------------------------------- #
+# What CHANGED, which on a screen with no accessibility is what a key did
+# --------------------------------------------------------------------------- #
+"""`highlights` above finds a whole ROW whose background is unlike the
+window's own, which is what a menu and a list look like and is the wrong
+question for a screen.
+
+**Measured on a real Windows 95 guest**: the biggest run of "unlike the
+background" on that desktop is the TASKBAR - a grey band across the
+bottom of a teal screen - so arrowing between desktop icons was answered
+"Start", every time, because the taskbar is the most highlighted-looking
+thing there and it never moves.
+
+A screen needs the other question: **what changed**. Pressing Down on a
+desktop changes exactly two small places - the label that lost the
+selection and the one that gained it - and nothing else. That is
+independent of the theme, the language, the layout and of whether the
+selection is drawn as an inverted background at all, which is what makes
+it the right primary method for a guest, a game and an installer alike.
+
+Pixels are read through the same `getpixel` everything else here uses, in
+BLOCKS: a whole-picture comparison is a million reads in Python and this
+runs on a keystroke. A block is sampled at nine points, which is enough
+to notice a label being inverted and cheap enough to do on every key.
+"""
+
+#: How big a block is. Small enough that one icon's label is several
+#: blocks and two neighbouring icons are not one, large enough that a
+#: 640x480 screen is 1 200 blocks rather than 300 000 pixels.
+BLOCK = 16
+
+#: How far apart two block samples must be to count as changed. Below
+#: this is the compression noise a virtual display puts on a still
+#: picture.
+BLOCK_DIFFERENCE = 12
+
+#: Blocks nearer than this to one another belong to the same thing - a
+#: label and the icon above it, a word and the word beside it.
+JOIN = 2
+
+
+def fingerprint(image, width=0, height=0, block=BLOCK):
+    """The picture as ``{(bx, by): (red, green, blue)}``, one per block.
+
+    Cheap on purpose: nine samples a block, which is 10 800 reads for a
+    640x480 screen - a few milliseconds, on a key press.
+    """
+    try:
+        if not width or not height:
+            width, height = image.size
+    except Exception:                                # noqa: BLE001
+        return {}
+    found = {}
+    if width < block or height < block:
+        return found
+    step = max(1, block // 3)
+    for top in range(0, height - block + 1, block):
+        for left in range(0, width - block + 1, block):
+            red = green = blue = count = 0
+            for y in range(top, top + block, step):
+                for x in range(left, left + block, step):
+                    try:
+                        pixel = image.getpixel((x, y))
+                    except Exception:                # noqa: BLE001
+                        continue
+                    colour = _rgb(pixel)
+                    if colour is None:
+                        continue
+                    red += colour[0]
+                    green += colour[1]
+                    blue += colour[2]
+                    count += 1
+            if count:
+                found[(left // block, top // block)] = (
+                    red // count, green // count, blue // count)
+    return found
+
+
+def changed_blocks(before, after, difference=BLOCK_DIFFERENCE):
+    """Which blocks are not what they were. ``set()`` for none."""
+    if not before or not after:
+        return set()
+    moved = set()
+    for where, colour in after.items():
+        was = before.get(where)
+        if was is None:
+            continue
+        if _distance(was, colour) >= difference:
+            moved.add(where)
+    return moved
+
+
+def regions_of(blocks, block=BLOCK, join=JOIN):
+    """The changed blocks grouped into rectangles, biggest first.
+
+    ``[(left, top, width, height, blocks)]`` in the PICTURE's own pixels.
+    Grouped because a label that has just been selected is a dozen
+    neighbouring blocks and saying each of them would be saying nothing.
+    """
+    if not blocks:
+        return []
+    left = set(blocks)
+    found = []
+    while left:
+        seed = left.pop()
+        group = [seed]
+        edge = [seed]
+        while edge:
+            bx, by = edge.pop()
+            for dx in range(-join, join + 1):
+                for dy in range(-join, join + 1):
+                    near = (bx + dx, by + dy)
+                    if near in left:
+                        left.discard(near)
+                        group.append(near)
+                        edge.append(near)
+        xs = [one[0] for one in group]
+        ys = [one[1] for one in group]
+        found.append((min(xs) * block, min(ys) * block,
+                      (max(xs) - min(xs) + 1) * block,
+                      (max(ys) - min(ys) + 1) * block, len(group)))
+    found.sort(key=lambda one: -one[4])
+    return found
+
+
+def unlikeness(fingerprint_now, region, ground, block=BLOCK):
+    """How unlike the window's own background that region now is.
+
+    **This is what tells the two changed places apart.** Moving a
+    selection changes two things: the one that LOST it now looks like the
+    background, and the one that GAINED it does not. So the answer to
+    "what did the key move onto" is the changed region that is furthest
+    from the background, not the biggest one.
+    """
+    if not fingerprint_now or ground is None:
+        return 0
+    left, top, width, height = region[0], region[1], region[2], region[3]
+    worst = 0
+    for by in range(top // block, (top + height) // block):
+        for bx in range(left // block, (left + width) // block):
+            colour = fingerprint_now.get((bx, by))
+            if colour is None:
+                continue
+            worst = max(worst, _distance(colour, ground))
+    return worst

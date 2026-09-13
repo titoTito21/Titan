@@ -430,6 +430,15 @@ class AFieldCanReallyBeTypedInto(unittest.TestCase):
             "'ab\\n' 3")
         self.assertEqual(self._run(['enter'], value='ab', caret=2), "'ab' 2")
 
+    def test_a_character_keeps_its_own_case(self):
+        """A reader sends `shift+n`, because that is what its key names
+        are. A caller sending the character it means, `N`, should get an
+        N rather than an n silently - measured on the real tNotes, where
+        it wrote "notatka 1" for a title typed as "Notatka 1"."""
+        self.assertEqual(self._run(['N'], value='', caret=0), "'N' 1")
+        self.assertEqual(self._run(['shift+n'], value='', caret=0), "'N' 1")
+        self.assertEqual(self._run(['n'], value='', caret=0), "'n' 1")
+
     def test_a_read_only_field_moves_but_does_not_change(self):
         self.assertEqual(
             self._run(['x', 'left'], value='abc', caret=3,

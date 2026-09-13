@@ -557,9 +557,21 @@ def _keep_running():
     timer nobody asked for.
     """
     global _thread, _stop
-    should = bool(_load()) and wanted()
+    watching = bool(_load())
+    switched_on = wanted()
+    should = watching and switched_on
     with _LOCK:
         running = _thread is not None and _thread.is_alive()
+        # `why` was declared in `_state` and assigned by NOTHING, so the
+        # diagnostics carried an empty reason for ever - and `running: false`
+        # with nothing saying why is the one answer an operator cannot act
+        # on. Every other layer here says it (`guest`: "the setting is off",
+        # `surface`, `trackpad`), and this is the one place that knows: the
+        # watch stops either because the switch went off or because there is
+        # nothing left to watch.
+        _state['why'] = ('' if should
+                         else 'the setting is off' if not switched_on
+                         else 'nothing is being watched')
     if should and not running:
         start()
     elif not should and running:

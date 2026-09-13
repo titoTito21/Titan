@@ -22,6 +22,7 @@ def get_subsystem_tools():
         ('src.ai.tools.titannet_tools', 'get_titannet_tools'),
         ('src.ai.tools.elten_tools', 'get_elten_tools'),
         ('src.ai.tools.elten_client_tools', 'get_elten_client_tools'),
+        ('src.ai.tools.reader_tools', 'get_reader_tools'),
         ('src.ai.tools.im_tools', 'get_im_tools'),
         ('src.ai.tools.ocr_tools', 'get_ocr_tools'),
     )

@@ -39,6 +39,18 @@ from . import compat
 _LOCK = threading.RLock()
 _state = {'reads': 0, 'failed': 0, 'why': '', 'ms': 0.0}
 
+#: Why the last window capture came back with nothing. **Ten silent
+#: `return None` paths is how a reader goes blind without saying so**: the
+#: guest read as empty and the only thing anybody could see was that it read
+#: as empty. Written down here and answered by `report()`.
+_capture = {'why': '', 'refused': 0, 'taken': 0}
+
+
+def _no_picture(why):
+    _capture['why'] = str(why)
+    _capture['refused'] += 1
+    return None
+
 #: How long a reading may take before it is given up on. Windows OCR is
 #: fast; something that is not answering is not something to wait for on a
 #: watcher's poll.
@@ -51,7 +63,14 @@ def _text(value):
 
 def report():
     with _LOCK:
-        return dict(_state)
+        found = dict(_state)
+    # The capture is a separate question from the recogniser, and it is the
+    # one that answers "the guest reads as empty".
+    try:
+        found['capture'] = dict(_capture)
+    except Exception:                                # noqa: BLE001
+        pass
+    return found
 
 
 def _note(why):
@@ -90,8 +109,283 @@ def _recognizer():
     return uwpOcr.UwpOcr()
 
 
-def read(left, top, width, height):
+#: Windows' own raster operation for a straight copy.
+SRCCOPY = 0x00CC0020
+
+
+#: How many points are looked at before a capture is called blank. A
+#: coarse grid is not enough: a Windows 95 desktop is **97% one colour**,
+#: and twelve samples across a maximised guest found nothing but that
+#: teal - so every capture of the user's own machine was refused as
+#: "flat" and the reader fell back to photographing the screen, which is
+#: whatever is in FRONT of the guest. Measured, on that guest: 132
+#: colours in the same picture this called blank.
+BLANK_SAMPLES = 48
+
+
+def _blank(pixels, width, height):
+    """Whether a capture came back as ONE colour and nothing else.
+
+    That is what a window which would not draw itself gives - measured on
+    VMware, all three `PrintWindow` flags answer pure black - and it is
+    the only thing this may refuse. **A picture that is mostly one colour
+    is not blank**: a desktop, a document and a game's menu are all
+    mostly their background, and refusing those is refusing the case the
+    whole feature exists for.
+    """
+    try:
+        down = max(1, height // BLANK_SAMPLES)
+        across = max(1, width // BLANK_SAMPLES)
+        first = None
+        for y in range(1, height - 1, down):
+            for x in range(1, width - 1, across):
+                one = pixels[y][x]
+                colour = (one.rgbRed, one.rgbGreen, one.rgbBlue)
+                if first is None:
+                    first = colour
+                elif colour != first:
+                    return False
+    except Exception:                                # noqa: BLE001
+        return False
+    return True
+
+
+def _pixel_type():
+    """The four bytes of one pixel, as the recogniser wants them.
+
+    **A name in somebody else's module is not an interface.** This asked
+    `screenBitmap` for `RGBQUAD` and this NVDA answers `cannot import name
+    'RGBQUAD' from 'screenBitmap'` - it lives in `winGDI` here - so the
+    capture returned nothing on EVERY call, in a silent path, and the whole
+    guest read as an empty screen with nothing anywhere saying why. It was
+    found by making the refusal say which of its ten returns it was.
+
+    So: NVDA's own type where this NVDA has one (identical memory, and one
+    fewer thing to be wrong), and OUR OWN when it has not - it is four bytes
+    in a documented order, and a reader must not go blind over the spelling
+    of a class name.
+    """
+    # `winBindings.gdi32` is where this NVDA keeps it, and `winGDI.RGBQUAD`
+    # is deprecated - reading it logs a WARNING on EVERY capture, which
+    # buried the log in a virtual machine. So the current home is tried
+    # first, then our own (byte-identical), and the deprecated name only if
+    # an older NVDA has nothing else - where it is not deprecated and logs
+    # nothing.
+    for where, name in (('winBindings.gdi32', 'RGBQUAD'),
+                        ('screenBitmap', 'RGBQUAD')):
+        try:
+            module = __import__(where, fromlist=[name.split('.')[-1]])
+            found = getattr(module, name, None)
+            if found is not None:
+                return found
+        except Exception:                            # noqa: BLE001
+            continue
+    import ctypes
+
+    class _OurRGBQUAD(ctypes.Structure):
+        # BGRA, which is what a 32-bit DIB holds and what `GetDIBits` fills.
+        _fields_ = [('rgbBlue', ctypes.c_ubyte),
+                    ('rgbGreen', ctypes.c_ubyte),
+                    ('rgbRed', ctypes.c_ubyte),
+                    ('rgbReserved', ctypes.c_ubyte)]
+
+    return _OurRGBQUAD
+
+
+def _wgc_pixels(hwnd, width, height, source, RGBQUAD):
+    """A window's composed picture through Windows Graphics Capture, packed
+    into the same ``(RGBQUAD * width * height)`` the recogniser wants. Or None.
+
+    The bytes come back top-down BGRA, which is exactly ``RGBQUAD``'s own
+    order, so the copy is a straight ``memmove`` - no per-pixel work in
+    Python. The native helper handles the top-level-window crop; here it is
+    only asked, and only when the device-context path came back flat.
+    """
+    try:
+        from . import guestNative
+    except Exception:                                # noqa: BLE001
+        return None
+    try:
+        buffer = guestNative.capture_window(hwnd, width, height, source)
+    except Exception:                                # noqa: BLE001
+        return None
+    if buffer is None:
+        return None
+    try:
+        import ctypes
+        pixels = (RGBQUAD * width * height)()
+        want = width * height * 4
+        ctypes.memmove(ctypes.byref(pixels), buffer, want)
+        return pixels
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def from_window(hwnd, width, height, source=None):
+    """A window's picture taken from its OWN device context. Or None.
+
+    ``source`` is ``(left, top, width, height)`` INSIDE the window, for
+    reading one part of it - a region a key has just changed, which is
+    the whole point of noticing that a key changed one.
+
+    **A screen capture reads whatever is IN FRONT.** NVDA's own path -
+    and Titan's - photographs a rectangle of the screen, which is right
+    for the window somebody is looking at and wrong for the case this
+    exists for: measured on a real VMware guest sitting behind a terminal,
+    a screen capture of the guest's rectangle came back as the TERMINAL's
+    text, read and announced as though it were the guest.
+
+    A window's own DC has no such problem, and on that same guest it gave
+    the real thing: 92% of the points the teal of a Windows 95 desktop,
+    5% the grey of its taskbar, and the taskbar found as a highlight.
+
+    `PrintWindow` is deliberately not used: measured on the same window,
+    all three of its flags failed outright and answered pure black, which
+    is what a surface drawn by Direct3D does. A flat answer here is
+    refused rather than returned, so the caller falls back to the screen.
+    """
+    if not hwnd or width <= 0 or height <= 0:
+        return _no_picture('no window, or a size of nothing')
+    try:
+        import ctypes
+        import screenBitmap                          # noqa: F401
+    except Exception as error:                       # noqa: BLE001
+        return _no_picture('this NVDA has no screenBitmap: %s' % error)
+    RGBQUAD = _pixel_type()
+    try:
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+        user32.GetWindowDC.restype = ctypes.c_void_p
+        for maker in (gdi32.CreateCompatibleDC, gdi32.CreateCompatibleBitmap,
+                      gdi32.SelectObject):
+            maker.restype = ctypes.c_void_p
+    except Exception as error:                       # noqa: BLE001
+        return _no_picture('GDI could not be reached: %s' % error)
+    import ctypes.wintypes as wintypes
+
+    class _BIH(ctypes.Structure):
+        _fields_ = [('biSize', ctypes.c_uint32), ('biWidth', ctypes.c_int32),
+                    ('biHeight', ctypes.c_int32),
+                    ('biPlanes', ctypes.c_uint16),
+                    ('biBitCount', ctypes.c_uint16),
+                    ('biCompression', ctypes.c_uint32),
+                    ('biSizeImage', ctypes.c_uint32),
+                    ('biXPelsPerMeter', ctypes.c_int32),
+                    ('biYPelsPerMeter', ctypes.c_int32),
+                    ('biClrUsed', ctypes.c_uint32),
+                    ('biClrImportant', ctypes.c_uint32)]
+
+    class _BMI(ctypes.Structure):
+        _fields_ = [('bmiHeader', _BIH), ('bmiColors', RGBQUAD * 1)]
+
+    holder = target = bitmap = old = None
+    try:
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(ctypes.c_void_p(hwnd),
+                                    ctypes.byref(rect)):
+            return _no_picture('the window would not say where it is')
+        whole, tall = rect.right - rect.left, rect.bottom - rect.top
+        if whole <= 0 or tall <= 0:
+            return _no_picture('the window has no size')
+        from_left = from_top = 0
+        if source:
+            from_left, from_top = int(source[0]), int(source[1])
+            whole, tall = int(source[2]), int(source[3])
+            if whole <= 0 or tall <= 0:
+                return _no_picture('the region asked for has no size')
+        holder = user32.GetWindowDC(ctypes.c_void_p(hwnd))
+        if not holder:
+            return _no_picture('the window would not lend its own context')
+        target = gdi32.CreateCompatibleDC(ctypes.c_void_p(holder))
+        bitmap = gdi32.CreateCompatibleBitmap(ctypes.c_void_p(holder),
+                                              width, height)
+        if not target or not bitmap:
+            return _no_picture('no bitmap could be made for %d by %d'
+                               % (width, height))
+        old = gdi32.SelectObject(ctypes.c_void_p(target),
+                                 ctypes.c_void_p(bitmap))
+        # Stretched, because the recogniser asked for a size of its own -
+        # `RecogImageInfo` scales by `resizeFactor` and every rectangle it
+        # answers is in that scale.
+        gdi32.SetStretchBltMode(ctypes.c_void_p(target), 4)   # HALFTONE
+        if not gdi32.StretchBlt(ctypes.c_void_p(target), 0, 0, width, height,
+                                ctypes.c_void_p(holder), from_left, from_top,
+                                whole, tall, SRCCOPY):
+            return _no_picture('the window would not copy itself (StretchBlt '
+                               'refused)')
+        info = _BMI()
+        info.bmiHeader.biSize = ctypes.sizeof(_BIH)
+        info.bmiHeader.biWidth = width
+        info.bmiHeader.biHeight = -height
+        info.bmiHeader.biPlanes = 1
+        info.bmiHeader.biBitCount = 32
+        pixels = (RGBQUAD * width * height)()
+        if not gdi32.GetDIBits(ctypes.c_void_p(target),
+                               ctypes.c_void_p(bitmap), 0, height,
+                               ctypes.byref(pixels), ctypes.byref(info), 0):
+            return _no_picture('the bitmap would not be read back')
+        if _blank(pixels, width, height):
+            # **A flat picture is a window that draws with Direct3D/DXGI/
+            # OpenGL** - a virtual machine's guest, a Unity or SDL game -
+            # and its device context has nothing in it. Windows Graphics
+            # Capture asks the compositor for the window's own composed
+            # surface instead, which is the one thing that answers those.
+            woven = _wgc_pixels(hwnd, width, height, source, RGBQUAD)
+            if woven is not None:
+                _capture['taken'] += 1
+                _capture['why'] = ''
+                return woven
+            return _no_picture('the window drew one flat colour, and Windows '
+                               'Graphics Capture could not take it either')
+        _capture['taken'] += 1
+        _capture['why'] = ''
+        return pixels
+    except Exception as error:                       # noqa: BLE001
+        return _no_picture('%s: %s' % (type(error).__name__, error))
+    finally:
+        try:
+            if old:
+                gdi32.SelectObject(ctypes.c_void_p(target),
+                                   ctypes.c_void_p(old))
+            if bitmap:
+                gdi32.DeleteObject(ctypes.c_void_p(bitmap))
+            if target:
+                gdi32.DeleteDC(ctypes.c_void_p(target))
+            if holder:
+                user32.ReleaseDC(ctypes.c_void_p(hwnd),
+                                 ctypes.c_void_p(holder))
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def _inside_window(hwnd, info):
+    """Where that screen rectangle is INSIDE the window, or None.
+
+    A window's own device context has its origin at the window's top left
+    corner, so a rectangle of the screen has to be moved there before it
+    can be copied out of one.
+    """
+    rect = _window_rect(hwnd)
+    if rect is None:
+        return None
+    left, top, right, bottom = rect
+    inside = (int(info.screenLeft) - left, int(info.screenTop) - top,
+              int(info.screenWidth), int(info.screenHeight))
+    if inside[0] < 0 or inside[1] < 0:
+        return None
+    if inside[0] + inside[2] > right - left:
+        return None
+    if inside[1] + inside[3] > bottom - top:
+        return None
+    return inside
+
+
+def read(left, top, width, height, hwnd=0):
     """Read a rectangle of the screen. ``Reading`` or None.
+
+    ``hwnd`` asks for that WINDOW's own picture rather than the screen's,
+    and falls back to the screen when the window will not draw itself.
+    See :func:`from_window` for why, and for what it was measured on.
 
     Synchronous on the outside and asynchronous underneath: NVDA's
     recogniser answers through a callback, and every caller here is a
@@ -123,9 +417,14 @@ def read(left, top, width, height):
         # NVDA's own capture path (`contentRecog.recogUi._captureWithGdi`),
         # not one of ours: it is the thing that already works on every
         # display, DPI and screen-curtain arrangement people really have.
-        bitmap = screenBitmap.ScreenBitmap(info.recogWidth, info.recogHeight)
-        pixels = bitmap.captureImage(info.screenLeft, info.screenTop,
-                                     info.screenWidth, info.screenHeight)
+        pixels = from_window(hwnd, info.recogWidth, info.recogHeight,
+                             source=_inside_window(hwnd, info)) \
+            if hwnd else None
+        if pixels is None:
+            bitmap = screenBitmap.ScreenBitmap(info.recogWidth,
+                                               info.recogHeight)
+            pixels = bitmap.captureImage(info.screenLeft, info.screenTop,
+                                         info.screenWidth, info.screenHeight)
     except Exception as error:                       # noqa: BLE001
         return _note('the window could not be photographed: %s' % error)
 
@@ -210,12 +509,42 @@ def _highlighted(pixels, info):
 
 
 def read_window(hwnd):
-    """Read one window. ``Reading`` or None."""
+    """Read one window. ``Reading`` or None.
+
+    **What the program DREW is asked first.** NVDA's display model already
+    holds the words every process passed to a GDI text call, with a
+    rectangle per character - exact, instant, free, and nothing leaves the
+    machine. Photographing a window that had already said what it was
+    writing is the long way round; it is kept for the windows that really do
+    need it, which is a Direct3D game, the inside of a virtual machine, and
+    anything blitted in from elsewhere.
+
+    An empty answer from the hook is not a failure - it means this window
+    does not draw its text that way - so the fall-through is silent.
+    """
+    if _drawn_text_wanted():
+        try:
+            from . import drawnText
+            drawn = drawnText.read_window(hwnd)
+        except Exception as error:                   # noqa: BLE001
+            drawn = None
+            _note('the display model could not be read: %s' % error)
+        if drawn:
+            return drawn
+
     rect = _window_rect(hwnd)
     if rect is None:
         return _note('that window has no place on the screen')
     left, top, right, bottom = rect
-    return read(left, top, right - left, bottom - top)
+    return read(left, top, right - left, bottom - top, hwnd=hwnd)
+
+
+def _drawn_text_wanted():
+    try:
+        from . import configSpec
+        return bool(configSpec.read().get('drawnText', True))
+    except Exception:                                # noqa: BLE001
+        return True
 
 
 #: What the model tier answers about itself, kept so the settings page

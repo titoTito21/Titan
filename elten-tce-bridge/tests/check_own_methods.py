@@ -107,9 +107,19 @@ def main():
             continue
         text = open(os.path.join(BRIDGE, name), encoding='utf-8',
                     errors='replace').read()
+        # A constant this file ASKS about with `defined?` is one it already
+        # knows may be absent - it belongs to the host, not to us. The
+        # bridge reopens `module EltenAPI`, which makes that module look
+        # like ours, so `EltenAPI::ELTEN_API_VERSION` (Elten's own, probed
+        # with `return "" if !defined?(...)`) was reported as missing. A
+        # checker with a false positive in it is a checker nobody runs.
+        probed = set(re.findall(r'defined\?\(\s*([A-Z][\w]*)::([A-Z][A-Z_0-9]*)',
+                                text))
         for holder, const in re.findall(r'\b([A-Z][\w]*)::([A-Z][A-Z_0-9]*)\b', text):
             if holder not in constants:
                 continue            # not one of ours
+            if (holder, const) in probed:
+                continue            # deliberately optional
             if const not in constants[holder]:
                 problems.append((name, holder, f'{holder}::{const}'))
     # **And no bare top-level constant.** Elten loads every application

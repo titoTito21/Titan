@@ -92,6 +92,26 @@ def _screen(category='', **_):
     return json.dumps({'categories': categories}, ensure_ascii=False)
 
 
+def _said(value):
+    """A value as WORDS, never as the Python it happens to be.
+
+    A tick list's value is a real list, and a list put into a sentence
+    through an f-string is `['tWeb']` - brackets, quotes and commas, in a
+    sentence that is then read out one punctuation mark at a time. Every
+    caller of this action SAYS what comes back: the bridge reads it to a
+    screen reader, the assistant reads it to the user. Titan already
+    learned this about a character sheet; it is the same mistake one
+    field smaller.
+    """
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(one) for one in value) if value else "nothing"
+    if value is None or value == "":
+        return "empty"
+    return str(value)
+
+
 def _set_value(item='', value='', **_):
     """Set one setting, the way pressing it in Titan's own window would."""
     identifier = str(item or '').strip()
@@ -112,6 +132,16 @@ def _set_value(item='', value='', **_):
         # bracket is not a list.
         if entry.kind == 'multi':
             import json as _json
+            # **A caller that sends a real list is not made to spell it.**
+            # Every other shape is stringified below, and `str()` of a
+            # Python list is Python's own spelling - single quotes - which
+            # is not JSON and does not parse: a client that did the
+            # obvious thing got one row back whose text was the repr of
+            # its own list. Over the bridge a JSON array arrives as a
+            # list, so it is taken as one.
+            if isinstance(value, (list, tuple)):
+                return (model.set(identifier, [str(one) for one in value]),
+                        entry.label, entry.value())
             text = str(value or '').strip()
             try:
                 parsed = _json.loads(text) if text.startswith('[') else None
@@ -133,7 +163,7 @@ def _set_value(item='', value='', **_):
     ok, label, now = outcome
     if not ok:
         return f"{label} would not take that value."
-    return f"{label} is now {now}. Nothing is written until you save."
+    return f"{label} is now {_said(now)}. Nothing is written until you save."
 
 
 def _press(item='', **_):

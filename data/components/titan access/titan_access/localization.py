@@ -87,6 +87,25 @@ def sync_with_tce():
     set_language(detect_tce_language())
 
 
+def translate(text):
+    """``_`` for the modules shared with the NVDA add-on.
+
+    Those modules ask ``_('Top left')`` with the English sentence as the
+    key, the gettext way; ``portable/i18n.py`` looks here for a callable
+    named ``translate`` and, finding none, answered the English on every
+    machine - so a Polish Titan Access walked its lists in English. The
+    keys are the sentences themselves, kept in ``locale/pl.json`` beside
+    the dotted ones, and a sentence with no entry is said as it is.
+    """
+    try:
+        template = _strings.get(text)
+        if template is None:
+            template = _fallback.get(text, text)
+        return template if template else text
+    except Exception:                                # noqa: BLE001
+        return text
+
+
 def L(key, *args):
     """Translate ``key`` and apply C#-style positional formatting with ``args``."""
     with _lock:

@@ -213,6 +213,47 @@ def _page():
              _('Tell Titan which program you are in, so its own features '
                'can be about that program'), ''),
         )),
+        # Translators: a group of settings in the Titan panel. Its own
+        # msgid rather than the layer entry's "Titan itself": the layer
+        # opens the whole of Titan, and this group is only about the
+        # settings inside it, so one word cannot serve both.
+        (_("Titan's own settings"),
+         # Translators: what the "Titan's own settings" category is for.
+         _('The list of Titan you walk with the arrow keys - what it can '
+           'start, its settings, its macros. Enter on a setting changes '
+           'it; Save is at the end of the categories.'), (
+            # Translators: a setting in the Titan enhancements panel.
+            ('titanValues', _('Say what a setting is set to'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('titanCounts', _('Say how many are in a list'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('titanAutoSave', _('Save Titan\'s settings straight away'), ''),
+        )),
+        # Translators: a group of settings in the Titan panel.
+        (_('Virtual machines'),
+         # Translators: what the 'Virtual machines' category is for.
+         _('A guest is another computer\'s screen, so there is nothing in '
+           'it for a reader to read. This follows the pointer instead: '
+           'what is written on its row, and what the pointer\'s own shape '
+           'says the control is. No key to press, and nothing is '
+           'installed in the guest.'), (
+            # Translators: a setting in the Titan enhancements panel.
+            ('guestCursor', _('Read what the pointer is on'), ''),
+            # Translators: a setting in the Titan enhancements panel. The
+            # agent channel: something INSIDE the guest, or inside a game,
+            # reporting what it sees - which is the only way to get real
+            # text rather than a picture.
+            ('agentLink',
+             _('Also listen for an agent inside a guest or a game telling '
+               'the reader what it sees. Nothing is needed in the guest for '
+               'the pointer above; this is for real text, where you can put '
+               'something there'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('agentFromGuest',
+             _('Let such an agent reach the reader over the network. Without '
+               'this it is heard only from this computer, or through VMware '
+               'itself, which needs no network at all'), 'agentLink'),
+        )),
         # Translators: a group of settings in the Titan panel.
         (_('Permissions'),
          # Translators: text on the Titan enhancements panel.
@@ -246,6 +287,12 @@ def _page():
             ('autoLabel',
              _('Work out a name for an unnamed control by reading it once, '
                'and remember it'), ''),
+            # Translators: a setting in the Titan enhancements panel. The
+            # display-model tier: what the program passed to a GDI text call,
+            # read from NVDA's own hooks instead of from a picture.
+            ('drawnText',
+             _('Read what the program drew, before taking any picture of '
+               'it (exact, instant, and nothing leaves the machine)'), ''),
             # Translators: a setting in the Titan enhancements panel: which
             # recogniser reads a window that shows a screen reader nothing.
             ('ocrTier', _('Read such a window with:'), ''),
@@ -348,6 +395,10 @@ def build():
             # Translators: a button on the Titan enhancements panel.
             modules = buttons.addButton(self, label=_('Reader modules...'))
             modules.Bind(wx.EVT_BUTTON, self._modules)
+            # Translators: a button on the Titan enhancements panel: shows
+            # the key an agent inside a guest has to carry.
+            key = buttons.addButton(self, label=_('The agent\'s key...'))
+            key.Bind(wx.EVT_BUTTON, self._agent_key)
             helper.addItem(buttons)
             helper.addItem(wx.StaticText(self, label=self._state()))
 
@@ -477,6 +528,47 @@ def build():
         def _modules(self, _event):
             from . import commands
             commands.reader_modules()
+
+        def _agent_key(self, _event):
+            """Show the key, so it can be copied into an agent.
+
+            A read-only text control rather than a message box: the whole
+            point is to select it and copy it, and a reader has its own
+            cursor in a text control and none in a dialog's static text.
+            """
+            import wx
+            from . import agentLink
+            # Translators: the title of the dialog showing the agent's key.
+            dialog = wx.Dialog(self, title=_('The agent\'s key'))
+            inside = wx.BoxSizer(wx.VERTICAL)
+            # Translators: text in the dialog showing the agent's key.
+            words = _('An agent must carry this key in every line it sends, '
+                      'or the reader drops it without answering. Copy it '
+                      'into the agent; it never leaves this computer '
+                      'otherwise. The agent talks to port {port}.').format(
+                          port=agentLink.PORT)
+            note = wx.TextCtrl(dialog, value=words, style=(
+                wx.TE_READONLY | wx.TE_MULTILINE | wx.NO_BORDER))
+            note.SetMinSize((420, 70))
+            # Translators: the name of the explanation in the key dialog.
+            a11y_name(note, _('What the key is for'))
+            inside.Add(note, 0, wx.EXPAND | wx.ALL, 6)
+            # Translators: the label of the field holding the agent's key.
+            inside.Add(wx.StaticText(dialog, label=_('&Key')), 0, wx.LEFT, 6)
+            field = wx.TextCtrl(dialog, value=agentLink.token(),
+                                style=wx.TE_READONLY)
+            field.SetMinSize((420, -1))
+            # Translators: the name of the field holding the agent's key.
+            a11y_name(field, _('The agent\'s key'))
+            inside.Add(field, 0, wx.EXPAND | wx.ALL, 6)
+            buttons = dialog.CreateButtonSizer(wx.CLOSE)
+            if buttons is not None:
+                inside.Add(buttons, 0, wx.EXPAND | wx.ALL, 6)
+            dialog.SetSizerAndFit(inside)
+            field.SetFocus()
+            field.SelectAll()
+            dialog.ShowModal()
+            dialog.Destroy()
 
         def _state(self):
             """What this NVDA can actually do, said plainly on the panel.

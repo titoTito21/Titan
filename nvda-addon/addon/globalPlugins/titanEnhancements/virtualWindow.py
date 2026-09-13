@@ -69,8 +69,11 @@ SKIP = frozenset({
 
 _LOCK = threading.RLock()
 _state = {'on': False, 'nodes': [], 'at': 0, 'inner': 0, 'hwnd': 0,
+          'layout': 'linear', 'clicked_at': 0.0, 'depth': None,
+          'window_rect': None,
           'title': '', 'moves': 0, 'presses': 0, 'partial': '', 'ms': 0,
-          'typing': False, 'why': ''}
+          'typing': False, 'why': '', 'typed': 0, 'field': None,
+          'menu': None, 'letter': 0}
 
 
 def report():
@@ -80,7 +83,8 @@ def report():
                 'at': _state['at'], 'window': _state['title'],
                 'moves': _state['moves'], 'presses': _state['presses'],
                 'partial': _state['partial'], 'ms': _state['ms'],
-                'why': _state['why'], 'here': _here_report()}
+                'why': _state['why'], 'typed': _state.get('typed', 0),
+                'here': _here_report()}
 
 
 def _here_report():
@@ -129,25 +133,220 @@ def typing_mode():
 
 
 def enter_typing():
-    """Give the keyboard to the field the cursor is on. ``(ok, said)``."""
+    """Type into the row the cursor is on. ``(ok, said)``.
+
+    **This is a mode of the VIRTUAL WINDOW**, not a hand-over to whatever
+    happens to have the focus. While it is on the virtual window holds
+    every printable key - the letters, the space, Enter - and puts each
+    one into the place the cursor is on. That is what makes it work in
+    the two cases that are not the same:
+
+    * a real control, which is focused and then edits itself, so Up and
+      Down are its lines, Left and Right its characters and Control with
+      an arrow its words - the control's own behaviour, not a copy of it;
+    * a row read off a PICTURE, where there is no control at all. That is
+      a virtual machine, and the guest is another computer with its own
+      caret: the row is clicked to put that caret where the words are,
+      and the keys go to the guest's window.
+
+    Releasing the keys instead - which is what this did first - works for
+    the first and silently does nothing for the second, because there is
+    nothing focused to receive them.
+    """
     node = here()
     if node is None:
         return _nothing()
-    if not _is_a_field(node):
-        return False, ''
-    ok, _why = focus_here()
-    if not ok:
-        # A row read off the screen has no control to focus, and clicking
-        # a rectangle is not the same promise: say so rather than turning
-        # a mode on that nothing is behind.
-        # Translators: said when a field could not be typed into.
-        return False, _('This cannot be typed into')
+    obj = node.get('obj')
+    if obj is not None:
+        if not _is_a_field(node):
+            return False, ''
+        ok, _why = focus_here()
+        if not ok:
+            # Translators: said when a field could not be typed into.
+            return False, _('This cannot be typed into')
+    else:
+        # A row off a picture. Clicking is how the caret gets there, and
+        # it is the same click Enter would make - so a window that
+        # answers a click answers this, and one that does not was never
+        # going to be typed into anyway.
+        ok, why = click_here()
+        if not ok:
+            return False, _refusal(why)
+    # **The field's own text becomes the window.** Its lines are what the
+    # cursor walks, its characters are what Left and Right say, and a
+    # letter goes in at the caret - so a field is walked exactly as the
+    # window's controls are, which is what "the edit field IS a virtual
+    # window" means.
+    from . import textField
     with _LOCK:
         _state['typing'] = True
+        _state['field'] = textField.Field(
+            text=_value_of(node), multiline=_is_multiline(node),
+            readonly=False)
     icons.play('open-object')
     # Translators: said when the virtual window hands the keyboard to a
     # field. The pair has to be symmetrical with 'Edit field off'.
-    return True, _('Edit field on')
+    said = _('Edit field on')
+    _say_field()
+    return True, said
+
+
+def _value_of(node):
+    """What the row already holds, so typing starts from the real text."""
+    obj = node.get('obj')
+    if obj is None:
+        # A row off a picture: the words that were read are all there is,
+        # and they are what the guest already shows.
+        return ''
+    for name in ('value', 'name'):
+        try:
+            found = getattr(obj, name, None)
+            if isinstance(found, str) and found:
+                return found
+        except Exception:                            # noqa: BLE001
+            continue
+    return ''
+
+
+def _is_multiline(node):
+    role = str(node.get('role') or '').upper()
+    if role in ('DOCUMENT', 'TERMINAL'):
+        return True
+    obj = node.get('obj')
+    try:
+        from . import elements
+        states = elements._states_of(obj) if obj is not None else []
+    except Exception:                                # noqa: BLE001
+        states = []
+    return any('multiline' in str(one).lower() for one in states)
+
+
+def field():
+    """The field being walked, or None."""
+    with _LOCK:
+        return _state.get('field')
+
+
+def _say_field():
+    """Where the caret is now, in the reader's own voice classes."""
+    found = field()
+    if found is None:
+        return
+    _say_parts(found.parts())
+
+
+#: What is said back as a key is typed. A letter is echoed because a
+#: reader that says nothing while somebody types is a reader they cannot
+#: tell is listening; the editing keys are left to the control, which
+#: announces what it did with them itself.
+ECHO = True
+
+
+def type_key(name, send):
+    """One key against the field being walked. ``(ok, said)``.
+
+    The field decides what the key means - :mod:`textField` is the one
+    place that knows, so the two readers and the two modes cannot drift
+    apart about what Backspace does - and what comes back is what to say:
+    the character moved onto, the line arrived at, or the text that went.
+
+    A key the field does not want (Tab, and Enter in a one-line field,
+    which belongs to the form) is handed back to the program with
+    ``send``.
+    """
+    if not typing_mode():
+        return False, ''
+    found = field()
+    if found is None:
+        return False, ''
+    from . import textField
+    was = found.text
+    what, said = textField.press(found, name)
+    if not what:
+        # Not the field's key: it is the program's.
+        try:
+            send()
+        except Exception:                            # noqa: BLE001
+            pass
+        return True, ''
+    with _LOCK:
+        _state['typed'] += 1
+    if what == 'edge':
+        _edge()
+        return True, ''
+    if found.text != was:
+        _write_back(found.text)
+    if said:
+        _say(said)
+    return True, ''
+
+
+def open_menu(node):
+    """Walk into a menu: what is on it becomes the list. ``(ok, said)``."""
+    obj = node.get('obj')
+    if obj is None:
+        return False, ''
+    note = {}
+    inside = nodes_of(obj, note)
+    inside = [row for row in inside if row.get('obj') is not obj]
+    if not inside:
+        # Translators: said when a menu has nothing on it that can be read.
+        return False, _('That menu is empty')
+    with _LOCK:
+        _state['menu'] = {'nodes': list(_state['nodes']),
+                          'at': _state['at'],
+                          'title': _state['title']}
+        _state.update({'nodes': inside, 'at': 0, 'inner': 0})
+    icons.play('open-object')
+    say_here()
+    return True, ''
+
+
+def in_a_menu():
+    with _LOCK:
+        return bool(_state.get('menu'))
+
+
+def close_menu():
+    """Back out of a menu to the window's own controls. ``(ok, said)``."""
+    with _LOCK:
+        was = _state.get('menu')
+        if not was:
+            return False, ''
+        _state.update({'nodes': was['nodes'], 'at': was['at'],
+                       'inner': 0, 'menu': None})
+    icons.play('close-object')
+    say_here()
+    return True, ''
+
+
+def _write_back(text):
+    """Put the text into the real control, where there is one.
+
+    A row read off a picture has none - there the keys have already been
+    typed into the guest by the program itself, because the row was
+    clicked and the guest has the keyboard.
+    """
+    node = here()
+    obj = (node or {}).get('obj')
+    if obj is None:
+        return False
+    for setter in ('value',):
+        try:
+            setattr(obj, setter, text)
+            return True
+        except Exception:                            # noqa: BLE001
+            continue
+    try:
+        obj.setFocus()
+    except Exception:                                # noqa: BLE001
+        pass
+    return False
+
+
+def typed():
+    with _LOCK:
+        return int(_state.get('typed') or 0)
 
 
 def leave_typing():
@@ -155,6 +354,7 @@ def leave_typing():
     with _LOCK:
         was = _state['typing']
         _state['typing'] = False
+        _state['field'] = None
     if not was:
         return False, ''
     icons.play('close-object')
@@ -202,6 +402,23 @@ def _text(value):
         return str(value or '').strip()
     except Exception:                                # noqa: BLE001
         return ''
+
+
+def _rect_of_window(window):
+    """``(left, top, width, height)`` of the window itself, or None.
+
+    The corners are the WINDOW's, not the bounding box of whatever the
+    walk happened to keep: a list's rows scrolled out of sight report
+    rectangles far below the window, and a corner worked out from those
+    lands on a row nobody can see.
+    """
+    try:
+        location = window.location
+        rect = (int(location.left), int(location.top),
+                int(location.width), int(location.height))
+    except Exception:                                # noqa: BLE001
+        return None
+    return rect if rect[2] > 0 and rect[3] > 0 else None
 
 
 def _role_name(obj):
@@ -254,20 +471,28 @@ def nodes_of(window, note=None):
     except Exception:                                # noqa: BLE001
         pass
     found, seen = [], 0
-    queue = [(window, 0)]
+    # **Every node knows which kept node it is inside.** ``parent`` is
+    # the id of the nearest ancestor that made it into the list - a
+    # skipped pane or an unnamed control passes its own parent through -
+    # which is what the interaction layout walks: the siblings of a
+    # control are the nodes with the same parent, and interacting with it
+    # is stepping down to the nodes whose parent it is. Ids rather than
+    # indexes, because the menu bar is moved to the front below and an
+    # index would move with it.
+    queue = [(window, 0, None)]
     while queue and seen < MAX_SEEN and len(found) < MAX_NODES:
         if time.time() - started > SECONDS:
             note['ran_out'] = 'time'
             break
-        obj, level = queue.pop(0)
+        obj, level, parent = queue.pop(0)
         seen += 1
         try:
-            for child in (obj.children or []):
-                queue.append((child, level + 1))
+            children = list(obj.children or [])
         except Exception:                            # noqa: BLE001
-            pass
+            children = []
         role = _role_name(obj)
         if role.upper() in SKIP:
+            queue.extend((child, level + 1, parent) for child in children)
             continue
         name = _text(getattr(obj, 'name', ''))
         value = _text(getattr(obj, 'value', ''))
@@ -283,11 +508,15 @@ def nodes_of(window, note=None):
                 # Nothing to call it by. A blank row is a row somebody
                 # arrows onto and is told nothing about, which is worse
                 # than a shorter list.
+                queue.extend((child, level + 1, parent)
+                             for child in children)
                 continue
             # Translators: the row for a window's menu bar.
             name = _('Menu bar')
+        queue.extend((child, level + 1, len(found)) for child in children)
         found.append({'name': name, 'value': value, 'description': described,
-                      'role': role, 'level': level, 'obj': obj})
+                      'role': role, 'level': level, 'obj': obj,
+                      'id': len(found), 'parent': parent})
     # **The menu bar first, because that is where it is.** The walk is
     # breadth first over the accessibility tree, whose order is the order
     # a toolkit happened to build its children in - so the menus turned
@@ -310,6 +539,7 @@ def nodes_of(window, note=None):
         # presses it by clicking where it really is, which is the only way
         # to press anything in somebody else's computer.
         found = _read_the_screen(window, note)
+    _number(found)
     note['seen'] = seen
     note['ms'] = int((time.time() - started) * 1000)
     if not note['ran_out']:
@@ -318,6 +548,21 @@ def nodes_of(window, note=None):
         elif len(found) >= MAX_NODES:
             note['ran_out'] = 'controls'
     return found
+
+
+def _number(rows):
+    """Give every row an ``id`` and a ``parent`` it has not got.
+
+    Rows read off a picture have no tree, and a caller may hand in rows
+    of its own: they are all top-level, so the interaction layout treats
+    them as siblings and finds nothing to step into but their words.
+    """
+    for index, row in enumerate(rows or []):
+        if 'id' not in row:
+            row['id'] = index
+        if 'parent' not in row:
+            row['parent'] = None
+    return rows
 
 
 def _read_the_screen(window, note):
@@ -374,8 +619,14 @@ def _read_the_screen(window, note):
     return rows
 
 
-def start(hwnd=0):
-    """Build the virtual window for whatever is in front. ``(ok, said)``."""
+def start(hwnd=0, speak=True):
+    """Build the virtual window for whatever is in front. ``(ok, said)``.
+
+    ``speak`` is False when the caller will place the cursor itself and say
+    the row - which is what `refresh(keep_place=True)` does, and saying the
+    first control here as well is the doubled announcement a rebuild used
+    to make.
+    """
     window = _foreground()
     if window is None:
         # Translators: said when there is no window to walk.
@@ -392,7 +643,8 @@ def start(hwnd=0):
                         'instead.')
     with _LOCK:
         _state.update({'on': True, 'nodes': nodes, 'at': 0, 'inner': 0,
-                       'typing': False,
+                       'typing': False, 'depth': None,
+                       'window_rect': _rect_of_window(window),
                        'partial': str(note.get('ran_out') or ''),
                        'ms': int(note.get('ms') or 0),
                        'title': _text(getattr(window, 'name', '')),
@@ -406,7 +658,8 @@ def start(hwnd=0):
         # where the rest of it went.
         # Translators: said when a window was too big to be walked whole.
         _say(_('Part of it only'))
-    say_here()
+    if speak:
+        say_here()
     # **A toggle says which state it is in and nothing else.** It carried
     # the number of controls, which is a fact about this window rather
     # than about the switch - and the first control is spoken straight
@@ -421,7 +674,8 @@ def stop():
     with _LOCK:
         was = _state['on']
         _state.update({'on': False, 'nodes': [], 'at': 0, 'inner': 0,
-                       'hwnd': 0, 'typing': False})
+                       'hwnd': 0, 'typing': False, 'typed': 0,
+                       'field': None, 'menu': None})
     if was and not icons.play('close-object'):
         _cue(False)
     # Translators: said when the virtual window is turned off.
@@ -491,7 +745,7 @@ def refresh(keep_place=True):
     with _LOCK:
         at = _state['at']
     stop()
-    ok, said = start()
+    ok, said = start(speak=not keep_place)
     if ok and keep_place:
         with _LOCK:
             _state['at'] = max(0, min(at, len(_state['nodes']) - 1))
@@ -515,7 +769,71 @@ def left_the_window():
         was = _state['hwnd']
     if now in (0, was):
         return False
+    # **A sub-window is FOLLOWED, not left.** An application that opens a
+    # dialog over the window being walked has not taken the user
+    # anywhere else: they are still in the same program, in a window that
+    # sits on the one they were in. Stopping there gave them a review
+    # that vanished exactly when something appeared to read.
+    if _owned_by(now, was):
+        return not follow(window)
     stop()
+    return True
+
+
+def _owned_by(now, was):
+    """Whether the window in front is a sub-window of the one walked.
+
+    Windows says so two ways and both are worth asking: an OWNED window
+    (which is what a dialog of the same program is), and a window of the
+    same process whose class is the dialog class. A window belonging to
+    something else entirely is a different program and is left alone.
+    """
+    if not now or not was:
+        return False
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.GetWindow.restype = ctypes.c_void_p
+        owner = int(user32.GetWindow(ctypes.c_void_p(int(now)), 4) or 0)
+        if owner == int(was):
+            return True
+        buffer = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(ctypes.c_void_p(int(now)), buffer, 64)
+        if str(buffer.value) != '#32770':
+            return False
+        mine = ctypes.wintypes.DWORD()
+        theirs = ctypes.wintypes.DWORD()
+        user32.GetWindowThreadProcessId(ctypes.c_void_p(int(was)),
+                                        ctypes.byref(mine))
+        user32.GetWindowThreadProcessId(ctypes.c_void_p(int(now)),
+                                        ctypes.byref(theirs))
+        return bool(mine.value) and mine.value == theirs.value
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def follow(window):
+    """Rebuild for a sub-window that has appeared. ``True`` if it worked.
+
+    Said once, on arriving - not per control - which is the rule the
+    dialog and ancestry layers already follow.
+    """
+    note = {}
+    nodes = nodes_of(window, note)
+    if not nodes:
+        return False
+    with _LOCK:
+        _state.update({'nodes': nodes, 'at': 0, 'inner': 0,
+                       'typing': False, 'field': None, 'menu': None,
+                       'title': _text(getattr(window, 'name', '')),
+                       'hwnd': int(getattr(window, 'windowHandle', 0) or 0)})
+    icons.play('open-object')
+    title = _text(getattr(window, 'name', ''))
+    # Translators: said on arriving in a window that opened over the one
+    # being walked. {title} is what it is called.
+    _say(_('{title}, sub-window').format(title=title) if title
+         else _('Sub-window'))
+    say_here()
     return True
 
 
@@ -530,6 +848,16 @@ def here():
 
 
 def move(delta):
+    # **The plain arrows follow whichever layout is on.** In the simple
+    # layout (the default) they step through the list; on the screen
+    # layout they go to the control above or below where this one really
+    # is; in the interaction layout Down steps INTO the control and Up
+    # back out of it, and they never move along the list at all.
+    which = layout()
+    if which == 'screen':
+        return move_vertical(delta)
+    if which == 'interact':
+        return interact_in() if delta > 0 else interact_out()
     with _LOCK:
         nodes = _state['nodes']
         if not nodes:
@@ -540,6 +868,7 @@ def move(delta):
             return say_here(beep=False)
         _state['at'] = at
         _state['inner'] = 0
+        _state['letter'] = 0
         _state['moves'] += 1
     return say_here()
 
@@ -549,6 +878,8 @@ def move_page(direction):
 
 
 def move_end(to_end):
+    if layout() == 'interact':
+        return interact_end(to_end)
     with _LOCK:
         nodes = _state['nodes']
         if not nodes:
@@ -560,21 +891,57 @@ def move_end(to_end):
 
 
 def move_inside(delta):
-    """Left and Right: the words of what this control says."""
+    """Left and Right: through what this control says.
+
+    **The words while there are words, and then the characters.** A row
+    with several words is read a word at a time, which is what somebody
+    wants from a name, a value or a path. A row that is one word - or the
+    END of a row that has run out of them - is read a CHARACTER at a
+    time, which is how a spelling, a number or an extension is checked by
+    ear. Stopping dead at the last word says nothing about what is in it.
+    """
     node = here()
     if node is None:
         return _nothing()
     words = _words_of(node)
     if not words:
-        return say_here(beep=False)
+        return _by_character(delta)
     with _LOCK:
         at = _state['inner'] + delta
-        if at < 0 or at >= len(words):
+        run_out = at < 0 or at >= len(words)
+        if not run_out:
+            _state['inner'] = at
+            _state['moves'] += 1
+            said = words[at]
+    if run_out:
+        # Off the end of the words is where the characters begin.
+        return _by_character(delta)
+    _say(said)
+    return True, said
+
+
+def _by_character(delta):
+    """One character of the row, and say it. ``(ok, said)``.
+
+    The whole row's text, so a row of one word still reads letter by
+    letter and a row whose words have run out carries on into them
+    rather than stopping.
+    """
+    node = here()
+    if node is None:
+        return _nothing()
+    text = ' '.join(part for part in (node.get('name'), node.get('value'))
+                    if part)
+    if not text:
+        return say_here(beep=False)
+    with _LOCK:
+        at = int(_state.get('letter') or 0) + int(delta)
+        if at < 0 or at >= len(text):
             _edge()
-            at = max(0, min(_state['inner'], len(words) - 1))
-        _state['inner'] = at
+            at = max(0, min(at, len(text) - 1))
+        _state['letter'] = at
         _state['moves'] += 1
-        said = words[at]
+    said = text[at]
     _say(said)
     return True, said
 
@@ -583,6 +950,675 @@ def _words_of(node):
     said = ' '.join(part for part in (node.get('name'), node.get('value'))
                     if part)
     return [word for word in said.split() if word]
+
+
+# --------------------------------------------------------------------------- #
+# Left and Right: by character, and by word with Control
+# --------------------------------------------------------------------------- #
+# The user reads a control's text the way a caret reads it: the arrows step
+# a CHARACTER at a time - a spelling, a number, an extension checked by ear -
+# and Control with an arrow steps a WORD, which is what a name, a value or a
+# path wants. `move_inside` (words then characters) is kept for anything that
+# still calls it, but the keys are these two now.
+def move_char(delta):
+    """One character of the row's text. ``(ok, said)``."""
+    return _by_character(delta)
+
+
+def move_word(delta):
+    """One word of the row's text; the characters where the words run out."""
+    node = here()
+    if node is None:
+        return _nothing()
+    words = _words_of(node)
+    if not words:
+        return _by_character(delta)
+    with _LOCK:
+        at = int(_state.get('inner') or 0) + int(delta)
+        run_out = at < 0 or at >= len(words)
+        if not run_out:
+            _state['inner'] = at
+            _state['letter'] = 0
+            _state['moves'] += 1
+            said = words[at]
+    if run_out:
+        return _by_character(delta)
+    _say(said)
+    return True, said
+
+
+# --------------------------------------------------------------------------- #
+# The screen, spatially: rows, columns, diagonals - and a layout that says
+# which of the two the arrows walk
+# --------------------------------------------------------------------------- #
+# Every control has a place on the screen - a real one from `obj.location`,
+# or the rectangle a row was READ at in a picture. So the window can be
+# walked as it LOOKS as well as in reading order: Shift with Left/Right is
+# the control beside this one on the same line, the numpad diagonals are the
+# nearest control in a corner, and Numpad 4/6 switches which the plain arrows
+# follow - the reading order (linear) or the screen (spatial).
+def _node_rect(node):
+    """``(left, top, width, height)`` of a node, or None. Cached on it."""
+    if not node:
+        return None
+    if '_rect' in node:
+        return node['_rect']
+    rect = None
+    given = node.get('rect')
+    if given:
+        try:
+            rect = (int(given[0]), int(given[1]), int(given[2]), int(given[3]))
+        except Exception:                            # noqa: BLE001
+            rect = None
+    if rect is None:
+        obj = node.get('obj')
+        try:
+            location = obj.location
+            rect = (int(location.left), int(location.top),
+                    int(location.width), int(location.height))
+        except Exception:                            # noqa: BLE001
+            rect = None
+    node['_rect'] = rect
+    return rect
+
+
+def _centre(rect):
+    return (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0)
+
+
+#: The three ways the arrows can read a window, in the order Numpad 4 and
+#: 6 walk them. ``linear`` is the SIMPLE layout: the list as it was read,
+#: Up and Down along it, Left and Right through a control's own text.
+#: ``screen`` is the picture: Up and Down to the control above and below,
+#: Left and Right to the control BESIDE this one on the same line. And
+#: ``interact`` is outSPOKEN's: Left and Right between the controls that
+#: sit together at one level, Down to step INTO one - its children, and
+#: then its words and its characters - and Up to step back out, said as
+#: "In, <it>" and "Out of, <it>" so the listener always knows which way
+#: they went. One setting for every walked list: the palette and a
+#: message ask this module which is on, so the same numpad keys mean the
+#: same thing in all of them.
+LAYOUTS = ('linear', 'screen', 'interact')
+
+
+def layout():
+    with _LOCK:
+        return _state.get('layout', 'linear')
+
+
+def layout_name(which):
+    if which == 'screen':
+        # Translators: the layout where the arrows follow the screen.
+        return _('Screen layout')
+    if which == 'interact':
+        # Translators: the layout where Down enters a control and Up leaves.
+        return _('Interaction layout')
+    # Translators: the layout where the arrows follow the list as read.
+    return _('Simple layout')
+
+
+def layout_cycle(delta=1):
+    """The next (or previous) layout, and say which. ``(ok, said)``."""
+    with _LOCK:
+        now = _state.get('layout', 'linear')
+        at = LAYOUTS.index(now) if now in LAYOUTS else 0
+        now = LAYOUTS[(at + (1 if delta > 0 else -1)) % len(LAYOUTS)]
+        _state['layout'] = now
+        _state['depth'] = None
+    return True, layout_name(now)
+
+
+def layout_toggle():
+    """The next layout - kept for anything that still calls it."""
+    return layout_cycle(1)
+
+
+def _has_submenu(node):
+    """Whether this control is a menu somebody can walk into."""
+    if not node:
+        return False
+    role = str(node.get('role') or '').upper()
+    if role in ('MENUBAR', 'MENU', 'POPUPMENU'):
+        return True
+    if role == 'MENUITEM':
+        return 'HASPOPUP' in {str(state).upper()
+                              for state in _states_of(node.get('obj'))}
+    return False
+
+
+def open_submenu():
+    """Right on a menu: walk into it. ``(ok, said)``.
+
+    A menu item with a submenu is opened the way Windows opens one - the
+    right arrow - and the submenu's items become the list. A submenu that
+    answers nothing until it is expanded is expanded first, through the
+    item's own action, and asked again.
+    """
+    node = here()
+    if not _has_submenu(node):
+        return False, ''
+    ok, said = open_menu(node)
+    if ok:
+        return ok, said
+    obj = node.get('obj')
+    try:
+        if int(getattr(obj, 'actionCount', 0) or 0):
+            obj.doAction(0)
+    except Exception:                                # noqa: BLE001
+        pass
+    time.sleep(0.15)
+    ok, said = open_menu(node)
+    if ok:
+        return ok, said
+    _edge()
+    return False, said
+
+
+def move_across(delta):
+    """The plain Left and Right, by layout: a character of this control's
+    text in the simple layout, the control BESIDE this one on the screen
+    layout, and the next control at this level - or the next word or
+    character, once interacting with the text - in the interaction one.
+
+    **A menu is the exception in every layout**: Right on a menu, a menu
+    bar or an item with a submenu walks INTO it, and Left inside an
+    opened menu comes back out - the keys Windows itself gives a menu.
+    """
+    if delta > 0 and _depth() is None and _has_submenu(here()):
+        ok, said = open_submenu()
+        if ok:
+            return ok, said
+    if delta < 0 and _depth() is None and in_a_menu():
+        return close_menu()
+    which = layout()
+    if which == 'screen':
+        return move_line(delta)
+    if which == 'interact':
+        return move_sibling(delta)
+    return move_char(delta)
+
+
+def move_across_shift(delta):
+    """Shift with Left and Right: whichever of the two the plain arrows
+    are NOT doing - the control beside this one in the simple layout, and
+    a character of the text on the other two."""
+    if layout() == 'linear':
+        return move_line(delta)
+    return move_char(delta)
+
+
+# --------------------------------------------------------------------------- #
+# The interaction layout: Left and Right along one level, Down into a
+# control, Up back out of it
+# --------------------------------------------------------------------------- #
+def _node_text(node):
+    return ' '.join(part for part in ((node or {}).get('name'),
+                                      (node or {}).get('value')) if part)
+
+
+def _depth():
+    """How far INTO the current control the cursor is: None for the
+    control itself, 'words' or 'chars' for its text. It belongs to the
+    row it was set on, so any move that lands on another row is back at
+    the control without every such move having to know."""
+    with _LOCK:
+        depth = _state.get('depth')
+        at = _state['at']
+    if isinstance(depth, tuple) and len(depth) == 2 and depth[1] == at:
+        return depth[0]
+    return None
+
+
+def _set_depth(level):
+    with _LOCK:
+        _state['depth'] = (level, _state['at']) if level else None
+
+
+def _index_of(node_id):
+    with _LOCK:
+        for index, node in enumerate(_state['nodes']):
+            if node.get('id') == node_id:
+                return index
+    return None
+
+
+def _siblings():
+    """The indexes of every node at the current control's level."""
+    node = here()
+    if node is None:
+        return []
+    parent = node.get('parent')
+    with _LOCK:
+        return [index for index, other in enumerate(_state['nodes'])
+                if other.get('parent') == parent]
+
+
+def _children_of(node):
+    with _LOCK:
+        return [index for index, other in enumerate(_state['nodes'])
+                if other.get('parent') == node.get('id')]
+
+
+def _called(node):
+    return _text(node.get('name')) or _text(node.get('role'))
+
+
+def _say_in(name, rest):
+    # Translators: said on stepping INTO a control in the interaction
+    # layout. {name} is the control; what follows is the first thing in it.
+    _say_parts([(_('In {name}').format(name=name), 'place')] + list(rest))
+
+
+def _say_out(name, rest):
+    # Translators: said on stepping OUT of a control in the interaction
+    # layout. {name} is the control that was left.
+    _say_parts([(_('Out of {name}').format(name=name), 'place')]
+               + list(rest))
+
+
+def move_sibling(delta):
+    """Left and Right in the interaction layout."""
+    depth = _depth()
+    if depth == 'chars':
+        return _by_character(delta)
+    node = here()
+    if node is None:
+        return _nothing()
+    if depth == 'words':
+        words = _words_of(node)
+        with _LOCK:
+            at = int(_state.get('inner') or 0) + int(delta)
+            if at < 0 or at >= len(words):
+                _edge()
+                at = max(0, min(at, max(len(words) - 1, 0)))
+            _state['inner'] = at
+            _state['letter'] = 0
+            _state['moves'] += 1
+        said = words[at] if words else ''
+        _say(said)
+        return True, said
+    level = _siblings()
+    with _LOCK:
+        at = _state['at']
+    if at not in level:
+        return say_here(beep=False)
+    where = level.index(at) + int(delta)
+    if where < 0 or where >= len(level):
+        _edge()
+        return say_here(beep=False)
+    with _LOCK:
+        _state['at'] = level[where]
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    return say_here()
+
+
+def interact_end(to_end):
+    """Home and End in the interaction layout: the ends of this level."""
+    depth = _depth()
+    node = here()
+    if node is None:
+        return _nothing()
+    if depth == 'chars':
+        text = _node_text(node)
+        with _LOCK:
+            _state['letter'] = max(len(text) - 1, 0) if to_end else 0
+            said = text[_state['letter']] if text else ''
+        _say(said)
+        return True, said
+    if depth == 'words':
+        words = _words_of(node)
+        with _LOCK:
+            _state['inner'] = max(len(words) - 1, 0) if to_end else 0
+            _state['letter'] = 0
+            said = words[_state['inner']] if words else ''
+        _say(said)
+        return True, said
+    level = _siblings()
+    if not level:
+        return say_here(beep=False)
+    with _LOCK:
+        _state['at'] = level[-1] if to_end else level[0]
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    return say_here()
+
+
+def interact_in():
+    """Down in the interaction layout: into this control.
+
+    Its children first, where it has any - a group's controls, a list's
+    rows - then its words, then their characters. Each step says "In,
+    <what was entered>" and the first thing inside it, as one utterance.
+    """
+    node = here()
+    if node is None:
+        return _nothing()
+    depth = _depth()
+    if depth == 'chars':
+        _edge()
+        return say_here(beep=False)
+    if depth == 'words':
+        words = _words_of(node)
+        with _LOCK:
+            inner = int(_state.get('inner') or 0)
+        word = words[inner] if 0 <= inner < len(words) else ''
+        if not word:
+            _edge()
+            return say_here(beep=False)
+        text = _node_text(node)
+        with _LOCK:
+            _state['letter'] = max(text.find(word), 0)
+        _set_depth('chars')
+        _say_in(word, [(word[0], 'name')])
+        return True, word[0]
+    children = _children_of(node)
+    if children:
+        with _LOCK:
+            _state['at'] = children[0]
+            _state['inner'] = 0
+            _state['letter'] = 0
+            _state['moves'] += 1
+        first = here()
+        _say_in(_called(node), parts_of(first, at=0, count=len(children)))
+        return True, _text(first.get('name'))
+    words = _words_of(node)
+    if not words:
+        _edge()
+        return say_here(beep=False)
+    with _LOCK:
+        _state['inner'] = 0
+        _state['letter'] = 0
+    _set_depth('words')
+    _say_in(_called(node), [(words[0], 'name')])
+    return True, words[0]
+
+
+def interact_out():
+    """Up in the interaction layout: out of this control, onto it.
+
+    The reverse of :func:`interact_in`, step for step, said as "Out of,
+    <what was left>" and then where the cursor now is.
+    """
+    node = here()
+    if node is None:
+        return _nothing()
+    depth = _depth()
+    if depth == 'chars':
+        words = _words_of(node)
+        with _LOCK:
+            inner = int(_state.get('inner') or 0)
+        word = words[inner] if 0 <= inner < len(words) else ''
+        _set_depth('words')
+        _say_out(word, [(word, 'name')])
+        return True, word
+    if depth == 'words':
+        _set_depth(None)
+        with _LOCK:
+            at = _state['at']
+            count = len(_state['nodes'])
+        _say_out(_called(node), parts_of(node, at=at, count=count))
+        return True, _text(node.get('name'))
+    parent = None
+    if node.get('parent') is not None:
+        parent = _index_of(node.get('parent'))
+    if parent is None:
+        _edge()
+        return say_here(beep=False)
+    with _LOCK:
+        _state['at'] = parent
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    container = here()
+    level = _siblings()
+    where = level.index(parent) if parent in level else 0
+    _say_out(_called(container),
+             parts_of(container, at=where, count=len(level)))
+    return True, _text(container.get('name'))
+
+
+def _spatial_pick(want):
+    """Index of the control best matching a direction test, or None.
+
+    ``want(dx, dy)`` is True for a candidate in the wanted direction; the
+    nearest such by centre distance, with movement ALONG the wanted axis
+    counting for less than movement across it, so "the control below" is
+    the one below rather than the one furthest to the side.
+    """
+    with _LOCK:
+        nodes = list(_state['nodes'])
+        at = _state['at']
+    if not (0 <= at < len(nodes)):
+        return None
+    here_rect = _node_rect(nodes[at])
+    if not here_rect:
+        return None
+    hx, hy = _centre(here_rect)
+    best, best_score = None, None
+    for index, node in enumerate(nodes):
+        if index == at:
+            continue
+        rect = _node_rect(node)
+        if not rect:
+            continue
+        cx, cy = _centre(rect)
+        dx, dy = cx - hx, cy - hy
+        if not want(dx, dy):
+            continue
+        score = dx * dx + dy * dy
+        if best_score is None or score < best_score:
+            best, best_score = index, score
+    return best
+
+
+def _go_to(index):
+    if index is None:
+        _edge()
+        return say_here(beep=False)
+    with _LOCK:
+        _state['at'] = index
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    return say_here()
+
+
+def move_line(delta):
+    """The control beside this one on the same row - Shift+Left/Right.
+
+    "The same row" is any control whose vertical middle is within this
+    one's height, which is how a reader tells a toolbar's buttons from the
+    row above and below without needing them pixel-aligned.
+    """
+    with _LOCK:
+        nodes = list(_state['nodes'])
+        at = _state['at']
+    rect = _node_rect(nodes[at]) if 0 <= at < len(nodes) else None
+    if not rect:
+        return _nothing()
+    band = max(rect[3], 8)
+    _hx, hy = _centre(rect)
+
+    def want(dx, dy):
+        return (dx > 0 if delta > 0 else dx < 0) and abs(dy) <= band
+    return _go_to(_spatial_pick(want))
+
+
+def move_vertical(delta):
+    """The control above or below - the plain arrows in screen layout."""
+    def want(dx, dy):
+        return dy > 0 if delta > 0 else dy < 0
+    return _go_to(_spatial_pick(want))
+
+
+def _bounds():
+    """The window's own rectangle - the bounding box of every control on
+    it - as ``(left, top, right, bottom)``, or None."""
+    with _LOCK:
+        nodes = list(_state['nodes'])
+    left = top = right = bottom = None
+    for node in nodes:
+        rect = _node_rect(node)
+        if not rect:
+            continue
+        l, t, w, h = rect
+        r, b = l + w, t + h
+        left = l if left is None else min(left, l)
+        top = t if top is None else min(top, t)
+        right = r if right is None else max(right, r)
+        bottom = b if bottom is None else max(bottom, b)
+    if left is None:
+        return None
+    return left, top, right, bottom
+
+
+def corner_name(dx_sign, dy_sign):
+    """What a corner is called, said before the control that is in it."""
+    if dy_sign > 0:
+        # Translators: a corner of the window, said before what is in it.
+        return _('Bottom right') if dx_sign > 0 else _('Bottom left')
+    # Translators: a corner of the window, said before what is in it.
+    return _('Top right') if dx_sign > 0 else _('Top left')
+
+
+def _window_box():
+    """``(left, top, right, bottom)`` of the window - its own rectangle
+    where it is known, the bounding box of its controls where not."""
+    with _LOCK:
+        rect = _state.get('window_rect')
+    if rect:
+        return rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]
+    return _bounds()
+
+
+def _visible(rect, box):
+    """Whether a control's rectangle is really on the window."""
+    l, t, w, h = rect
+    if w <= 0 or h <= 0:
+        return False
+    if box is None:
+        return True
+    left, top, right, bottom = box
+    return l < right and l + w > left and t < bottom and t + h > top
+
+
+def move_diagonal(dx_sign, dy_sign):
+    """The control in a CORNER of the window - the numpad diagonals.
+
+    Numpad 7/9/1/3 go to the four corners of the window itself, not to the
+    nearest control diagonally from this one: the user asked for the
+    corners, which is how somebody who cannot see the window jumps to where
+    the OK button, the title, the first item or the status line is.
+
+    Two things decide it, both learned from corners that landed wrong:
+
+    * **The corner is the WINDOW's**, never the bounding box of the
+      controls. A list's rows scrolled out of view report rectangles far
+      below the window, so a box drawn round every control reached down
+      to the last invisible row and "bottom left" was a row nobody could
+      see. Only a control really on the window is a candidate.
+    * **The control's OWN corner is measured**, not its centre. Measured
+      by centres, a small button anywhere near the corner beat the list
+      that actually fills it; measured by its own corner, the control
+      that sits IN the corner wins, and a tie between a large one and a
+      small one there goes to the small one - the status line over the
+      list it sits under.
+
+    The corner's name is said first, in the same utterance.
+    """
+    box = _window_box()
+    if box is None:
+        return _nothing()
+    left, top, right, bottom = box
+    cx = right if dx_sign > 0 else left
+    cy = bottom if dy_sign > 0 else top
+    with _LOCK:
+        nodes = list(_state['nodes'])
+    best, best_score = None, None
+    for index, node in enumerate(nodes):
+        rect = _node_rect(node)
+        if not rect or not _visible(rect, box):
+            continue
+        l, t, w, h = rect
+        own_x = l + w if dx_sign > 0 else l
+        own_y = t + h if dy_sign > 0 else t
+        score = ((own_x - cx) ** 2 + (own_y - cy) ** 2, w * h)
+        if best_score is None or score < best_score:
+            best, best_score = index, score
+    if best is None:
+        return _nothing()
+    with _LOCK:
+        _state['at'] = best
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    return say_here(prefix=[(corner_name(dx_sign, dy_sign), 'place')])
+
+
+def explore(x, y):
+    """A finger at a point on the screen: the control under it, said.
+
+    The SMALLEST control whose rectangle holds the point, because a window
+    holds a pane holds a list holds the row, and the row is what the
+    finger is on. Said only when it is a different control from the last
+    one explored - a finger resting on a button must not read it thirty
+    times a second. The cursor moves with the finger, so a double tap
+    presses what was just found. ``(ok, said)``.
+    """
+    with _LOCK:
+        nodes = list(_state['nodes'])
+        box = _state.get('window_rect')
+    box = (box[0], box[1], box[0] + box[2], box[1] + box[3]) if box else None
+    best, best_area = None, None
+    for index, node in enumerate(nodes):
+        rect = _node_rect(node)
+        if not rect or not _visible(rect, box):
+            continue
+        l, t, w, h = rect
+        if not (l <= x < l + w and t <= y < t + h):
+            continue
+        area = w * h
+        if best_area is None or area < best_area:
+            best, best_area = index, area
+    if best is None:
+        return False, ''
+    with _LOCK:
+        if _state.get('explored') == best and _state['at'] == best:
+            return True, ''
+        _state['explored'] = best
+        _state['at'] = best
+        _state['inner'] = 0
+        _state['letter'] = 0
+        _state['moves'] += 1
+    return say_here()
+
+
+def click_mouse():
+    """Numpad 5: a real mouse click on the control - double on a quick second.
+
+    A click is a different thing from Enter (which does the control's own
+    action, or clicks when it has none): it is the mouse, at the control's
+    place, which is the only thing that reaches a control drawn in a picture
+    or one whose action the toolkit does not expose. Two presses inside
+    :data:`DOUBLE_CLICK` are a double click, as they are anywhere.
+    """
+    now = time.time()
+    with _LOCK:
+        double = (now - float(_state.get('clicked_at') or 0.0)) < DOUBLE_CLICK
+        _state['clicked_at'] = now
+    ok, why = click_here(double=double)
+    if not ok:
+        return False, _refusal(why) if '_refusal' in globals() else why
+    # Translators: said after a double mouse click.
+    # Translators: said after a single mouse click.
+    return True, (_('Double-clicked') if double else _('Clicked'))
+
+
+#: Two Numpad-5 presses closer together than this are a double click.
+DOUBLE_CLICK = 0.4
 
 
 # --------------------------------------------------------------------------- #
@@ -726,6 +1762,17 @@ def activate():
         ok, said = enter_typing()
         if ok or said:
             return ok, said
+    # **A menu bar is walked into, not pressed.** Pressing it opens the
+    # real menu and takes the keyboard out of the review; what somebody
+    # walking a window wants from the menu bar is to see what is ON it -
+    # so its menus become the list, and Escape comes back out. The same
+    # shape the described application's review uses, because a flyout is
+    # a menu a keyboard cannot follow.
+    if str(node.get('role') or '').upper() in ('MENUBAR', 'MENU',
+                                               'POPUPMENU'):
+        ok, said = open_menu(node)
+        if ok or said:
+            return ok, said
     if obj is None:
         # A row read off the screen: there is no control to ask what it
         # can do, so Enter is a click at the place the words are.
@@ -796,9 +1843,9 @@ def _in_a_virtual_machine():
         return False
 
 
-def click_here():
+def click_here(double=False):
     """Click the middle of the control the cursor is on, then put the
-    mouse back where it was.
+    mouse back where it was. ``double`` clicks twice.
 
     Through NVDA's own `winUser`, so it is the same click NVDA's own
     "click where the review cursor is" makes - and without telling
@@ -991,8 +2038,21 @@ def parts_of(node, at=0, count=0):
     if not node:
         return []
     parts = []
-    if node.get('name'):
-        parts.append((node['name'], 'name'))
+    name = node.get('name')
+    if not name:
+        # **A picture says what it shows.** A row that is an icon and has
+        # no name is a row somebody arrows onto and is told "graphic" -
+        # and the system icons are exactly the ones that can be named for
+        # nothing: a warning, a folder, a printer, an hourglass.
+        try:
+            from . import iconNames
+            ok, shows = iconNames.describe(node.get('obj'))
+            if ok:
+                name = shows
+        except Exception:                            # noqa: BLE001
+            pass
+    if name:
+        parts.append((name, 'name'))
     from . import context
     word = context.role_name(getattr(node.get('obj'), 'role', None))
     if word:
@@ -1018,7 +2078,10 @@ def _states_of(obj):
         return []
 
 
-def say_here(beep=True):
+def say_here(beep=True, prefix=None):
+    """Say the control the cursor is on. ``prefix`` is ``[(text, class)]``
+    said in FRONT of it, in the same utterance - the corner's name, for
+    one - so nothing can cut it off."""
     node = here()
     if node is None:
         return _nothing()
@@ -1029,7 +2092,7 @@ def say_here(beep=True):
         role = getattr(node.get('obj'), 'role', None)
         if not icons.play(icons.for_role(role)):
             _beep(at, count)
-    parts = parts_of(node, at=at, count=count)
+    parts = list(prefix or []) + parts_of(node, at=at, count=count)
     _say_parts(parts)
     return True, ', '.join(text for text, _voice in parts)
 

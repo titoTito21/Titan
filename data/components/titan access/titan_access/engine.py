@@ -1130,7 +1130,198 @@ class TitanAccessEngine:
             print(f"[TitanAccess] gesture dispatch error: {e}")
             return False
 
+    #: What the walked lists answer, by the name this reader's own hook
+    #: gives a key. The shared modules are written against NVDA's
+    #: spellings and their own; `textField.bare_name` knows both, so what
+    #: is passed on is whatever was pressed.
+    WALKED_KEYS = ('up', 'down', 'left', 'right', 'home', 'end',
+                   'pageup', 'pagedown', 'return', 'enter', 'escape',
+                   'backspace', 'delete', 'f5', 'space', 'tab')
+
+    def _walked_key(self, vk, key_name, ctrl, alt, shift) -> bool:
+        """The ported walkers get their keys here. ``True`` when one took it.
+
+        **The other half of sharing a module.** `virtualWindow`, `palette`
+        and `textField` are byte-identical in both readers, and in NVDA
+        the plugin borrows the arrows for them; here nothing did - so the
+        virtual window turned ON in this reader and no key walked it,
+        which is a feature that reports success and cannot be used.
+
+        Runs on the hook thread, so everything it calls is local: moving
+        a cursor in a list already in hand, never a round trip.
+        """
+        name = str(key_name or '').lower()
+        if alt:
+            return False
+        # **The same keys as the NVDA add-on, key for key.** Left and
+        # Right follow the layout (a character, the word or control
+        # beside, the row beside), Shift the other way round, Control by
+        # word; Numpad 7/9/1/3 are the four corners, Numpad 4/6 the
+        # layout - one setting for the palette, a message and the
+        # virtual window alike (`virtualWindow.LAYOUTS`).
+        try:
+            from .portable import palette
+            if palette.walking():
+                said = ''
+                if name in ('up', 'numpad8'):
+                    palette.move(-1)
+                elif name in ('down', 'numpad2'):
+                    palette.move(1)
+                elif name == 'left':
+                    if ctrl:
+                        palette.move_word(-1)
+                    elif shift:
+                        palette.move_across_shift(-1)
+                    else:
+                        palette.move_across(-1)
+                elif name == 'right':
+                    if ctrl:
+                        palette.move_word(1)
+                    elif shift:
+                        palette.move_across_shift(1)
+                    else:
+                        palette.move_across(1)
+                elif name == 'home':
+                    palette.move_end(False)
+                elif name == 'end':
+                    palette.move_end(True)
+                elif name == 'numpad7':
+                    palette.move_corner(-1, -1)
+                elif name == 'numpad9':
+                    palette.move_corner(1, -1)
+                elif name == 'numpad1':
+                    palette.move_corner(-1, 1)
+                elif name == 'numpad3':
+                    palette.move_corner(1, 1)
+                elif name == 'numpad4':
+                    _ok, said = palette.layout_cycle(-1)
+                elif name == 'numpad6':
+                    _ok, said = palette.layout_cycle(1)
+                elif name in ('return', 'enter'):
+                    palette.activate()
+                elif name == 'escape':
+                    palette.back()
+                else:
+                    return False
+                if said:
+                    self._say(str(said))
+                return True
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
+            from .portable import virtualWindow
+        except Exception:                            # noqa: BLE001
+            return False
+        try:
+            if not virtualWindow.reviewing():
+                return False
+            if virtualWindow.typing_mode():
+                if name == 'escape':
+                    _ok, said = virtualWindow.leave_typing()
+                    if said:
+                        self._say(str(said))
+                    return True
+                # Everything else is the field's: the letters, the space,
+                # the arrows, Backspace. `type_key` hands back anything
+                # the field does not want.
+                held = []
+                if ctrl:
+                    held.append('ctrl')
+                if shift:
+                    held.append('shift')
+                whole = '+'.join(held + [name])
+                _ok, said = virtualWindow.type_key(whole, lambda: None)
+                if said:
+                    self._say(str(said))
+                return True
+            if name in ('up', 'numpad8'):
+                virtualWindow.move(-1)
+            elif name in ('down', 'numpad2'):
+                virtualWindow.move(1)
+            elif name == 'left':
+                if ctrl:
+                    virtualWindow.move_word(-1)
+                elif shift:
+                    virtualWindow.move_across_shift(-1)
+                else:
+                    virtualWindow.move_across(-1)
+            elif name == 'right':
+                if ctrl:
+                    virtualWindow.move_word(1)
+                elif shift:
+                    virtualWindow.move_across_shift(1)
+                else:
+                    virtualWindow.move_across(1)
+            elif name == 'home':
+                virtualWindow.move_end(False)
+            elif name == 'end':
+                virtualWindow.move_end(True)
+            elif name == 'pageup':
+                virtualWindow.move_page(-1)
+            elif name == 'pagedown':
+                virtualWindow.move_page(1)
+            elif name == 'numpad7':
+                virtualWindow.move_diagonal(-1, -1)
+            elif name == 'numpad9':
+                virtualWindow.move_diagonal(1, -1)
+            elif name == 'numpad1':
+                virtualWindow.move_diagonal(-1, 1)
+            elif name == 'numpad3':
+                virtualWindow.move_diagonal(1, 1)
+            elif name == 'numpad4':
+                _ok, said = virtualWindow.layout_cycle(-1)
+                if said:
+                    self._say(str(said))
+            elif name == 'numpad6':
+                _ok, said = virtualWindow.layout_cycle(1)
+                if said:
+                    self._say(str(said))
+            elif name == 'numpad5':
+                _ok, said = virtualWindow.click_mouse()
+                if said:
+                    self._say(str(said))
+            elif name in ('return', 'enter'):
+                _ok, said = virtualWindow.activate()
+                if said:
+                    self._say(str(said))
+            elif name == 'f5':
+                _ok, said = virtualWindow.refresh()
+                if said:
+                    self._say(str(said))
+            elif name == 'escape':
+                if virtualWindow.in_a_menu():
+                    virtualWindow.close_menu()
+                else:
+                    _on, said = virtualWindow.stop()
+                    if said:
+                        self._say(str(said))
+            else:
+                return False
+            return True
+        except Exception as error:                   # noqa: BLE001
+            print(f"[TitanAccess] walked-key error: {error}")
+            return False
+
+    def on_walked_numpad(self, vk, key_name, shift) -> bool:
+        """A NumPad key with NumLock off, BEFORE object navigation gets it.
+
+        Those keys reach the hook as ``numpad7`` and the like and go to
+        the object navigator - which is right everywhere except inside a
+        walked list, where Numpad 7/9/1/3 are the corners and 4/6 the
+        layout, exactly as in the NVDA add-on. Answers False at once when
+        no walker is up, so object navigation is untouched otherwise.
+        """
+        return self._walked_key(vk, key_name, False, False, shift)
+
     def on_plain_key(self, vk, key_name, ctrl, alt, shift) -> bool:
+        # **The walked lists first.** They are explicit modes the user
+        # turned on, so while one is up its keys are its own - the same
+        # rule the NVDA add-on follows by borrowing the gestures.
+        try:
+            if self._walked_key(vk, key_name, ctrl, alt, shift):
+                return True
+        except Exception:                            # noqa: BLE001
+            pass
         # Browse mode quick-nav / arrows take precedence when active.
         try:
             if self.browse is not None and self.browse.is_active:
@@ -1206,7 +1397,18 @@ class TitanAccessEngine:
         # which is free here and is what the user asked for; the virtual
         # window is on `w`, beside the other reading commands.
         g.register("virtualWindow", "w", self.action_toggle_virtual_window)
+        g.register("commandPalette", "space", self.action_command_palette)
+        g.register("titanWindow", "i", self.action_titan_window)
+        # The Titan MENU, on the key the add-on puts it on - the same
+        # menu, walked, rather than a second list of the same things.
+        g.register("titanMenu", "shift+t", self.action_titan_menu)
         g.register("trackpad", "minus", self.action_toggle_trackpad)
+        # The reader's manager, walked - markers, monitors, the auditory
+        # icons, the sound scheme, the voices - on the key the add-on has
+        # it on (NVDA+shift+j there, Insert+shift+j here). The module was
+        # vendored and reached by nothing, so a user of this reader had
+        # no way to see what they had made or to choose a sound.
+        g.register("readerManager", "shift+j", self.action_reader_manager)
 
         # (Ctrl+Alt+C/W/L/P review shortcuts removed: on a Polish keyboard
         # Ctrl+Alt == AltGr, so they collided with typing diacritics. Caret
@@ -1245,6 +1447,158 @@ class TitanAccessEngine:
             self._say("Virtual window: %s" % error)
             return False
         if said:
+            self._say(str(said))
+        return bool(ok)
+
+    def action_command_palette(self, *_args):
+        """The command palette, walked - the same one the add-on has.
+
+        A list of layers, then a list of the commands in one, then Enter.
+        Shared as one file, so the two readers cannot drift apart about
+        what is on it.
+        """
+        try:
+            from .portable import layers, palette
+        except Exception as error:                   # noqa: BLE001
+            self._say("Palette: %s" % error)
+            return False
+        names = layers.names()
+        if not names:
+            return False
+        rows = []
+        for name in names:
+            rows.append({
+                'label': '%s (%d)' % (layers.label(name),
+                                      len(layers.keys_of(name))),
+                'role': '',
+                'run': (lambda chosen=name: self._palette_layer(chosen)),
+            })
+        ok, _said = palette.show(rows, "Titan")
+        return bool(ok)
+
+    def _palette_layer(self, layer):
+        """One layer's commands. Enter runs the one the cursor is on."""
+        from .portable import layers, palette
+        rows = []
+        for key in sorted(layers.keys_of(layer)):
+            command, said = layers.keys_of(layer)[key]
+            try:
+                text = said() if callable(said) else str(command)
+            except Exception:                        # noqa: BLE001
+                text = str(command)
+            rows.append({'label': '%s (%s)' % (text, key), 'role': '',
+                         'run': (lambda one=command: self._palette_run(one))})
+        return palette.show(rows, layers.label(layer),
+                            back=self.action_command_palette)
+
+    #: Palette commands this reader answers ITSELF rather than through the
+    #: shared `commands` module - because what they mean here is genuinely
+    #: different, not because the shared one is missing.
+    MINE = {
+        'status': 'action_read_window_title',
+        'read_locally': 'action_toggle_virtual_window',
+    }
+
+    def _palette_run(self, command):
+        """Run a palette command HERE.
+
+        **The commands are shared now**, so most of them are the very same
+        function the add-on runs - one source, two readers. A handful mean
+        something different in this reader and are answered above; a
+        handful more are genuinely NVDA's own (its speech filter, its audio
+        session, its review cursor) and say so out loud rather than
+        pretending, which is what `commands` itself does when a part it
+        reaches for is not here.
+        """
+        from .portable import palette
+        palette.stop()
+        name = str(command or '')
+        own = self.MINE.get(name)
+        if own:
+            getattr(self, own)()
+            return True, ''
+        try:
+            from .portable import commands
+        except Exception as error:                   # noqa: BLE001
+            self._say("%s: %s" % (name, error))
+            return False, ''
+        work = getattr(commands, name, None)
+        if not callable(work):
+            self._say("%s: not in this reader" % name)
+            return False, ''
+        try:
+            work()
+        except ImportError as error:                 # noqa: BLE001
+            self._say("%s: this reader has not got that (%s)"
+                      % (name, error))
+            return False, ''
+        except Exception as error:                   # noqa: BLE001
+            self._say("%s: %s" % (name, error))
+            return False, ''
+        return True, ''
+
+    def action_titan_menu(self, *_args):
+        """The Titan menu, walked - the SAME menu the add-on puts up.
+
+        Not a second list of Titan's actions: `menu.build()` is one
+        definition of what is on the Titan menu and in what order, and
+        `menuWalk` walks that, so the two readers cannot quietly stop
+        agreeing about it. What differs is only the frame it belongs to,
+        which `compat.gui` answers for each.
+        """
+        try:
+            from .portable import menuWalk
+        except Exception as error:                   # noqa: BLE001
+            self._say("Titan: %s" % error)
+            return False
+        try:
+            ok, said = menuWalk.open_it(None)
+        except Exception as error:                   # noqa: BLE001
+            self._say("Titan: %s" % error)
+            return False
+        if not ok and said:
+            self._say(str(said))
+        return bool(ok)
+
+    def action_titan_window(self, *_args):
+        """Titan itself, walked: the pages, and what is on a page.
+
+        The same module the add-on uses, and it reaches Titan the same
+        way - except that here `LINK` is Titan's own doorway rather than
+        a pipe, so there is nothing to wait for.
+        """
+        try:
+            from .portable import titanWalk
+        except Exception as error:                   # noqa: BLE001
+            self._say("Titan: %s" % error)
+            return False
+        try:
+            ok, _said = titanWalk.open_it()
+        except Exception as error:                   # noqa: BLE001
+            self._say("Titan: %s" % error)
+            return False
+        return bool(ok)
+
+    def action_reader_manager(self, *_args):
+        """What the user has made, walked: markers, programs, procedures,
+        names, monitors, the auditory icons, the sound scheme, the voices.
+
+        The same `managerWalk` the NVDA add-on has, so both readers show
+        the same things in the same order. The form the add-on also
+        offers is NVDA's own window and is not here; every level of the
+        walk says so where it would have opened it.
+        """
+        try:
+            from .portable import managerWalk
+        except Exception as error:                   # noqa: BLE001
+            self._say("Manager: %s" % error)
+            return False
+        try:
+            ok, said = managerWalk.open_it()
+        except Exception as error:                   # noqa: BLE001
+            self._say("Manager: %s" % error)
+            return False
+        if not ok and said:
             self._say(str(said))
         return bool(ok)
 

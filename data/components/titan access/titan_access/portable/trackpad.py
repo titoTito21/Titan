@@ -194,8 +194,14 @@ def _log(text, error=False):
 
 
 _LOCK = threading.RLock()
+# `devices` is deliberately NOT here: `report()` counts it from `_preparsed`,
+# and a key sitting in the state dict that nothing ever assigns is exactly the
+# working-looking zero this module already shipped once.
 _state = {'on': False, 'why': '', 'contacts': 0, 'gestures': 0,
-          'devices': 0, 'hwnd': 0, 'started': 0.0}
+          'hwnd': 0, 'started': 0.0,
+          # What NVDA did with each gesture, which is a different question
+          # from how many were recognised.
+          'ran': 0, 'unbound': 0, 'failed': 0, 'mode_as': ''}
 _held = {'proc': None, 'class': None, 'window': None,
          'surface': False}
 _preparsed = {}
@@ -206,6 +212,15 @@ def report():
     with _LOCK:
         found = dict(_state)
     found['available'] = available()[0]
+    # `devices` was set to 0 once and assigned by nothing, so the status
+    # command reported "no digitizer" for ever while the pad was delivering
+    # contacts and gestures - a field read by a name nothing writes is a
+    # working-looking zero, and a lying diagnostic is worse than none.
+    # `_preparsed` holds one entry per raw-input device a report has arrived
+    # from, with None for anything whose descriptor would not parse, so the
+    # devices really being read are the entries that did.
+    found['devices'] = sum(1 for v in _preparsed.values() if v is not None)
+    found['devices_refused'] = sum(1 for v in _preparsed.values() if v is None)
     return found
 
 
@@ -602,6 +617,52 @@ def _mode():
         return 'object'
 
 
+#: What the mode has to look like inside a gesture's own name. NVDA binds its
+#: touch gestures as `ts(object):flickright` and `ts(text):...`, so a name
+#: carrying anything else is a name nothing can be bound to.
+_MODE_NAMES = ('object', 'text')
+
+
+def _named_as_nvda_binds_them(gesture, preheld, tracker, mode):
+    """The same gesture, named the way NVDA's own bindings are written.
+
+    **This is what "the gestures still do not work" was.** Read out of the
+    live NVDA's log: `first gesture: ts(TouchMode.OBJECT):hoverdown`. NVDA
+    binds `ts(object):hoverdown` - the mode's VALUE - and `TouchMode` is an
+    enum whose `str()` on this Python is its repr, so every gesture this
+    add-on emitted carried a name no binding could ever match. The pad
+    itself was perfect: 4306 contacts, 539 gestures recognised, and not one
+    of them could have run a script.
+
+    Rather than deciding which of the two NVDA wants - a question about
+    somebody else's Python version - the gesture is BUILT and then ASKED
+    what it is called. A name with `TouchMode.` in it is made again with the
+    plain string, and what worked is remembered for the session.
+    """
+    import touchHandler
+    first = (getattr(gesture, 'identifiers', None) or [''])[0]
+    if _state.get('mode_as') == 'value' or 'TouchMode.' in str(first):
+        plain = str(getattr(mode, 'value', mode) or 'object')
+        if plain not in _MODE_NAMES:
+            plain = 'object'
+        try:
+            other = touchHandler.TouchInputGesture(preheld, tracker, plain)
+        except Exception:                            # noqa: BLE001
+            return gesture
+        name = (getattr(other, 'identifiers', None) or [''])[0]
+        if 'TouchMode.' not in str(name):
+            if _state.get('mode_as') != 'value':
+                with _LOCK:
+                    _state['mode_as'] = 'value'
+                _log('the mode goes in as %r, so a gesture is called %s'
+                     % (plain, name))
+            return other
+    elif first and not _state.get('mode_as'):
+        with _LOCK:
+            _state['mode_as'] = 'member'
+    return gesture
+
+
 def _emit(manager=None, mode=None):
     """Whatever NVDA's own tracker has decided, executed as a gesture.
 
@@ -622,14 +683,26 @@ def _emit(manager=None, mode=None):
             gesture = touchHandler.TouchInputGesture(preheld, tracker, mode)
         except Exception:                            # noqa: BLE001
             continue
+        gesture = _named_as_nvda_binds_them(gesture, preheld, tracker, mode)
 
         def run(gesture=gesture):
             try:
                 compat.inputCore.manager.executeGesture(gesture)
-            except Exception:                        # noqa: BLE001
-                # An unbound gesture raises NoInputGestureAction, which is
-                # not a fault: most gestures are bound to nothing.
-                pass
+            except Exception as error:               # noqa: BLE001
+                # **"Nothing is bound to it" and "it broke" are different
+                # answers**, and this counted neither: every gesture was
+                # swallowed here, so a pad that emitted 539 of them and ran
+                # none looked exactly like a pad that worked.
+                name = type(error).__name__
+                with _LOCK:
+                    if name == 'NoInputGestureAction':
+                        _state['unbound'] += 1
+                    else:
+                        _state['failed'] += 1
+                        _state['why'] = '%s: %s' % (name, error)
+                return
+            with _LOCK:
+                _state['ran'] += 1
         with _LOCK:
             _state['gestures'] += 1
             if _state['gestures'] == 1:

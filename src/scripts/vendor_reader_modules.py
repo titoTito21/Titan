@@ -29,6 +29,7 @@ vendored fails rather than shipping as two readers that disagree.
 """
 
 import filecmp
+import io
 import os
 import shutil
 import sys
@@ -87,11 +88,26 @@ SHARED = (
     'windowsAndActions.py',
     # Whether a reader module actually does anything to a window.
     'verify.py',
+    # What kind of dialog has appeared - a question, a warning, an error
+    # - read off its ICON by comparing pictures, which is the same in
+    # both readers because Windows draws the same icons for both.
+    'dialog_kind.py',
+    # And what an icon SHOWS, named the same way: a folder, a printer,
+    # the warning triangle. No model, no key, nothing sent anywhere.
+    'iconNames.py',
+    # A field's own text as something to WALK - the edit-field mode, and
+    # the one place that knows what Backspace and Control with an arrow
+    # mean in a field, so the two readers and both their modes cannot
+    # drift apart about it.
+    'textField.py',
     # Layered commands: one key opens a layer, the next chooses in it.
     'layers.py',
     # And the palette that walks them - a list in the same shape as every
     # other list either reader walks, rather than a modal dialog.
     'palette.py',
+    # The trackpad in every walked list - the table of what each gesture
+    # does, and the finger exploration the lists answer.
+    'touchWalk.py',
     # Titan's own typed doorway, asked the same way in both readers. It is
     # built entirely on one call, so the add-on's pipe and Titan Access's
     # direct call are the same file with two `link` shims under it.
@@ -107,11 +123,41 @@ SHARED = (
     'widgetReview.py',
     # Titan's own window: its applications, settings, buffers, statusbar.
     'titanWindow.py',
+    # And the same Titan WALKED - the pages as a list, what is on a page
+    # as a list, Enter doing the one obvious thing to a row.
+    'titanWalk.py',
+    # What the user has MADE, walked: the markers, the programs, the
+    # procedures, the names, the watched areas, the icons, the scheme and
+    # the voice classes. The forms stay where editing happens.
+    'managerWalk.py',
     # A window that exposes nothing, read as a picture - a game's menu, a
     # virtual machine.
     'surface.py',
     # Writing a reader module for a program, from what was observed.
     'draft.py',
+    # The few windows either reader puts up - and, first, the walked page
+    # that has replaced most of them. `compat.gui` is what differs: NVDA's
+    # own frame there, Titan's own window here.
+    'dialogs.py',
+    # What Titan could do the last time we asked, kept beside everything
+    # else this reader accumulates. Its script-name half is NVDA's Input
+    # Gestures and simply goes unused on the other side.
+    'gestures.py',
+    # THE Titan menu - one definition, two renderings. The `wx.Menu` is for
+    # somebody who wants the platform's own; `menuWalk` walks that same
+    # menu as a list. Rebuilding it as a second list is how the two quietly
+    # stop agreeing, which is exactly what this file exists to prevent.
+    'menu.py',
+    'menuWalk.py',
+    # And what each entry of it does. Most of these are Titan's own and
+    # work in either reader; the handful that reach NVDA's speech filter,
+    # its audio session or its review cursor say so out loud rather than
+    # failing silently.
+    'commands.py',
+    # A place in a program, marked and gone back to.
+    'markers.py',
+    # What was said, kept, so "what was that?" has an answer.
+    'journal.py',
     # The laptop's touchpad as a touch screen. Its pad-reading half is
     # ctypes and portable; where the contacts GO is NVDA's own touch
     # machinery, and in Titan Access it says so rather than pretending.
@@ -181,20 +227,119 @@ def copy():
     return copied
 
 
+# --------------------------------------------------------------------------- #
+# The Polish travels with the modules
+# --------------------------------------------------------------------------- #
+# A shared module says `_('Top left')` with the English sentence as the
+# key. In NVDA that is answered out of the add-on's own `.po`; in Titan
+# Access it is answered out of `locale/pl.json`, keyed by the sentence
+# itself - and until this step existed nothing put the sentences there, so
+# a Polish Titan Access walked its lists in English (704 sentences, on the
+# day it was measured). The translation is written ONCE, in the add-on's
+# catalogue, and carried across here with the code.
+ADDON_PO = os.path.join(ROOT, 'nvda-addon', 'addon', 'locale', 'pl',
+                        'LC_MESSAGES', 'nvda.po')
+ACCESS_PL = os.path.join(ROOT, 'data', 'components', 'titan access',
+                         'locale', 'pl.json')
+
+
+def shared_sentences():
+    """Every string a vendored module passes to ``_()``."""
+    import ast
+    found = set()
+    for name in SHARED:
+        path = os.path.join(SOURCE, name)
+        try:
+            tree = ast.parse(io.open(path, encoding='utf-8').read())
+        except Exception:                            # noqa: BLE001
+            continue
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id == '_' and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)):
+                found.add(node.args[0].value)
+    return found
+
+
+def addon_polish():
+    """``{msgid: msgstr}`` out of the add-on's Polish catalogue."""
+    import re
+    try:
+        text = io.open(ADDON_PO, encoding='utf-8').read()
+    except Exception:                                # noqa: BLE001
+        return {}
+
+    def unquote(chunk):
+        parts = re.findall(r'"((?:[^"\\]|\\.)*)"', chunk)
+        raw = ''.join(parts)
+        return (raw.encode('utf-8').decode('unicode_escape')
+                .encode('latin-1').decode('utf-8'))
+    out = {}
+    pattern = (r'(?ms)^msgid\s+((?:"(?:[^"\\]|\\.)*"\s*)+)'
+               r'^msgstr\s+((?:"(?:[^"\\]|\\.)*"\s*)+)')
+    for match in re.finditer(pattern, text):
+        try:
+            key, value = unquote(match.group(1)), unquote(match.group(2))
+        except Exception:                            # noqa: BLE001
+            continue
+        if key and value:
+            out[key] = value
+    return out
+
+
+def polish_missing():
+    """The shared sentences the add-on has Polish for and Titan Access
+    has not - what `carry_polish` would add."""
+    import json
+    try:
+        have = json.load(io.open(ACCESS_PL, encoding='utf-8'))
+    except Exception:                                # noqa: BLE001
+        have = {}
+    known = addon_polish()
+    return sorted(key for key in shared_sentences()
+                  if key not in have and key in known)
+
+
+def carry_polish():
+    """Put the add-on's Polish for every shared sentence into pl.json."""
+    import json
+    missing = polish_missing()
+    if not missing:
+        return []
+    have = json.load(io.open(ACCESS_PL, encoding='utf-8'))
+    known = addon_polish()
+    for key in missing:
+        have[key] = known[key]
+    io.open(ACCESS_PL, 'w', encoding='utf-8', newline='\n').write(
+        json.dumps(have, ensure_ascii=False, indent=2) + '\n')
+    return missing
+
+
 def main(argv):
     if '--check' in argv:
         same, wrong = check()
-        if same:
+        missing = polish_missing()
+        if same and not missing:
             print('The shared reader modules are identical in both trees.')
             return 0
-        print('They have drifted apart:')
-        for one in wrong:
-            print('  - %s' % one)
+        if not same:
+            print('They have drifted apart:')
+            for one in wrong:
+                print('  - %s' % one)
+        if missing:
+            print('%d shared sentence(s) have Polish in the add-on and not '
+                  'in Titan Access - run the script without --check.'
+                  % len(missing))
         return 1
     copied = copy()
     print('Vendored %d module(s) into %s:' % (len(copied), TARGET))
     for name in copied:
         print('  %s' % name)
+    carried = carry_polish()
+    if carried:
+        print('Carried the Polish for %d shared sentence(s) into pl.json.'
+              % len(carried))
     same, wrong = check()
     if not same:
         for one in wrong:

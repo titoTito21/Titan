@@ -88,6 +88,66 @@ def meanings():
 
 NAMES = tuple(sorted(meanings().keys()))
 
+#: Where an icon's sound comes from. **The built-in one** is the wave file
+#: this add-on ships (or the user's own in `titanIcons/`), played by NVDA
+#: itself and there on any machine. **Titan's own** is the sound Titan's
+#: desktop plays for the same event, out of the user's sound theme,
+#: through Titan's mixer - so a reader in Titan sounds like Titan; it
+#: needs Titan running and falls back to the built-in one when it is not.
+#: **An external file** is any wave file the user chose.
+SOURCE_BUILTIN = 'builtin'
+SOURCE_TITAN = 'titan'
+SOURCE_EXTERNAL = 'external'
+SOURCES = (SOURCE_BUILTIN, SOURCE_TITAN, SOURCE_EXTERNAL)
+
+
+def source_names():
+    return {
+        # Translators: where an icon's sound comes from - the add-on's own.
+        SOURCE_BUILTIN: _('the built-in sound'),
+        # Translators: where an icon's sound comes from - Titan's theme.
+        SOURCE_TITAN: _("Titan's own sound"),
+        # Translators: where an icon's sound comes from - a file chosen.
+        SOURCE_EXTERNAL: _('a sound file of your own'),
+    }
+
+
+#: The sound Titan's own desktop plays for the same event, by the name the
+#: theme knows it under. `reader/` is the reader's own set (`sfx/<theme>/
+#: SRE/`), everything else is the theme's own. A name Titan has not got is
+#: silence at Titan's end and the built-in sound at ours.
+TITAN_SOUNDS = {
+    'select-object': 'core/FOCUS.ogg',
+    'item': 'reader/listitem.ogg',
+    'button': 'reader/cursor.ogg',
+    'large-movement': 'ui/endoflist.ogg',
+    'ellipses': 'reader/ellipses.ogg',
+    'open-object': 'ui/uiopen.ogg',
+    'close-object': 'ui/uiclose.ogg',
+    'section': 'ui/sectionchange.ogg',
+    'paragraph': 'ui/statusbar.ogg',
+    'on': 'reader/keyon.ogg',
+    'off': 'reader/keyoff.ogg',
+    'mark-object': 'ui/drop.ogg',
+    'deselect-object': 'ui/drag.ogg',
+    'task-done': 'core/SELECT.ogg',
+    'save-object': 'core/SELECT.ogg',
+    'delete-object': 'ui/X.ogg',
+    'modified-object': 'ui/notify.ogg',
+    'unmodified-object': 'ui/statusbar.ogg',
+    'yank-object': 'ui/drop.ogg',
+    'warn-user': 'core/error.ogg',
+    'alert-user': 'reader/notification.ogg',
+    'ask-question': 'reader/question_dialog.ogg',
+    'help': 'ui/tip.ogg',
+    'new-mail': 'ui/notify.ogg',
+    'progress': 'ui/buffer_ping.ogg',
+    'search-hit': 'core/SELECT.ogg',
+    'search-miss': 'core/error.ogg',
+    'yes-answer': 'core/SELECT.ogg',
+    'no-answer': 'core/error.ogg',
+}
+
 _LOCK = threading.RLock()
 _state = {'played': 0, 'missing': [], 'why': ''}
 
@@ -139,9 +199,15 @@ def switched_on():
     cursor cue is played on EVERY control the focus reaches, all day, in
     every program; an icon here is played by this add-on's own surfaces -
     the reviews, the Titan window - which the user opened deliberately.
+
+    A tree with no `configSpec` - Titan Access - has no switch for them
+    yet, and absent means yes there too.
     """
-    from . import configSpec
-    return bool(configSpec.read().get('auditoryIcons', True))
+    try:
+        from . import configSpec
+        return bool(configSpec.read().get('auditoryIcons', True))
+    except Exception:                                # noqa: BLE001
+        return True
 
 
 #: The manager's own store, beside the markers, the monitors and the sound
@@ -151,6 +217,7 @@ def switched_on():
 FILENAME = 'titanIcons.json'
 
 _off = None
+_sources = {}
 
 
 def path():
@@ -159,29 +226,42 @@ def path():
 
 
 def _load():
-    global _off
+    global _off, _sources
     with _LOCK:
         if _off is not None:
             return _off
         _off = set()
+        _sources = {}
         where = path()
         if where and os.path.isfile(where):
             try:
                 with open(where, encoding='utf-8') as handle:
                     data = json.load(handle)
                 if isinstance(data, dict):
+                    sources = data.get('sources')
+                    if isinstance(sources, dict):
+                        for name, row in sources.items():
+                            if not isinstance(row, dict):
+                                continue
+                            source = str(row.get('source') or SOURCE_BUILTIN)
+                            _sources[str(name)] = {
+                                'source': source if source in SOURCES
+                                else SOURCE_BUILTIN,
+                                'file': str(row.get('file') or '')}
                     data = data.get('off')
                 if isinstance(data, list):
                     _off = {str(name) for name in data}
             except Exception:                        # noqa: BLE001
                 _off = set()
+                _sources = {}
         return _off
 
 
 def forget():
-    global _off
+    global _off, _sources
     with _LOCK:
         _off = None
+        _sources = {}
 
 
 def save():
@@ -190,12 +270,141 @@ def save():
         return False
     with _LOCK:
         data = sorted(_load())
+        sources = {name: dict(row) for name, row in _sources.items()
+                   if row.get('source') != SOURCE_BUILTIN or row.get('file')}
     try:
         with open(where, 'w', encoding='utf-8') as handle:
-            json.dump({'off': data}, handle, ensure_ascii=False, indent=1)
+            json.dump({'off': data, 'sources': sources}, handle,
+                      ensure_ascii=False, indent=1)
         return True
     except Exception:                                # noqa: BLE001
         return False
+
+
+def source_of(name):
+    """``(source, file)`` for one icon - built-in unless the user chose."""
+    _load()
+    with _LOCK:
+        row = _sources.get(str(name)) or {}
+    return row.get('source', SOURCE_BUILTIN), row.get('file', '')
+
+
+def set_source(name, source, file=''):
+    """Choose where one icon's sound comes from. Answers what it is now."""
+    source = str(source or SOURCE_BUILTIN)
+    if source not in SOURCES:
+        return SOURCE_BUILTIN
+    _load()
+    with _LOCK:
+        _sources[str(name)] = {'source': source, 'file': str(file or '')}
+    save()
+    return source
+
+
+def titan_name(name):
+    """What Titan calls the sound for this icon, or ''."""
+    return TITAN_SOUNDS.get(str(name), '')
+
+
+#: What NVDA's own player takes. Anything else - `.ogg` above all, which
+#: is what every sound in Titan's themes is - goes through Titan's mixer,
+#: which decodes it; without Titan such a file cannot sound here, and the
+#: caller falls back to the built-in wave file.
+NVDA_PLAYS = ('.wav',)
+
+
+def play_file(where, wait=False):
+    """One sound file - a wave file through NVDA's own player, anything
+    else (`.ogg`, `.mp3`, `.flac`) through Titan's mixer. Never raises."""
+    where = str(where or '')
+    if not where or not os.path.isfile(where):
+        return False
+    if os.path.splitext(where)[1].lower() not in NVDA_PLAYS:
+        return play_titan(where)
+    wave = compat.nvwave
+    if wave is None:
+        # No player of the reader's own - which is the case inside Titan
+        # Access, where this module runs with Titan's mixer underneath it.
+        if play_titan(where):
+            return True
+        with _LOCK:
+            _state['why'] = 'this NVDA has no nvwave'
+        return False
+    try:
+        wave.playWaveFile(where, asynchronous=not wait)
+    except TypeError:
+        try:
+            wave.playWaveFile(where)
+        except Exception:                            # noqa: BLE001
+            return False
+    except Exception:                                # noqa: BLE001
+        return False
+    return True
+
+
+def play_titan(theme_name):
+    """One of Titan's own sounds - or a FILE, by its absolute path -
+    through Titan's mixer. Never waits.
+
+    Answers whether Titan is there to be asked - the sound itself plays on
+    Titan's side, later, and cannot be waited for from a focus event.
+    """
+    theme_name = str(theme_name or '').strip()
+    if not theme_name:
+        return False
+    # **Inside Titan, Titan's mixer is a call away.** This module is the
+    # same file in Titan Access, which runs in Titan's own process: there
+    # the bus would be a round trip to ourselves, and the sound module is
+    # right here. Outside Titan that import fails and the bus is the way.
+    if _play_in_process(theme_name):
+        return True
+    try:
+        from .link import LINK
+        if not LINK.connected():
+            return False
+    except Exception:                                # noqa: BLE001
+        return False
+    import threading as _threading
+
+    def send():
+        try:
+            LINK.bridge('sounds.play', timeout=3.0, name=theme_name)
+        except Exception:                            # noqa: BLE001
+            pass
+    _threading.Thread(target=send, name='TitanIcon', daemon=True).start()
+    return True
+
+
+def _play_in_process(theme_name):
+    """Titan's own sound module, when this runs inside Titan. Never raises."""
+    try:
+        from src.titan_core import sound
+    except Exception:                                # noqa: BLE001
+        return False
+    try:
+        lowered = theme_name.lower()
+        if os.path.isabs(theme_name):
+            return bool(sound.play_sound_file(theme_name))
+        if lowered.startswith(('reader/', 'sre/')):
+            return bool(sound.play_reader_sound(theme_name.split('/', 1)[1]))
+        sound.play_sound(theme_name)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def play_by_source(name, source, file='', wait=False):
+    """Play an icon from where the user said, falling back to built-in.
+
+    A source that cannot answer - Titan not running, a file that has gone -
+    is not silence: the built-in sound stands in, because an icon that
+    quietly stops sounding is one the user will think they switched off.
+    """
+    if source == SOURCE_TITAN and play_titan(titan_name(name)):
+        return True
+    if source == SOURCE_EXTERNAL and play_file(file, wait=wait):
+        return True
+    return play_file(path_of(name), wait=wait)
 
 
 def wanted(name):
@@ -217,13 +426,17 @@ def set_wanted(name, on):
 
 
 def described():
-    """Every icon, for the manager: name, meaning, whether it sounds."""
+    """Every icon, for the manager: name, meaning, whether it sounds, and
+    where its sound comes from."""
     words = meanings()
     rows = []
     for name in NAMES:
+        source, chosen = source_of(name)
         rows.append({'id': name, 'meaning': words.get(name, ''),
                      'on': str(name) not in _load(),
-                     'file': path_of(name)})
+                     'file': path_of(name),
+                     'source': source, 'external': chosen,
+                     'titan': titan_name(name)})
     return rows
 
 
@@ -237,28 +450,16 @@ def play(name, wait=False):
     """
     if not wanted(name):
         return False
-    where = path_of(name)
-    if not where:
+    source, chosen = source_of(name)
+    if source == SOURCE_BUILTIN and not path_of(name):
         with _LOCK:
             if name not in _state['missing']:
                 _state['missing'].append(str(name))
         return False
-    wave = compat.nvwave
-    if wave is None:
+    if not play_by_source(name, source, chosen, wait=wait):
         with _LOCK:
-            _state['why'] = 'this NVDA has no nvwave'
-        return False
-    try:
-        wave.playWaveFile(where, asynchronous=not wait)
-    except TypeError:
-        # Older NVDA: `async` rather than `asynchronous`, and no keyword at
-        # all further back. A sound that will not play is not worth an
-        # exception in a focus handler.
-        try:
-            wave.playWaveFile(where)
-        except Exception:                            # noqa: BLE001
-            return False
-    except Exception:                                # noqa: BLE001
+            if name not in _state['missing']:
+                _state['missing'].append(str(name))
         return False
     with _LOCK:
         _state['played'] += 1
@@ -348,12 +549,7 @@ def for_focus(obj):
 
 
 def try_it(name):
-    """Play one whatever the switches say - the manager's Try button."""
-    where = path_of(name)
-    if not where or compat.nvwave is None:
-        return False
-    try:
-        compat.nvwave.playWaveFile(where, asynchronous=True)
-        return True
-    except Exception:                                # noqa: BLE001
-        return False
+    """Play one whatever the switches say - the manager's Try button,
+    from wherever the user has chosen it comes from."""
+    source, chosen = source_of(name)
+    return play_by_source(name, source, chosen)

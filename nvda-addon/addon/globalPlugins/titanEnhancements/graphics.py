@@ -130,6 +130,21 @@ def parts(obj):
     name = _text(getattr(obj, 'name', ''))
     if not name:
         name = labels.get(obj)
+    if not name:
+        # **What Windows itself drew, named for nothing.** Most of the
+        # icons on Windows are the shell's own - a folder, a printer, the
+        # warning triangle - and they can be recognised by comparing the
+        # picture, here, in about a millisecond, with nothing sent
+        # anywhere and no key needed. A picture that is somebody's own
+        # artwork lands near none of them and is left to the tier that
+        # can describe anything.
+        try:
+            from . import iconNames
+            ok, shows = iconNames.describe(obj)
+            if ok:
+                name = shows
+        except Exception:                            # noqa: BLE001
+            pass
     if name:
         said.append((name, elements.NAME_PITCH))
     said.append((word(kind), elements.ROLE_PITCH))
@@ -253,8 +268,24 @@ def label_locally(obj):
     """
     from . import labels
     from . import localOcr
+    # **What Windows drew is named before anything is read.** A stock
+    # icon is recognised by comparison rather than recognised by a
+    # recogniser: it is certain, instant, and costs nothing.
+    try:
+        from . import iconNames
+        ok, shows = iconNames.describe(obj)
+        if ok and shows:
+            labels.put(obj, shows, source='icon')
+            return True, shows
+    except Exception:                                # noqa: BLE001
+        pass
+    # **Every refusal here names itself.** They were bare `''`s, and the
+    # caller logs whatever comes back - so the log carried "Titan could
+    # not work out a name:" with nothing after the colon, three times in
+    # a row, which is the shape of message this add-on exists not to
+    # produce. Each of these is a different thing to do about it.
     if not labels.needs_one(obj):
-        return False, ''
+        return False, 'this control already has a name'
     stored = labels.get(obj)
     if stored:
         return True, stored
@@ -268,17 +299,21 @@ def label_locally(obj):
     except Exception:                                # noqa: BLE001
         return False, _('This control has no place on the screen to read.')
     if width < 4 or height < 4:
-        return False, ''
+        return False, ('it is %dx%d on the screen, which is too small to '
+                       'have anything written on it' % (width, height))
     reading = localOcr.read(left, top, width, height)
     if reading is None:
         return False, _text(localOcr.report().get('why', ''))
     said = ' '.join(_text(word.get('text')) for line in reading.lines
                     for word in line).strip()
     first = said.strip(' .:-')
-    if not first or len(first) > labels.MAX_LENGTH:
+    if not first:
+        return False, "Windows' recogniser read no words on it"
+    if len(first) > labels.MAX_LENGTH:
         # A name is a name, not a paragraph - and a control whose reading
         # is a paragraph is one the recogniser found a whole panel in.
-        return False, ''
+        return False, ('what was read is %d characters, which is a panel '
+                       'rather than a name' % len(first))
     labels.put(obj, first, source='ai')
     return True, first
 

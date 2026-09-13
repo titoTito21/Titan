@@ -190,10 +190,58 @@ def _synth_or_current(name):
     return driver_for(key) if key else current()
 
 
+def _ask(driver, name):
+    """Read one of a driver's own properties. Never raises, for ANY reason.
+
+    **`getattr` with a default is not enough here, and that was a crash.**
+    These are `AutoPropertyObject` properties, so reading one CALLS the
+    driver's getter - and `synthDriverHandler._getAvailableVariants` raises
+    `NotImplementedError` for every synthesizer that has no variants, which
+    `getattr`'s default does not catch (it catches `AttributeError` and
+    nothing else). Choosing a voice on such a synthesizer in the voice-class
+    manager therefore ended in an unhandled exception, with the dialog left
+    half filled in; over a bridged driver (`rpyc`) the same thing arrives as
+    a remote traceback, which is worse to read and no easier to catch.
+    """
+    if driver is None:
+        return None
+    try:
+        return getattr(driver, name, None)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def has_setting(synth, field, wanted):
+    """Whether the driver really has that voice or that variant.
+
+    True, False, or **None for "it will not say"** - and the three are
+    different answers. A driver that cannot be asked is not one to guess
+    about, so None means "set it and see", which is what this always did.
+
+    **Asking is the only way to find out.** Setting a voice a synthesizer
+    has not got does not raise anywhere it can be caught: NVDA's eSpeak
+    driver queues the change onto a thread of its own, so the failure is
+    logged THERE - `espeak_SetVoiceByName: code 2` (EE_NOT_FOUND) - once
+    per utterance, for as long as the class is used. Measured in a real
+    log: 261 of them, from one class, in four minutes.
+    """
+    name = str(wanted or '').strip()
+    if not name:
+        return None
+    collection = _ask(synth, 'availableVoices' if field == 'voice'
+                      else 'availableVariants')
+    if not collection:
+        return None
+    try:
+        return name in {str(key) for key in collection.keys()}
+    except Exception:                                # noqa: BLE001
+        return None
+
+
 def voices_of(name=''):
     """``[(id, label)]`` for a synthesizer - NVDA's own when unnamed."""
     synth = _synth_or_current(name)
-    return _entries(getattr(synth, 'availableVoices', None))
+    return _entries(_ask(synth, 'availableVoices'))
 
 
 def variants_of(name='', voice=''):
@@ -219,7 +267,7 @@ def variants_of(name='', voice=''):
         except Exception:                            # noqa: BLE001
             was = None
     try:
-        return _entries(getattr(synth, 'availableVariants', None))
+        return _entries(_ask(synth, 'availableVariants'))
     finally:
         if was is not None:
             try:
@@ -299,8 +347,19 @@ def apply_to(synth, profile):
         wanted = str(profile.get(field) or '').strip()
         if not wanted:
             continue
+        # **Asked before it is set, because it cannot be asked after.**
+        # A driver that does not have this dial at all, or does not have
+        # this voice, is a class spoken in the plain voice - which is what
+        # the docstring at the top of this module has always promised and
+        # what it did not do: the failure happens on the driver's own
+        # thread, where a `try` here catches nothing, so the only way to
+        # keep that promise is not to make the change.
+        if not supports(synth, field):
+            continue
+        if has_setting(synth, field, wanted) is False:
+            continue
         try:
-            held = getattr(synth, field, None)
+            held = _ask(synth, field)
             if held == wanted:
                 continue
             setattr(synth, field, wanted)
@@ -380,6 +439,70 @@ def stop():
         except Exception:                            # noqa: BLE001
             pass
 
+# --------------------------------------------------------------------------- #
+# When the reader is told to be quiet, so are we
+# --------------------------------------------------------------------------- #
+#: NVDA's own `cancelSpeech`, kept so it can be put back exactly.
+_cancel_was = None
+
+
+def follow_cancel():
+    """Stop our own drivers whenever NVDA's speech is cancelled.
+
+    **A driver of ours is not in NVDA's speech queue**, which is the whole
+    point of it - and it is also the one thing that goes wrong: pressing a
+    key to shut the reader up reaches `synth.cancel()` on NVDA's
+    synthesizer and nothing at all on ours, so a message being spoken
+    elsewhere carries on over whatever the user asked for instead. There
+    is no extension point for this, so `cancelSpeech` is wrapped, the way
+    :mod:`origin` wraps the speech functions and for the same reason.
+
+    Idempotent, and it puts back only what it put there.
+    """
+    global _cancel_was
+    if _cancel_was is not None:
+        return True
+    speech = compat.speech
+    original = getattr(speech, 'cancelSpeech', None) if speech else None
+    if not callable(original):
+        return False
+
+    def wrapper(*args, **kwargs):
+        try:
+            stop()
+        except Exception:                            # noqa: BLE001
+            pass
+        return original(*args, **kwargs)
+    wrapper.__name__ = 'cancelSpeech'
+    wrapper._titan_original = original
+    try:
+        setattr(speech, 'cancelSpeech', wrapper)
+    except Exception:                                # noqa: BLE001
+        return False
+    _cancel_was = original
+    return True
+
+
+def unfollow_cancel():
+    """Put NVDA's own `cancelSpeech` back, and only if it is still ours."""
+    global _cancel_was
+    original = _cancel_was
+    _cancel_was = None
+    speech = compat.speech
+    if original is None or speech is None:
+        return False
+    try:
+        standing = getattr(speech, 'cancelSpeech', None)
+        # Only OURS. Something else may have wrapped it since, and a
+        # reader is not the place to win an argument with another add-on.
+        if getattr(standing, '_titan_original', None) is original:
+            setattr(speech, 'cancelSpeech', original)
+            return True
+    except Exception:                                # noqa: BLE001
+        pass
+    return False
+
+
 
 # --------------------------------------------------------------------------- #
 # The reader's own driver, changed and always changed back
@@ -408,17 +531,52 @@ def standing():
         return dict(_standing)
 
 
+def name_of(synth):
+    """What a driver calls itself, or ''. Never raises."""
+    return str(_ask(synth, 'name') or '').strip()
+
+
+def for_another_synth(profile, synth=None):
+    """Whether this profile's voice belongs to a DIFFERENT synthesizer.
+
+    A voice id means nothing outside the synthesizer it came from. The
+    user's own table had `controller` set to sapi5_32's
+    `HKEY_LOCAL_MACHINE\\...\\RHVoice\\Natan` while NVDA was running
+    eSpeak, and that name was pushed into eSpeak once per notification -
+    which is the reported swarm of errors, and it was in the log 261 times.
+
+    A profile that names no synthesizer is not a different one: it was
+    chosen for whatever the user is using, and `has_setting` is what
+    catches it if they have since changed synthesizer.
+    """
+    wanted = str((profile or {}).get('synth') or '').strip()
+    if not wanted:
+        return False
+    here = name_of(synth if synth is not None else current())
+    return bool(here) and wanted != here
+
+
 def become(profile):
     """Put ``profile``'s driver settings on NVDA's own synthesizer.
 
     An empty profile means "be the reader's own voice again", which is what
     the end of every sequence asks for.
+
+    **A voice belonging to another synthesizer is left behind here.** This
+    is the one place a profile can reach a driver it was not chosen for:
+    :func:`speak_with` goes to the driver the profile NAMES, and a class
+    that names one is supposed to go there - but the dials of such a class
+    still travel through the ordinary sequence, and the voice used to
+    travel with them.
     """
     synth = current()
     if synth is None:
         return False
     restore_standing(synth)
     wanted = {name: value for name, value in (profile or {}).items() if value}
+    if for_another_synth(profile, synth):
+        wanted.pop('voice', None)
+        wanted.pop('variant', None)
     if not wanted:
         return True
     was = apply_to(synth, wanted)

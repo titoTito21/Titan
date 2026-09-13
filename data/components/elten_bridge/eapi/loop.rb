@@ -181,6 +181,13 @@ module EltenLoop
       @held.keys
     end
 
+    # The keys that went down THIS frame, by name. `held` answers what is
+    # still down; `getkeychar` needs what was just typed, which is a
+    # different question and had no way to be asked.
+    def pressed_names
+      @pressed.keys
+    end
+
     # Nothing may stay held when the window loses the keyboard, or a game
     # walks into a wall for ever because Left never came up.
     def release_all

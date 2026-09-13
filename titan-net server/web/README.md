@@ -35,7 +35,7 @@ web layout (WCAG 2.2 AA) with Polish / English i18n.
 | `js/auth.js`        | Login / register pages |
 | `js/chat.js`        | Chat page logic |
 | `js/repository.js`  | Repository page logic |
-| `js/forum.js`       | Forum page logic |
+| `js/groups.js`      | Groups, and the forum inside them - `forum.html` only redirects here |
 
 ## Accessibility highlights (WCAG 2.2 AA)
 

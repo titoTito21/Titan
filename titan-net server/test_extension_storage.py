@@ -146,9 +146,14 @@ class TheBuiltinExtensions(unittest.TestCase):
             "INSERT INTO users (username, is_admin) VALUES ('boss', 1)")
         self.seed(Database, self.connection.cursor())
         rows = self.rows()
-        self.assertEqual([row['slug'] for row in rows], ['cling'])
-        self.assertEqual(rows[0]['status'], 'active')
-        self.assertEqual(rows[0]['author_id'], 2)
+        # Read the list off Database rather than keeping a copy of it here:
+        # `elten_apps` was added beside `cling` and this test asserted a
+        # hardcoded ['cling'], so a correct server failed its own suite.
+        self.assertEqual([row['slug'] for row in rows],
+                         [slug for slug, _name, _desc in Database.BUILTIN_EXTENSIONS])
+        for row in rows:
+            self.assertEqual(row['status'], 'active')
+            self.assertEqual(row['author_id'], 2)
 
     def test_the_first_user_will_do_when_there_is_no_admin(self):
         self.connection.execute(
@@ -167,7 +172,7 @@ class TheBuiltinExtensions(unittest.TestCase):
             "INSERT INTO users (username, is_admin) VALUES ('boss', 1)")
         self.seed(Database, self.connection.cursor())
         self.seed(Database, self.connection.cursor())
-        self.assertEqual(len(self.rows()), 1)
+        self.assertEqual(len(self.rows()), len(Database.BUILTIN_EXTENSIONS))
 
     def test_an_extension_somebody_has_changed_is_never_touched(self):
         """Only ever INSERT: a moderator who renamed it, or took it out of

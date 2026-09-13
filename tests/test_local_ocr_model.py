@@ -221,5 +221,55 @@ class OfferedWhereTheNeedArises(unittest.TestCase):
         self.assertIn('ID_YES', block)
 
 
+class TheIconModelIsNotWiredToSpeech(unittest.TestCase):
+    """Measured and found wrong too often to speak.
+
+    On this machine it announced GitHub Desktop and two folder windows
+    all as "information", and Windows' own folder icon as "envelope". A
+    reader that says "envelope" for a folder is worse than one that says
+    "icon", so it stays unreached until a bigger picture makes it right.
+    """
+
+    def setUp(self):
+        from src.ai.ocr import icon_model
+        self.icons = icon_model
+
+    def test_nothing_that_speaks_reaches_it(self):
+        guilty = []
+        for where in ('nvda-addon', os.path.join('data', 'components',
+                                                 'titan access')):
+            for root, _dirs, names in os.walk(os.path.join(TITAN, where)):
+                for name in names:
+                    if not name.endswith('.py'):
+                        continue
+                    path = os.path.join(root, name)
+                    with open(path, encoding='utf-8', errors='replace') as f:
+                        if 'icon_model' in f.read():
+                            guilty.append(os.path.relpath(path, TITAN))
+        self.assertEqual(guilty, [],
+                         'a reader now speaks through the icon model')
+
+    def test_the_measurement_is_written_down(self):
+        """So the next person does not have to find it out again."""
+        source = open(os.path.join(TITAN, 'src', 'ai', 'ocr',
+                                   'icon_model.py'), encoding='utf-8').read()
+        self.assertIn('NOT_YET_SPOKEN', source)
+        self.assertIn('SHDefExtractIconW', source,
+                      'the next thing to try is not written down')
+
+    def test_it_declines_rather_than_guessing(self):
+        """A zero-shot model always has a nearest label; the floor and
+        the margin are what stop it being a confident lie."""
+        self.assertGreater(self.icons.SURE_ENOUGH, 0.15)
+        self.assertGreater(self.icons.CLEAR_MARGIN, 0.0)
+        escapes = [one for one in self.icons.VOCABULARY if not one[0]]
+        self.assertTrue(escapes, 'nothing for a logo to land on')
+
+    def test_absent_is_a_normal_state(self):
+        ok, why = self.icons.available()
+        self.assertIsInstance(ok, bool)
+        if not ok:
+            self.assertTrue(why)
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

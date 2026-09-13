@@ -30,6 +30,7 @@ os.makedirs('logs', exist_ok=True)
 # Configure logging - see logging_setup for why this is not basicConfig.
 import logging_setup
 logger = logging_setup.configure('TitanNetHTTP', 'http_server.log')
+from logging_setup import describe_error
 
 
 class TitanNetHTTPServer:
@@ -587,7 +588,7 @@ class TitanNetHTTPServer:
             logger.error(f"Upload error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
         finally:
             # Never leave a half-written .part file behind on any error path.
@@ -654,7 +655,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get apps error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_app_details(self, request: web.Request) -> web.Response:
@@ -708,7 +709,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get app details error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_repository(self, request: web.Request) -> web.Response:
@@ -730,7 +731,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get repository error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_category(self, request: web.Request) -> web.Response:
@@ -756,7 +757,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get category error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_pending(self, request: web.Request) -> web.Response:
@@ -792,7 +793,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get pending error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_approve(self, request: web.Request) -> web.Response:
@@ -903,7 +904,7 @@ class TitanNetHTTPServer:
             logger.error(f"Approve error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_download(self, request: web.Request) -> web.Response:
@@ -972,7 +973,7 @@ class TitanNetHTTPServer:
             logger.error(f"Download error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_delete(self, request: web.Request) -> web.Response:
@@ -1038,7 +1039,7 @@ class TitanNetHTTPServer:
             logger.error(f"Delete error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_stats(self, request: web.Request) -> web.Response:
@@ -1081,7 +1082,7 @@ class TitanNetHTTPServer:
             logger.error(f"Stats error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_search(self, request: web.Request) -> web.Response:
@@ -1136,7 +1137,7 @@ class TitanNetHTTPServer:
             logger.error(f"Search error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     # Forum handlers
@@ -1197,7 +1198,7 @@ class TitanNetHTTPServer:
             logger.error(f"Create topic error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_topics(self, request: web.Request) -> web.Response:
@@ -1236,7 +1237,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get topics error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_topic(self, request: web.Request) -> web.Response:
@@ -1262,7 +1263,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get topic error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_add_reply(self, request: web.Request) -> web.Response:
@@ -1300,7 +1301,7 @@ class TitanNetHTTPServer:
             logger.error(f"Add reply error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_replies(self, request: web.Request) -> web.Response:
@@ -1330,7 +1331,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get replies error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_delete_topic(self, request: web.Request) -> web.Response:
@@ -1364,7 +1365,7 @@ class TitanNetHTTPServer:
             logger.error(f"Delete topic error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_search_forum(self, request: web.Request) -> web.Response:
@@ -1402,7 +1403,7 @@ class TitanNetHTTPServer:
             logger.error(f"Search forum error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     async def handle_get_my_topics(self, request: web.Request) -> web.Response:
@@ -1436,7 +1437,7 @@ class TitanNetHTTPServer:
             logger.error(f"Get my topics error: {e}", exc_info=True)
             return web.json_response({
                 'success': False,
-                'error': str(e)
+                'error': describe_error(e)
             }, status=500)
 
     # =====================================================================
@@ -1460,7 +1461,7 @@ class TitanNetHTTPServer:
             })
         except Exception as e:
             logger.error(f"Get account email error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_set_account_email(self, request: web.Request) -> web.Response:
         """Set/replace the authenticated user's recovery email and send a
@@ -1486,7 +1487,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Set account email error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_verify_email(self, request: web.Request) -> web.Response:
         """Consume an email-verification token (from the emailed link)."""
@@ -1500,7 +1501,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Verify email error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     def _note_authz_violation(self, request: web.Request, user: Dict, resource: str):
         """Report a cross-user (IDOR) access attempt to Cerberus."""
@@ -1569,7 +1570,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Reset password error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # ----- User mailboxes -----
 
@@ -1590,7 +1591,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'messages': messages, 'address': address})
         except Exception as e:
             logger.error(f"Mail list error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mail_get(self, request: web.Request) -> web.Response:
         try:
@@ -1613,7 +1614,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'message': msg})
         except Exception as e:
             logger.error(f"Mail get error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mail_mark_read(self, request: web.Request) -> web.Response:
         try:
@@ -1626,7 +1627,7 @@ class TitanNetHTTPServer:
             return web.json_response(result)
         except Exception as e:
             logger.error(f"Mail mark read error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mail_delete(self, request: web.Request) -> web.Response:
         try:
@@ -1639,7 +1640,7 @@ class TitanNetHTTPServer:
             return web.json_response(result)
         except Exception as e:
             logger.error(f"Mail delete error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mail_send(self, request: web.Request) -> web.Response:
         try:
@@ -1707,7 +1708,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Mail send error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mail_incoming(self, request: web.Request) -> web.Response:
         """Ingest a message delivered by the Postfix pipe (mail_delivery.py).
@@ -1744,7 +1745,7 @@ class TitanNetHTTPServer:
                                       'duplicate': bool(result.get('duplicate'))})
         except Exception as e:
             logger.error(f"Mail incoming error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     def _require_auth(self, request: web.Request):
         """Return the authenticated user dict or None."""
@@ -1765,7 +1766,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'groups': groups})
         except Exception as e:
             logger.error(f"List groups error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_create_group(self, request: web.Request) -> web.Response:
         """Create a group (any authenticated user; becomes owner)."""
@@ -1794,7 +1795,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=status)
         except Exception as e:
             logger.error(f"Create group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_group(self, request: web.Request) -> web.Response:
         try:
@@ -1809,7 +1810,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'group': group})
         except Exception as e:
             logger.error(f"Get group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_update_group(self, request: web.Request) -> web.Response:
         try:
@@ -1834,7 +1835,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Update group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_rename_group(self, request: web.Request) -> web.Response:
         try:
@@ -1850,7 +1851,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Rename group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_group(self, request: web.Request) -> web.Response:
         try:
@@ -1863,7 +1864,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Delete group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_join_group(self, request: web.Request) -> web.Response:
         try:
@@ -1876,7 +1877,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Join group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_leave_group(self, request: web.Request) -> web.Response:
         try:
@@ -1889,7 +1890,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Leave group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_group_members(self, request: web.Request) -> web.Response:
         try:
@@ -1910,7 +1911,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'members': members})
         except Exception as e:
             logger.error(f"Group members error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_approve_member(self, request: web.Request) -> web.Response:
         try:
@@ -1924,7 +1925,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Approve member error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_reject_member(self, request: web.Request) -> web.Response:
         try:
@@ -1938,7 +1939,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Reject member error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_set_group_moderator(self, request: web.Request) -> web.Response:
         try:
@@ -1956,7 +1957,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Set group moderator error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_transfer_group_ownership(self, request: web.Request) -> web.Response:
         try:
@@ -1972,7 +1973,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Transfer group ownership error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_ban_from_group(self, request: web.Request) -> web.Response:
         try:
@@ -1990,7 +1991,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Ban from group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unban_from_group(self, request: web.Request) -> web.Response:
         try:
@@ -2006,7 +2007,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Unban from group error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_list_group_forums(self, request: web.Request) -> web.Response:
         try:
@@ -2024,7 +2025,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'forums': forums})
         except Exception as e:
             logger.error(f"List group forums error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_create_group_forum(self, request: web.Request) -> web.Response:
         try:
@@ -2044,7 +2045,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Create group forum error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_group_forum(self, request: web.Request) -> web.Response:
         try:
@@ -2057,7 +2058,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Delete group forum error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_list_move_requests(self, request: web.Request) -> web.Response:
         """Pending cross-group move requests the caller can act on."""
@@ -2070,7 +2071,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'requests': requests})
         except Exception as e:
             logger.error(f"List move requests error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_approve_move(self, request: web.Request) -> web.Response:
         try:
@@ -2097,7 +2098,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Approve move error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_reject_move(self, request: web.Request) -> web.Response:
         try:
@@ -2110,7 +2111,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Reject move error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # =====================================================================
     # Titan-Net Extension System Handlers
@@ -2142,7 +2143,7 @@ class TitanNetHTTPServer:
                                       'schema': remote_ui.SCHEMA_VERSION})
         except Exception as e:
             logger.error(f"List remote screens error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_remote_screen(self, request: web.Request) -> web.Response:
         try:
@@ -2161,7 +2162,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'screen': row})
         except Exception as e:
             logger.error(f"Get remote screen error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_save_remote_screen(self, request: web.Request) -> web.Response:
         """Create or replace a screen. Staff only - this is server content."""
@@ -2196,7 +2197,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Save remote screen error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_remote_screen(self, request: web.Request) -> web.Response:
         try:
@@ -2211,7 +2212,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 404)
         except Exception as e:
             logger.error(f"Delete remote screen error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_list_remote_submissions(self, request: web.Request) -> web.Response:
         """What users sent back from a screen handled by the built-in 'store'."""
@@ -2237,7 +2238,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'submissions': rows})
         except Exception as e:
             logger.error(f"List remote submissions error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # =====================================================================
     # Server sound handlers
@@ -2256,7 +2257,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'sounds': sounds})
         except Exception as e:
             logger.error(f"List server sounds error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_upload_server_sound(self, request: web.Request) -> web.Response:
         """Staff uploads a sound the server can later play at anyone.
@@ -2317,7 +2318,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Upload server sound error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def _prune_orphan_sound(self, filename: Optional[str],
                                   keep: Optional[str] = None):
@@ -2379,7 +2380,7 @@ class TitanNetHTTPServer:
             })
         except Exception as e:
             logger.error(f"Download server sound error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_server_sound(self, request: web.Request) -> web.Response:
         try:
@@ -2396,7 +2397,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 404)
         except Exception as e:
             logger.error(f"Delete server sound error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_play_server_sound(self, request: web.Request) -> web.Response:
         """Play a registered sound at whoever the target selects.
@@ -2429,7 +2430,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': bool(sent), 'played_to': sent})
         except Exception as e:
             logger.error(f"Play server sound error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_push_remote_screen(self, request: web.Request) -> web.Response:
         """Open one of the server's screens on somebody's client right now."""
@@ -2452,7 +2453,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': bool(sent), 'pushed_to': sent})
         except Exception as e:
             logger.error(f"Push remote screen error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_submit_extension(self, request: web.Request) -> web.Response:
         try:
@@ -2487,7 +2488,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Submit extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_list_extensions(self, request: web.Request) -> web.Response:
         try:
@@ -2503,7 +2504,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'extensions': extensions})
         except Exception as e:
             logger.error(f"List extensions error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_extension(self, request: web.Request) -> web.Response:
         try:
@@ -2522,7 +2523,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'extension': ext})
         except Exception as e:
             logger.error(f"Get extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_approve_extension(self, request: web.Request) -> web.Response:
         try:
@@ -2540,7 +2541,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Approve extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_reject_extension(self, request: web.Request) -> web.Response:
         try:
@@ -2556,7 +2557,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Reject extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_disable_extension(self, request: web.Request) -> web.Response:
         """Take an ACTIVE moderator component offline network-wide (staff only)."""
@@ -2574,7 +2575,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Disable extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_enable_extension(self, request: web.Request) -> web.Response:
         """Restore a disabled moderator component to active (staff only)."""
@@ -2592,7 +2593,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Enable extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_extension(self, request: web.Request) -> web.Response:
         """Permanently delete a moderator component (staff only)."""
@@ -2610,7 +2611,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Delete extension error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_extension_client(self, request: web.Request) -> web.Response:
         """Download an ACTIVE extension's client code (for clients to load)."""
@@ -2626,7 +2627,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'extension': ext})
         except Exception as e:
             logger.error(f"Extension client error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_extension_data_get(self, request: web.Request) -> web.Response:
         try:
@@ -2643,7 +2644,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'key': key, 'value': value})
         except Exception as e:
             logger.error(f"Extension data get error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_extension_data_set(self, request: web.Request) -> web.Response:
         try:
@@ -2663,7 +2664,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 400)
         except Exception as e:
             logger.error(f"Extension data set error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_add_extension_asset(self, request: web.Request) -> web.Response:
         try:
@@ -2680,7 +2681,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Add extension asset error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_list_extension_assets(self, request: web.Request) -> web.Response:
         try:
@@ -2693,7 +2694,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'assets': assets})
         except Exception as e:
             logger.error(f"List extension assets error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_extension_asset(self, request: web.Request) -> web.Response:
         try:
@@ -2710,7 +2711,7 @@ class TitanNetHTTPServer:
             return web.json_response({'success': True, 'asset': asset})
         except Exception as e:
             logger.error(f"Get extension asset error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # =====================================================================
     # Curated moderation capability (timed jail / release)
@@ -2733,7 +2734,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Jail user error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_release_user(self, request: web.Request) -> web.Response:
         try:
@@ -2747,7 +2748,7 @@ class TitanNetHTTPServer:
             return web.json_response(result, status=200 if result.get('success') else 403)
         except Exception as e:
             logger.error(f"Release user error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # Role Management Handlers
 
@@ -2791,7 +2792,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get user role error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_all_users(self, request: web.Request) -> web.Response:
         """Get all registered users (moderator/developer only)"""
@@ -2830,7 +2831,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get all users error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # Moderation Handlers
 
@@ -2878,7 +2879,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Promote moderator error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_demote_moderator(self, request: web.Request) -> web.Response:
         """Demote moderator to regular user (developer only)"""
@@ -2919,7 +2920,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Demote moderator error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_moderators(self, request: web.Request) -> web.Response:
         """Get list of all moderators"""
@@ -2935,7 +2936,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get moderators error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_admin_change_password(self, request: web.Request) -> web.Response:
         """Admin / developer forced password reset for any user.
@@ -2985,7 +2986,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Admin change_password error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # Ban System Handlers
 
@@ -3019,7 +3020,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Ban from room error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_ban_globally(self, request: web.Request) -> web.Response:
         """Ban user globally from TCE Community"""
@@ -3050,7 +3051,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Ban globally error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_ban_hard(self, request: web.Request) -> web.Response:
         """Hard ban user - most restrictive ban (IP + Hardware + User)"""
@@ -3088,7 +3089,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Hard ban error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_ban_from_forum(self, request: web.Request) -> web.Response:
         """Ban user from forum"""
@@ -3118,7 +3119,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Ban from forum error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unban_from_room(self, request: web.Request) -> web.Response:
         """Unban user from room"""
@@ -3145,7 +3146,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unban from room error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unban_globally(self, request: web.Request) -> web.Response:
         """Unban user globally"""
@@ -3173,7 +3174,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unban globally error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unban_from_forum(self, request: web.Request) -> web.Response:
         """Unban user from forum"""
@@ -3201,7 +3202,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unban from forum error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_check_ban_status(self, request: web.Request) -> web.Response:
         """Check user ban status"""
@@ -3226,7 +3227,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Check ban status error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # App Repository Moderation Handlers
 
@@ -3249,7 +3250,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Reject app error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_pending_apps(self, request: web.Request) -> web.Response:
         """Get pending apps awaiting approval"""
@@ -3265,7 +3266,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get pending apps error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_approve_app(self, request: web.Request) -> web.Response:
         """Approve app in repository (moderator only)"""
@@ -3286,7 +3287,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Approve app error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # Forum Moderation Handlers
 
@@ -3308,7 +3309,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Lock topic error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unlock_topic(self, request: web.Request) -> web.Response:
         """Unlock forum topic (moderator only)"""
@@ -3328,7 +3329,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unlock topic error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_pin_topic(self, request: web.Request) -> web.Response:
         """Pin forum topic (moderator only)"""
@@ -3348,7 +3349,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Pin topic error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unpin_topic(self, request: web.Request) -> web.Response:
         """Unpin forum topic (moderator only)"""
@@ -3368,7 +3369,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unpin topic error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_reply(self, request: web.Request) -> web.Response:
         """Delete forum reply (moderator only)"""
@@ -3388,7 +3389,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Delete reply error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_edit_reply(self, request: web.Request) -> web.Response:
         """Edit forum reply (moderator only)"""
@@ -3415,7 +3416,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Edit reply error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def _notify_topic_move(self, actor: dict, result: dict) -> None:
         """Tell the people affected by a move. Best-effort, never fails the move.
@@ -3547,7 +3548,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Move topic error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_mark_topic_read(self, request: web.Request) -> web.Response:
         """Mark forum topic as read by user"""
@@ -3572,7 +3573,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Mark topic read error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_whats_new(self, request: web.Request) -> web.Response:
         """Get what's new counts for current user - non-blocking DB"""
@@ -3591,7 +3592,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"What's new error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # Room Moderation Handlers
 
@@ -3632,7 +3633,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Kick user error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_ban_user(self, request: web.Request) -> web.Response:
         """Ban user from room (moderator/room creator only)"""
@@ -3672,7 +3673,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Ban user error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_unban_user(self, request: web.Request) -> web.Response:
         """Unban user from room (moderator/room creator only)"""
@@ -3711,7 +3712,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Unban user error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_message(self, request: web.Request) -> web.Response:
         """Delete room message (moderator only)"""
@@ -3733,7 +3734,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Delete message error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_delete_room(self, request: web.Request) -> web.Response:
         """Delete room (moderator only)"""
@@ -3755,7 +3756,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Delete room error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     # ------------------------------------------------------------------
     # User sound (business card) endpoints
@@ -3830,7 +3831,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"User sound upload error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     async def handle_get_user_sound(self, request: web.Request) -> web.Response:
         """Download a user's business-card sound."""
@@ -3854,7 +3855,7 @@ class TitanNetHTTPServer:
 
         except Exception as e:
             logger.error(f"Get user sound error: {e}", exc_info=True)
-            return web.json_response({'success': False, 'error': str(e)}, status=500)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
 
     def _create_ssl_context(self):
         """Create SSL context from Let's Encrypt certificates"""

@@ -30,6 +30,7 @@ import time
 
 import globalPluginHandler
 
+from . import agentLink
 from . import channel                                # noqa: F401
 from . import commands
 from . import compat
@@ -42,6 +43,7 @@ from . import dialogs
 from . import earcons
 from . import focus
 from . import gestures
+from . import guest
 from . import i18n
 from . import interject
 from . import link
@@ -106,6 +108,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         super().__init__()
         self._panel = None
         self._smart_bound = False
+        self._guest_bound = False
         self._terminal_bound = False
         self._ocr_bound = False
         self._watching = threading.Event()
@@ -181,6 +184,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     if compat.log is not None:
                         compat.log.error(
                             'Titan trackpad raised on start: %s' % error)
+            try:
+                # The ear for an agent on the far side of a wall - a guest,
+                # or a game engine. Off until asked for, and a switch that
+                # is off starts nothing at all: this opens a socket.
+                agentLink.keep_running()
+            except Exception as error:               # noqa: BLE001
+                if compat.log is not None:
+                    compat.log.error(
+                        'Titan agent channel: %s' % error)
             self._start_watching()
 
     # ----------------------------------------------------------- lifecycle
@@ -192,6 +204,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         would outlive the add-on that did it.
         """
         self._watching.set()
+        try:
+            agentLink.stop()
+            agentLink.stop_variables()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             earcons.stop()
         except Exception:                            # noqa: BLE001
@@ -212,11 +229,29 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:                            # noqa: BLE001
             pass
         try:
+            # NVDA's own `cancelSpeech` back. A wrapper left behind by an
+            # add-on that has gone is a reader calling into a module
+            # nobody owns - the same rule as `origin.stop` above.
+            speaking.unfollow_cancel()
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
             if self._smart_bound:
                 self._borrow_keys(False)
         except Exception:                            # noqa: BLE001
             pass
-        for leave in (states.stop, trackpad.stop, surface.stop_now,
+        try:
+            if self._guest_bound:
+                self._guest_bound = False
+                for gesture in self.GUEST_KEYS:
+                    try:
+                        self.removeGestureBinding(gesture)
+                    except Exception:                # noqa: BLE001
+                        pass
+        except Exception:                            # noqa: BLE001
+            pass
+        for leave in (guest.stop, states.stop, trackpad.stop,
+                      surface.stop_now,
                       terminal.stop, monitors.stop, ocrReview.stop,
                       appReview.stop, virtualWindow.stop,
                       widgetReview.stop, _close_described_applications):
@@ -355,6 +390,20 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:                            # noqa: BLE001
             pass
         try:
+            # **Arriving is not the only way to be somewhere.** Switching
+            # this on WHILE looking at a guest - which is exactly what
+            # somebody does - fired no foreground event, so nothing ever
+            # started and the setting appeared to do nothing at all.
+            # Found by trying to drive it from outside and discovering
+            # that Windows will not let a background process change the
+            # foreground window, which is also why the user's own machine
+            # would have shown this. Refusing costs one class check.
+            if not guest.following():
+                guest.consider(obj)
+            self._keep_guest_keys_right()
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
             # **Arriving in Titan, and leaving it.** Titan Access plays a
             # cue and says the desktop's name on the way in, because
             # somebody coming back from another program needs to know
@@ -415,8 +464,91 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                 self._keep_virtual_keys_right()
         except Exception:                            # noqa: BLE001
             pass
+        try:
+            # **A virtual machine in front is the whole signal.** There is
+            # deliberately no key to press: the guest's window IS another
+            # computer's screen, so following the pointer in it is what
+            # this does whenever the user is looking at one, and a window
+            # that is not this guest's is a guest they have left.
+            if not guest.crossing(obj):
+                guest.consider(obj)
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
+            self._keep_guest_keys_right()
+        except Exception:                            # noqa: BLE001
+            pass
         self._keep_keys_right()
         nextHandler()
+
+    #: **The keys that move something in a picture.** Arrowing through a
+    #: guest's icons, a game's menu or an installer's options changes
+    #: nothing on the host - no focus event, no caret, no object - so the
+    #: only thing that says what happened is the picture, and the only
+    #: cheap moment to look at it is just after the key.
+    #:
+    #: Every one of them is SENT ON first and unconditionally. These are
+    #: the guest's keys, or the game's; a reader that swallowed one would
+    #: break the window it was trying to describe. They are bound only
+    #: while such a window is really in front, and given straight back.
+    #:
+    #: Enter is here because it is where a new screen appears. Space is
+    #: not: it is typing, and so is everything else left out.
+    GUEST_KEYS = {
+        'kb:upArrow': 'guestMoved',
+        'kb:downArrow': 'guestMoved',
+        'kb:leftArrow': 'guestMoved',
+        'kb:rightArrow': 'guestMoved',
+        'kb:tab': 'guestMoved',
+        'kb:shift+tab': 'guestMoved',
+        'kb:home': 'guestMoved',
+        'kb:end': 'guestMoved',
+        'kb:pageUp': 'guestMoved',
+        'kb:pageDown': 'guestMoved',
+        'kb:enter': 'guestMoved',
+    }
+
+    def _keep_guest_keys_right(self):
+        try:
+            want = bool(guest.following())
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want == getattr(self, '_guest_bound', False):
+            return
+        for gesture, script_name in self.GUEST_KEYS.items():
+            try:
+                if want:
+                    self.bindGesture(gesture, script_name)
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._guest_bound = want
+
+    @script(description=_('In a virtual machine, a game or a window that '
+                          'draws itself: say what the key moved onto'),
+            category=CATEGORY)
+    def script_guestMoved(self, gesture):
+        # **Sent on first, and whatever happens next.** This key belongs
+        # to the window being described.
+        try:
+            gesture.send()
+        except Exception:                            # noqa: BLE001
+            pass
+        if not guest.following():
+            # A binding that outlived its window: give the keys back
+            # rather than reading somebody else's screen.
+            self._keep_guest_keys_right()
+            return
+        try:
+            if compat.core is not None:
+                compat.core.callLater(int(guest.SETTLE * 1000),
+                                      guest.after_key)
+            else:
+                guest.after_key()
+        except Exception:                            # noqa: BLE001
+            pass
+
 
     #: The keys a drawn window's model borrows, and what each does. Tab
     #: and the up/down arrows walk the controls that were READ; Enter
@@ -493,6 +625,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:enter': 'ocrClick',
         'kb:f5': 'ocrRefresh',
         'kb:escape': 'ocrLeave',
+        # The numpad corners, as in every other walked list: the first and
+        # the last line, at their first and their last word.
+        'kb:numpad7': 'ocrUpLeft',
+        'kb:numpad9': 'ocrUpRight',
+        'kb:numpad1': 'ocrDownLeft',
+        'kb:numpad3': 'ocrDownRight',
     }
 
     #: The reviews' keys once more, for a Titan application described as a
@@ -577,6 +715,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:space': 'appToggle',
         'kb:f5': 'appRefresh',
         'kb:escape': 'appLeave',
+        # The numpad corners, as in every other walked list: the first and
+        # the last control, and the end of what is inside them.
+        'kb:numpad7': 'appUpLeft',
+        'kb:numpad9': 'appUpRight',
+        'kb:numpad1': 'appDownLeft',
+        'kb:numpad3': 'appDownRight',
     }
 
     def _borrow_app_keys(self, borrow=True):
@@ -614,6 +758,25 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:end': 'paletteEnd',
         'kb:enter': 'paletteActivate',
         'kb:escape': 'paletteBack',
+        # Left and Right by whichever layout is on (a character, the word
+        # beside, the row beside), Shift the other way round, Control by
+        # word - so the palette reads exactly like the virtual window.
+        'kb:leftArrow': 'paletteCharLeft',
+        'kb:rightArrow': 'paletteCharRight',
+        'kb:shift+leftArrow': 'paletteShiftLeft',
+        'kb:shift+rightArrow': 'paletteShiftRight',
+        'kb:control+leftArrow': 'paletteWordLeft',
+        'kb:control+rightArrow': 'paletteWordRight',
+        # And the numpad as in the virtual window: the four corners of
+        # the page (the start and end of the first row, of the last row),
+        # and 4 / 6 the layout - one setting shared with the virtual
+        # window, so a user who changed it there finds it changed here.
+        'kb:numpad7': 'paletteUpLeft',
+        'kb:numpad9': 'paletteUpRight',
+        'kb:numpad1': 'paletteDownLeft',
+        'kb:numpad3': 'paletteDownRight',
+        'kb:numpad4': 'paletteLayoutBack',
+        'kb:numpad6': 'paletteLayout',
     }
 
     def _borrow_palette_keys(self, borrow=True):
@@ -634,6 +797,55 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             want = False
         if want != getattr(self, '_palette_bound', False):
             self._borrow_palette_keys(want)
+        self._keep_touch_right()
+
+    # ------------------------------------------------------------ touch
+    #: The trackpad's gestures, held while ANY walked list is up - the
+    #: palette, the virtual window, the OCR review - and given back the
+    #: moment none is. One script answers them all and asks
+    #: :mod:`touchWalk` which list has them; the table of what each
+    #: gesture does is there, in one place, with the finger counts.
+    def _touch_gestures(self):
+        from . import touchWalk
+        return {'ts:%s' % action: 'walkTouch' for action in touchWalk.ACTIONS}
+
+    def _keep_touch_right(self):
+        try:
+            from . import touchWalk
+            want = bool(touchWalk.walker())
+        except Exception:                            # noqa: BLE001
+            want = False
+        if want == getattr(self, '_touch_bound', False):
+            return
+        for gesture, script_name in self._touch_gestures().items():
+            try:
+                if want:
+                    self.bindGesture(gesture, script_name)
+                else:
+                    self.removeGestureBinding(gesture)
+            except Exception:                        # noqa: BLE001
+                pass
+        self._touch_bound = want
+
+    @script(description=_('In a walked list: the trackpad - explore with a '
+                          'finger, flick to move, more fingers for the '
+                          'corners, the layout and the ends'),
+            category=CATEGORY)
+    def script_walkTouch(self, gesture):
+        from . import touchWalk
+        name = (getattr(gesture, 'identifiers', None) or [''])[0]
+        handled, said = touchWalk.handle(
+            touchWalk.action_of(name),
+            getattr(gesture, 'x', None), getattr(gesture, 'y', None))
+        if not handled:
+            self._keep_touch_right()
+            return
+        # A gesture may have closed the list, or opened a menu inside it.
+        self._keep_palette_keys_right()
+        self._keep_virtual_keys_right()
+        self._keep_ocr_keys_right()
+        if said:
+            dialogs.report(said)
 
     def _palette_key(self, gesture, act):
         if not palette.walking():
@@ -652,12 +864,54 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         if said:
             dialogs.report(said)
 
-    @script(description=_('In the command palette: the command above'),
+    @script(description=_('In the application: the top left corner - the '
+                          'first control'), category=CATEGORY)
+    def script_appUpLeft(self, gesture):
+        self._app_move(gesture, lambda: appReview.move_corner(-1, -1))
+
+    @script(description=_('In the application: the top right corner - the '
+                          'end of the first control'), category=CATEGORY)
+    def script_appUpRight(self, gesture):
+        self._app_move(gesture, lambda: appReview.move_corner(1, -1))
+
+    @script(description=_('In the application: the bottom left corner - '
+                          'the last control'), category=CATEGORY)
+    def script_appDownLeft(self, gesture):
+        self._app_move(gesture, lambda: appReview.move_corner(-1, 1))
+
+    @script(description=_('In the application: the bottom right corner - '
+                          'the end of the last control'), category=CATEGORY)
+    def script_appDownRight(self, gesture):
+        self._app_move(gesture, lambda: appReview.move_corner(1, 1))
+
+    @script(description=_('In the screen review: the top left corner - the '
+                          'start of the first line'), category=CATEGORY)
+    def script_ocrUpLeft(self, gesture):
+        self._ocr_move(gesture, lambda: ocrReview.move_corner(-1, -1))
+
+    @script(description=_('In the screen review: the top right corner - the '
+                          'end of the first line'), category=CATEGORY)
+    def script_ocrUpRight(self, gesture):
+        self._ocr_move(gesture, lambda: ocrReview.move_corner(1, -1))
+
+    @script(description=_('In the screen review: the bottom left corner - '
+                          'the start of the last line'), category=CATEGORY)
+    def script_ocrDownLeft(self, gesture):
+        self._ocr_move(gesture, lambda: ocrReview.move_corner(-1, 1))
+
+    @script(description=_('In the screen review: the bottom right corner - '
+                          'the end of the last line'), category=CATEGORY)
+    def script_ocrDownRight(self, gesture):
+        self._ocr_move(gesture, lambda: ocrReview.move_corner(1, 1))
+
+    @script(description=_('In the command palette: the command above - or, '
+                          'in the interaction layout, out of this row'),
             category=CATEGORY)
     def script_paletteUp(self, gesture):
         self._palette_key(gesture, lambda: palette.move(-1))
 
-    @script(description=_('In the command palette: the command below'),
+    @script(description=_('In the command palette: the command below - or, '
+                          'in the interaction layout, into this row'),
             category=CATEGORY)
     def script_paletteDown(self, gesture):
         self._palette_key(gesture, lambda: palette.move(1))
@@ -677,6 +931,82 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def script_paletteActivate(self, gesture):
         self._palette_key(gesture, palette.activate)
 
+
+    def _palette_move(self, gesture, move):
+        if not palette.walking():
+            self._keep_palette_keys_right()
+            gesture.send()
+            return
+        try:
+            move()
+        except Exception:                            # noqa: BLE001
+            gesture.send()
+
+    @script(description=_('In the palette: back through the row - a '
+                          'character, the word beside, or the row beside, '
+                          'by layout'), category=CATEGORY)
+    def script_paletteCharLeft(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_across(-1))
+
+    @script(description=_('In the palette: on through the row - a '
+                          'character, the word beside, or the row beside, '
+                          'by layout'), category=CATEGORY)
+    def script_paletteCharRight(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_across(1))
+
+    @script(description=_('In the palette: the other way through the row '
+                          '- the word beside in the simple layout, a '
+                          'character in the others'), category=CATEGORY)
+    def script_paletteShiftLeft(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_across_shift(-1))
+
+    @script(description=_('In the palette: the other way on through the '
+                          'row - the word beside in the simple layout, a '
+                          'character in the others'), category=CATEGORY)
+    def script_paletteShiftRight(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_across_shift(1))
+
+    @script(description=_('In the palette: the top left corner - the start '
+                          'of the first row'), category=CATEGORY)
+    def script_paletteUpLeft(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_corner(-1, -1))
+
+    @script(description=_('In the palette: the top right corner - the end '
+                          'of the first row'), category=CATEGORY)
+    def script_paletteUpRight(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_corner(1, -1))
+
+    @script(description=_('In the palette: the bottom left corner - the '
+                          'start of the last row'), category=CATEGORY)
+    def script_paletteDownLeft(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_corner(-1, 1))
+
+    @script(description=_('In the palette: the bottom right corner - the '
+                          'end of the last row'), category=CATEGORY)
+    def script_paletteDownRight(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_corner(1, 1))
+
+    @script(description=_('In the palette: the next layout - simple, '
+                          'screen, interaction; shared with the virtual '
+                          'window'), category=CATEGORY)
+    def script_paletteLayout(self, gesture):
+        self._palette_key(gesture, lambda: palette.layout_cycle(1))
+
+    @script(description=_('In the palette: the previous layout - simple, '
+                          'screen, interaction; shared with the virtual '
+                          'window'), category=CATEGORY)
+    def script_paletteLayoutBack(self, gesture):
+        self._palette_key(gesture, lambda: palette.layout_cycle(-1))
+
+    @script(description=_('In the palette: the word before, in this '
+                          'command\'s name'), category=CATEGORY)
+    def script_paletteWordLeft(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_word(-1))
+
+    @script(description=_('In the palette: the word after, in this '
+                          'command\'s name'), category=CATEGORY)
+    def script_paletteWordRight(self, gesture):
+        self._palette_move(gesture, lambda: palette.move_word(1))
     @script(description=_('In the command palette: back one level, or '
                           'close it'), category=CATEGORY)
     def script_paletteBack(self, gesture):
@@ -700,6 +1030,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:backspace': 'virtualBack',
         'kb:f5': 'virtualRefresh',
         'kb:escape': 'virtualLeave',
+        # By word with Control, by the control beside this one on the same
+        # line with Shift - the plain Left/Right are already by character.
+        'kb:control+leftArrow': 'virtualWordLeft',
+        'kb:control+rightArrow': 'virtualWordRight',
+        'kb:shift+leftArrow': 'virtualLineLeft',
+        'kb:shift+rightArrow': 'virtualLineRight',
+        # The numpad as the screen: the four diagonals go to the control
+        # nearest each corner of the window, 5 clicks it, and 4 and 6 walk
+        # the three layouts the arrows can follow - simple, screen,
+        # interaction (see `virtualWindow.LAYOUTS`).
+        'kb:numpad7': 'virtualUpLeft',
+        'kb:numpad9': 'virtualUpRight',
+        'kb:numpad1': 'virtualDownLeft',
+        'kb:numpad3': 'virtualDownRight',
+        'kb:numpad5': 'virtualClick',
+        'kb:numpad4': 'virtualLayoutBack',
+        'kb:numpad6': 'virtualLayout',
     }
 
     def _virtual_gestures(self):
@@ -718,7 +1065,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         return gestures
 
     def _borrow_virtual_keys(self, borrow=True):
-        for gesture, script_name in self._virtual_gestures().items():
+        # Both sets are let go, because either may be the one held.
+        gestures = dict(self._virtual_gestures())
+        if not borrow:
+            gestures.update(self._virtual_typing_gestures())
+        for gesture, script_name in gestures.items():
             try:
                 if borrow:
                     self.bindGesture(gesture, script_name)
@@ -726,6 +1077,45 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                     self.removeGestureBinding(gesture)
             except Exception:                        # noqa: BLE001
                 pass
+
+    def _virtual_typing_gestures(self):
+        """Every key the edit-field mode holds.
+
+        **All of them, and that is the point.** The mode is the virtual
+        window's own: while it is on, the letters, the space and Enter go
+        into the row the cursor is on, and the virtual window's own
+        navigation is suspended. Holding only Escape - which is what this
+        did first - gives the keys to whatever happens to be focused,
+        which works over a real control and does nothing at all over a
+        row read off a picture, where nothing is focused to receive them.
+        """
+        wanted = {}
+        for character in self.TYPING_CHARACTERS:
+            wanted['kb:%s' % character] = 'virtualType'
+            wanted['kb:shift+%s' % character] = 'virtualType'
+        for name in self.TYPING_KEYS:
+            wanted['kb:%s' % name] = 'virtualType'
+            wanted['kb:control+%s' % name] = 'virtualType'
+            wanted['kb:shift+%s' % name] = 'virtualType'
+        # Escape is the way out and is deliberately never typed.
+        wanted['kb:escape'] = 'virtualLeave'
+        return wanted
+
+    @script(description=_('In the virtual window: type into the field'),
+            category=CATEGORY)
+    def script_virtualType(self, gesture):
+        if not (virtualWindow.reviewing() and virtualWindow.typing_mode()):
+            self._keep_virtual_keys_right()
+            gesture.send()
+            return
+        # **With the modifiers**, or Control and an arrow is a plain
+        # arrow and Control and Backspace takes one character.
+        _ok, said = virtualWindow.type_key(
+            '+'.join(list(getattr(gesture, 'modifierNames', None) or [])
+                     + [str(getattr(gesture, 'mainKeyName', '') or '')]),
+            gesture.send)
+        if said:
+            dialogs.report(said)
 
     def _virtual_wants(self):
         """Which keys the virtual window should be holding right now.
@@ -739,13 +1129,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         try:
             if not virtualWindow.reviewing():
                 return ''
-            return 'escape' if virtualWindow.typing_mode() else 'all'
+            return 'typing' if virtualWindow.typing_mode() else 'all'
         except Exception:                            # noqa: BLE001
             return ''
 
     def _keep_virtual_keys_right(self):
         want = self._virtual_wants()
         have = getattr(self, '_virtual_bound', '')
+        self._keep_touch_right()
         if want == have:
             return
         # Let go of whatever is held before taking anything, or the two
@@ -754,11 +1145,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._borrow_virtual_keys(False)
         if want == 'all':
             self._borrow_virtual_keys(True)
-        elif want == 'escape':
-            try:
-                self.bindGesture('kb:escape', 'virtualLeave')
-            except Exception:                        # noqa: BLE001
-                want = ''
+        elif want == 'typing':
+            for gesture, script_name in \
+                    self._virtual_typing_gestures().items():
+                try:
+                    self.bindGesture(gesture, script_name)
+                except Exception:                    # noqa: BLE001
+                    pass
         self._virtual_bound = want
 
     #: A widget's keys. Fewer than the others because a widget answers
@@ -810,6 +1203,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             want = False
         if want != getattr(self, '_ocr_bound', False):
             self._borrow_ocr_keys(want)
+        self._keep_touch_right()
 
     def _borrow_keys(self, borrow=True):
         """Take the navigation keys while a drawn window is being read.
@@ -903,7 +1297,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         description=_('Opens the Titan menu: everything Titan can do'),
         category=CATEGORY, gesture='kb:NVDA+shift+t')
     def script_titanMenu(self, gesture):
-        titan_menu.show(self)
+        # **Walked, not a menu.** A `wx.Menu` takes the foreground, closes
+        # when anything else happens, and says each entry once; every
+        # other list in this add-on is walked. The real menu is still
+        # there - `commands.titan_menu_as_a_menu` - for somebody who
+        # wants the platform's own.
+        commands.titan_menu()
 
     @script(
         # Translators: an NVDA command.
@@ -1374,17 +1773,98 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def script_virtualDown(self, gesture):
         self._virtual_move(gesture, lambda: virtualWindow.move(1))
 
-    @script(description=_('In the virtual window: back through what this '
-                          'control says'),
+    @script(description=_('In the virtual window: back - a character of '
+                          'this control\'s text, the control beside it, or '
+                          'the control before it at this level, by layout'),
             category=CATEGORY)
     def script_virtualLeft(self, gesture):
-        self._virtual_move(gesture, lambda: virtualWindow.move_inside(-1))
+        self._virtual_move(gesture, lambda: virtualWindow.move_across(-1))
 
-    @script(description=_('In the virtual window: on through what this '
-                          'control says'),
+    @script(description=_('In the virtual window: on - a character of this '
+                          'control\'s text, the control beside it, or the '
+                          'control after it at this level, by layout'),
             category=CATEGORY)
     def script_virtualRight(self, gesture):
-        self._virtual_move(gesture, lambda: virtualWindow.move_inside(1))
+        self._virtual_move(gesture, lambda: virtualWindow.move_across(1))
+
+    @script(description=_('In the virtual window: the word before, in this '
+                          'control\'s text'), category=CATEGORY)
+    def script_virtualWordLeft(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_word(-1))
+
+    @script(description=_('In the virtual window: the word after, in this '
+                          'control\'s text'), category=CATEGORY)
+    def script_virtualWordRight(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_word(1))
+
+    @script(description=_('In the virtual window: the other way back - the '
+                          'control beside this one in the simple layout, a '
+                          'character of its text in the others'),
+            category=CATEGORY)
+    def script_virtualLineLeft(self, gesture):
+        self._virtual_move(gesture,
+                           lambda: virtualWindow.move_across_shift(-1))
+
+    @script(description=_('In the virtual window: the other way on - the '
+                          'control beside this one in the simple layout, a '
+                          'character of its text in the others'),
+            category=CATEGORY)
+    def script_virtualLineRight(self, gesture):
+        self._virtual_move(gesture,
+                           lambda: virtualWindow.move_across_shift(1))
+
+    @script(description=_('In the virtual window: the top left corner of '
+                          'the window'), category=CATEGORY)
+    def script_virtualUpLeft(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_diagonal(-1, -1))
+
+    @script(description=_('In the virtual window: the top right corner of '
+                          'the window'), category=CATEGORY)
+    def script_virtualUpRight(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_diagonal(1, -1))
+
+    @script(description=_('In the virtual window: the bottom left corner of '
+                          'the window'), category=CATEGORY)
+    def script_virtualDownLeft(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_diagonal(-1, 1))
+
+    @script(description=_('In the virtual window: the bottom right corner '
+                          'of the window'), category=CATEGORY)
+    def script_virtualDownRight(self, gesture):
+        self._virtual_move(gesture, lambda: virtualWindow.move_diagonal(1, 1))
+
+    @script(description=_('In the virtual window: click the control with the '
+                          'mouse - twice quickly for a double click'),
+            category=CATEGORY)
+    def script_virtualClick(self, gesture):
+        if not virtualWindow.reviewing():
+            self._keep_virtual_keys_right()
+            gesture.send()
+            return
+        _ok, said = virtualWindow.click_mouse()
+        if said:
+            dialogs.report(said)
+
+    def _virtual_layout(self, gesture, delta):
+        if not virtualWindow.reviewing():
+            self._keep_virtual_keys_right()
+            gesture.send()
+            return
+        _ok, said = virtualWindow.layout_cycle(delta)
+        if said:
+            dialogs.report(said)
+
+    @script(description=_('In the virtual window: the next layout the '
+                          'arrows follow - simple, screen, interaction'),
+            category=CATEGORY)
+    def script_virtualLayout(self, gesture):
+        self._virtual_layout(gesture, 1)
+
+    @script(description=_('In the virtual window: the previous layout the '
+                          'arrows follow - simple, screen, interaction'),
+            category=CATEGORY)
+    def script_virtualLayoutBack(self, gesture):
+        self._virtual_layout(gesture, -1)
 
     @script(description=_('In the virtual window: ten controls back'),
             category=CATEGORY)
@@ -1469,6 +1949,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             _ok, said = virtualWindow.leave_typing()
             self._keep_virtual_keys_right()
             dialogs.report(said)
+            return
+        if virtualWindow.in_a_menu():
+            # Out of the menu, back to the window's own controls - one
+            # level at a time, as everywhere else here.
+            _ok, said = virtualWindow.close_menu()
+            if said:
+                dialogs.report(said)
             return
         _on, said = virtualWindow.stop()
         self._keep_virtual_keys_right()
@@ -1645,14 +2132,6 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         _on, said = appReview.stop()
         self._keep_app_keys_right()
         dialogs.report(said)
-
-    @script(
-        # Translators: an NVDA command.
-        description=_('TCE applications: write into the field you are '
-                      'on'),
-        category=CATEGORY)
-    def script_appType(self, gesture):
-        commands.type_into_application()
 
     @script(
         # Translators: an NVDA command.

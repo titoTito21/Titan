@@ -15,6 +15,7 @@ to know exactly what is on it; one test builds the real thing.
 import os
 import sys
 import types
+import json
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -472,6 +473,76 @@ class OneCategoryAtATimeTests(unittest.TestCase):
             self.assertEqual(self.frame.shell_addon_list.IsEnabled(), wanted)
         self.assertTrue(self.frame.windows_e_hook_cb.IsEnabled(),
                         "the switch must never disable itself")
+
+
+class TickListOverTheActionsTests(unittest.TestCase):
+    """A tick list holds SEVERAL answers and an action argument is one
+    thing, so `set_value` has to take both shapes.
+
+    A client that sends a real JSON array - which is what a list IS over
+    the bridge, and the obvious thing to send - had it stringified before
+    it was parsed, and `str()` of a Python list is Python's own spelling:
+    `['a', 'b']`, single quotes, which is not JSON. It did not parse, fell
+    through to the `|` split, and the setting ended up holding one entry
+    whose text was the repr of the whole list. Nothing raised.
+    """
+
+    def setUp(self):
+        self.frame = wx.Frame(None, title="fake titan")
+        self.addCleanup(self.frame.Destroy)
+        panel = wx.Panel(self.frame)
+        wx.StaticText(panel, label="Add-ons the AI may drive")
+        self.control = wx.CheckListBox(panel,
+                                       choices=["tNotes", "tEdit", "tWeb"])
+        self.control.Check(0, True)
+        self.frame.categories = {"General": panel}
+        self.frame.category_order = ["General"]
+        self.model = ui_model.SettingsModel(self.frame)
+        self.item = next(item for item in self.model.items()
+                         if item.kind == ui_model.KIND_MULTI)
+
+    def ticked(self):
+        return [self.control.GetString(index)
+                for index in range(self.control.GetCount())
+                if self.control.IsChecked(index)]
+
+    def test_a_real_list_is_taken_as_one(self):
+        self.assertTrue(self.model.set(self.item.id, ["tNotes", "tEdit"]))
+        self.assertEqual(self.ticked(), ["tNotes", "tEdit"])
+
+    def test_a_json_array_is_taken_as_one(self):
+        """What a client that cannot send a list sends instead."""
+        self.assertTrue(self.item.set(json.loads('["tEdit", "tWeb"]')))
+        self.assertEqual(self.ticked(), ["tEdit", "tWeb"])
+
+    def test_the_action_takes_either_shape(self):
+        from src.settings import settings_actions
+        settings_actions._model = self.model
+        self.addCleanup(lambda: setattr(settings_actions, '_model', None))
+        said = settings_actions._set_value(item=self.item.id,
+                                           value=["tWeb"])
+        self.assertNotIn("[", said, said)
+        self.assertEqual(self.ticked(), ["tWeb"])
+        settings_actions._set_value(item=self.item.id,
+                                    value='["tNotes", "tEdit"]')
+        self.assertEqual(self.ticked(), ["tNotes", "tEdit"])
+
+    def test_the_sentence_it_answers_is_words_not_python(self):
+        """Every caller SAYS what comes back, so a Python repr in it is a
+        repr read out one punctuation mark at a time."""
+        from src.settings import settings_actions as act
+        self.assertEqual(act._said(["tNotes", "tEdit"]), "tNotes, tEdit")
+        self.assertEqual(act._said([]), "nothing")
+        self.assertEqual(act._said(True), "on")
+        self.assertEqual(act._said(False), "off")
+        self.assertEqual(act._said(""), "empty")
+        self.assertEqual(act._said("C:\\Down"), "C:\\Down")
+        self.assertEqual(act._said(7), "7")
+
+    def test_nothing_ticked_is_a_real_answer(self):
+        self.assertTrue(self.model.set(self.item.id, []))
+        self.assertEqual(self.ticked(), [])
+
 
 
 if __name__ == '__main__':

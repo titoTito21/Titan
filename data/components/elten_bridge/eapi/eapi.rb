@@ -89,13 +89,56 @@ end
 # one.
 module Speech
   class << self
-    def speak(text, interrupt: true, position: 0.0, pitch: 0.0, wait: false)
+    # **Elten's signature, or it is nothing.** Elten's own is
+    #
+    #     speak(text, stop: true, use_dictionary: true, id: nil,
+    #           break_sequence: true, pan: 50, limit: nil)
+    #
+    # and not one of those keywords was accepted here: this took `interrupt`,
+    # `position`, `pitch` and `wait`, which are the port's own invention. So
+    # every application writing what Elten documents got
+    # `ArgumentError: unknown keywords: :stop, :break_sequence` - the ELTEN
+    # Game Room says its narration that way at ten call sites and its board
+    # at an eleventh (`speak(value, pan: position)`), so the whole of what it
+    # reads aloud raised instead of being said. The same fault `input_text`
+    # had, and found the same way: by reading Elten instead of guessing.
+    #
+    # `stop` IS this port's `interrupt` (Elten stops the current line by
+    # default), and Elten's `pan` is 0..100 about a centre of 50 where this
+    # takes -1.0..1.0 - handing one straight to the other is the bug that has
+    # already put Titan's shell sounds in the left speaker, so it is
+    # converted. `use_dictionary`, `id`, `break_sequence` and `limit` are
+    # accepted and not acted on: a keyword this build cannot honour must
+    # still be accepted, or refusing one is refusing the application for
+    # asking precisely. The port's own four keep working, for `alert` and for
+    # anything already written against them.
+    def speak(text, stop: nil, use_dictionary: nil, id: nil,
+              break_sequence: nil, pan: nil, limit: nil,
+              interrupt: nil, position: nil, pitch: nil, wait: nil,
+              **_ignored)
       return if text.nil?
 
+      really_interrupt = if !interrupt.nil?
+                           !!interrupt
+                         elsif !stop.nil?
+                           !!stop
+                         else
+                           true
+                         end
+      really_position = if !position.nil?
+                          position.to_f
+                        elsif !pan.nil?
+                          # 0..100 about 50 -> -1.0..1.0
+                          ((pan.to_f - 50.0) / 50.0).clamp(-1.0, 1.0)
+                        else
+                          0.0
+                        end
+
       EltenBridge.call('speak', { 'text' => text.to_s,
-                                  'interrupt' => interrupt,
-                                  'position' => position, 'pitch' => pitch,
-                                  'wait' => wait })
+                                  'interrupt' => really_interrupt,
+                                  'position' => really_position,
+                                  'pitch' => (pitch || 0.0).to_f,
+                                  'wait' => !!wait })
       nil
     rescue EltenBridge::Closed
       nil
@@ -1185,5 +1228,210 @@ module Kernel
   rescue Exception => e
     Log.warning("insert_scene: #{e.class}: #{e.message}")
     false
+  end
+
+  # ------------------------------------------------------------------------
+  # More of Elten's BARE functions - the ones applications call with no
+  # receiver. A name that is there and not here is a NoMethodError inside
+  # somebody else's program, usually swallowed by its own `rescue` and seen
+  # as a feature that quietly does nothing. Each of these was found by
+  # reading what the installed applications really call and asking Elten's
+  # own source whether it has it.
+  # ------------------------------------------------------------------------
+
+  # `process_notification(notif)` - `eapi/common/activity.rb`. A hash with
+  # `'sound'` and `'alert'`. Tyflopodcast announces every new episode with
+  # it, so without this the whole point of that application was a
+  # NoMethodError. Elten's body, line for line.
+  def process_notification(notif)
+    return nil unless notif.is_a?(Hash)
+
+    play_sound(notif['sound']) unless notif['sound'].nil?
+    unless notif['alert'].nil?
+      speak(notif['alert'], stop: false, break_sequence: false)
+    end
+    nil
+  end
+
+  # `process_url(url)` - `eapi/common/url.rb`. Anything that is not
+  # `elten://` goes to the browser the user has open, which is what BopIt
+  # asks for when it offers its beta group.
+  #
+  # An `elten://` address names a SCENE inside Elten - a forum group, a
+  # blog, a thread - and there are no scenes here, so it cannot be followed.
+  # Elten's own code answers `false` for a path it does not recognise, which
+  # makes that the honest answer rather than a new kind of failure.
+  def process_url(url)
+    return false unless url.is_a?(String)
+    return platform_open_url(url) if url[0...8].to_s.downcase != 'elten://'
+
+    Log.warning("process_url cannot follow #{url} - an elten:// address " \
+                'names a screen inside Elten, and there are none here')
+    false
+  end
+
+  # `getkeychar(keybd = nil, multi = false)` - `eapi/common/input.rb`. The
+  # character just typed, as a String, and '' when nothing printable was.
+  # Tyflopodcast reads its search box with `getkeychar(nil, true)`.
+  #
+  # Elten reads a 256-byte keyboard state and translates virtual keys; here
+  # the frame already carries the keys BY NAME, so the printable ones are
+  # turned back into characters, with Shift honoured. `keybd` is Elten's way
+  # of asking about a state the caller already has, which this port never
+  # hands out, so it is accepted and ignored rather than refused.
+  PRINTABLE_KEYS = {
+    'space' => ' ', 'tab' => "\t",
+    'comma' => ',', 'period' => '.', 'slash' => '/', 'semicolon' => ';',
+    'quote' => "'", 'bracketleft' => '[', 'bracketright' => ']',
+    'backslash' => '\\', 'minus' => '-', 'equal' => '=', 'grave' => '`'
+  }.freeze
+  SHIFTED_KEYS = {
+    ',' => '<', '.' => '>', '/' => '?', ';' => ':', "'" => '"',
+    '[' => '{', ']' => '}', '\\' => '|', '-' => '_', '=' => '+',
+    '`' => '~', '1' => '!', '2' => '@', '3' => '#', '4' => '$', '5' => '%',
+    '6' => '^', '7' => '&', '8' => '*', '9' => '(', '0' => ')'
+  }.freeze
+
+  def getkeychar(keybd = nil, multi = false)
+    _ = keybd
+    # `raw_key_held?`, not `key_held?`: the latter asks TITAN over the bridge
+    # for the live keyboard, and this is called once a FRAME by anything with
+    # a text field - a round trip per frame is the trap that made moving a
+    # sound three hundred blocking calls a second. The frame's own state is
+    # also the right answer: the characters typed THIS frame, with the shift
+    # that was down THIS frame.
+    shifted = raw_key_held?('key_shift')
+    typed = ''
+    EltenLoop.pressed_names.each do |name|
+      bare = name.start_with?('key_') ? name[4..].to_s : name.to_s
+      character =
+        if bare.length == 1 && bare.match?(/[a-z0-9]/)
+          shifted ? (SHIFTED_KEYS[bare] || bare.upcase) : bare
+        elsif PRINTABLE_KEYS.key?(bare)
+          plain = PRINTABLE_KEYS[bare]
+          shifted ? (SHIFTED_KEYS[plain] || plain) : plain
+        end
+      next if character.nil?
+
+      typed += character
+      break unless multi == true
+    end
+    typed
+  end
+
+  # `readini` / `writeini` - `eapi/core/base.rb`. Elten's own INI pair, and
+  # what `readconfig` / `writeconfig` are built on.
+  def readini(file, group, key, default = "\0")
+    default = default.to_s if default.is_a?(Integer)
+    return default.to_s unless File.file?(file.to_s)
+
+    current = nil
+    _elten_ini_lines(file).each do |line|
+      text = line.to_s.strip
+      if text =~ /\A\[(.+?)\]\s*\z/
+        current = Regexp.last_match(1).to_s
+      elsif !current.nil? && current.casecmp(group.to_s).zero? &&
+            text =~ /\A([^=]+?)\s*=\s*(.*)\z/
+        return Regexp.last_match(2).to_s if
+          Regexp.last_match(1).to_s.strip.casecmp(key.to_s).zero?
+      end
+    end
+    default.to_s
+  rescue Exception => e
+    Log.warning("readini(#{file}): #{e.class}: #{e.message}")
+    default.to_s
+  end
+
+  def writeini(file, group, key, value)
+    text_value = value.nil? ? nil : value.to_s.delete("\r\n")
+    lines = File.file?(file.to_s) ? _elten_ini_lines(file) : []
+    current = nil
+    section_at = nil
+    key_at = nil
+    lines.each_with_index do |line, index|
+      text = line.to_s.strip
+      if text =~ /\A\[(.+?)\]\s*\z/
+        current = Regexp.last_match(1).to_s
+        section_at = index if current.casecmp(group.to_s).zero?
+      elsif !current.nil? && current.casecmp(group.to_s).zero? &&
+            text =~ /\A([^=]+?)\s*=/ &&
+            Regexp.last_match(1).to_s.strip.casecmp(key.to_s).zero?
+        key_at = index
+      end
+    end
+    if key_at
+      if text_value.nil?
+        lines.delete_at(key_at)
+      else
+        lines[key_at] = "#{key}=#{text_value}"
+      end
+    elsif !text_value.nil?
+      if section_at
+        lines.insert(section_at + 1, "#{key}=#{text_value}")
+      else
+        lines << '' unless lines.empty? || lines.last.to_s.strip.empty?
+        lines << "[#{group}]"
+        lines << "#{key}=#{text_value}"
+      end
+    end
+    directory = File.dirname(file.to_s)
+    require 'fileutils'
+    FileUtils.mkdir_p(directory) unless File.directory?(directory)
+    File.binwrite(file.to_s, lines.join("\n") + "\n")
+    true
+  rescue Exception => e
+    Log.warning("writeini(#{file}): #{e.class}: #{e.message}")
+    false
+  end
+
+  # `readconfig(group, key, val = "")` / `writeconfig(group, key, val)` -
+  # `eapi/core/base.rb` and `eapi/core/local_config.rb`. Pointed at ELTEN's
+  # own `elten.ini`, so a setting made here is the setting Elten reads - the
+  # rule `data_path` already follows for an application's saves. Reading an
+  # absent key WRITES the default, which is Elten's own behaviour and what
+  # makes a first run leave the file it will read next time.
+  def readconfig(group, key, val = '')
+    file = _elten_ini_path
+    return val if file.nil?
+
+    answer = readini(file, group, key, '$DEFAULT')
+    if answer == '$DEFAULT'
+      writeconfig(group, key, val)
+      answer = val
+    end
+    return answer.to_i if val.is_a?(Integer)
+
+    answer
+  end
+
+  def writeconfig(group, key, val)
+    file = _elten_ini_path
+    return false if file.nil?
+
+    val = val.to_s unless val.nil?
+    writeini(file, group, key, val)
+  end
+
+  private
+
+  # Elten's own `elten.ini`, or NOTHING. `Dirs.eltendata` is empty when Elten
+  # is not installed beside Titan, and joining an empty directory gives the
+  # bare name `elten.ini` - which would write a configuration file into
+  # whatever folder the process happens to have started in, and read it back
+  # from somewhere else next time. Answering nil makes `readconfig` hand back
+  # the default and `writeconfig` say it could not, which is the truth.
+  def _elten_ini_path
+    directory = Dirs.eltendata.to_s
+    return nil if directory.strip.empty?
+
+    EltenPath.join(directory, 'elten.ini')
+  end
+
+  def _elten_ini_lines(file)
+    File.binread(file.to_s).force_encoding('UTF-8')
+        .encode('UTF-8', invalid: :replace, undef: :replace, replace: '')
+        .split(/\r\n|\r|\n/)
+  rescue Exception
+    []
   end
 end

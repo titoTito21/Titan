@@ -68,6 +68,16 @@ def _try(name, work):
 NO_WINDOW = ('there is no window in front to look at, so there is nothing '
              'here to read - not a fault')
 
+# GetCursorInfo's flags. 0 is "hidden", 2 is CURSOR_SUPPRESSED - Windows
+# saying the pointer is put away because the user is on touch or pen. Either
+# way there is no cursor image to name, which is a machine with nothing to
+# test here rather than anything wrong: a guest read on such a machine simply
+# has no pointer to follow.
+CURSOR_SHOWING = 0x1
+CURSOR_SUPPRESSED = 0x2
+NO_POINTER = ('the pointer is put away (Windows says {why}), so there is no '
+              'cursor image to name - not a fault')
+
 
 def _no_window():
     """Whether there is really no foreground window at all.
@@ -263,10 +273,19 @@ def _monitors():
                        'foreground window' % len(rows))
     by = 'a control' if monitors._anchor(obj) else 'its place'
     rect = monitors._rect_of(obj)
+    # **An idle watch has to say why it is idle.** This printed 'running' or
+    # 'idle' and nothing else, so the one thing a reader needs in order to do
+    # anything about it - the switch is off, or there is nothing to watch -
+    # reached nobody, and `_state['why']` was a field nothing delivered.
+    found = monitors.report()
+    how = 'running'
+    if not found['running']:
+        how = 'idle'
+        if found.get('why'):
+            how += ' (%s)' % found['why']
     return True, ('%d watched, %d of them readable right now, watch %s; '
                   'here is %r, watchable by %s%s'
-                  % (len(rows), read,
-                     'running' if monitors.report()['running'] else 'idle',
+                  % (len(rows), read, how,
                      monitors._describe(obj), by,
                      ' and as an area' if rect and rect[2] > 0 else
                      ', with no area'))
@@ -546,8 +565,293 @@ def _voice_classes():
                      ', '.join(classes.parts_read()) or 'nothing'))
 
 
+def _cursor_flags():
+    """``GetCursorInfo``'s flags, or None when the call itself failed.
+
+    Kept apart from :func:`guest._cursor_info`, which answers the handle and
+    the place and deliberately nothing else - what the flags are FOR is
+    telling "there is no pointer just now" from "Windows would not say".
+    """
+    try:
+        import ctypes
+
+        class _INFO(ctypes.Structure):
+            _fields_ = [('cbSize', ctypes.c_uint),
+                        ('flags', ctypes.c_uint),
+                        ('hCursor', ctypes.c_void_p),
+                        ('x', ctypes.c_long), ('y', ctypes.c_long)]
+        info = _INFO()
+        info.cbSize = ctypes.sizeof(_INFO)
+        if not ctypes.windll.user32.GetCursorInfo(ctypes.byref(info)):
+            return None
+        return int(info.flags)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def _guest_cursor():
+    """The whole guest chain, on whatever window is in front.
+
+    **The part that could not be tested any other way.** A cursor inside a
+    guest is one the virtual machine built from the guest's own bitmap, so
+    it has a handle nobody has ever seen and comparing handles - which is
+    what naming a cursor has always done - answers nothing at all. Here the
+    current pointer is COPIED, which gives exactly that: a handle that is
+    nobody's, showing a picture that is somebody's. Naming the copy is
+    naming a guest's cursor.
+    """
+    import ctypes
+    import time
+    from . import guest
+    from . import iconNames
+    from . import localOcr
+    try:
+        user32 = ctypes.windll.user32
+        user32.CopyIcon.restype = ctypes.c_void_p
+    except Exception as error:                       # noqa: BLE001
+        return False, 'no user32: %s' % error
+    handle, x, y = guest._cursor_info()
+    if not handle:
+        # Windows answering "there is no cursor right now" is an answer, and
+        # a different thing from Windows refusing to answer. Reported as a
+        # failure it sent the reader looking for a bug in GetCursorInfo on a
+        # machine that was merely on touch input - and a check that fails for
+        # a reason the code handles correctly is one people learn to ignore.
+        flags = _cursor_flags()
+        if flags is not None and not flags & CURSOR_SHOWING:
+            why = ('it is suppressed for touch or pen input'
+                   if flags & CURSOR_SUPPRESSED else 'it is hidden')
+            return True, NO_POINTER.format(why=why)
+        return False, 'Windows would not say what the pointer is'
+    by_handle = iconNames.cursor_now()
+    copy = int(user32.CopyIcon(ctypes.c_void_p(handle)) or 0)
+    if not copy:
+        return False, 'the pointer could not be copied'
+    started = time.time()
+    try:
+        by_picture = guest.shape_of(copy)
+    finally:
+        try:
+            user32.DestroyIcon(ctypes.c_void_p(copy))
+        except Exception:                            # noqa: BLE001
+            pass
+    drawing = int((time.time() - started) * 1000)
+    if by_handle and by_picture != by_handle:
+        return False, ('a guest\'s cursor would be named %r where the same '
+                       'picture by handle is %r' % (by_picture, by_handle))
+    said = ['pointer %r by handle, %r by picture (%d ms)'
+            % (by_handle or '', by_picture or '', drawing)]
+    # And the other half: the strip the pointer is on, read for real.
+    ready, why = localOcr.available()
+    if not ready:
+        said.append('no recogniser: %s' % why)
+        return True, '; '.join(said)
+    try:
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        hwnd = int(user32.GetForegroundWindow() or 0)
+    except Exception:                                # noqa: BLE001
+        hwnd = 0
+    if not hwnd:
+        if _no_window():
+            return True, '; '.join(said + [NO_WINDOW])
+        return False, 'no foreground window'
+    where = guest.strip_for(hwnd, y)
+    if where is None:
+        said.append('that window has no place on the screen')
+        return True, '; '.join(said)
+    started = time.time()
+    words = guest.words_at(hwnd, y)
+    took = int((time.time() - started) * 1000)
+    said.append('the pointer\'s row: %r in %d ms (strip %d by %d)'
+                % (words[:48], took, where[2], where[3]))
+    said.append('would say %r' % guest.sentence(words, by_picture)[:60])
+    return True, '; '.join(said)
+
+
+def _guest_windows():
+    """Every virtual machine's guest screen that is open, by window handle.
+
+    Found by CLASS rather than by what is in front, because that is the one
+    question that can be answered at any moment: a guest is being read
+    correctly or it is not, and waiting until the user happens to be looking
+    at it is how a reading fault goes unnoticed for a week.
+
+    **The child, not the frame.** A virtual machine's frame carries a menu
+    bar, a tab strip and a status line of its own - the host's interface,
+    which a reader reads properly already - and paints the guest onto a
+    child of its own (`MKSEmbedded` and its kind). Reading the frame is how
+    a guest reading comes back with "File Machine View" at the top of
+    somebody's installer.
+    """
+    import ctypes
+    from . import surface
+    user32 = ctypes.windll.user32
+    frames = []
+    displays = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def each_child(handle, _param):
+        name = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(handle, name, 256)
+        if (str(name.value or '') in surface.VM_DISPLAY_CLASSES
+                and user32.IsWindowVisible(handle)):
+            # VMware keeps a SPARE console: two `MKSEmbedded` children of
+            # one frame, the same size, at the same place, one of them
+            # invisible - and the invisible one draws nothing, so a capture
+            # of it is refused and the guest reads as empty. Measured here,
+            # along with a parked Remote Desktop `IHWindowClass` at the full
+            # size of the screen, which is what "biggest wins" chose.
+            displays.append(int(handle))
+        return True
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def each_top(handle, _param):
+        name = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(handle, name, 256)
+        if (str(name.value or '') in surface.VM_CLASSES
+                and user32.IsWindowVisible(handle)):
+            frames.append(int(handle))
+            try:
+                user32.EnumChildWindows(handle, each_child, None)
+            except Exception:                        # noqa: BLE001
+                pass
+        return True
+
+    try:
+        user32.EnumWindows(each_top, None)
+    except Exception:                                # noqa: BLE001
+        return []
+
+    def area(handle):
+        rect = _rect_of(handle)
+        return 0 if rect is None else rect[2] * rect[3]
+
+    # Biggest first, and a display child before the frame that holds it.
+    ordered = sorted(set(displays), key=area, reverse=True)
+    ordered += [one for one in sorted(set(frames), key=area, reverse=True)
+                if one not in displays]
+    return [one for one in ordered if area(one) > 0]
+
+
+def _rect_of(hwnd):
+    import ctypes
+    from ctypes import wintypes
+    rect = wintypes.RECT()
+    try:
+        if not ctypes.windll.user32.GetWindowRect(ctypes.c_void_p(int(hwnd)),
+                                                 ctypes.byref(rect)):
+            return None
+    except Exception:                                # noqa: BLE001
+        return None
+    return (rect.left, rect.top, rect.right - rect.left,
+            rect.bottom - rect.top)
+
+
+def _guest_screen():
+    """A guest's whole screen, read for real, with the highlight found.
+
+    **This is the check that answers "does it read the virtual machine".**
+    The pointer check above proves the cursor half; this proves the half
+    that matters when somebody is installing an operating system in a
+    guest - the picture, the words in it, and which row the arrow keys are
+    on - and it does it without the user having to be looking at the guest
+    when it runs.
+    """
+    import time
+    from . import guest
+    from . import localOcr
+    windows = _guest_windows()
+    if not windows:
+        return True, 'no virtual machine is open, so there is nothing to read'
+    hwnd = windows[0]
+    rect = _rect_of(hwnd)
+    if rect is None or rect[2] < 64 or rect[3] < 64:
+        return False, 'the guest\'s window has no usable place on the screen'
+    said = ['guest window %d, %d by %d' % (hwnd, rect[2], rect[3])]
+    started = time.time()
+    picture = localOcr.from_window(hwnd, rect[2], rect[3])
+    said.append('its own picture %s in %d ms'
+                % ('came back' if picture is not None else 'REFUSED',
+                   (time.time() - started) * 1000))
+    if picture is None:
+        why = (localOcr.report().get('capture') or {}).get('why')
+        return False, '; '.join(said + [why or 'no reason was recorded'])
+    ready, why = localOcr.available()
+    if not ready:
+        return True, '; '.join(said + ['no recogniser: %s' % why])
+    started = time.time()
+    reading = localOcr.read(rect[0], rect[1], rect[2], rect[3], hwnd=hwnd)
+    took = int((time.time() - started) * 1000)
+    if reading is None or not reading:
+        said.append('read nothing in %d ms (%s)'
+                    % (took, localOcr.report().get('why') or 'no reason given'))
+        return False, '; '.join(said)
+    rows = reading.rows()
+    said.append('%d lines in %d ms' % (len(rows), took))
+    said.append('first: %r' % ' | '.join(row[0] for row in rows[:3])[:80])
+    said.append('highlighted: %r' % (guest.selected_in(reading) or ''))
+    return True, '; '.join(said)
+
+
+def _touch_gestures():
+    """How NVDA spells a touch gesture, and how this add-on names one.
+
+    **The one thing that could be asked without a finger.** Every earlier
+    touchpad fault was found by a real drag; this one is a NAME, and a name
+    can be compared with the names NVDA itself is bound to. The live log said
+    `first gesture: ts(TouchMode.OBJECT):hoverdown` while every binding in
+    NVDA reads `ts(object):...`, so nothing this pad emitted could ever have
+    run a script - and the counters said 539 gestures, which looked like a
+    pad that worked.
+    """
+    from . import trackpad
+    found = trackpad.report()
+    said = ['contacts %d, gestures %d, ran %d, unbound %d, failed %d'
+            % (found.get('contacts', 0), found.get('gestures', 0),
+               found.get('ran', 0), found.get('unbound', 0),
+               found.get('failed', 0))]
+    if not found.get('on'):
+        said.append('the pad is not being read (%s)'
+                    % (found.get('why') or 'the setting is off'))
+    # What NVDA's own bindings look like: the answer this rests on.
+    spellings = set()
+    try:
+        import inputCore
+        maps = [getattr(inputCore.manager, 'userGestureMap', None)]
+        for module in (getattr(inputCore, 'manager', None),):
+            maps.append(getattr(module, 'localeGestureMap', None))
+        for one in maps:
+            entries = getattr(one, '_map', None) or {}
+            for key in entries:
+                text = str(key)
+                if text.startswith('ts(') or text.startswith('ts:'):
+                    spellings.add(text.split(':')[0])
+    except Exception as error:                       # noqa: BLE001
+        said.append('NVDA would not say how it binds touch: %s' % error)
+    # And what a gesture of ours would be called, asked of NVDA's own class.
+    named = ''
+    try:
+        import touchHandler
+        mode = trackpad._mode()
+        plain = str(getattr(mode, 'value', mode))
+        named = 'the mode is %r and its value is %r' % (str(mode), plain)
+        if str(mode) != plain:
+            named += ' - so the value is what goes in'
+    except Exception as error:                       # noqa: BLE001
+        named = 'the mode could not be read: %s' % error
+    said.append(named)
+    if spellings:
+        said.append('NVDA binds ' + ', '.join(sorted(spellings)[:4]))
+    chose = found.get('mode_as') or 'not decided yet (no gesture yet)'
+    said.append('this add-on passes the mode as: %s' % chose)
+    return True, '; '.join(said)
+
+
 CHECKS = (
     ('local OCR', _local_ocr),
+    ('the touchpad\'s gestures', _touch_gestures),
+    ('the guest\'s screen', _guest_screen),
+    ('the guest\'s pointer', _guest_cursor),
     ('screen review', _ocr_review),
     ('windows and actions', _controls),
     ('anchoring a control', _anchor),

@@ -1463,12 +1463,21 @@ class TitanApp(wx.Frame):
                     wx.CallAfter(refresh_ui)
 
                 except OSError as e:
-                    print(f"ERROR: Error deleting directory '{item_path}': {e}")
+                    # Keep the reason in a plain local. Python deletes the
+                    # `as e` name when the except block ends, and this dialog
+                    # is raised LATER on the GUI thread by wx.CallAfter - so
+                    # closing over `e` meant the callable raised NameError
+                    # inside wx's event loop, where nothing catches it, and
+                    # the user was told nothing at all. "The directory is in
+                    # use" is the common case on Windows, so this was the
+                    # failure that most needed reporting.
+                    reason = str(e)
+                    print(f"ERROR: Error deleting directory '{item_path}': {reason}")
 
-                    def show_error():
+                    def show_error(reason=reason):
                         play_endoflist_sound()
                         vibrate_error()  # Add vibration for uninstall error
-                        _show_skinned_message(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, e), _("Error"), wx.OK | wx.ICON_ERROR)
+                        _show_skinned_message(_("Error uninstalling '{}':\n{}\n\nMake sure the directory is not in use.").format(item_name, reason), _("Error"), wx.OK | wx.ICON_ERROR)
 
                     wx.CallAfter(show_error)
 
@@ -2420,6 +2429,18 @@ class TitanApp(wx.Frame):
         # view-name announcement on cycle (from the row text itself).
         self._with_tab_bar_nav_speech_suppressed()
         ctrl = new_view.get('control')
+        # **Announced BEFORE the focus moves, and that order is the fix
+        # for "Gry, 2 z 13, gry 2 z 13".** The announcement replaces the
+        # reader's own report of the row it is about to land on, and a
+        # reader can only stand its report down if it has been TOLD before
+        # the focus event reaches it. Announced after `SetFocus`, the two
+        # raced: the focus event was usually processed first, the reader
+        # read the row ("Gry, 2 z 13" is the row's own text), and Titan's
+        # sentence came a beat later as a second copy. The call to a
+        # reader add-on goes over the bus synchronously, so when it
+        # returns the mark is in place; the focus that follows is then
+        # muted, and the row is heard once, in Titan's words.
+        self._announce_view_switched(new_view, new_idx, len(self.registered_views))
         try:
             if isinstance(ctrl, wx.ListBox):
                 if ctrl.GetCount() > 0:
@@ -2435,7 +2456,6 @@ class TitanApp(wx.Frame):
         except Exception as e:
             print(f"[GUI] tab bar cycle focus error: {e}")
 
-        self._announce_view_switched(new_view, new_idx, len(self.registered_views))
         vibrate_focus_change()
         # The tab bar row is still focused in the new list, so reset the tip timer.
         self._cancel_tab_bar_tip()

@@ -196,3 +196,24 @@ def report():
                 sizes[one] = None
         found[name] = {'handlers': len(logger.handlers), 'files': sizes}
     return found
+
+
+def describe_error(exc: BaseException) -> str:
+    """Render an exception for an API ``error`` field so it can never be blank.
+
+    ``str(e)`` is the empty string for every exception raised with no
+    arguments, and SQLCipher's ``sqlite3Codec: deferred error condition``
+    surfaces as a bare ``MemoryError`` (see the ``_serialized_write``
+    iteration notes in models.py). Over a hundred handlers reported
+    ``str(e)`` directly, so such a failure reached the client - and the
+    operator reading it - as ``{"success": false, "error": ""}``: a 500 that
+    says an error happened and nothing whatever about which one. The type
+    name is always present, so the answer is always readable.
+    """
+    text = ''
+    try:
+        text = str(exc).strip()
+    except Exception:
+        text = ''
+    name = type(exc).__name__
+    return f"{name}: {text}" if text else name

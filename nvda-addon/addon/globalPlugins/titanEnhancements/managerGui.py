@@ -110,6 +110,49 @@ def _facts_about(program):
     return lines
 
 
+def _warn_if_titan_must_play(where):
+    """A file NVDA cannot play itself is played by Titan's mixer.
+
+    The user asked for exactly this warning: choosing an `.ogg` when TCE is
+    not running would otherwise be a choice that seems to do nothing. Said
+    once, at the moment of choosing, with the file still chosen - it will
+    sound as soon as TCE is running.
+    """
+    import os
+    if os.path.splitext(str(where or ''))[1].lower() in icons.NVDA_PLAYS:
+        return False
+    try:
+        from .link import LINK
+        connected = LINK.connected()
+    except Exception:                                # noqa: BLE001
+        connected = False
+    if connected:
+        return False
+    try:
+        import wx
+        import gui
+        gui.messageBox(
+            # Translators: shown when a sound file NVDA cannot play itself
+            # is chosen while Titan is not running.
+            _('A file of this kind is played by Titan\'s own mixer, so it '
+              'needs the TCE environment running. TCE is not running now: '
+              'the file is kept, and will sound once TCE is started.'),
+            # Translators: the title of that warning.
+            _('This sound needs TCE'), wx.OK | wx.ICON_WARNING)
+    except Exception:                                # noqa: BLE001
+        pass
+    return True
+
+
+def _sound_wildcard():
+    """The file chooser's filter: wave files NVDA plays itself and the
+    formats Titan's mixer decodes - `.ogg` above all, which is what every
+    sound in Titan's themes is."""
+    # Translators: the kinds of file offered when choosing a sound.
+    return '%s (*.wav;*.ogg;*.mp3;*.flac)|*.wav;*.ogg;*.mp3;*.flac' % _(
+        'Sound files')
+
+
 def build():
     """The dialog class, or None when there is no wx."""
     try:
@@ -734,10 +777,26 @@ def build():
             self.icon_meaning = helper.addItem(wx.TextCtrl(
                 page, style=wx.TE_READONLY, size=(-1, -1)))
             self.icon_meaning.SetName(_('What this marks'))
+            # **Where the sound comes from.** The built-in one, Titan's
+            # own for the same event, or a file of the user's - the same
+            # three answers the sound scheme has, so a user learns one
+            # rule. A real `wx.Choice`, so a reader announces the answer
+            # itself.
+            self._icon_sources = list(icons.SOURCES)
+            names = icons.source_names()
+            # Translators: where an auditory icon's sound comes from.
+            self.icon_source = helper.addLabeledControl(
+                _('The sound comes from'), wx.Choice,
+                choices=[names[source] for source in self._icon_sources])
+            self.icon_source.Bind(wx.EVT_CHOICE, self._icon_source_chosen)
             buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
             # Translators: a button in the manager window.
             hear = buttons.addButton(page, label=_('&Hear it'))
             hear.Bind(wx.EVT_BUTTON, self._hear_icon)
+            # Translators: a button in the manager window - pick a sound
+            # file of the user's own for this icon.
+            choose = buttons.addButton(page, label=_('Choose a &file...'))
+            choose.Bind(wx.EVT_BUTTON, self._icon_file)
             # Translators: a button in the manager window.
             folder = buttons.addButton(page, label=_('&Where they are'))
             folder.Bind(wx.EVT_BUTTON, self._icon_folder)
@@ -769,7 +828,49 @@ def build():
                 # Translators: shown for an icon with no sound file.
                 said = _('{what} - there is no sound for this one').format(
                     what=said)
+            if row.get('source') == icons.SOURCE_EXTERNAL and row.get(
+                    'external'):
+                said = '%s (%s)' % (said, row['external'])
             self.icon_meaning.SetValue(said)
+            try:
+                self.icon_source.SetSelection(
+                    self._icon_sources.index(row.get('source')))
+            except (ValueError, AttributeError):
+                pass
+
+        def _icon_source_chosen(self, _event):
+            row = self._chosen_icon()
+            if row is None:
+                return
+            index = self.icon_source.GetSelection()
+            if not 0 <= index < len(self._icon_sources):
+                return
+            source = self._icon_sources[index]
+            if source == icons.SOURCE_EXTERNAL and not row.get('external'):
+                self._icon_file(None)
+                return
+            icons.set_source(row['id'], source, row.get('external', ''))
+            self._fill_icons(at=self.icons.GetSelection())
+
+        def _icon_file(self, _event):
+            """A wave file of the user's own, for this icon."""
+            import wx
+            row = self._chosen_icon()
+            if row is None:
+                return
+            with wx.FileDialog(
+                    self,
+                    # Translators: the title of the file chooser for a sound.
+                    _('Choose a sound file'),
+                    wildcard=_sound_wildcard(),
+                    style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as chooser:
+                if chooser.ShowModal() != wx.ID_OK:
+                    self._fill_icons(at=self.icons.GetSelection())
+                    return
+                where = chooser.GetPath()
+            icons.set_source(row['id'], icons.SOURCE_EXTERNAL, where)
+            self._fill_icons(at=self.icons.GetSelection())
+            _warn_if_titan_must_play(where)
 
         def _icon_toggled(self, event):
             at = event.GetSelection()
@@ -820,10 +921,21 @@ def build():
                 _('Answer it with'), wx.Choice,
                 choices=[words[way] for way in self._ways])
             self.way.Bind(wx.EVT_CHOICE, self._way_chosen)
+            self._sources = list(schemes.SOURCES)
+            names = schemes.source_names()
+            # Translators: where a state's sound comes from.
+            self.source = helper.addLabeledControl(
+                _('The sound comes from'), wx.Choice,
+                choices=[names[source] for source in self._sources])
+            self.source.Bind(wx.EVT_CHOICE, self._source_chosen)
             buttons = guiHelper.ButtonHelper(wx.HORIZONTAL)
             # Translators: a button in the manager window.
             hear = buttons.addButton(page, label=_('&Hear it'))
             hear.Bind(wx.EVT_BUTTON, self._hear_state)
+            # Translators: a button in the manager window - pick a sound
+            # file of the user's own for this state.
+            choose = buttons.addButton(page, label=_('Choose a &file...'))
+            choose.Bind(wx.EVT_BUTTON, self._state_file)
             # Translators: a button in the manager window.
             back = buttons.addButton(page, label=_('Put them all &back'))
             back.Bind(wx.EVT_BUTTON, self._reset_scheme)
@@ -834,8 +946,10 @@ def build():
         def _fill_states(self, at=0):
             self._state_rows = schemes.described()
             words = schemes.way_names()
-            self.states.Set(['%s - %s' % (row['label'],
-                                          words.get(row['way'], ''))
+            sources = schemes.source_names()
+            self.states.Set(['%s - %s, %s' % (row['label'],
+                                              words.get(row['way'], ''),
+                                              sources.get(row['source'], ''))
                              for row in self._state_rows])
             if self._state_rows:
                 self.states.SetSelection(
@@ -855,6 +969,42 @@ def build():
                 self.way.SetSelection(self._ways.index(row['way']))
             except ValueError:
                 self.way.SetSelection(0)
+            try:
+                self.source.SetSelection(
+                    self._sources.index(row.get('source')))
+            except (ValueError, AttributeError):
+                pass
+
+        def _source_chosen(self, _event):
+            row = self._chosen_state()
+            if row is None:
+                return
+            index = self.source.GetSelection()
+            if not 0 <= index < len(self._sources):
+                return
+            source = self._sources[index]
+            if source == schemes.SOURCE_EXTERNAL and not row.get('external'):
+                self._state_file(None)
+                return
+            schemes.set_source(row['state'], source, row.get('external', ''))
+            self._fill_states(at=self.states.GetSelection())
+
+        def _state_file(self, _event):
+            import wx
+            row = self._chosen_state()
+            if row is None:
+                return
+            with wx.FileDialog(
+                    self, _('Choose a sound file'),
+                    wildcard=_sound_wildcard(),
+                    style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as chooser:
+                if chooser.ShowModal() != wx.ID_OK:
+                    self._fill_states(at=self.states.GetSelection())
+                    return
+                where = chooser.GetPath()
+            schemes.set_source(row['state'], schemes.SOURCE_EXTERNAL, where)
+            self._fill_states(at=self.states.GetSelection())
+            _warn_if_titan_must_play(where)
 
         def _state_chosen(self, _event):
             self._show_way()

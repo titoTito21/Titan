@@ -17,6 +17,53 @@ import sys
 import tempfile
 import unittest
 
+import atexit as _atexit
+
+#: Temporary directories this run made, removed when it ends.
+#:
+#: Measured: this suite left 2 directories behind per run, one per `mkdtemp` that
+#: nothing removed, and they accumulate for ever - thousands had built up in
+#: %TEMP%. Registered at exit rather than per test so a FAILING test cleans
+#: up too.
+_SCRATCH = []
+
+
+def _sweep_old_extractors():
+    """Remove the private 7-Zip copies earlier runs left behind.
+
+    `UpdateManager._resolve_extractor` makes one in %TEMP% and
+    `_release_extractor` removes it - production is correct and guarded
+    against resolving twice. A couple of tests reach the resolver by a path
+    that does not release, so two `titan_update_7z_*` directories are left per
+    run. Sweeping at the start bounds that at one run's worth instead of
+    letting it grow, without touching the production path to suit a test.
+    """
+    here = tempfile.gettempdir()
+    try:
+        names = os.listdir(here)
+    except OSError:
+        return
+    for name in names:
+        if name.startswith('titan_update_7z_'):
+            shutil.rmtree(os.path.join(here, name), ignore_errors=True)
+
+
+_sweep_old_extractors()
+
+
+def scratch(prefix=None):
+    """A temporary directory that is removed when the run ends."""
+    path = tempfile.mkdtemp(**({'prefix': prefix} if prefix else {}))
+    _SCRATCH.append(path)
+    return path
+
+
+@_atexit.register
+def _clear_scratch():
+    while _SCRATCH:
+        shutil.rmtree(_SCRATCH.pop(), ignore_errors=True)
+
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.system import updater as updater_module
@@ -86,7 +133,7 @@ class ExtractorStandsOutside(unittest.TestCase):
     """The tool doing the work must not be a file the work replaces."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='titan_updater_test_')
+        self.root = scratch('titan_updater_test_')
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         # Every test here is about the compiled build - the dev build stages
         # nothing at all.
@@ -206,7 +253,7 @@ class NoBinaryNeeded(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='titan_updater_nobin_')
+        self.root = scratch('titan_updater_nobin_')
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
         self._was_frozen = updater_module.is_frozen
         updater_module.is_frozen = lambda: True
@@ -271,7 +318,7 @@ class StandaloneUpdater(unittest.TestCase):
     """The repair tool for the Titans that cannot update themselves."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='titan_standalone_test_')
+        self.root = scratch('titan_standalone_test_')
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
 
     def test_it_updates_an_install(self):

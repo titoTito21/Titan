@@ -307,12 +307,29 @@ def has_icon(obj):
     return bool(icon_handle(_handle(obj)))
 
 
-def icon_word():
-    """What is said about an icon nobody has read.
+def icon_word(obj=None):
+    """What is said about this window's icon. Never empty.
 
-    Deliberately the same word :mod:`graphics` says for one, so a user
-    hears one vocabulary for one thing.
+    **Three tiers, and the middle one used to be missing.** The request
+    was "a description of the icon by AI, or the KIND of icon", and until
+    now there were only the ends of that: what the AI made of it, kept
+    per program, or the bare word "icon". So a window showing the shell's
+    own warning triangle, folder or shield was announced as having "an
+    icon" - true, and no use to anybody.
+
+    :mod:`iconNames` names the ones Windows itself drew, by comparing
+    pictures: instant, free, no key, nothing sent anywhere. Only a
+    picture that is nobody's stock artwork falls through to the word.
     """
+    if obj is not None:
+        try:
+            from . import iconNames
+            shows = iconNames.of_window(_handle(obj))
+            said = iconNames.word(shows) if shows else ''
+            if said:
+                return said
+        except Exception:                            # noqa: BLE001
+            pass
     try:
         from . import graphics
         return graphics.word('icon')
@@ -480,7 +497,7 @@ def parts_for(obj):
     if described:
         parts.append((described, 'detail'))
     elif has_icon(obj):
-        parts.append((icon_word(), 'detail'))
+        parts.append((icon_word(obj), 'detail'))
     return parts
 
 

@@ -485,6 +485,41 @@ def _on_the_screen(location):
     return _overlaps(location, bounds)
 
 
+def _is_visible(obj):
+    """Whether Windows itself considers that window shown.
+
+    **VMware keeps a SPARE console.** Measured on this machine: two
+    `MKSEmbedded` children of one frame, the same 2358 by 1281, at the same
+    place on the screen - one visible and one not. Every test that rectangles
+    can answer passes for both, so the invisible one wins whenever it is
+    found first, and what comes back is a window that draws nothing: a
+    capture of it is refused and the guest reads as empty. `IsWindowVisible`
+    is the exact question, and it costs nothing.
+
+    Answers True when it cannot be asked, which is the rule every check here
+    follows: a test that cannot see must not be the thing that refuses.
+    """
+    try:
+        handle = int(getattr(obj, 'windowHandle', 0) or 0)
+    except Exception:                                # noqa: BLE001
+        return True
+    if not handle:
+        return True
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        # **A handle that is not a window cannot be asked.** Every test here
+        # is written against objects that carry a handle Windows has never
+        # heard of, and `IsWindowVisible` answers 0 about one - which would
+        # make this refuse every candidate it was given rather than the
+        # invisible ones.
+        if not user32.IsWindow(ctypes.c_void_p(handle)):
+            return True
+        return bool(user32.IsWindowVisible(ctypes.c_void_p(handle)))
+    except Exception:                                # noqa: BLE001
+        return True
+
+
 def _biggest(candidates):
     """The largest of them, or None."""
     best = None
@@ -526,6 +561,8 @@ def display_of(obj):
         try:
             location = getattr(child, 'location', None)
             if not _on_the_screen(location):
+                continue
+            if not _is_visible(child):
                 continue
             if outer_ok and not _overlaps(location, outer):
                 continue

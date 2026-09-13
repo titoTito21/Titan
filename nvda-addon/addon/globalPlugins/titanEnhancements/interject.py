@@ -147,6 +147,15 @@ def dialog_kind(kind='', label='', **_):
                 pass
     word = str(label or '').strip() or name
     with _LOCK:
+        # **The kind goes IN PLACE of the word "dialog" where it can.**
+        # NVDA says the dialog's name and then its role - "dialog" - and
+        # the kind said beside that is the same fact twice: "Zapisz,
+        # dialog, pytanie". What the user wants to hear is "Zapisz,
+        # pytanie". This is the ONE control type this add-on will replace
+        # a role word for, and only because the word is knowable: it is
+        # `controlTypes.Role.DIALOG`'s own display string, in the user's
+        # own language, asked of the running NVDA rather than guessed.
+        globals()['_instead'] = (word, time.time())
         if name in KIND_FIRST:
             globals()['_prefix'] = (word, time.time())
             globals()['_suffix'] = None
@@ -264,6 +273,58 @@ def applied():
 # --------------------------------------------------------------------------- #
 # Changing what NVDA is about to say
 # --------------------------------------------------------------------------- #
+#: The kind to say instead of the word "dialog", armed with the kind and
+#: living exactly as long as the prefix and suffix do.
+_instead = None
+
+
+def _dialog_word():
+    """What NVDA calls a dialog, in the user's own language. ``''`` when
+    it will not say - an alpha build renames these constantly, so this is
+    asked rather than written down."""
+    try:
+        from . import compat
+        types = compat.controlTypes
+        if types is None:
+            import controlTypes as types
+        role = getattr(types, 'Role', None)
+        found = getattr(role, 'DIALOG', None) if role is not None else None
+        said = getattr(found, 'displayString', '')
+        return str(said or '').strip()
+    except Exception:                                # noqa: BLE001
+        return ''
+
+
+def _kind_instead(sequence):
+    """Put the kind where NVDA's word "dialog" is. The sequence, changed.
+
+    Only ever an exact, whole-item match on the role word: a dialog whose
+    NAME happens to contain it is not renamed, and a sequence that does
+    not carry the word at all is handed back untouched - the kind is then
+    said beside it, as it was before, which is worse and still true.
+    """
+    with _LOCK:
+        armed = _instead if _fresh(_instead) else None
+    if armed is None:
+        return sequence, False
+    word = _dialog_word()
+    if not word:
+        return sequence, False
+    made = []
+    swapped = False
+    for part in sequence:
+        if not swapped and isinstance(part, str) \
+                and part.strip().lower() == word.lower():
+            made.append(armed[0])
+            swapped = True
+            continue
+        made.append(part)
+    if swapped:
+        with _LOCK:
+            globals()['_instead'] = None
+    return made, swapped
+
+
 def _filter(speechSequence=None, **_kwargs):
     """NVDA's filter: return the sequence, changed or not.
 
@@ -289,6 +350,17 @@ def _filter(speechSequence=None, **_kwargs):
         # Anything earlier would record what was meant rather than what came
         # out, and anything later would be after the words had gone.
         _journal(sequence)
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        # If the kind can take the place of the role word, it does - and
+        # then it must not ALSO be said beside it.
+        sequence, swapped = _kind_instead(sequence)
+        if swapped:
+            with _LOCK:
+                globals()['_prefix'] = None
+                globals()['_suffix'] = None
+            return sequence
     except Exception:                                # noqa: BLE001
         pass
     try:
@@ -423,7 +495,14 @@ def capabilities():
     which is what a capability answering no is FOR.
     """
     return {'dialog_kind': _registered, 'state_suffix': _registered,
-            'role_label': False}
+            # **One control type, and only because its word is
+            # knowable.** A dialog's role word is
+            # `controlTypes.Role.DIALOG`'s own display string, which the
+            # running NVDA is asked for - so the kind can be put exactly
+            # where it is rather than found by matching text. Everything
+            # else still answers no, for the reason below.
+            'role_label': False,
+            'dialog_role_label': True}
 
 
 # --------------------------------------------------------------------------- #
@@ -502,6 +581,89 @@ def by_origin():
     return dict(_by_origin)
 
 
+#: How many utterances were handed to a synthesizer of their own rather
+#: than to NVDA's, by class. `nvda.diagnostics` shows it: a class set to
+#: another synthesizer and a count that never moves is the fault this is
+#: written against, seen from outside.
+_by_synth = {}
+
+
+def _words_of(sequence):
+    """What is being SAID in a sequence - commands are not words."""
+    return ' '.join(part for part in sequence
+                    if isinstance(part, str) and part.strip()).strip()
+
+
+def _to_braille(text):
+    """Put the words on the braille display, since the speech went
+    somewhere NVDA is not looking.
+
+    `speak()` feeds no braille at all - `ui.message` brailles separately,
+    and what another program says through the controller is not brailled
+    by anybody - so a message spoken by a driver of ours would otherwise
+    be one a braille reader never gets. Shown as a MESSAGE, which is what
+    it is; a message replaces the one before it, so saying the same thing
+    twice costs a braille reader nothing.
+    """
+    from . import compat
+    if compat.braille is None or not text:
+        return False
+    try:
+        handler = getattr(compat.braille, 'handler', None)
+        if handler is None:
+            return False
+        handler.message(text)
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def _elsewhere(mark, profile, sequence):
+    """Say this whole utterance on the synthesizer its class NAMES.
+
+    **A synthesizer cannot be a speech command**, which is the whole
+    reason this is here rather than in `voices`: NVDA has commands for
+    pitch, rate and volume and none at all for a synthesizer, so a class
+    set to another one could only ever have its VOICE pushed onto
+    whatever driver NVDA was already using - a voice id that means
+    nothing outside the synthesizer it came from. On the user's own
+    machine that was sapi5_32's RHVoice name pushed into eSpeak, once per
+    notification, 261 times in four minutes, each one an error in the log
+    and none of them audible. The setting had never once worked.
+
+    So the utterance is taken away from NVDA (`[]` - `speak()` returns at
+    once on an empty sequence, checked against NVDA's own source) and
+    said by a driver of ours, which is what `voices.say_whole` has always
+    been for. Only for a class that IS a whole utterance: a different
+    synthesizer in the middle of one would be two programs talking over
+    each other.
+
+    ``False`` means "nothing was done", and the caller then does what it
+    always did.
+    """
+    from . import classes
+    from . import speaking
+    from . import voices
+    wanted = str((profile or {}).get('synth') or '').strip()
+    if not wanted or not classes.is_whole(mark):
+        return False
+    # The same synthesizer is not another one: NVDA is already using it,
+    # and a second instance of one driver is two programs on one device.
+    if not speaking.for_another_synth(profile):
+        return False
+    words = _words_of(sequence)
+    if not words:
+        return False
+    try:
+        if not voices.say_whole(mark, words, profile):
+            return False
+    except Exception:                                # noqa: BLE001
+        return False
+    _to_braille(words)
+    _by_synth[mark] = _by_synth.get(mark, 0) + 1
+    return True
+
+
 def _origin_voice(sequence):
     """The voice for what this utterance IS, not for what it says.
 
@@ -531,6 +693,10 @@ def _origin_voice(sequence):
     profile = classes.voice_of(mark)
     if not profile:
         return sequence
+    # **A synthesizer of its own is answered FIRST**, because it is the
+    # one thing that cannot be done to the utterance in hand.
+    if _elsewhere(mark, profile, sequence):
+        return []
     synth = prosody.panner.current_synth()
     on, off = voices._commands(profile, synth)
     named = voices._signature(profile)

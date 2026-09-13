@@ -763,6 +763,19 @@ def _play_sound(args):
             player = getattr(sound, 'play_ai_sound', None)
             if player is not None:
                 return bool(player(name))
+        # **A file by its absolute path**, for a client that cannot decode
+        # it itself: NVDA's own player takes wave files and nothing else,
+        # and a user who chose an `.ogg` for a reader sound is asking
+        # Titan's mixer, which decodes everything a theme may hold. Only a
+        # real file of a sound type, so the doorway cannot be made to open
+        # anything else.
+        import os as _os
+        if _os.path.isabs(name):
+            if (_os.path.isfile(name) and _os.path.splitext(name)[1].lower()
+                    in ('.wav', '.ogg', '.mp3', '.flac')):
+                return bool(sound.play_sound_file(
+                    name, pan=None if pan in (None, '') else float(pan)))
+            raise ValueError('not a sound file: %s' % name)
         sound.play_sound(name, pan=None if pan in (None, '') else float(pan))
         return True
     played, error = run_on_gui(play)

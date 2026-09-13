@@ -187,8 +187,53 @@ class _Api(object):
         return None
 
 
+class _Gui(object):
+    """NVDA's ``gui``, answered with Titan's own window.
+
+    The shared modules put their dialogs and their menus on
+    ``compat.gui.mainFrame`` and wrap a popup in ``prePopup`` /
+    ``postPopup``, which is how NVDA hands a window the foreground and
+    takes it back. Titan has a main window of its own and wx already gives
+    a dialog parented to it the foreground, so the two calls are honestly
+    nothing here rather than an imitation of NVDA's.
+    """
+
+    @property
+    def mainFrame(self):
+        try:
+            import wx
+        except Exception:                            # noqa: BLE001
+            return None
+        try:
+            app = wx.GetApp()
+        except Exception:                            # noqa: BLE001
+            return None
+        if app is None:
+            return None
+        try:
+            found = app.GetTopWindow()
+        except Exception:                            # noqa: BLE001
+            return None
+        # A window wx has already destroyed answers every attribute with a
+        # RuntimeError from inside its own event loop, where nothing
+        # catches it - so it is not somewhere to put a menu.
+        try:
+            if found is None or not bool(found):
+                return None
+        except Exception:                            # noqa: BLE001
+            return None
+        return found
+
+    def prePopup(self):
+        return None
+
+    def postPopup(self):
+        return None
+
+
 speech = _Speech()
 ui = _Ui()
+gui = _Gui()
 tones = _Tones()
 log = _Log()
 queueHandler = _QueueHandler()

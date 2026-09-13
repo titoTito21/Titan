@@ -137,6 +137,32 @@ def _import_api():
 api = _try('api', _import_api)
 
 
+def _import_core():
+    import core
+    return core
+
+
+#: NVDA's own main loop. `callLater` is the one thing wanted from it -
+#: doing something a moment after a key, on the thread that is allowed to
+#: read the screen and speak - and it is reached here rather than
+#: imported where it is used, like everything else NVDA owns, so an NVDA
+#: without it answers None instead of raising.
+core = _try('core', _import_core)
+
+
+def _import_gui():
+    import gui
+    return gui
+
+
+#: NVDA's own interface - ``gui.mainFrame`` is the window every dialog and
+#: every menu this add-on puts up belongs to, and ``prePopup`` /
+#: ``postPopup`` is how NVDA hands it the foreground and takes it back.
+#: Asked through here rather than imported, because the modules that use it
+#: are shared with Titan Access, where the frame is Titan's own.
+gui = _try('gui', _import_gui)
+
+
 def _import_control_types():
     import controlTypes
     return controlTypes
@@ -151,6 +177,17 @@ def _import_text_infos():
 
 
 textInfos = _try('textInfos', _import_text_infos)
+
+
+def _import_display_model():
+    # NVDA's off-screen model: what every process DREW, kept by the GDI
+    # hooks in the copy of `nvdaHelperRemote.dll` injected into it. The
+    # tier under both OCR tiers - see `drawnText`.
+    import displayModel
+    return displayModel
+
+
+displayModel = _try('displayModel', _import_display_model)
 
 
 def _import_input_core():

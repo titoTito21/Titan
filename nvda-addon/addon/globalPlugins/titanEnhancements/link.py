@@ -229,6 +229,7 @@ def handlers():
     from . import channel
     from . import focus
     from . import interject
+    from . import speaking
     from . import nvda_control
     served = {
         'attach': LINK.attach,
@@ -341,8 +342,15 @@ def diagnostics(**_):
                            'labelled': focus.labelled()})
 
     from . import interject
+    from . import speaking
     ask('interject_registered', interject.registered)
     ask('interject_applied', interject.applied)
+    # A class set to another synthesizer and a count that never moves is
+    # the fault this answers, seen from outside.
+    ask('said_elsewhere', lambda: dict(interject._by_synth))
+    ask('cancel_followed', lambda: speaking._cancel_was is not None)
+    ask('our_drivers', lambda: sorted(speaking._drivers))
+    ask('drivers_refused', speaking.refused)
     ask('spoken_log', lambda: [line[1][:60] for line in
                                interject.spoken_log()[-6:]])
 
@@ -350,6 +358,8 @@ def diagnostics(**_):
     # nothing happened" is answerable only by what the mode thought it
     # was on at the time.
     for name in ('dialog_kind', 'live', 'surface', 'smart', 'trackpad',
+                 'guest', 'drawnText', 'agentLink', 'vmware', 'guestNative',
+                 'vgaFont',
                  'states', 'semantics', 'ancestry', 'virtualWindow',
                  'appReview', 'palette', 'terminal', 'ocrReview'):
         def get(name=name):
@@ -366,7 +376,16 @@ def diagnostics(**_):
         ask(name, get)
 
     from . import configSpec
-    ask('settings', configSpec.read)
+    # **Never the agent's key.** Diagnostics are what a user pastes into a
+    # bug report; the key is shown only in the settings panel's own
+    # dialog, where copying it is a deliberate act.
+    def settings_without_secrets():
+        values = dict(configSpec.read())
+        for name in list(values):
+            if 'token' in name.lower() or 'secret' in name.lower():
+                values[name] = '(set)' if values[name] else ''
+        return values
+    ask('settings', settings_without_secrets)
     from . import readerModules
     ask('modules', lambda: len(readerModules.load()))
     return found
@@ -386,22 +405,32 @@ def diagnostics(**_):
 #: their own gets the same, which is the point.
 _STRING = {'type': 'string'}
 
+# **The AI reaches this reader with no Titan code at all.** A client that
+# joins the bus and declares its actions richly - a summary, typed params,
+# a risk level, and `promote` - is folded into Titan's own action registry
+# by `_merge_bus`, so `titan_list_actions` lists it and every `promote`
+# action becomes a first-class tool the assistant and the agent call
+# directly. Nothing on Titan's side names NVDA: the reader describes itself
+# here, which is the whole point - a client should not need Titan changed
+# to be something the AI can use. The ten promoted below are what answers
+# "what am I on", "read this", "move the review", "change the rate"; the
+# rest stay reachable through titan_list_actions, off the promoted budget.
 DECLARED = [
-    {'name': 'context',
+    {'name': 'context', 'promote': True,
      'summary': "What NVDA can see right now: the focused control by name, "
                 "role and state, what is selected, where the review cursor "
                 "is, and whether NVDA is in browse mode.",
      'params': {}},
-    {'name': 'window',
+    {'name': 'window', 'promote': True,
      'summary': "The window NVDA is reading, with its handle - which is not "
                 "always the window Windows calls the foreground.",
      'params': {}},
-    {'name': 'describe',
+    {'name': 'describe', 'promote': True,
      'summary': "What the reader would say about the focused control, in "
                 "parts: the name, the control type and each state, each "
                 "with the tone it is said at.",
      'params': {}},
-    {'name': 'speak',
+    {'name': 'speak', 'promote': True,
      'summary': "Read something out in NVDA's own voice, optionally from a "
                 "place in the stereo image and at a pitch of its own.",
      'params': {'text': dict(_STRING, required=True),
@@ -416,7 +445,7 @@ DECLARED = [
                                             "name at 0, the control type "
                                             "at -4, a state at +4, which "
                                             "is Titan Access's own shape."}}},
-    {'name': 'stop', 'summary': "Stop NVDA speaking.", 'params': {}},
+    {'name': 'stop', 'promote': True, 'summary': "Stop NVDA speaking.", 'params': {}},
     {'name': 'switch',
      'summary': "Read or set one of the add-on's own switches while NVDA is "
                 "running - which is the only way there is: a switch written "
@@ -470,21 +499,21 @@ DECLARED = [
      'params': {'text': dict(_STRING, required=True)}},
     {'name': 'say_all',
      'summary': "Have NVDA read on from the review cursor.", 'params': {}},
-    {'name': 'read_focus',
+    {'name': 'read_focus', 'promote': True,
      'summary': "Have NVDA say the focused control again.", 'params': {}},
-    {'name': 'review',
+    {'name': 'review', 'promote': True,
      'summary': "Move NVDA's review cursor and read what is there.",
      'params': {'where': dict(_STRING,
                               description="line, word, character, paragraph"),
                 'direction': dict(_STRING,
                                   description="next, previous or current")}},
-    {'name': 'mode',
+    {'name': 'mode', 'promote': True,
      'summary': "Put NVDA into browse mode or focus mode.",
      'params': {'name': dict(_STRING, description="browse, focus or toggle")}},
-    {'name': 'settings',
+    {'name': 'settings', 'promote': True,
      'summary': "Every NVDA setting Titan may read or change, and whether "
                 "the user has allowed changing them.", 'params': {}},
-    {'name': 'setting',
+    {'name': 'setting', 'promote': True,
      'summary': "Read one NVDA setting, or change it.",
      'params': {'name': dict(_STRING, required=True),
                 'value': dict(_STRING)}},

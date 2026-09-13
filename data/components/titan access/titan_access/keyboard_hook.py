@@ -363,6 +363,15 @@ class KeyboardHook:
         # and keep NumPad usable for typing digits when NumLock is on.
         if (is_numpad_nav or (key_name == "numpadsubtract" and not self._numlock_on())) \
                 and not self._ctrl and not self._alt:
+            # A walked list (the palette, a message, the virtual window)
+            # owns the NumPad while it is up - the corners and the layout -
+            # and is asked before object navigation for that reason.
+            try:
+                if is_numpad_nav and self.engine.on_walked_numpad(
+                        vk, key_name, self._shift):
+                    return True
+            except Exception as e:
+                print(f"[TitanAccess] keyboard_hook: walked numpad error: {e}")
             try:
                 if self.engine.on_modifier_gesture(vk, key_name, self._ctrl,
                                                    self._alt, self._shift):

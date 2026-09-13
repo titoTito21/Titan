@@ -959,20 +959,63 @@ class Database:
         no-op, so existing ``conn = db.get_connection(); ...; conn.close()``
         call sites keep working without changes.
 
-        Inside a ``@_serialized_write`` body the decorator overrides
-        ``self._tls.conn`` to point at the shared writer connection, so
-        ``get_connection()`` transparently returns it. Reads outside the
-        decorator continue to get their own per-thread connection.
+        **A cached connection is checked before it is handed out again, and
+        replaced if it has died.** Because ``_PooledConn.close()`` is a no-op,
+        a connection that goes bad is otherwise cached in ``self._tls`` for
+        the life of the thread and every later query on that thread fails
+        for ever, while other threads carry on perfectly - which is what a
+        server answering 500 on some endpoints and 200 on others looks like
+        from outside. Two ways it goes bad are real here: SQLCipher's
+        ``sqlite3Codec: deferred error condition`` surfaces as a bare
+        ``MemoryError`` on the connection that hit it (see the
+        ``_serialized_write`` iteration notes above), and anything that
+        closes the real handle out from under the pool leaves a closed one
+        behind. ``SELECT 1`` touches no page and no file: measured here at
+        1.0 us, against 4.6 us for the cheapest real query there is (a COUNT
+        over an empty table) and far more for anything this server actually
+        runs. Being sure is cheaper than being wrong.
+
+        NOTE: ``_serialized_write`` deliberately does NOT swap a shared
+        writer connection into ``self._tls`` - that was iteration 3 and it
+        corrupted pages ("Do not reintroduce"). It takes ``_writer_lock``
+        and nothing more, so every thread here keeps its own connection.
         """
         real = getattr(self._tls, 'conn', None)
         if real is not None:
-            return _PooledConn(real)
+            if self._connection_is_alive(real):
+                return _PooledConn(real)
+            # Dead in the pool: drop it and open a fresh one below.
+            logger.warning(
+                "Pooled DB connection for thread "
+                f"{threading.current_thread().name!r} is no longer usable - "
+                "discarding it and reopening"
+            )
+            try:
+                real.close()
+            except Exception:
+                pass
+            self._tls.conn = None
 
-        # First call on this thread: open + key + tune.
+        # First call on this thread (or a replacement): open + key + tune.
         conn = self._open_keyed_connection()
 
         self._tls.conn = conn
         return _PooledConn(conn)
+
+    @staticmethod
+    def _connection_is_alive(conn) -> bool:
+        """Cheap liveness probe for a pooled connection.
+
+        ``MemoryError`` is an ordinary ``Exception`` subclass, so this catches
+        it; ``BaseException`` is deliberately NOT caught, because swallowing a
+        ``KeyboardInterrupt`` or ``SystemExit`` to report a healthy connection
+        would stop the server shutting down.
+        """
+        try:
+            conn.execute('SELECT 1').fetchone()
+            return True
+        except Exception:
+            return False
 
     def close_all(self):
         """Close the pooled connection for the current thread (test/shutdown helper)."""

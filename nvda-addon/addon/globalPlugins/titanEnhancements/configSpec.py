@@ -124,6 +124,33 @@ SPEC = {
     # thing that spends somebody's money and privacy is opted INTO. 'both'
     # asks the AI first and falls back to Windows when it cannot.
     'ocrTier': "option('local', 'ai', 'both', default='local')",
+    # **What the program DREW, before any picture is taken.** NVDA injects
+    # `nvdaHelperRemote.dll` into every process and hooks the GDI text calls,
+    # so for a window that draws its text that way the words are already
+    # known - exactly, instantly, free, with a rectangle per character. It is
+    # tried before either recogniser and costs nothing when it answers
+    # nothing, which is what a Direct3D game or the inside of a virtual
+    # machine does. On by default BECAUSE it spends nothing: this is the one
+    # tier there is no reason to opt into. See `drawnText`.
+    'drawnText': "boolean(default=True)",
+    # **An agent on the far side of a wall.** Inside a virtual machine and
+    # inside a game engine the words exist and this side cannot see them: the
+    # guest draws in the guest, and Unity draws its text as meshes. So
+    # something on the inside says what it sees and the reader listens on a
+    # socket. Off by default, and that is not caution for its own sake - a
+    # socket that makes a screen reader speak lets any program on the machine
+    # say anything in the user's ear, so it is opt-in, token-checked, and
+    # bound to this machine unless the guest switch below is on too.
+    'agentLink': "boolean(default=False)",
+    # Accept an agent from OUTSIDE this machine - which in practice means a
+    # virtual machine's guest, the case the whole channel exists for. It
+    # widens the socket from 127.0.0.1 to every interface, so it is a
+    # separate answer from switching the channel on.
+    'agentFromGuest': "boolean(default=False)",
+    # The shared secret, made here and given to the agent. Never typed by
+    # the user; shown on the settings page so it can be copied into the
+    # agent's configuration.
+    'agentToken': "string(default='')",
     # Which language Windows' own recogniser reads in. Empty means whatever
     # Windows is set to, which is right until somebody is reading a program
     # in another language.
@@ -183,6 +210,27 @@ SPEC = {
     # and it is what answers "where was that?" - which no reader answers.
     # Nothing is written to disk unless the user asks for it.
     'journal': 'boolean(default=True)',
+    # ---- Titan's own window, walked ------------------------------------
+    # What a row of it says about itself, and what happens to a setting
+    # changed in it. They are here rather than decided because each is a
+    # real trade: a value on the row is the whole point of a settings list
+    # for somebody working by ear AND is a longer row to listen past, and
+    # saving is Titan's own `OnSave` - the SAPI registration, the system
+    # monitor, the shell, the menu bar - which is a great deal to do on
+    # every keystroke.
+    'titanValues': 'boolean(default=True)',
+    'titanCounts': 'boolean(default=True)',
+    'titanAutoSave': 'boolean(default=False)',
+    # Inside a virtual machine: what the pointer is on, said as it moves.
+    # A guest's window is another computer's screen, so a reader can say
+    # nothing about it at all - and this needs no key and no guest tools,
+    # only the host's own pointer and a strip of the picture it is on.
+    #
+    # OFF, because it reads a piece of the screen whenever the pointer
+    # moves to another row. Everything it uses is local (Windows' own
+    # recogniser) and nothing leaves the machine, but a reader that talks
+    # while somebody is working is a decision to make for oneself.
+    'guestCursor': 'boolean(default=False)',
     # Titan's own cursor cues on every focus change, everywhere EXCEPT
     # Titan's own windows (which already play their own). Off by default: it
     # changes what the whole machine sounds like, which is not a decision to
@@ -205,6 +253,16 @@ def apply(section=None):
     panner.PANNER.enabled = bool(values.get('position', True))
     if not values.get('standDownForTitanAccess', True):
         focus.stand_down(False)
+    # **A switch that opens a socket has to act when it is ticked.** Read
+    # live, `agentLink` said `wanted: true, listening: false`: the channel
+    # was started once at start-up and the answer changed afterwards, so
+    # ticking it appeared to do nothing until NVDA was restarted - and
+    # unticking it left the socket open, which is worse.
+    try:
+        from . import agentLink
+        agentLink.keep_running()
+    except Exception:                                # noqa: BLE001
+        pass
     return values
 #: A setting that is not a yes or a no. Everything here was a switch until
 #: one question turned out to have three answers, and the two places that

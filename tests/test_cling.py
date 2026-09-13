@@ -21,6 +21,30 @@ import sys
 import tempfile
 import unittest
 
+import atexit
+
+#: Temporary directories this run made, removed when it ends.
+#:
+#: 32 inline `scratch('cling-...')` calls left theirs behind -
+#: 11 889 empty `cling-*` directories had accumulated in %TEMP%, one per call
+#: across every run of this suite. `ClingCase` cleans up its own root; these
+#: did not, and a test that litters is a test nobody can run often. Registered
+#: at exit rather than per test so a FAILING test cleans up too.
+_SCRATCH = []
+
+
+def scratch(prefix=None):
+    """A temporary directory that is removed when the run ends."""
+    path = tempfile.mkdtemp(**({'prefix': prefix} if prefix else {}))
+    _SCRATCH.append(path)
+    return path
+
+
+@atexit.register
+def _clear_scratch():
+    while _SCRATCH:
+        shutil.rmtree(_SCRATCH.pop(), ignore_errors=True)
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -166,7 +190,7 @@ class ClingCase(unittest.TestCase):
     """A temporary `data/cling` root, and a way to open what is in it."""
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='cling-test-')
+        self.root = scratch('cling-test-')
         self.apps_root = os.path.join(self.root, 'apps')
         os.makedirs(self.apps_root)
         self.state = os.path.join(self.root, 'state')
@@ -1177,7 +1201,7 @@ class Lua(unittest.TestCase):
             self.assertIsNone(runtime.get_global(name), name)
 
     def test_a_module_outside_the_application_is_refused(self):
-        root = tempfile.mkdtemp()
+        root = scratch()
         try:
             runtime = LuaRuntime(root)
             with self.assertRaises(LuaError):
@@ -1516,7 +1540,7 @@ class TheEmulator(unittest.TestCase):
         host = host_module.ClingHost(
             app, 'en', speaker=QuietSpeaker(), mixer=SilentMixer(),
             store=store_module.Store(app_id, 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-emu-')),
+                                     scratch('cling-emu-')),
             clock=runner.FakeClock())
         engine = engines.build(host)
         self.assertEqual(type(engine).__name__, 'KlangoEngine')
@@ -1533,7 +1557,7 @@ class TheEmulator(unittest.TestCase):
         host = host_module.ClingHost(
             app, 'en', speaker=QuietSpeaker(), mixer=SilentMixer(),
             store=store_module.Store(app_id, 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-emu-')),
+                                     scratch('cling-emu-')),
             clock=runner.FakeClock())
         original = session_module.find_library
         session_module.find_library = lambda *_a: ''
@@ -1558,7 +1582,7 @@ class TheEmulator(unittest.TestCase):
             INSTALLED['mole'], 'en', speaker=QuietSpeaker(),
             mixer=SilentMixer(),
             store=store_module.Store('mole', 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-say-')),
+                                     scratch('cling-say-')),
             clock=runner.FakeClock())
         session = klango.KlangoSession(host)
         session.runtime.interpreter.MAX_STEPS = 5000000
@@ -1586,7 +1610,7 @@ class TheEmulator(unittest.TestCase):
             INSTALLED['mole'], 'en', speaker=QuietSpeaker(),
             mixer=SilentMixer(),
             store=store_module.Store('mole', 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-busy-')),
+                                     scratch('cling-busy-')),
             clock=clock)
         session = klango.KlangoSession(host)
         session.runtime.run('id = _Snd_Create("*a fairly long spoken line here")\n'
@@ -1614,7 +1638,7 @@ class TheEmulator(unittest.TestCase):
                 INSTALLED['mole'], 'en', speaker=QuietSpeaker(),
                 mixer=SilentMixer(),
                 store=store_module.Store('mole', 'test-suite',
-                                         tempfile.mkdtemp(prefix='cling-rpc-')),
+                                         scratch('cling-rpc-')),
                 clock=runner.FakeClock())
             session = klango.KlangoSession(host)
             session.runtime.run(
@@ -1650,7 +1674,7 @@ class TheEmulator(unittest.TestCase):
         host = host_module.ClingHost(
             INSTALLED['mole'], 'en', speaker=QuietSpeaker(), mixer=SilentMixer(),
             store=store_module.Store('mole', 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-rpc2-')),
+                                     scratch('cling-rpc2-')),
             clock=runner.FakeClock())
         session = klango.KlangoSession(host)
         session.runtime.run('local rpc = k_NewKRPC{}\n'
@@ -1683,7 +1707,7 @@ class TheEmulator(unittest.TestCase):
             INSTALLED['mole'], 'en', speaker=QuietSpeaker(),
             mixer=SilentMixer(),
             store=store_module.Store('mole', 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-emu-')),
+                                     scratch('cling-emu-')),
             clock=runner.FakeClock())
         session = klango.KlangoSession(host)
         # The application's own loop paces itself to 60 frames a second and
@@ -1816,7 +1840,7 @@ class ClingSpeaksTitansLanguage(unittest.TestCase):
         from clingkit.klango import engine, keyboard, natives
         from clingkit.lua import LuaRuntime
 
-        state = tempfile.mkdtemp(prefix='cling-lang-')
+        state = scratch('cling-lang-')
         app = _AnyApp()
         for language, expected in (('pl', 'pl-pl'), ('en', 'en-us')):
             host = host_module.ClingHost(
@@ -1825,7 +1849,7 @@ class ClingSpeaksTitansLanguage(unittest.TestCase):
                 clock=runner.FakeClock())
             runtime = LuaRuntime()
             files = natives.Filesystem(app.path, '',
-                                       tempfile.mkdtemp(prefix='cling-lw-'))
+                                       scratch('cling-lw-'))
             natives.install(runtime, host, files, lambda *_a: None)
             engine.install(runtime, host, files, keyboard.Keyboard())
             self.assertEqual(host.store.get('reg:/user/app/lang'), expected)
@@ -1840,7 +1864,7 @@ class ClingSpeaksTitansLanguage(unittest.TestCase):
         host = self.host('pl')
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-v-'))
+                                   scratch('cling-v-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         runtime.run('v = _Voice_Enum()\n n = 0\n langs = ""\n'
@@ -1897,11 +1921,11 @@ class TheApplicationIsWhereverItIs(unittest.TestCase):
     def files(self, *roots):
         from clingkit.klango import natives
         return natives.Filesystem(list(roots), '',
-                                  tempfile.mkdtemp(prefix='cling-fsw-'))
+                                  scratch('cling-fsw-'))
 
     def two_halves(self):
-        first = tempfile.mkdtemp(prefix='cling-half1-')
-        second = tempfile.mkdtemp(prefix='cling-half2-')
+        first = scratch('cling-half1-')
+        second = scratch('cling-half2-')
         write(os.path.join(first, 'code.lua'), '-- the package')
         os.makedirs(os.path.join(second, 'trainings'))
         write(os.path.join(second, 'trainings', 'lesson.txt'), 'aaa sss')
@@ -2096,7 +2120,7 @@ class TheTextControl(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-t-'))
+                                   scratch('cling-t-'))
         natives.install(runtime, host, files, lambda *_a: None)
         keys = keyboard.Keyboard()
         engine.install(runtime, host, files, keys)
@@ -2170,7 +2194,7 @@ class TheTextControl(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-f-'))
+                                   scratch('cling-f-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         runtime.run('h = _Gfx_TxtEdit_Init{}\n'
@@ -2244,7 +2268,7 @@ class APrimitiveNobodyWroteDoesNotEndTheApplication(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-net-'))
+                                   scratch('cling-net-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         return runtime
@@ -2398,7 +2422,7 @@ class EveryEnginePrimitive(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-p-'))
+                                   scratch('cling-p-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         environment.install(runtime, lambda *_a: None)
@@ -2527,7 +2551,7 @@ class RandomIsRandom(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-r-'))
+                                   scratch('cling-r-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         return runtime
@@ -2635,7 +2659,7 @@ class SoundIsWhereKlangoPutIt(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(host.app.path, '',
-                                   tempfile.mkdtemp(prefix='cling-s-'))
+                                   scratch('cling-s-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         runtime.run('v = _Voice_Create({})\n'
@@ -2701,7 +2725,7 @@ class ASampleIsFoundTheWayKlangoFindsOne(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = tempfile.mkdtemp(prefix='cling-p-')
+        self.root = scratch('cling-p-')
         os.makedirs(os.path.join(self.root, 'sounds', 'default_samples'))
         for name in ('c.wav', 'e_l.wav'):
             with open(os.path.join(self.root, 'sounds', 'default_samples',
@@ -2720,7 +2744,7 @@ class ASampleIsFoundTheWayKlangoFindsOne(unittest.TestCase):
             clock=runner.FakeClock())
         runtime = LuaRuntime()
         files = natives.Filesystem(self.root, '',
-                                   tempfile.mkdtemp(prefix='cling-p2-'))
+                                   scratch('cling-p2-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         return host.klango_sounds.resolve
@@ -2924,13 +2948,13 @@ class ALoopReallyLoops(unittest.TestCase):
 
     def test_a_looping_sound_is_asked_for_as_one(self):
         spatial = self.FakeSpatial()
-        here = write(os.path.join(tempfile.mkdtemp(), 'music.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'music.ogg'), 'x')
         self.mixer(spatial).start(here, 0.0, 0.0, 1.0, 0.0, loop=True)
         self.assertEqual(spatial.calls, [('file', 'music.ogg', True)])
 
     def test_a_one_shot_is_not(self):
         spatial = self.FakeSpatial()
-        here = write(os.path.join(tempfile.mkdtemp(), 'hit.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'hit.ogg'), 'x')
         self.mixer(spatial).start(here, 0.0, 0.0, 1.0)
         self.assertEqual(spatial.calls, [('file', 'hit.ogg', False)])
 
@@ -2941,7 +2965,7 @@ class ALoopReallyLoops(unittest.TestCase):
                 self.calls.append(('file', os.path.basename(path), 'no loop'))
                 return 7
         spatial = Older()
-        here = write(os.path.join(tempfile.mkdtemp(), 'music.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'music.ogg'), 'x')
         handle = self.mixer(spatial).start(here, 0.0, 0.0, 1.0, 0.0, loop=True)
         self.assertIsNotNone(handle)
         self.assertEqual(spatial.calls, [('file', 'music.ogg', 'no loop')])
@@ -2951,7 +2975,7 @@ class ALoopReallyLoops(unittest.TestCase):
         vector out itself and hands it over with the clay pigeon."""
         from clingkit.klango import sounds
         spatial = self.FakeSpatial()
-        here = write(os.path.join(tempfile.mkdtemp(), 'flight.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'flight.ogg'), 'x')
         mixer = self.mixer(spatial)
         handle = mixer.start(here, 0.0, 0.0, 1.0, 0.0, loop=True)
         self.assertTrue(mixer.set_velocity(handle, (5.06, 0.0, 0.0)))
@@ -2968,7 +2992,7 @@ class ALoopReallyLoops(unittest.TestCase):
 
     def test_a_held_sound_is_paused_where_it_is(self):
         spatial = self.FakeSpatial()
-        here = write(os.path.join(tempfile.mkdtemp(), 'music.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'music.ogg'), 'x')
         mixer = self.mixer(spatial)
         handle = mixer.start(here, 0.0, 0.0, 1.0, 0.0, loop=True)
         self.assertTrue(mixer.pause(handle, True))
@@ -2997,7 +3021,7 @@ class ASoundThatIsPlayingCanStillBeMovedAndReGained(unittest.TestCase):
         return ALoopReallyLoops.mixer(self, spatial)
 
     def playing(self, spatial, name='music.ogg', gain=0.0):
-        here = write(os.path.join(tempfile.mkdtemp(), name), 'x')
+        here = write(os.path.join(scratch(), name), 'x')
         mixer = self.mixer(spatial)
         return mixer, mixer.start(here, 0.0, 0.0, gain, 0.0, loop=True)
 
@@ -3039,7 +3063,7 @@ class ASoundThatIsPlayingCanStillBeMovedAndReGained(unittest.TestCase):
 
             def _theme_volume(self_inner):
                 return 0.5
-        here = write(os.path.join(tempfile.mkdtemp(), 'music.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'music.ogg'), 'x')
         mixer = Quieter()
         handle = mixer.start(here, 0.0, 0.0, 0.0, 0.0, loop=True)
         spatial.calls = []
@@ -3179,7 +3203,7 @@ class ClingIsPortable(unittest.TestCase):
 
     def test_the_library_is_found_with_nothing_else_installed(self):
         from clingkit.klango.session import find_library
-        found = find_library([tempfile.mkdtemp(prefix='cling-empty-'),
+        found = find_library([scratch('cling-empty-'),
                               catalog.component_apps_dir()])
         self.assertTrue(found, 'the shipped library was not found')
         self.assertTrue(os.path.isfile(os.path.join(found, 'llib.lua')),
@@ -3192,7 +3216,7 @@ class ClingIsPortable(unittest.TestCase):
     def test_the_users_own_library_still_wins(self):
         """Somebody with a newer or a patched Klango keeps theirs."""
         from clingkit.klango.session import find_library
-        theirs = tempfile.mkdtemp(prefix='cling-lib-')
+        theirs = scratch('cling-lib-')
         os.makedirs(os.path.join(theirs, 'llib'))
         write(os.path.join(theirs, 'llib', 'llib.lua'), '-- theirs\n')
         self.assertEqual(find_library([theirs, catalog.component_apps_dir()]),
@@ -3201,7 +3225,7 @@ class ClingIsPortable(unittest.TestCase):
     def test_the_user_keeps_theirs_when_a_name_is_the_same(self):
         """The overlay rule the other eleven add-on kinds follow: the
         component's own copy is the fallback, never the override."""
-        theirs = tempfile.mkdtemp(prefix='cling-overlay-')
+        theirs = scratch('cling-overlay-')
         os.makedirs(os.path.join(theirs, 'clingdemo'))
         write(os.path.join(theirs, 'clingdemo', 'kni.txt'),
               'appname=clingdemo\nsummary=the user\'s own\n')
@@ -3453,7 +3477,7 @@ class TheSoundBank(unittest.TestCase):
         file among the sound formats - and its engine synthesises one. Without
         this every application's menu plays its earcons and says nothing."""
         from clingkit.klango import sounds
-        folder = tempfile.mkdtemp(prefix='cling-txt-')
+        folder = scratch('cling-txt-')
         path = os.path.join(folder, 'new_game.txt')
         write(path, 'New game')
         host = host_module.ClingHost(
@@ -3529,8 +3553,8 @@ class TheVoiceFinishes(unittest.TestCase):
             _AnyApp(), 'en', speaker=QuietSpeaker(), mixer=SilentMixer(),
             clock=runner.FakeClock())
         runtime = LuaRuntime()
-        files = natives.Filesystem(tempfile.mkdtemp(prefix='cling-v-'), '',
-                                   tempfile.mkdtemp(prefix='cling-vw-'))
+        files = natives.Filesystem(scratch('cling-v-'), '',
+                                   scratch('cling-vw-'))
         natives.install(runtime, host, files, lambda *_a: None)
         engine.install(runtime, host, files, keyboard.Keyboard())
         return host, runtime
@@ -3559,7 +3583,7 @@ class RunningAnotherFile(unittest.TestCase):
 
     def session(self):
         from clingkit.klango import session as session_module
-        folder = tempfile.mkdtemp(prefix='cling-run-')
+        folder = scratch('cling-run-')
         write(os.path.join(folder, 'level.lev'), 'Level = { n = (Level and Level.n or 0) + 1 }')
         write(os.path.join(folder, 'thing.lua'), 'ran = (ran or 0) + 1')
         app = _AnyApp()
@@ -3605,7 +3629,7 @@ class _AnyApp(object):
 
     def __init__(self):
         self.id = 'test'
-        self.path = tempfile.mkdtemp(prefix='cling-any-')
+        self.path = scratch('cling-any-')
         self.package = ''
         self.engine = 'klango'
         self.kni = {}
@@ -4218,7 +4242,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
         return mixer
 
     def test_a_sound_is_played_on_every_mode_including_none(self):
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'not really ogg')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'not really ogg')
         for mode in ('none', 'stereo', '3d'):
             with self.subTest(mode=mode):
                 mixer = self.mixer_for(mode)
@@ -4227,7 +4251,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
                 self.assertTrue(mixer._sound.played)
 
     def test_a_placed_sound_still_carries_its_place(self):
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'x')
         mixer = self.mixer_for('stereo')
         mixer.play(here, -1.0, 0.0, 1.0)
         self.assertEqual(mixer._sound.played[-1][1], 0.0)      # hard left, 0..1
@@ -4281,7 +4305,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
 
     def test_a_sound_is_placed_even_when_titans_stereo_is_off(self):
         """A Klango board is aimed at by ear; the pan is not a preference."""
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'x')
         channel = self.FakeChannel()
         mixer = self.placed_mixer('none', channel)
         self.assertTrue(mixer.play(here, -1.0, 0.0, 1.0))
@@ -4293,7 +4317,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
         """Constant power, not linear: a sound that crosses the listener
         must not dip 3 dB as it passes the middle, which is where the
         distance model is making it loudest."""
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'x')
         channel = self.FakeChannel()
         mixer = self.placed_mixer('none', channel)
         for pan, expected in ((-1.0, (1.0, 0.0)), (0.0, (0.707, 0.707)),
@@ -4304,7 +4328,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
                              'pan %s' % pan)
 
     def test_a_sound_crossing_the_listener_keeps_its_loudness(self):
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'x')
         channel = self.FakeChannel()
         mixer = self.placed_mixer('none', channel)
         power = []
@@ -4315,7 +4339,7 @@ class SoundReallyReachesTheMixer(unittest.TestCase):
         self.assertEqual(power, [1.0] * 9, 'it changed loudness as it went')
 
     def test_a_quieter_sound_is_still_placed(self):
-        here = write(os.path.join(tempfile.mkdtemp(), 'a.ogg'), 'x')
+        here = write(os.path.join(scratch(), 'a.ogg'), 'x')
         channel = self.FakeChannel()
         mixer = self.placed_mixer('none', channel)
         mixer.play(here, 1.0, 0.0, 0.5)
@@ -4340,7 +4364,7 @@ class RealApplications(unittest.TestCase):
         host = host_module.ClingHost(
             app, language, speaker=QuietSpeaker(), mixer=RecordingMixer(),
             store=store_module.Store(app_id, 'test-suite',
-                                     tempfile.mkdtemp(prefix='cling-real-')),
+                                     scratch('cling-real-')),
             clock=clock)
         if engine:
             previous, app.engine = app.engine, engine
@@ -4465,7 +4489,7 @@ class RealApplications(unittest.TestCase):
 
     @needs('mole')
     def test_mole_remembers_the_level_between_runs(self):
-        state = tempfile.mkdtemp(prefix='cling-level-')
+        state = scratch('cling-level-')
         app = INSTALLED['mole']
         first = host_module.ClingHost(
             app, 'en', speaker=QuietSpeaker(), mixer=RecordingMixer(),
