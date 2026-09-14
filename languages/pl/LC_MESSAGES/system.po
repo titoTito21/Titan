@@ -66,7 +66,7 @@ msgstr "Otwórz właściwości systemu"
 
 #: src/titan_core/tce_system_net.py:650
 msgid "Connect to WiFi Network"
-msgstr ""
+msgstr "Połącz z siecią WiFi"
 
 #: src/titan_core/tce_system_net.py:662
 #, python-brace-format
@@ -75,11 +75,11 @@ msgstr "Sieć: {}"
 
 #: src/titan_core/tce_system_net.py:666
 msgid "Enter WiFi network password:"
-msgstr ""
+msgstr "Wprowadź hasło sieci WiFi:"
 
 #: src/titan_core/tce_system_net.py:673
 msgid "Connect automatically"
-msgstr ""
+msgstr "Łącz automatycznie"
 
 #: src/titan_core/tce_system_net.py:679 src/titan_core/tce_system_net.py:761
 msgid "Connect"
@@ -92,7 +92,7 @@ msgstr "Anuluj"
 
 #: src/titan_core/tce_system_net.py:702
 msgid "Please enter a password"
-msgstr ""
+msgstr "Wprowadź hasło"
 
 #: src/titan_core/tce_system_net.py:702 src/titan_core/tce_system_net.py:942
 #: src/titan_core/tce_system_net.py:1032 src/titan_core/tce_system_net.py:1040
@@ -102,7 +102,7 @@ msgstr "Błąd"
 
 #: src/titan_core/tce_system_net.py:717
 msgid "Click 'Refresh' to scan for WiFi networks"
-msgstr ""
+msgstr "Naciśnij „Odśwież”, aby wyszukać sieci WiFi"
 
 #: src/titan_core/tce_system_net.py:719
 msgid "Ready"
@@ -110,18 +110,18 @@ msgstr "Gotowe"
 
 #: src/titan_core/tce_system_net.py:727
 msgid "Scanning WiFi networks..."
-msgstr ""
+msgstr "Wyszukiwanie sieci WiFi..."
 
 #: src/titan_core/tce_system_net.py:729
 msgid "Please wait"
-msgstr ""
+msgstr "Proszę czekać"
 
 #: src/titan_core/tce_system_net.py:743 src/titan_core/tce_system_net.py:1190
 #: src/titan_core/tce_system_net.py:1191 src/titan_core/tce_system_net.py:1251
 #: src/titan_core/tce_system_net.py:1253 src/titan_core/tce_system_net.py:1726
 #: src/titan_core/tce_system_net.py:1728
 msgid "WiFi"
-msgstr ""
+msgstr "WiFi"
 
 #: src/titan_core/tce_system_net.py:750
 msgid "Network Name"
@@ -129,11 +129,11 @@ msgstr "Nazwa sieci"
 
 #: src/titan_core/tce_system_net.py:751
 msgid "Signal"
-msgstr ""
+msgstr "Sygnał"
 
 #: src/titan_core/tce_system_net.py:752
 msgid "Security"
-msgstr ""
+msgstr "Zabezpieczenia"
 
 #: src/titan_core/tce_system_net.py:753
 msgid "Status"
@@ -141,11 +141,11 @@ msgstr "Status"
 
 #: src/titan_core/tce_system_net.py:760
 msgid "Refresh"
-msgstr ""
+msgstr "Odśwież"
 
 #: src/titan_core/tce_system_net.py:762
 msgid "Disconnect"
-msgstr ""
+msgstr "Rozłącz"
 
 #: src/titan_core/tce_system_net.py:812
 msgid "WiFi Scanner"
@@ -153,11 +153,11 @@ msgstr "Skaner WiFi"
 
 #: src/titan_core/tce_system_net.py:813
 msgid "Scanning for networks..."
-msgstr ""
+msgstr "Wyszukiwanie sieci..."
 
 #: src/titan_core/tce_system_net.py:829
 msgid "Processing results..."
-msgstr ""
+msgstr "Przetwarzanie wyników..."
 
 #: src/titan_core/tce_system_net.py:839
 msgid "Complete!"
@@ -171,12 +171,12 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:888
 msgid "Scan Timeout"
-msgstr ""
+msgstr "Przekroczono czas wyszukiwania"
 
 #: src/titan_core/tce_system_net.py:895
 #, python-brace-format
 msgid "WiFi scan failed: {}"
-msgstr ""
+msgstr "Wyszukiwanie WiFi nie powiodło się: {}"
 
 #: src/titan_core/tce_system_net.py:896
 msgid "Scan Error"
@@ -185,12 +185,12 @@ msgstr "Błąd skanowania"
 #: src/titan_core/tce_system_net.py:907 src/titan_core/tce_system_net.py:1178
 #: src/titan_core/tce_system_net.py:1627 src/titan_core/tce_system_net.py:1732
 msgid "Secured"
-msgstr ""
+msgstr "Zabezpieczona"
 
 #: src/titan_core/tce_system_net.py:907 src/titan_core/tce_system_net.py:1178
 #: src/titan_core/tce_system_net.py:1627 src/titan_core/tce_system_net.py:1732
 msgid "Open"
-msgstr ""
+msgstr "Otwórz"
 
 #: src/titan_core/tce_system_net.py:908 src/titan_core/tce_system_net.py:1177
 #: src/titan_core/tce_system_net.py:1626 src/titan_core/tce_system_net.py:1731
@@ -199,15 +199,15 @@ msgstr "Połączono"
 
 #: src/titan_core/tce_system_net.py:922 src/titan_core/tce_system_net.py:1153
 msgid "No WiFi networks found"
-msgstr ""
+msgstr "Nie znaleziono sieci WiFi"
 
 #: src/titan_core/tce_system_net.py:924
 msgid "Try refreshing"
-msgstr ""
+msgstr "Spróbuj odświeżyć"
 
 #: src/titan_core/tce_system_net.py:942
 msgid "Please select a network"
-msgstr ""
+msgstr "Wybierz sieć"
 
 #: src/titan_core/tce_system_net.py:961
 msgid "WiFi Connection"
@@ -221,11 +221,11 @@ msgstr "Łączenie z {}..."
 
 #: src/titan_core/tce_system_net.py:972
 msgid "Authenticating..."
-msgstr ""
+msgstr "Uwierzytelnianie..."
 
 #: src/titan_core/tce_system_net.py:979
 msgid "Establishing connection..."
-msgstr ""
+msgstr "Nawiązywanie połączenia..."
 
 #: src/titan_core/tce_system_net.py:988
 msgid "Connected!"
@@ -233,16 +233,16 @@ msgstr "Połączono!"
 
 #: src/titan_core/tce_system_net.py:988
 msgid "Failed!"
-msgstr ""
+msgstr "Nie powiodło się!"
 
 #: src/titan_core/tce_system_net.py:1021
 #, python-brace-format
 msgid "Connection to {} timed out. Please check your password and try again."
-msgstr ""
+msgstr "Przekroczono czas połączenia z {}. Sprawdź hasło i spróbuj ponownie."
 
 #: src/titan_core/tce_system_net.py:1022
 msgid "Connection Timeout"
-msgstr ""
+msgstr "Przekroczono czas połączenia"
 
 #: src/system/system_monitor.py:766 src/titan_core/tce_system_net.py:1028
 #: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
@@ -262,11 +262,11 @@ msgstr "Nie udało się połączyć z {}"
 
 #: src/titan_core/tce_system_net.py:1037
 msgid "Disconnected from network"
-msgstr ""
+msgstr "Rozłączono z siecią"
 
 #: src/titan_core/tce_system_net.py:1040
 msgid "Failed to disconnect"
-msgstr ""
+msgstr "Nie udało się rozłączyć"
 
 #: src/titan_core/tce_system_net.py:1151
 #, python-brace-format
@@ -279,12 +279,12 @@ msgstr "Skanowanie sieci w tle..."
 
 #: src/titan_core/tce_system_net.py:1176
 msgid "Unknown"
-msgstr ""
+msgstr "Nieznane"
 
 #: src/titan_core/tce_system_net.py:1180 src/titan_core/tce_system_net.py:1631
 #: src/titan_core/tce_system_net.py:1734
 msgid "list item"
-msgstr ""
+msgstr "element listy"
 
 #: src/titan_core/tce_system_net.py:1188 src/titan_core/tce_system_net.py:1249
 #: src/titan_core/tce_system_net.py:1724
@@ -299,7 +299,7 @@ msgstr "Niezaznaczone"
 #: src/titan_core/tce_system_net.py:1190 src/titan_core/tce_system_net.py:1251
 #: src/titan_core/tce_system_net.py:1726
 msgid "checkbox"
-msgstr ""
+msgstr "pole wyboru"
 
 #: src/titan_core/tce_system_net.py:1195
 msgid "Scanning for WiFi networks..."
@@ -342,24 +342,24 @@ msgstr "Skanowanie już trwa"
 
 #: src/titan_core/tce_system_net.py:1353
 msgid "WiFi Manager: Widget"
-msgstr ""
+msgstr "Menedżer WiFi: widżet"
 
 #: src/titan_core/tce_system_net.py:1654
 #, python-brace-format
 msgid "Enter WiFi network password for {}:"
-msgstr ""
+msgstr "Wprowadź hasło sieci WiFi {}:"
 
 #: src/titan_core/tce_system_net.py:1656
 msgid "Password: "
-msgstr ""
+msgstr "Hasło: "
 
 #: src/titan_core/tce_system_net.py:1658
 msgid "Connecting to network..."
-msgstr ""
+msgstr "Łączenie z siecią..."
 
 #: src/titan_core/tce_system_net.py:1661
 msgid "Password required"
-msgstr ""
+msgstr "Wymagane hasło"
 
 #: src/titan_core/tce_system_net.py:1664
 msgid ""
@@ -371,15 +371,15 @@ msgstr ""
 
 #: src/titan_core/tce_system_net.py:1697
 msgid "WiFi manager closed"
-msgstr ""
+msgstr "Menedżer WiFi zamknięty"
 
 #: src/titan_core/tce_system_net.py:1743
 msgid "Refreshing WiFi networks..."
-msgstr ""
+msgstr "Odświeżanie sieci WiFi..."
 
 #: src/titan_core/tce_system_net.py:1746
 msgid "Networks refreshed"
-msgstr ""
+msgstr "Sieci odświeżone"
 
 #: src/titan_core/tce_system_net.py:1756
 msgid ""
@@ -393,11 +393,11 @@ msgstr "Inicjalizacja interfejsu WiFi..."
 
 #: src/titan_core/tce_system_net.py:1770
 msgid "Creating network manager..."
-msgstr ""
+msgstr "Tworzenie menedżera sieci..."
 
 #: src/titan_core/tce_system_net.py:1784
 msgid "WiFi initialization timed out. Please try again."
-msgstr ""
+msgstr "Przekroczono czas inicjalizacji WiFi. Spróbuj ponownie."
 
 #: src/titan_core/tce_system_net.py:1785
 msgid "Timeout Error"
@@ -409,7 +409,7 @@ msgstr "Sprawdzanie interfejsów WiFi..."
 
 #: src/titan_core/tce_system_net.py:1792
 msgid "No WiFi interfaces available or WiFi initialization failed."
-msgstr ""
+msgstr "Brak dostępnych interfejsów WiFi lub inicjalizacja WiFi nie powiodła się."
 
 #: src/titan_core/tce_system_net.py:1793
 msgid "WiFi Error"
@@ -560,11 +560,11 @@ msgstr "Ekran odblokowany"
 
 #: src/ui/shutdown_question.py:14
 msgid "Are you sure you want to exit Titan?"
-msgstr ""
+msgstr "Czy na pewno chcesz zamknąć Titana?"
 
 #: src/ui/shutdown_question.py:15
 msgid "Confirm Exit"
-msgstr ""
+msgstr "Potwierdź wyjście"
 
 #: src/system/mic_permission.py:117
 msgid ""
@@ -586,7 +586,7 @@ msgstr ""
 
 #: src/system/mic_permission.py:125
 msgid "No microphone was found. Connect a microphone or headset and try again."
-msgstr ""
+msgstr "Nie znaleziono mikrofonu. Podłącz mikrofon lub zestaw słuchawkowy i spróbuj ponownie."
 "Nie znaleziono mikrofonu. Podłącz mikrofon lub słuchawki z mikrofonem i "
 "spróbuj ponownie."
 

@@ -715,6 +715,43 @@ def _emit(manager=None, mode=None):
                 compat.queueHandler.eventQueue, run)
 
 
+#: The first finger down, and the first finger that MOVES, are each a
+#: reader event with a sound of its own (`icons.READER_EVENTS`): the start
+#: of a gesture and the start of exploration. Noticed here, on the raw
+#: contacts, so both recognisers - NVDA's tracker and the add-on's own -
+#: report them the same way.
+EXPLORE_MOVE = 12
+_touch = {'down': 0, 'explored': False, 'x0': None, 'y0': None}
+
+
+def _note_contacts(contacts):
+    try:
+        from . import icons
+    except Exception:                                # noqa: BLE001
+        icons = None
+    down = [(x, y) for _identifier, x, y, is_down in contacts if is_down]
+    was = _touch['down']
+    _touch['down'] = len(down)
+    if not down:
+        _touch['explored'] = False
+        _touch['x0'] = _touch['y0'] = None
+        return
+    if was == 0:
+        _touch['explored'] = False
+        _touch['x0'], _touch['y0'] = down[0]
+        if icons is not None:
+            icons.play('reader.gesture-start')
+        return
+    if len(down) == 1 and not _touch['explored'] \
+            and _touch['x0'] is not None:
+        x, y = down[0]
+        if abs(x - _touch['x0']) >= EXPLORE_MOVE \
+                or abs(y - _touch['y0']) >= EXPLORE_MOVE:
+            _touch['explored'] = True
+            if icons is not None:
+                icons.play('reader.explore-start')
+
+
 def feed(contacts):
     """One report's worth of contacts, into NVDA's tracker.
 
@@ -736,9 +773,24 @@ def feed(contacts):
     it uses the live position while the finger is down; a tap barely
     noticed, because it is decided by how little the finger moved.
     """
+    try:
+        _note_contacts(contacts)
+    except Exception:                                # noqa: BLE001
+        pass
     manager = _tracker_manager()
     if manager is None:
-        return 0
+        # **No NVDA tracker underneath - Titan Access.** The same contacts
+        # go to the add-on's own recogniser, which speaks the same gesture
+        # names, and `touchRecognizer.listener` is where that reader
+        # decides what a gesture does.
+        try:
+            from . import touchRecognizer
+            touchRecognizer.feed(contacts)
+            with _LOCK:
+                _state['contacts'] += len(contacts)
+            return len(contacts)
+        except Exception:                            # noqa: BLE001
+            return 0
     seen = set()
     for identifier, x, y, down in contacts:
         seen.add(identifier)
@@ -1066,6 +1118,17 @@ def stop():
 def toggle():
     if running():
         stop()
+        try:
+            from . import icons
+            icons.play('reader.trackpad-off')
+        except Exception:                            # noqa: BLE001
+            pass
         return False, _('Trackpad gestures off.')
     ok, said = start()
+    if ok:
+        try:
+            from . import icons
+            icons.play('reader.trackpad-on')
+        except Exception:                            # noqa: BLE001
+            pass
     return ok, said

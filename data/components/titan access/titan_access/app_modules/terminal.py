@@ -68,6 +68,7 @@ class TerminalModule(AppModuleBase):
         "windowsterminal", "wt", "windowsterminalpreview",
         "putty", "kitty", "mintty", "bash", "wsl", "wslhost",
         "cmder", "conemu", "conemu64", "alacritty", "hyper",
+        "mobaxterm", "tabby", "wezterm-gui", "securecrt",
     }
     process_name = "cmd"     # primary key (used for app_name / gestures)
 

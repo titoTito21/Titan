@@ -395,6 +395,9 @@ def build(plugin):
     # Translators: an entry in the Titan menu.
     builder.item(managers, _('Voices and reading order...'),
                  lambda: _run_command('voice_classes'))
+    # Translators: an entry in the Titan menu.
+    builder.item(managers, _('Speech schemes...'),
+                 lambda: _run_command('speech_schemes'))
     # Translators: a submenu of the Titan menu.
     menu.AppendSubMenu(managers, _('Managers'))
 

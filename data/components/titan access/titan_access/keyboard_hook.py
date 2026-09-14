@@ -346,7 +346,8 @@ class KeyboardHook:
             name = _ARROW_TO_NUMPAD.get(key_name, key_name)
             try:
                 if self.engine.on_modifier_gesture(vk, name, self._ctrl,
-                                                   self._alt, self._shift):
+                                                   self._alt, self._shift,
+                                                   with_modifier=True):
                     return True
             except Exception as e:
                 print(f"[TitanAccess] keyboard_hook: modifier gesture error: {e}")

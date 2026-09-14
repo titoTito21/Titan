@@ -79,7 +79,7 @@ msgstr "Utwórz: {kind}..."
 
 #: src/ui/menu.py:193
 msgid "Enable AI features in Settings, AI features"
-msgstr ""
+msgstr "Włącz funkcje SI w Ustawieniach, w kategorii Funkcje SI"
 "Włącz składniki sztucznej inteligencji w Ustawieniach, Składniki "
 "sztucznej inteligencji"
 
@@ -143,7 +143,7 @@ msgstr "Menedżer komponentów"
 
 #: src/ui/menu.py:282
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr ""
+msgstr "Nie można wczytać Menedżera komponentów (nie znaleziono componentmanagergui.py)"
 "Nie można załadować Menedżera komponentów (nie znaleziono "
 "componentmanagergui.py)"
 

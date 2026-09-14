@@ -105,9 +105,49 @@ SHARED = (
     # And the palette that walks them - a list in the same shape as every
     # other list either reader walks, rather than a modal dialog.
     'palette.py',
+    # One review at a time: the palette, the virtual window and the widget
+    # review each end the others through this. It was imported by all of
+    # them and vendored by nobody, so in Titan Access the virtual window,
+    # the palette and everything walked on top of them failed on
+    # `cannot import name 'reviews'` - the virtual window that "does not
+    # exist".
+    'reviews.py',
+    # The words for a role and a state, which the virtual window asks for
+    # every row - and the focus context the bus serves. Written against
+    # `compat` alone, so it answers in both readers.
+    'context.py',
     # The trackpad in every walked list - the table of what each gesture
     # does, and the finger exploration the lists answer.
     'touchWalk.py',
+    # The switches the shared modules ask about, answered by whichever
+    # reader is underneath; the recogniser that turns raw contacts into
+    # gestures where there is no NVDA tracker; the busy and attention
+    # watchers, which are win32 and nothing else.
+    'switchboard.py',
+    'touchRecognizer.py',
+    'states.py',
+    # The seam the shared modules ask the reader through, and everything
+    # that reaches Titan Access only through it: the guest reader and the
+    # native text-mode tier under it, the agent channel, the drawn text of
+    # a window, and the two manager windows on the plain-wx kit.
+    'readerApi.py',
+    'guest.py',
+    'guestNative.py',
+    'vgaFont.py',
+    'vmware.py',
+    'drawnText.py',
+    'agentLink.py',
+    'wxkit.py',
+    'managerGui.py',
+    'classManager.py',
+    'personalities.py',
+    # The smart OCR cursor over a drawn window, and the kind of a picture.
+    'smart.py',
+    'graphics.py',
+    # JAWS-like speech schemes: how each kind of control is announced, in
+    # speech and in braille, and the walked editor of them.
+    'speechSchemes.py',
+    'schemeWalk.py',
     # Titan's own typed doorway, asked the same way in both readers. It is
     # built entirely on one call, so the add-on's pipe and Titan Access's
     # direct call are the same file with two `link` shims under it.
@@ -174,7 +214,8 @@ SHARED_PACKAGES = ('readerModules',)
 #: this reader - `_` through its own catalogue, NVDA's services through
 #: its own, and Titan directly rather than over a pipe, because Titan
 #: Access is not on the other side of anything.
-SHIMS = ('__init__.py', 'i18n.py', 'compat.py', 'link.py')
+SHIMS = ('__init__.py', 'i18n.py', 'compat.py', 'link.py',
+         'elements.py', 'configSpec.py')
 
 
 def _pairs():

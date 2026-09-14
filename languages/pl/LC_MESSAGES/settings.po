@@ -532,11 +532,11 @@ msgstr "Klucz API"
 
 #: src/ui/settingsgui.py:1333
 msgid "Claude CLI"
-msgstr ""
+msgstr "Claude CLI"
 
 #: src/ui/settingsgui.py:1333
 msgid "Codex CLI"
-msgstr ""
+msgstr "Codex CLI"
 
 #: src/ui/settingsgui.py:1340
 msgid "AI provider:"
@@ -927,16 +927,16 @@ msgstr "Brak opisu."
 
 #: src/ui/settingsgui.py:2643 src/ui/settingsgui.py:2675
 msgid "This feature is only available on Windows."
-msgstr ""
+msgstr "Ta funkcja jest dostępna tylko w systemie Windows."
 
 #: src/ui/settingsgui.py:2643 src/ui/settingsgui.py:2675
 msgid "Information"
-msgstr ""
+msgstr "Informacja"
 
 #: src/ui/settingsgui.py:2653 src/ui/settingsgui.py:2692
 #, python-brace-format
 msgid "Command '{}' finished with error code {}.\n"
-msgstr ""
+msgstr "Polecenie „{}” zakończyło się kodem błędu {}.\\n"
 
 #: src/ui/settingsgui.py:2659
 #, python-brace-format
@@ -1103,11 +1103,11 @@ msgstr ""
 
 #: src/ui/settingsgui.py:3268
 msgid "Settings have been saved."
-msgstr ""
+msgstr "Ustawienia zostały zapisane."
 
 #: src/ui/settingsgui.py:3597
 msgid "macOS Speech"
-msgstr ""
+msgstr "Mowa macOS"
 
 #: src/ui/settingsgui.py:3598
 msgid "Speech Dispatcher"
@@ -1115,7 +1115,7 @@ msgstr "Speech Dispatcher"
 
 #: src/ui/settingsgui.py:3766 src/ui/settingsgui.py:3771
 msgid "Default voice"
-msgstr ""
+msgstr "Głos domyślny"
 
 #: src/settings/configvizard.py:160 src/settings/configvizard.py:615
 msgid "Welcome to Titan!"
@@ -1186,7 +1186,7 @@ msgstr "Stwórz konto titan-net"
 
 #: src/settings/configvizard.py:538
 msgid "On this step you can enable features that may affect the operating system."
-msgstr ""
+msgstr "W tym kroku możesz włączyć funkcje, które mogą wpływać na system operacyjny."
 "Na tym etapie możesz włączyć funkcje, które mogą mieć wpływ na system "
 "operacyjny."
 

@@ -68,6 +68,14 @@ _recording = {'on': False, 'name': '', 'steps': [], 'program': ''}
 _state = {'ran': 0, 'failed': 0, 'why': ''}
 
 
+def _event(name):
+    try:
+        from . import icons
+        icons.play(name)
+    except Exception:                                # noqa: BLE001
+        pass
+
+
 def report():
     with _LOCK:
         return dict(_state, recording=_recording['on'],
@@ -203,6 +211,7 @@ def start_recording(name=''):
         _recording.update({'on': True, 'name': str(name or ''), 'steps': [],
                            'program': anchors.program_of()})
     # Translators: said when recording a procedure starts.
+    _event('reader.procedure-recording')
     return True, _('Recording on')
 
 
@@ -229,6 +238,7 @@ def stop_recording(name=''):
     save()
     # Translators: said when a procedure is kept. {what} is its name, {n}
     # how many steps.
+    _event('reader.procedure-kept')
     return True, _('Kept {what}, {n} steps').format(what=said, n=len(steps))
 
 
@@ -285,11 +295,8 @@ def note_press(obj=None):
     if not recording():
         return False
     if obj is None:
-        try:
-            import api
-            obj = api.getFocusObject()
-        except Exception:                            # noqa: BLE001
-            obj = None
+        from . import readerApi
+        obj = readerApi.focus()
     note_focus(obj)
     step = {'do': PRESS, 'what': anchors.describe(obj) if obj else ''}
     anchor = anchors.anchor_for(obj) if obj is not None else None
@@ -412,6 +419,7 @@ def run(procedure, say=None):
     with _LOCK:
         _state['ran'] += 1
     # Translators: said when a procedure has finished. {what} is its name.
+    _event('reader.procedure-done')
     return True, _('{what}: done').format(what=procedure.get('name') or '')
 
 
@@ -425,14 +433,9 @@ def _do(step, at):
             return False, _('Step {n}: {what} is not there').format(
                 n=at, what=step.get('what') or '')
         if kind in (GO, WAIT):
-            try:
-                obj.setFocus()
-            except Exception:                        # noqa: BLE001
-                try:
-                    import api
-                    api.setNavigatorObject(obj)
-                except Exception:                    # noqa: BLE001
-                    pass
+            from . import readerApi
+            if not readerApi.set_focus(obj):
+                readerApi.navigate_to(obj)
             return True, ''
         return _press(obj, at)
     if kind == PRESS:
@@ -442,13 +445,13 @@ def _do(step, at):
         # before it was a `go` to a control that WAS found, so the focus is
         # where the recording left it and not wherever the user happens to
         # be.
-        try:
-            import api
-            return _press(api.getFocusObject(), at)
-        except Exception:                            # noqa: BLE001
+        from . import readerApi
+        focused = readerApi.focus()
+        if focused is None:
             # Translators: said when a step could not be done. {n} is the
             # step's number.
             return False, _('Step {n} could not be done').format(n=at)
+        return _press(focused, at)
     if kind == TYPE:
         return _type(step.get('text') or '', at)
     if kind == KEY:
@@ -466,34 +469,25 @@ def _press(obj, at):
     """
     if obj is None:
         return False, _('Step {n} could not be done').format(n=at)
-    try:
-        if int(getattr(obj, 'actionCount', 0) or 0) > 0:
-            obj.doAction(0)
-            return True, ''
-    except Exception:                                # noqa: BLE001
-        pass
+    from . import readerApi
+    if readerApi.do_action(obj):
+        return True, ''
     return _key('enter', at)
 
 
 def _type(text, at):
-    try:
-        import keyboardHandler
-        for character in str(text):
-            keyboardHandler.KeyboardInputGesture.fromName(
-                character if character != ' ' else 'space').send()
+    from . import readerApi
+    if readerApi.type_text(str(text)):
         return True, ''
-    except Exception:                                # noqa: BLE001
-        # Translators: said when a step could not type. {n} is the step.
-        return False, _('Step {n}: the text could not be typed').format(n=at)
+    # Translators: said when a step could not type. {n} is the step.
+    return False, _('Step {n}: the text could not be typed').format(n=at)
 
 
 def _key(name, at):
-    try:
-        import keyboardHandler
-        keyboardHandler.KeyboardInputGesture.fromName(str(name)).send()
+    from . import readerApi
+    if readerApi.send_key(str(name)):
         return True, ''
-    except Exception:                                # noqa: BLE001
-        # Translators: said when a step's key could not be sent. {n} is the
-        # step, {key} the key.
-        return False, _('Step {n}: the key {key} could not be sent').format(
-            n=at, key=name)
+    # Translators: said when a step's key could not be sent. {n} is the
+    # step, {key} the key.
+    return False, _('Step {n}: the key {key} could not be sent').format(
+        n=at, key=name)

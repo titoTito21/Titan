@@ -86,12 +86,74 @@ class ExplorerModule(AppModuleBase):
         self._dir_cache = None
         super().on_lose_focus(obj)
 
+    @staticmethod
+    def _is_file_row(obj):
+        """A row of a FOLDER view, and not of explorer's other lists.
+
+        explorer.exe also owns the Alt+Tab switcher, the taskbar and the
+        Start menu's XAML surfaces, whose list items are windows and
+        apps: reading "Battle.net, folder" there was this module
+        mistaking every row of the task switcher for a file. A folder
+        view is DirectUI; the switcher is XAML.
+        """
+        fw = (getattr(obj, "framework_id", "") or "").upper()
+        if fw == "XAML":
+            return False
+        klass = (getattr(obj, "class_name", "") or "")
+        if klass in ("ListViewItem", "TextBlock"):
+            return False
+        return True
+
+    @staticmethod
+    def _has_cells(obj):
+        """A details-view row carries its columns as children; the Type
+        column is then read by the semantics layer and a second type word
+        from the extension would say it twice."""
+        native = getattr(obj, "native", None)
+        if native is None:
+            return False
+        try:
+            return len(native.GetChildren() or []) > 1
+        except Exception:
+            return False
+
+    def _row_of_cell(self, obj):
+        """Explorer reports the focus on a CELL of a row (a ``UIProperty``
+        edit named for its column) as the arrows move; what the user is on
+        is the row. Re-target the snapshot at the row, cells and all."""
+        if obj.role != ROLE_EDIT or obj.class_name != "UIProperty":
+            return obj
+        native = getattr(obj, "native", None)
+        provider = getattr(self.engine, "provider", None)
+        if native is None or provider is None:
+            return obj
+        try:
+            parent = native.GetParentControl()
+            if parent is None or parent.ControlTypeName != "ListItemControl":
+                return obj
+            row = provider.element_to_object(parent)
+        except Exception:
+            return obj
+        if row is None:
+            return obj
+        for field in ("native", "name", "role", "states", "value",
+                      "description", "bounds", "automation_id", "class_name",
+                      "pos_in_set", "size_of_set", "level", "hwnd"):
+            try:
+                setattr(obj, field, getattr(row, field))
+            except Exception:
+                continue
+        return obj
+
     def customize_object(self, obj):
         if obj is None:
             return obj
+        obj = self._row_of_cell(obj)
         try:
             # File / folder list items: append a friendly type description.
             if obj.role in (ROLE_LISTITEM, ROLE_GRIDITEM):
+                if not self._is_file_row(obj) or self._has_cells(obj):
+                    return obj
                 name = obj.name or ""
                 if name:
                     if "." in name:

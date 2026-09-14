@@ -1776,7 +1776,7 @@ msgstr "moderator"
 #: src/network/titan_net_gui.py:5465
 #, python-brace-format
 msgid "Your thread {title} was moved from {source} to {destination} by {user}"
-msgstr ""
+msgstr "Twój wątek {title} został przeniesiony z {source} do {destination} przez użytkownika {user}"
 "Twój wątek {title} został przeniesiony z {source} do {destination} przez "
 "{user}"
 
@@ -2379,7 +2379,7 @@ msgstr "jego obecne forum"
 #: src/network/titan_net_gui.py:6961
 #, python-brace-format
 msgid "Move request sent to the moderators of {group} for approval"
-msgstr ""
+msgstr "Prośba o przeniesienie została wysłana do moderatorów grupy {group} do zatwierdzenia"
 "Prośba o przeniesienie wysłana do moderatorów grupy {group} do "
 "zatwierdzenia"
 
@@ -3874,7 +3874,7 @@ msgstr "Otwórz w edytorze"
 #: src/network/titan_net_mod_components.py:1668
 #, python-brace-format
 msgid "Enter your {provider} API key. It is stored locally for future use."
-msgstr ""
+msgstr "Wprowadź swój klucz API {provider}. Jest przechowywany lokalnie do przyszłego użytku."
 "Wprowadź swój klucz API {provider}. Zostanie zapisany lokalnie do "
 "przyszłego użytku."
 
@@ -3911,7 +3911,7 @@ msgstr "(zaktualizowano kod komponentu — {n} linii)"
 
 #: src/network/titan_net_mod_components.py:1727
 msgid "Generated. Refine further, or Open in Editor to review and save."
-msgstr ""
+msgstr "Wygenerowano. Dopracuj dalej lub otwórz w edytorze, aby przejrzeć i zapisać."
 "Wygenerowano. Doprecyzuj dalej lub otwórz w edytorze, aby przejrzeć i "
 "zapisać."
 
@@ -4952,7 +4952,7 @@ msgstr "Błąd otwierania ustawień"
 
 #: src/system/klangomode.py:1196 src/system/klangomode.py:2298
 msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr ""
+msgstr "Nie można wczytać Menedżera komponentów (nie znaleziono componentmanagergui.py)"
 "Nie można załadować Menedżera komponentów (nie znaleziono "
 "componentmanagergui.py)"
 

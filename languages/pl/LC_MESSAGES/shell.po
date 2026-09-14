@@ -1038,7 +1038,7 @@ msgstr "Wyloguj"
 
 #: src/shell/shutdown_dialog.py:58
 msgid "Ends your current session and allows other users to log on to the system."
-msgstr ""
+msgstr "Kończy bieżącą sesję i pozwala innym użytkownikom zalogować się do systemu."
 "Kończy bieżącą sesję i pozwala innym użytkownikom zalogować się do "
 "systemu."
 
@@ -1497,7 +1497,7 @@ msgstr "Szczegóły"
 #: src/shell/explorer.py:1266
 #, python-brace-format
 msgid "Windows cannot find {name}. Check the spelling and try again."
-msgstr ""
+msgstr "System Windows nie może znaleźć {name}. Sprawdź pisownię i spróbuj ponownie."
 "Nie można odnaleźć „{name}”. Sprawdź, czy nazwa została wpisana "
 "poprawnie, i spróbuj ponownie."
 

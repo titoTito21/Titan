@@ -77,13 +77,13 @@ def forget():
 
 
 def wanted():
-    from . import configSpec
-    return bool(configSpec.read().get('liveRegions', True))
+    from . import switchboard
+    return switchboard.read('liveRegions', True)
 
 
 def status_bars_wanted():
-    from . import configSpec
-    return bool(configSpec.read().get('liveStatusBars', True))
+    from . import switchboard
+    return switchboard.read('liveStatusBars', True)
 
 
 def _text(value):
@@ -181,6 +181,12 @@ def announce(text, politeness='polite', prefix=''):
     speech = compat.speech
     if speech is None:
         return False
+
+    try:
+        from . import icons
+        icons.play('reader.live-region')
+    except Exception:                                # noqa: BLE001
+        pass
 
     def speak():
         try:

@@ -215,120 +215,120 @@ msgstr "Przygotowywanie połączenia z Telegramem..."
 
 #: src/network/telegram_windows.py:24 src/network/telegram_windows.py:321
 msgid "Wiadomości prywatne z"
-msgstr ""
+msgstr "Wiadomości prywatne z"
 
 #: src/network/telegram_windows.py:68
 msgid "Online"
-msgstr ""
+msgstr "Online"
 
 #: src/network/telegram_windows.py:101
 msgid "Wyślij"
-msgstr ""
+msgstr "Wyślij"
 
 #: src/network/telegram_windows.py:271
 msgid "Nie udało się wysłać wiadomości"
-msgstr ""
+msgstr "Nie udało się wysłać wiadomości"
 
 #: src/network/telegram_windows.py:271
 msgid "Błąd"
-msgstr ""
+msgstr "Błąd"
 
 #: src/network/telegram_windows.py:291 src/network/telegram_windows.py:813
 msgid "Voice message"
-msgstr ""
+msgstr "Wiadomość głosowa"
 
 #: src/network/telegram_windows.py:337
 msgid "Historia rozmowy z"
-msgstr ""
+msgstr "Historia rozmowy z"
 
 #: src/network/telegram_windows.py:374
 msgid "Połączenie wychodzące"
-msgstr ""
+msgstr "Połączenie wychodzące"
 
 #: src/network/telegram_windows.py:374
 msgid "Połączenie przychodzące"
-msgstr ""
+msgstr "Połączenie przychodzące"
 
 #: src/network/telegram_windows.py:375
 msgid "Rozmowa z"
-msgstr ""
+msgstr "Rozmowa z"
 
 #: src/network/telegram_windows.py:424
 msgid "Dzwonisz do"
-msgstr ""
+msgstr "Dzwonisz do"
 
 #: src/network/telegram_windows.py:424
 msgid "Połączenie przychodzące od"
-msgstr ""
+msgstr "Połączenie przychodzące od"
 
 #: src/network/telegram_windows.py:436
 msgid "Łączenie..."
-msgstr ""
+msgstr "Łączenie..."
 
 #: src/network/telegram_windows.py:449 src/network/telegram_windows.py:519
 #: src/network/telegram_windows.py:524
 msgid "Wycisz"
-msgstr ""
+msgstr "Wycisz"
 
 #: src/network/telegram_windows.py:453
 msgid "Zakończ"
-msgstr ""
+msgstr "Zakończ"
 
 #: src/network/telegram_windows.py:464
 msgid "Skróty: Spacja=Wycisz/Włącz • Escape=Zakończ"
-msgstr ""
+msgstr "Skróty: Spacja=Wycisz/Włącz • Escape=Zakończ"
 
 #: src/network/telegram_windows.py:490 src/network/telegram_windows.py:525
 msgid "Połączono - rozmowa aktywna"
-msgstr ""
+msgstr "Połączono - rozmowa aktywna"
 
 #: src/network/telegram_windows.py:514
 msgid "Łączenie"
-msgstr ""
+msgstr "Łączenie"
 
 #: src/network/telegram_windows.py:520
 msgid "Włącz"
-msgstr ""
+msgstr "Włącz"
 
 #: src/network/telegram_windows.py:521
 msgid "Mikrofon wyciszony"
-msgstr ""
+msgstr "Mikrofon wyciszony"
 
 #: src/network/telegram_windows.py:551 src/network/telegram_windows.py:844
 msgid "Group chat"
-msgstr ""
+msgstr "Czat grupowy"
 
 #: src/network/telegram_windows.py:595
 msgid "Active"
-msgstr ""
+msgstr "Aktywne"
 
 #: src/network/telegram_windows.py:788
 msgid "Me"
-msgstr ""
+msgstr "Ja"
 
 #: src/network/telegram_windows.py:860
 msgid "Group chat history"
-msgstr ""
+msgstr "Historia czatu grupowego"
 
 #: src/network/telegram_windows.py:917
 msgid "Incoming call"
-msgstr ""
+msgstr "Połączenie przychodzące"
 
 #: src/network/telegram_windows.py:970
 msgid "CALL"
-msgstr ""
+msgstr "POŁĄCZENIE"
 
 #: src/network/telegram_windows.py:983
 msgid "Incoming call from:"
-msgstr ""
+msgstr "Połączenie przychodzące od:"
 
 #: src/network/telegram_windows.py:1000
 msgid "Reject"
-msgstr ""
+msgstr "Odrzuć"
 
 #: src/network/telegram_windows.py:1008
 msgid "Accept"
-msgstr ""
+msgstr "Odbierz"
 
 #: src/network/telegram_gui.py:146
 msgid "Settings"

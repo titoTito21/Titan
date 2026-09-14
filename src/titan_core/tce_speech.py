@@ -284,6 +284,35 @@ def _init():
 _reader_speaker = None
 
 
+_private_reader_speaker = None
+
+
+def get_private_reader_engine():
+    """A ``StereoSpeech`` that is the READER's alone.
+
+    `get_reader_engine` shares Titan's own engine whenever stereo speech is
+    on, which is right for a reader that sounds like Titan and wrong for
+    one the user has given a voice of its own: a rate set on a shared
+    engine is a rate set on every app and game. This one is never shared.
+    """
+    global _private_reader_speaker
+    if _private_reader_speaker is not None:
+        return _private_reader_speaker
+    _init()
+    with _init_lock:
+        if _private_reader_speaker is not None:
+            return _private_reader_speaker
+        try:
+            from src.titan_core.stereo_speech import StereoSpeech
+            speaker = StereoSpeech()
+            _apply_stereo_settings(speaker)
+            _private_reader_speaker = speaker
+            return speaker
+        except Exception as e:
+            print(f"[tce_speech] get_private_reader_engine failed: {e}")
+            return None
+
+
 def get_reader_engine():
     """Return a real Titan ``StereoSpeech`` engine dedicated to Titan Access.
 

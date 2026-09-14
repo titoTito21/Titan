@@ -22,35 +22,35 @@ msgstr ""
 
 #: src/accessibility/messages.py:143
 msgid "Not set"
-msgstr ""
+msgstr "Nie ustawiono"
 
 #: src/accessibility/messages.py:146
 msgid "Ctrl"
-msgstr ""
+msgstr "Ctrl"
 
 #: src/accessibility/messages.py:147
 msgid "Shift"
-msgstr ""
+msgstr "Shift"
 
 #: src/accessibility/messages.py:148
 msgid "Alt"
-msgstr ""
+msgstr "Alt"
 
 #: src/accessibility/messages.py:149
 msgid "Win"
-msgstr ""
+msgstr "Win"
 
 #: src/accessibility/messages.py:150
 msgid "Cmd"
-msgstr ""
+msgstr "Cmd"
 
 #: src/accessibility/messages.py:151
 msgid "Accent"
-msgstr ""
+msgstr "Akcent"
 
 #: src/accessibility/messages.py:152
 msgid "Space"
-msgstr ""
+msgstr "Spacja"
 
 #: src/accessibility/messages.py:153
 msgid "Tab"
@@ -58,55 +58,55 @@ msgstr "Tab"
 
 #: src/accessibility/messages.py:154
 msgid "Enter"
-msgstr ""
+msgstr "Enter"
 
 #: src/accessibility/messages.py:155
 msgid "Escape"
-msgstr ""
+msgstr "Escape"
 
 #: src/accessibility/messages.py:156
 msgid "Backspace"
-msgstr ""
+msgstr "Backspace"
 
 #: src/accessibility/messages.py:157
 msgid "Delete"
-msgstr ""
+msgstr "Delete"
 
 #: src/accessibility/messages.py:158
 msgid "Insert"
-msgstr ""
+msgstr "Insert"
 
 #: src/accessibility/messages.py:159
 msgid "Home"
-msgstr ""
+msgstr "Home"
 
 #: src/accessibility/messages.py:160
 msgid "End"
-msgstr ""
+msgstr "End"
 
 #: src/accessibility/messages.py:161
 msgid "Page Up"
-msgstr ""
+msgstr "Page Up"
 
 #: src/accessibility/messages.py:162
 msgid "Page Down"
-msgstr ""
+msgstr "Page Down"
 
 #: src/accessibility/messages.py:163
 msgid "Up"
-msgstr ""
+msgstr "Góra"
 
 #: src/accessibility/messages.py:164
 msgid "Down"
-msgstr ""
+msgstr "Dół"
 
 #: src/accessibility/messages.py:165
 msgid "Left"
-msgstr ""
+msgstr "Lewo"
 
 #: src/accessibility/messages.py:166
 msgid "Right"
-msgstr ""
+msgstr "Prawo"
 
 #: src/accessibility/messages.py:192
 #, python-brace-format

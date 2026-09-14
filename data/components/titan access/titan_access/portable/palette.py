@@ -50,13 +50,61 @@ _LOCK = threading.RLock()
 #: it closes, and ``title`` is what the level is called.
 _state = {'on': False, 'rows': [], 'at': 0, 'title': '', 'back': None,
           'letter': 0, 'inner': 0, 'depth': None,
-          'kind': ''}
+          'kind': '', 'hwnd': 0}
 
 _counted = {'opened': 0, 'ran': 0, 'went_back': 0, 'closed': 0}
 
 
 def _text(value):
     return str(value or '').strip()
+
+
+def _foreground_hwnd():
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        return int(user32.GetForegroundWindow() or 0)
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
+def _window_exists(hwnd):
+    try:
+        import ctypes
+        return bool(ctypes.windll.user32.IsWindow(ctypes.c_void_p(int(hwnd))))
+    except Exception:                                # noqa: BLE001
+        return True
+
+
+def left_the_window():
+    """Whether the palette is up but the user has gone somewhere else.
+
+    A list that outlived the window it was opened over swallows the
+    arrows in whatever the user moved to - reported as "the arrow keys
+    sometimes do not work", which is exactly what a walked message left
+    open behind an Alt+Tab looks like from outside. So a change of the
+    top-level window in front closes it, the way the virtual window and
+    the OCR review already close.
+
+    Two things are NOT leaving: a window that has gone (the dialog a row
+    opened, now closed - the palette was put back up while that dialog
+    still had the foreground, so the handle it kept is the dialog's), and
+    no foreground at all. Either adopts the window in front.
+    """
+    if not walking():
+        return False
+    now = _foreground_hwnd()
+    with _LOCK:
+        was = int(_state['hwnd'] or 0)
+    if not now or now == was:
+        return False
+    if not was or not _window_exists(was):
+        with _LOCK:
+            _state['hwnd'] = now
+        return False
+    stop()
+    return True
 
 
 def walking():
@@ -83,6 +131,7 @@ def report():
 # Saying
 # --------------------------------------------------------------------------- #
 def _say(text):
+    _spoke()
     if compat.queueHandler is None or compat.ui is None:
         return
 
@@ -100,6 +149,7 @@ def _say_parts(parts):
     is in the list higher."""
     if not parts:
         return
+    _spoke()
     try:
         from . import elements
         sequence = elements.sequence(parts)
@@ -113,6 +163,20 @@ def _say_parts(parts):
         voices.speak_sequence(sequence)
     except Exception:                                # noqa: BLE001
         _say(', '.join(str(text) for text, _voice in parts))
+
+
+def spoken():
+    """How many times this list has spoken. A caller that has just asked
+    for a move compares before and after: a move that spoke for itself
+    must not be REPORTED as well, which was every row of a walked list
+    said twice - "Gry, 2 z 13, gry 2 z 13"."""
+    with _LOCK:
+        return int(_state.get('spoke') or 0)
+
+
+def _spoke():
+    with _LOCK:
+        _state['spoke'] = int(_state.get('spoke') or 0) + 1
 
 
 def _beep(at, count):
@@ -129,6 +193,8 @@ def _beep(at, count):
 
 
 def _edge():
+    if icons.play('reader.edge'):
+        return
     if compat.tones is None:
         return
     try:
@@ -213,9 +279,13 @@ def show(rows, title, back=None, kind='', at=0):
                        'title': _text(title), 'back': back,
                        'letter': 0, 'inner': 0, 'depth': None,
                        'kind': _text(kind)})
+        if first:
+            # The window this was opened over: a level put up on top of
+            # another keeps the first one's, since the user has not moved.
+            _state['hwnd'] = _foreground_hwnd()
         _counted['opened'] += 1
     if first:
-        icons.play('open-object')
+        icons.play('reader.palette-open')
     if title:
         _say(_text(title))
     if kind == 'text':
@@ -314,6 +384,7 @@ def move_corner(dx_sign, dy_sign):
         _state['letter'] = 0
         _state['depth'] = None
     name = corner_name(dx_sign, dy_sign)
+    icons.play('reader.corner')
     if dx_sign <= 0:
         return say_here(prefix=[(name, 'place')])
     return _say_end(prefix=[(name, 'place')])
@@ -445,7 +516,7 @@ def explore(x, y):
         _state['inner'] = 0
         _state['letter'] = 0
         _state['depth'] = None
-    return say_here()
+    return say_here(beep=not icons.play('reader.explore'))
 
 
 def _word_bounded(delta):
@@ -623,7 +694,7 @@ def stop():
         if was:
             _counted['closed'] += 1
     if was:
-        icons.play('close-object')
+        icons.play('reader.palette-close')
     if kind == 'text':
         # Translators: said when a long answer being walked is closed.
         # The pair with 'Message'.

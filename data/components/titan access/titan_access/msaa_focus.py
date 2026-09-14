@@ -59,6 +59,7 @@ _STATE_OFFSCREEN = "offscreen"
 # --------------------------------------------------------------------------- #
 EVENT_SYSTEM_FOREGROUND = 0x0003
 EVENT_OBJECT_FOCUS = 0x8005
+EVENT_OBJECT_STATECHANGE = 0x800A
 
 WINEVENT_OUTOFCONTEXT = 0x0000
 WINEVENT_SKIPOWNPROCESS = 0x0002
@@ -349,6 +350,7 @@ class MSAAProvider:
 
     def __init__(self):
         self._listeners: List[FocusCallback] = []
+        self._state_listeners = []
         self._lock = threading.RLock()
         self._hooks = []
         self._proc = None
@@ -367,6 +369,16 @@ class MSAAProvider:
     @property
     def available(self) -> bool:
         return self._available
+
+    def add_state_listener(self, callback) -> None:
+        """Hear ``EVENT_OBJECT_STATECHANGE`` as a snapshot of the control
+        whose state moved - which is how a check box ticked under the
+        focus, by Space or by the mouse, is heard at all: no focus event
+        follows a tick. UI Automation raises the same WinEvent for its own
+        controls, so this covers WinUI and WPF as well as Win32."""
+        with self._lock:
+            if callback not in self._state_listeners:
+                self._state_listeners.append(callback)
 
     def add_focus_listener(self, callback: FocusCallback) -> None:
         with self._lock:
@@ -399,7 +411,9 @@ class MSAAProvider:
             flags = WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS
             for ev_min, ev_max in ((EVENT_SYSTEM_FOREGROUND,
                                     EVENT_SYSTEM_FOREGROUND),
-                                   (EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS)):
+                                   (EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS),
+                                   (EVENT_OBJECT_STATECHANGE,
+                                    EVENT_OBJECT_STATECHANGE)):
                 h = _user32.SetWinEventHook(ev_min, ev_max, 0, self._proc,
                                             0, 0, flags)
                 if h:
@@ -469,16 +483,28 @@ class MSAAProvider:
     # -- event handling ---------------------------------------------------- #
     def _on_win_event(self, hWinEventHook, event, hwnd, id_object, id_child,
                       thread, time_ms):
-        # Only react to focus / foreground; ignore caret, menus, etc.
-        if event not in (EVENT_OBJECT_FOCUS, EVENT_SYSTEM_FOREGROUND):
+        # Only react to focus / foreground / a state change; ignore caret,
+        # location changes, etc.
+        if event not in (EVENT_OBJECT_FOCUS, EVENT_SYSTEM_FOREGROUND,
+                         EVENT_OBJECT_STATECHANGE):
+            return
+        if event == EVENT_OBJECT_STATECHANGE and not self._state_listeners:
             return
         try:
             acc, child = _AccessibleObjectFromEvent(hwnd, id_object, id_child)
             if acc is None:
                 return
             obj = self._build(acc, child, int(hwnd) if hwnd else 0)
-            if obj is not None:
-                self._dispatch(obj)
+            if obj is None:
+                return
+            if event == EVENT_OBJECT_STATECHANGE:
+                for cb in list(self._state_listeners):
+                    try:
+                        cb(obj)
+                    except Exception as e:
+                        print(f"[TitanAccess] msaa: state listener error: {e}")
+                return
+            self._dispatch(obj)
         except Exception as e:  # never raise into the WinEvent callback
             print(f"[TitanAccess] msaa: event error: {e}")
 

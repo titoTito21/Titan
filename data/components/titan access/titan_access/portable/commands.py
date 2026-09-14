@@ -969,6 +969,32 @@ def voice_classes_as_a_form():
 
 
 # --------------------------------------------------------------------------- #
+# The speech schemes
+# --------------------------------------------------------------------------- #
+def speech_schemes():
+    """How each KIND of control is announced - JAWS's schemes - walked
+    and edited with the arrows and Enter; the form is a row on it."""
+    from . import schemeWalk
+    ok, said = schemeWalk.open_it()
+    if not ok and said:
+        _refused(said)
+
+
+def speech_schemes_as_a_form():
+    from . import classManager
+    if not classManager.show(page='schemes'):
+        _refused(_('The speech schemes need NVDA\'s own interface.'))
+
+
+def next_speech_scheme():
+    """The next scheme, made the one in force, and said."""
+    from . import speechSchemes
+    _key, label = speechSchemes.cycle(1)
+    # Translators: said when the speech scheme changes. {name} is its name.
+    dialogs.report(_('Scheme: {name}').format(name=label))
+
+
+# --------------------------------------------------------------------------- #
 # Naming what the program never named
 # --------------------------------------------------------------------------- #
 def label_control():

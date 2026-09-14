@@ -23,6 +23,7 @@ from . import anchors            # noqa: F401
 from . import appReview          # noqa: F401
 from . import appScreen          # noqa: F401
 from . import classes            # noqa: F401
+from . import context            # noqa: F401
 from . import commands           # noqa: F401
 from . import dialog_kind        # noqa: F401
 from . import dialogs            # noqa: F401
@@ -43,6 +44,7 @@ from . import monitors           # noqa: F401
 from . import palette            # noqa: F401
 from . import perProgram         # noqa: F401
 from . import procedures         # noqa: F401
+from . import reviews            # noqa: F401
 from . import sceneModel         # noqa: F401
 from . import schemes            # noqa: F401
 from . import shared             # noqa: F401
@@ -66,7 +68,10 @@ __all__ = [
     'iconNames', 'icons', 'journal', 'labels', 'layers', 'localOcr',
     'managerWalk', 'markers', 'menu', 'menuWalk', 'monitors',
     'palette', 'perProgram', 'procedures', 'sceneModel', 'schemes',
-    'touchWalk',
+    'touchWalk', 'switchboard', 'touchRecognizer', 'states',
+    'readerApi', 'guest', 'guestNative', 'vgaFont', 'vmware', 'drawnText',
+    'agentLink', 'wxkit', 'managerGui', 'classManager', 'personalities', 'smart', 'graphics',
+    'speechSchemes', 'schemeWalk', 'reviews', 'context',
     'shared', 'surface', 'textField', 'titan', 'titanWalk',
     'titanWindow', 'toolkit', 'trackpad', 'verify', 'virtualInput',
     'virtualWindow', 'widgetReview', 'windowKind', 'windowsAndActions'

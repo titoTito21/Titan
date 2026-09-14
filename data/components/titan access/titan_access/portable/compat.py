@@ -56,6 +56,27 @@ class _Speech(object):
     def speakMessage(self, text):
         return self.speakText(text)
 
+    def speak(self, sequence, **_kw):
+        """NVDA's ``speech.speak(sequence)``: the words of a sequence, said.
+
+        A sequence is strings with speech commands between them (a pitch,
+        a rate, a break); the smart OCR cursor hands one over. The commands
+        are what this adapter cannot carry, so the strings are said as one
+        line and nothing is dropped - every word, no tone.
+        """
+        if isinstance(sequence, str):
+            return self.speakText(sequence)
+        words = []
+        try:
+            for item in sequence or ():
+                if isinstance(item, str) and item.strip():
+                    words.append(item.strip())
+        except TypeError:
+            return False
+        if not words:
+            return False
+        return self.speakText(', '.join(words))
+
     def speakText(self, text, **_kw):
         try:
             from .. import speech_adapter
@@ -244,6 +265,7 @@ api = _Api()
 #: half-answered: a `play` that silently does nothing is worse than one
 #: that says it cannot.
 nvwave = _note('nvwave', 'Titan plays its own sounds through its mixer')
+displayModel = _note('displayModel', 'the drawn text of a window is read by Windows OCR here')
 
 #: NVDA's own, with no equivalent here. Each is recorded rather than being
 #: quietly None, so a shared module that says less on this side can be

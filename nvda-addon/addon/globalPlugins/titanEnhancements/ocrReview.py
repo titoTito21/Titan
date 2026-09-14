@@ -181,6 +181,9 @@ def _foreground():
 
 def _cue(on):
     try:
+        from . import icons
+        if icons.play('reader.review-on' if on else 'reader.review-off'):
+            return
         from . import earcons
         earcons.play_named('vscreenOn.ogg' if on else 'vscreenOff.ogg')
     except Exception:                                # noqa: BLE001
@@ -324,6 +327,28 @@ def explore(x, y):
     return True, say_line(beep=True)
 
 
+def layout():
+    """The one arrow layout, shared with the virtual window and the
+    palette - so a user learns it once (`virtualWindow.LAYOUTS`)."""
+    try:
+        from . import virtualWindow
+        return virtualWindow.layout()
+    except Exception:                                # noqa: BLE001
+        return 'linear'
+
+
+def layout_cycle(delta=1):
+    """Next (or previous) arrow layout, said - the same Numpad 4/6 as the
+    window and the palette, on the same setting."""
+    try:
+        from . import virtualWindow
+        ok, name = virtualWindow.layout_cycle(delta)
+    except Exception:                                # noqa: BLE001
+        return False, ''
+    _say(name, interrupt=True)
+    return ok, name
+
+
 def move_corner(dx_sign, dy_sign):
     """A corner of what was read - the numpad diagonals, as everywhere.
 
@@ -361,13 +386,13 @@ def reviewing_cursor():
         return _state['row'], _state['word']
 
 
-def click():
-    """Click where the cursor is. ``(ok, sentence)``.
+def click(double=False):
+    """Click (or double-click) where the cursor is. ``(ok, sentence)``.
 
     Not "activate the control": there is no control. There is a place on
     the screen where those words are drawn, and clicking it is what a
     sighted person would do - which is the whole reason the coordinates are
-    kept.
+    kept. A double click is what opens an item, so it is offered too.
     """
     found = here()
     if found is None:
@@ -375,7 +400,7 @@ def click():
         return False, _('There is nothing here to click')
     text, rect = found
     from . import smart
-    ok, said = smart._click(rect, text)
+    ok, said = smart._click(rect, text, double=double)
     if ok:
         with _LOCK:
             _state['clicks'] += 1
@@ -396,13 +421,31 @@ def _beep(row):
 
 def _edge():
     try:
+        from . import icons
+        if icons.play('reader.edge'):
+            return
         from . import earcons
         earcons.play_named('edge.ogg')
     except Exception:                                # noqa: BLE001
         pass
 
 
+def spoken():
+    """How many times this list has spoken. A caller that has just asked
+    for a move compares before and after: a move that spoke for itself
+    must not be REPORTED as well, which was every row of a walked list
+    said twice - "Gry, 2 z 13, gry 2 z 13"."""
+    with _LOCK:
+        return int(_state.get('spoke') or 0)
+
+
+def _spoke():
+    with _LOCK:
+        _state['spoke'] = int(_state.get('spoke') or 0) + 1
+
+
 def _say(text, interrupt=True):
+    _spoke()
     if compat.speech is None:
         return
     try:

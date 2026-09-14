@@ -305,11 +305,8 @@ def described():
 def wanted():
     """The scheme's own switch. A tree with no `configSpec` - Titan
     Access - has no switch yet, and absent means yes."""
-    try:
-        from . import configSpec
-        return bool(configSpec.read().get('soundScheme', True))
-    except Exception:                                # noqa: BLE001
-        return True
+    from . import switchboard
+    return switchboard.read('soundScheme', True)
 
 
 # --------------------------------------------------------------------------- #
@@ -326,10 +323,28 @@ def answer(states):
     words, sounds = [], []
     if not wanted():
         return list(states or []), sounds
+    # **The speech scheme's output mode decides sound vs word for a
+    # state.** A speech-only scheme says every state; a sound-only scheme
+    # sounds them; a "sound and speech" scheme leaves the per-state choice
+    # to the sound scheme below (which is the neutral default). So whether
+    # a checked check box is a sound, a word or both depends on the
+    # scheme, and the same rule reaches every other state.
+    mode = 'both'
+    try:
+        from . import speechSchemes
+        mode = speechSchemes.scheme_output()
+    except Exception:                                # noqa: BLE001
+        mode = 'both'
+    if mode == 'speech':
+        return list(states or []), sounds
     scheme = _load()
     for state in (states or []):
         name = str(state).upper()
-        way = (scheme.get(name) or {}).get('way', AS_WORD)
+        if mode == 'sound':
+            # Every state a sound, where there is one; a word otherwise.
+            way = AS_SOUND
+        else:
+            way = (scheme.get(name) or {}).get('way', AS_WORD)
         if way == AS_WORD:
             words.append(state)
             continue

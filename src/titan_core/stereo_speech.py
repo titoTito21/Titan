@@ -3160,10 +3160,31 @@ class StereoSpeech:
                     continue
                 pitch = int(seg[1]) if len(seg) > 1 and seg[1] is not None else 0
                 position = float(seg[2]) if len(seg) > 2 and seg[2] is not None else 0.0
-                if groups and groups[-1][1] == pitch and groups[-1][2] == position:
+                # A fifth element is a VOLUME offset (-10..10), which a
+                # reader's voice class may carry for a part: a state a
+                # little louder, "3 of 10" a little quieter. Applied as a
+                # gain on the rendered clip, so every engine takes it.
+                volume = 0
+                if len(seg) > 4 and seg[4] is not None:
+                    try:
+                        volume = max(-10, min(10, int(seg[4])))
+                    except (TypeError, ValueError):
+                        volume = 0
+                # A fourth element is a RATE offset (-10..10) for the part:
+                # the engine is set to it while that part is rendered and
+                # put back afterwards, so "3 of 10" can be faster than the
+                # name in front of it.
+                rate = 0
+                if len(seg) > 3 and seg[3] is not None:
+                    try:
+                        rate = max(-10, min(10, int(seg[3])))
+                    except (TypeError, ValueError):
+                        rate = 0
+                if groups and groups[-1][1] == pitch and groups[-1][2] == position \
+                        and groups[-1][3] == volume and groups[-1][4] == rate:
                     groups[-1][0] += ", " + text
                 else:
-                    groups.append([text, pitch, position])
+                    groups.append([text, pitch, position, volume, rate])
             if not groups or my_seq != self._speak_seq:
                 if my_seq == self._speak_seq:
                     self.is_speaking = False
@@ -3205,10 +3226,28 @@ class StereoSpeech:
             last = len(groups) - 1
             played = False
             try:
-                for idx, (text, pitch, position) in enumerate(groups):
+                for idx, (text, pitch, position, volume, rate) in enumerate(groups):
                     if my_seq != self._speak_seq:
                         break
-                    seg_audio = self._synthesize_segment(text, pitch)
+                    base_rate = getattr(self, '_rate_setting', 0)
+                    if rate:
+                        try:
+                            self.set_rate(max(-10, min(10, base_rate + rate)))
+                        except Exception:
+                            rate = 0
+                    try:
+                        seg_audio = self._synthesize_segment(text, pitch)
+                    finally:
+                        if rate:
+                            try:
+                                self.set_rate(base_rate)
+                            except Exception:
+                                pass
+                    if seg_audio is not None and volume:
+                        try:
+                            seg_audio = seg_audio.apply_gain(volume * 1.5)
+                        except Exception:
+                            pass
                     if seg_audio is None and pitch:
                         # Some engines refuse a pitched request but synthesize
                         # the same text happily at their own pitch. A part read
@@ -3429,6 +3468,12 @@ class StereoSpeech:
         Args:
             rate (int): Rate from -10 to +10
         """
+        # Remembered, so a part of an announcement asked for at another
+        # rate (`speak_concat`) can be rendered at it and the rate put back.
+        try:
+            self._rate_setting = max(-10, min(10, int(rate)))
+        except (TypeError, ValueError):
+            pass
         try:
             if self.engine == 'sapi5' and self.sapi:
                 clamped_rate = max(-10, min(10, rate))

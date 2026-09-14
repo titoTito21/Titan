@@ -392,7 +392,7 @@ msgstr ""
 #: src/ai/ai_agent_gui.py:277 src/ai/ai_creation_kit.py:1387
 #: src/ai/assistant/assistant_gui.py:313
 msgid "Enable AI components in Settings, AI features first."
-msgstr ""
+msgstr "Najpierw włącz komponenty SI w Ustawieniach, w kategorii Funkcje SI."
 "Najpierw włącz składniki sztucznej inteligencji w Ustawieniach, Składniki"
 " sztucznej inteligencji."
 
@@ -1311,13 +1311,13 @@ msgstr "Skopiowano"
 
 #: src/ai/ocr/mimic.py:841 src/ai/ocr/mimic.py:893
 msgid "AI features are switched off in Settings, AI features."
-msgstr ""
+msgstr "Funkcje SI są wyłączone w Ustawieniach, w kategorii Funkcje SI."
 "Składniki sztucznej inteligencji są wyłączone w Ustawieniach, Składniki "
 "sztucznej inteligencji."
 
 #: src/ai/ocr/mimic.py:845 src/ai/ocr/mimic.py:897
 msgid "AI OCR is switched off. Turn it on in Settings, AI features."
-msgstr ""
+msgstr "AI OCR jest wyłączony. Włącz go w Ustawieniach, w kategorii Funkcje SI."
 "AI OCR jest wyłączone. Włącz je w Ustawieniach, Składniki sztucznej "
 "inteligencji."
 
@@ -1375,7 +1375,7 @@ msgstr "{name}, więcej"
 
 #: src/ai/ocr/overlay.py:438
 msgid "There is no reading to build an overlay from. Read the screen first."
-msgstr ""
+msgstr "Nie ma odczytu, z którego można zbudować nakładkę. Najpierw odczytaj ekran."
 "Nie ma odczytu, z którego można zbudować nakładkę. Najpierw odczytaj "
 "ekran."
 

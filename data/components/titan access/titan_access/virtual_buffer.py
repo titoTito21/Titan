@@ -957,7 +957,13 @@ def build_for_window(hwnd=0, allow_ocr=True, on_status=None,
     if prefer:
         tiers = [prefer]
     else:
-        tiers = ["uia", "msaa", "win32"]
+        # A Java window says almost nothing to UI Automation and
+        # everything to its own bridge, so the bridge is asked first.
+        # The display model (what the program DREW) sits below the
+        # accessibility tiers and above OCR: a window that answers nothing
+        # through UIA/MSAA/win32 may still have drawn its text through GDI,
+        # which is exact where a picture is a guess.
+        tiers = ["jab", "uia", "msaa", "win32", "drawn"]
         if allow_ocr:
             tiers.append("ocr")
     for tier in tiers:
@@ -979,15 +985,69 @@ def build_for_window(hwnd=0, allow_ocr=True, on_status=None,
 
 
 def _build_tier(tier, hwnd, deadline, on_status):
+    if tier == "jab":
+        try:
+            from titan_access import jab
+            return jab.nodes(hwnd) if jab.is_java_window(hwnd) else []
+        except Exception:
+            return []
     if tier == "uia":
         return build_uia(_uia_root(hwnd), deadline)
     if tier == "msaa":
         return build_msaa(hwnd, deadline)
     if tier == "win32":
         return build_win32(hwnd, deadline)
+    if tier == "drawn":
+        return build_drawn(hwnd)
     if tier == "ocr":
         return build_ocr(hwnd, on_status=on_status)
     return []
+
+
+def build_drawn(hwnd) -> List[VNode]:
+    """The text a program DREW, read from the display model rather than
+    photographed - exact, instant, free, and pressable by a real
+    rectangle. The tier NVDA gets from injecting into every process; here
+    it works for a program whose window HAS an injected helper (one NVDA
+    also reads), and answers nothing otherwise, which falls through to OCR.
+    An empty answer is not a failure: the window does not draw its text
+    through GDI, or nothing of a reader is in its process."""
+    try:
+        from titan_access.portable import drawnText
+        reading = drawnText.read_window(int(hwnd))
+    except Exception as e:
+        if _DBG:
+            print(f"[TitanAccess][vbuf] drawn tier: {e}")
+        return []
+    if reading is None:
+        return []
+    return _nodes_from_reading(reading, hwnd)
+
+
+def _nodes_from_reading(reading, hwnd):
+    """A `localOcr.Reading` (lines of words with screen rectangles) as
+    `VNode` rows - the same shape the OCR tier answers, so navigation,
+    quick navigation and a click by rectangle all work unchanged."""
+    nodes = []
+    for line in getattr(reading, 'lines', None) or []:
+        text = ' '.join(str(word.get('text', '')) for word in line).strip()
+        if not text:
+            continue
+        first = line[0]
+        last = line[-1]
+        left = int(first.get('left', 0))
+        top = int(first.get('top', 0))
+        right = int(last.get('left', 0) + last.get('width', 0))
+        bottom = int(max(int(word.get('top', 0)) + int(word.get('height', 0))
+                         for word in line))
+        node = VNode()
+        node.name = text
+        node.role = C.ROLE_TEXT
+        node.rect = (left, top, right, bottom)
+        node.source = 'drawn'
+        node.hwnd = int(hwnd)
+        nodes.append(node)
+    return nodes
 
 
 def _uia_root(hwnd):
@@ -1109,6 +1169,7 @@ def activate(node: VNode, screen=None) -> bool:
         "msaa": _activate_msaa,
         "win32": _activate_win32,
         "ocr": _activate_ocr,
+        "drawn": _activate_drawn,
     }.get(node.source)
     if handler is None:
         return False
@@ -1181,6 +1242,13 @@ def _activate_win32(node, _screen=None):
 def _activate_ocr(node, screen=None):
     from titan_access import ocr_assist
     return ocr_assist.activate(node, screen)
+
+
+def _activate_drawn(node, screen=None):
+    """Press a drawn-text row by clicking the middle of its rectangle -
+    a real screen rectangle from the display model, so this is a click at
+    a place the program told us about, not a guess."""
+    return _click_centre(node)
 
 
 def _press_enter() -> bool:

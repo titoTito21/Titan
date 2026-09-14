@@ -221,7 +221,7 @@ msgstr "aplikacja internetowa"
 
 #: src/ui/invisibleui.py:2102
 msgid "Widget activation error"
-msgstr ""
+msgstr "Błąd aktywacji widżetu"
 
 #: src/ui/invisibleui.py:2128 src/ui/invisibleui.py:2129
 #: src/ui/invisibleui.py:3014 src/ui/invisibleui.py:3045
@@ -261,7 +261,7 @@ msgstr "W widżecie"
 
 #: src/ui/invisibleui.py:2290
 msgid "Error getting element"
-msgstr ""
+msgstr "Błąd pobierania elementu"
 
 #: src/ui/invisibleui.py:2371
 msgid "Error entering widget mode"
@@ -305,15 +305,15 @@ msgstr "Wstecz"
 
 #: src/ui/invisibleui.py:2642
 msgid "Error expanding platform"
-msgstr ""
+msgstr "Błąd rozwijania platformy"
 
 #: src/ui/invisibleui.py:2654
 msgid "Error"
-msgstr ""
+msgstr "Błąd"
 
 #: src/ui/invisibleui.py:2670 src/ui/invisibleui.py:2688
 msgid "Error returning"
-msgstr ""
+msgstr "Błąd powrotu"
 
 #: src/ui/invisibleui.py:2692
 msgid "Clock:"
@@ -341,7 +341,7 @@ msgstr "Wychodzę z panelu głośności"
 
 #: src/ui/invisibleui.py:2799
 msgid "Exiting WiFi manager, returning to Titan UI"
-msgstr ""
+msgstr "Zamykanie menedżera WiFi, powrót do Titan UI"
 
 #: src/ui/invisibleui.py:2818 src/ui/invisibleui.py:4110
 #: src/ui/invisibleui.py:4149

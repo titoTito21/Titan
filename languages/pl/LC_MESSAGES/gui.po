@@ -55,7 +55,7 @@ msgstr "OK"
 
 #: src/ui/gui.py:514
 msgid "Create Account"
-msgstr ""
+msgstr "Utwórz konto"
 
 #: src/ui/gui.py:530 src/ui/gui.py:3440 src/ui/gui.py:4102 src/ui/gui.py:4161
 msgid "Logout"
@@ -127,11 +127,11 @@ msgstr "Hasło 2FA"
 
 #: src/ui/gui.py:712
 msgid "Log in"
-msgstr ""
+msgstr "Zaloguj się"
 
 #: src/ui/gui.py:713
 msgid "Create account"
-msgstr ""
+msgstr "Utwórz konto"
 
 #: src/ui/gui.py:714
 msgid "Log out"
@@ -174,7 +174,7 @@ msgstr "gra"
 
 #: src/ui/gui.py:1337
 msgid "Open"
-msgstr ""
+msgstr "Otwórz"
 
 #: src/ui/gui.py:1374
 #, python-brace-format
@@ -345,7 +345,7 @@ msgstr "Zalogowano do Telegrama"
 
 #: src/ui/gui.py:3493 src/ui/gui.py:3613 src/ui/gui.py:3868
 msgid "Login cancelled"
-msgstr ""
+msgstr "Logowanie anulowane"
 
 #: src/ui/gui.py:3501
 #, python-brace-format
@@ -389,7 +389,7 @@ msgstr "Zalogowano do Titan-Net jako {username}"
 
 #: src/ui/gui.py:3611
 msgid "Continuing in offline mode"
-msgstr ""
+msgstr "Kontynuowanie w trybie offline"
 
 #: src/ui/gui.py:3620
 #, python-brace-format
@@ -426,7 +426,7 @@ msgstr "{user} jest teraz offline"
 #: src/ui/gui.py:3748 src/ui/gui.py:3889
 #, python-brace-format
 msgid "New message from {user}"
-msgstr ""
+msgstr "Nowa wiadomość od {user}"
 
 #: src/ui/gui.py:3779
 #, python-brace-format
@@ -489,7 +489,7 @@ msgstr ""
 #: src/ui/gui.py:3982
 #, python-brace-format
 msgid "New Titan-Net message from {user}"
-msgstr ""
+msgstr "Nowa wiadomość Titan-Net od {user}"
 
 #: src/ui/gui.py:4053 src/ui/gui.py:4072
 msgid "Opening Telegram"
@@ -618,7 +618,7 @@ msgstr "Informacja"
 
 #: src/ui/gui.py:4609
 msgid "No battery detected. Power settings may not be available."
-msgstr ""
+msgstr "Nie wykryto baterii. Ustawienia zasilania mogą być niedostępne."
 
 #: src/ui/gui.py:4612
 msgid ""
@@ -644,11 +644,11 @@ msgstr ""
 
 #: src/ui/gui.py:4659
 msgid "Volume Control"
-msgstr ""
+msgstr "Regulacja głośności"
 
 #: src/ui/gui.py:4661
 msgid "Could not find audio mixer. Please install 'pavucontrol' or 'alsamixer'."
-msgstr ""
+msgstr "Nie znaleziono miksera dźwięku. Zainstaluj „pavucontrol” lub „alsamixer”."
 
 #: src/ui/gui.py:4669
 #, python-brace-format
@@ -704,7 +704,7 @@ msgstr ""
 
 #: src/ui/gui.py:4770
 msgid "Could not open network settings. Please use your system's network manager."
-msgstr ""
+msgstr "Nie można otworzyć ustawień sieci. Użyj menedżera sieci swojego systemu."
 
 #: src/ui/gui.py:5029
 msgid "Network settings - coming soon"
@@ -823,11 +823,11 @@ msgstr "Połączenie nie powiodło się: {}"
 #: src/ui/gui.py:5316
 #, python-format
 msgid "--- Chat history with %s ---"
-msgstr ""
+msgstr "--- Historia rozmowy z %s ---"
 
 #: src/ui/gui.py:5334
 msgid "--- End of history ---"
-msgstr ""
+msgstr "--- Koniec historii ---"
 
 #: src/ui/gui.py:5343
 msgid "Otrzymano zmianę statusu"

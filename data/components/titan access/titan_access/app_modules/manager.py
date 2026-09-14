@@ -21,11 +21,25 @@ from titan_access.app_modules.tce import TCEModule
 from titan_access.app_modules.chromium import ChromiumModule, EdgeModule
 from titan_access.app_modules.firefox import FirefoxModule
 from titan_access.app_modules.terminal import TerminalModule
+from titan_access.app_modules.windows_shell import ShellHostModule, LogonModule
+from titan_access.app_modules.system_tools import (
+    TaskManagerModule, ManagementConsoleModule, RegistryEditorModule,
+    SevenZipModule, TotalCommanderModule,
+)
+from titan_access.app_modules.media_players import (
+    VlcModule, Foobar2000Module, WinampModule, AimpModule, MusicBeeModule,
+    MediaPlayerModule, NotepadPlusPlusModule,
+)
 
 # Module classes registered with the manager. Add new modules here.
 _MODULE_CLASSES = (
     ExplorerModule, NotepadModule, CalculatorModule, TCEModule,
     ChromiumModule, EdgeModule, FirefoxModule, TerminalModule,
+    ShellHostModule, LogonModule,
+    TaskManagerModule, ManagementConsoleModule, RegistryEditorModule,
+    SevenZipModule, TotalCommanderModule,
+    VlcModule, Foobar2000Module, WinampModule, AimpModule, MusicBeeModule,
+    MediaPlayerModule, NotepadPlusPlusModule,
 )
 
 

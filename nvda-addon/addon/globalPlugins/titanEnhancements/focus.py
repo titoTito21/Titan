@@ -316,6 +316,12 @@ def _menu_left(obj, module):
     if not left:
         return False
     word = ancestry.leaving_word(left)
+    if word:
+        try:
+            from . import icons
+            icons.play('reader.menu-left')
+        except Exception:                            # noqa: BLE001
+            pass
     if not word:
         return False
     try:
@@ -355,6 +361,7 @@ def handle_gain_focus(obj, next_handler):
     global _suppressed, _pitched
     module = module_for(obj)
     _menu_left(obj, module)
+    _scheme_sound(obj)
     if not is_titan_object(obj):
         # **A TCE application is Titan too.** It runs in a subprocess of
         # its own, so it is not "Titan's window" by pid - but tNotes and
@@ -1073,6 +1080,18 @@ def _say_unless_titan_does(sequence):
         core.callLater(PITCH_DELAY_MS, now_or_never)
     except Exception:                                # noqa: BLE001
         now_or_never()
+
+
+def _scheme_sound(obj):
+    """The sound the speech scheme gives this kind of control, if any.
+    Played on every focus, inside Titan and out, because a scheme that
+    says a link is a sound rather than a word has to play it wherever
+    the word would have been said."""
+    try:
+        from . import speechSchemes
+        return speechSchemes.sounded(speechSchemes.kind_of_object(obj))
+    except Exception:                                # noqa: BLE001
+        return False
 
 
 def _cue(obj):

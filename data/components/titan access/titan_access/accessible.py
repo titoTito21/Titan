@@ -143,6 +143,56 @@ def _through_the_sound_scheme(states):
         return list(states)
 
 
+def _volume(tag):
+    """The volume offset the user gave this class, or 0. Carried as the
+    fifth element of a segment, which Titan's concatenated speech applies
+    as a gain on that part."""
+    try:
+        from .portable import classes
+        value = classes.voice_of(tag).get("volume")
+        return int(value) if value is not None else 0
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
+def _rate(tag):
+    try:
+        from .portable import classes
+        value = classes.voice_of(tag).get("rate")
+        return int(value) if value is not None else 0
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
+def _part(text, tag, default_pitch):
+    """One segment with its class's pitch, rate and volume."""
+    volume = _volume(tag)
+    rate = _rate(tag)
+    if volume or rate:
+        return (text, _pitch(tag, default_pitch), 0.0, rate, volume)
+    return (text, _pitch(tag, default_pitch))
+
+
+def _pitch(tag, default):
+    """The pitch the user gave this semantic class, or the shipped one.
+
+    `portable/classes.py` is the same file the NVDA add-on's class manager
+    edits - which class has which pitch, rate and volume - and this reader
+    read none of it, so a voice changed under one reader stayed as shipped
+    under the other. Titan's speech takes a pitch per segment, and `_part`
+    carries the class's rate and volume beside it for the concatenated
+    speech to apply.
+    """
+    try:
+        from .portable import classes
+        value = classes.voice_of(tag).get("pitch")
+        if value is None:
+            return default
+        return int(value)
+    except Exception:                                # noqa: BLE001
+        return default
+
+
 def _state_segment(obj: AccessibleObject) -> str:
     """Comma-joined localized state labels (focus is implied, so omitted)."""
     present = _through_the_sound_scheme(
@@ -264,6 +314,13 @@ def describe(obj: Optional[AccessibleObject], settings,
         return []
 
     segments: List[Tuple[str, int]] = []
+    # Every part is built into its own slot, and the speech scheme's rule
+    # for this KIND of control says which are said, in what order and in
+    # which voice (`portable/speechSchemes.py` - the same file the NVDA
+    # add-on reads, so a scheme made under one reader is the scheme under
+    # the other). Each slot holds ``(text, voice class, default pitch)``.
+    built = {part: [] for part in ('name', 'kind', 'state', 'value',
+                                   'description', 'place', 'hint')}
 
     want_name = settings.get_bool("Verbosity", "ElementName", True)
     want_type = settings.get_bool("Verbosity", "ElementType", True)
@@ -280,18 +337,18 @@ def describe(obj: Optional[AccessibleObject], settings,
         # themselves - here or in the other reader.
         name = _shared_name_for(obj)
     if want_name and name:
-        segments.append((name, NAME_PITCH))
+        built['name'].append((name, 'name', NAME_PITCH))
 
     # 2) Control type at a lower pitch.
     if custom.get("role_word"):
         # What the user calls it wins: a "pane" the program uses as a
         # toolbar is a toolbar to the person using it, and they are the one
         # who hears it on every arrival.
-        segments.append((str(custom["role_word"]), ROLE_PITCH))
+        built['kind'].append((str(custom["role_word"]), 'kind', ROLE_PITCH))
     elif role_label_override:
         # The host pinned an exact control-type label for this announcement;
         # speak it regardless of the verbosity flags.
-        segments.append((role_label_override, ROLE_PITCH))
+        built['kind'].append((role_label_override, 'kind', ROLE_PITCH))
     else:
         type_forced = (for_navigation and
                        settings.get_bool("Navigation",
@@ -299,13 +356,13 @@ def describe(obj: Optional[AccessibleObject], settings,
         if (want_type or type_forced) and _role_class_enabled(obj.role, settings):
             role_text = role_label(obj.role)
             if role_text:
-                segments.append((role_text, ROLE_PITCH))
+                built['kind'].append((role_text, 'kind', ROLE_PITCH))
 
     # 3) States at a higher pitch.
     if want_state:
         state_text = _state_segment(obj)
         if state_text:
-            segments.append((state_text, STATE_PITCH))
+            built['state'].append((state_text, 'state', STATE_PITCH))
 
     # 3b) Description at the neutral pitch. Carries the UIA full description AND
     # any enrichment an app module appended in ``customize_object`` (the file
@@ -317,28 +374,56 @@ def describe(obj: Optional[AccessibleObject], settings,
         desc = (obj.description or "").strip()
         value = (obj.value or "").strip()
         if desc and desc != name and desc != value:
-            segments.append((desc, NAME_PITCH))
+            built['description'].append((desc, 'description', NAME_PITCH))
 
     # 4) List / collection position ("3 of 10").
     if want_position and obj.pos_in_set > 0 and obj.size_of_set > 0:
-        segments.append(
+        built['place'].append(
             (L("element.positionOf", obj.pos_in_set, obj.size_of_set),
-             NAME_PITCH))
+             'place', NAME_PITCH))
 
     # 5) Hierarchy level ("level 2").
     if want_level and obj.level > 0:
-        segments.append((L("engine.hierarchyLevel", obj.level), NAME_PITCH))
+        built['place'].append((L("engine.hierarchyLevel", obj.level), 'place',
+                               NAME_PITCH))
 
     # 6) Parameter (e.g. a link URL).
     if want_param and obj.parameter:
-        segments.append((obj.parameter, NAME_PITCH))
+        built['value'].append((obj.parameter, 'value', NAME_PITCH))
+
+    # 7) The instructions the control carries - how to use it, which a
+    # detailed scheme (SuperNova at High, JAWS at Beginner) reads. Its own
+    # help text, which most controls do not have; empty then.
+    hint = (obj.help_text or "").strip()
+    if hint and hint != name:
+        built['hint'].append((hint, 'detail', DETAIL_PITCH))
+
+    # **The scheme's order, voices, type word and sound-for-the-type.**
+    arranged = None
+    try:
+        from .portable import speechSchemes
+        arranged = speechSchemes.arrange(
+            speechSchemes.kind_of(obj.role), built,
+            keep_kind_word=bool(custom.get("role_word")
+                                or role_label_override))
+    except Exception:                                # noqa: BLE001
+        arranged = None
+    if arranged is None:
+        arranged = []
+        for part in ('name', 'kind', 'state', 'value', 'description',
+                     'place', 'hint'):
+            arranged.extend(built[part])
+    for one in arranged:
+        text, tag = one[0], one[1]
+        pitch = one[2] if len(one) > 2 else NAME_PITCH
+        segments.append(_part(text, tag, pitch))
 
     # A note the user asked to have said after this control, every time.
     # It ADDS; a name replaces - that is the whole difference between the
     # two, and it is why this is last and is not gated on a verbosity
     # flag: it is there because somebody put it there.
     if custom.get("note"):
-        segments.append((str(custom["note"]), DETAIL_PITCH))
+        segments.append(_part(str(custom["note"]), 'detail', DETAIL_PITCH))
 
     # Make sure we always say *something* (e.g. all verbosity off, no name).
     if not segments:
@@ -347,9 +432,30 @@ def describe(obj: Optional[AccessibleObject], settings,
     return segments
 
 
+def split_segment(segment):
+    """``(text, pitch, rate, volume)`` out of a segment of ANY length.
+
+    A segment is ``(text, pitch)`` for a part in the shipped voice and
+    ``(text, pitch, position, rate, volume)`` once the user has given that
+    part's class a rate or a volume in the class manager (`_part`). Every
+    consumer used to write ``for text, pitch in segments`` - which raises
+    ``too many values to unpack`` the moment a class carries a rate, on the
+    focus path, inside the provider's listener, where nothing catches it.
+    Measured: with one class given a rate, every menu item after the first
+    and every row of the Alt+Tab switcher was silent. One place unpacks now.
+    """
+    try:
+        text = segment[0]
+    except Exception:                                # noqa: BLE001
+        return "", 0, 0, 0
+    pitch = segment[1] if len(segment) > 1 else 0
+    rate = segment[3] if len(segment) > 3 else 0
+    volume = segment[4] if len(segment) > 4 else 0
+    return text, pitch, rate, volume
+
+
 def describe_line(obj: Optional[AccessibleObject], settings,
                   for_navigation: bool = False) -> str:
     """Flatten :func:`describe` into a single string for non-pitched output."""
-    return ", ".join(text for text, _pitch in describe(obj, settings,
-                                                        for_navigation)
-                     if text)
+    return ", ".join(seg[0] for seg in describe(obj, settings, for_navigation)
+                     if seg and seg[0])

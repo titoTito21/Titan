@@ -136,11 +136,10 @@ def find(anchor, note=None):
         note['why'] = 'the anchor names no control'
         return None
     try:
-        import api
-        from . import labels
-        window = api.getForegroundObject()
+        from . import labels, readerApi
+        window = readerApi.foreground()
     except Exception as error:                       # noqa: BLE001
-        note['why'] = 'NVDA would not say what is in front: %s' % error
+        note['why'] = 'the reader would not say what is in front: %s' % error
         return None
     if window is None:
         note['why'] = 'there is no window in front'
@@ -177,9 +176,5 @@ def find(anchor, note=None):
 def at_point(point):
     if not point or len(point) != 2:
         return None
-    try:
-        import api
-        return api.getDesktopObject().objectFromPoint(int(point[0]),
-                                                      int(point[1]))
-    except Exception:                                # noqa: BLE001
-        return None
+    from . import readerApi
+    return readerApi.object_at(int(point[0]), int(point[1]))

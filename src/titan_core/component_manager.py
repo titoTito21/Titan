@@ -473,7 +473,8 @@ class ComponentManager:
         """Registers a menu function from a component."""
         self.component_menu_functions[name] = func
 
-    def register_settings_category(self, category_name, panel_builder, save_callback=None, load_callback=None):
+    def register_settings_category(self, category_name, panel_builder, save_callback=None, load_callback=None,
+                                   parent=None):
         """
         Register a settings category from a component.
 
@@ -510,7 +511,13 @@ class ComponentManager:
                 panel = panel_builder(self.settings_frame.content_panel)
                 print(f"[ComponentManager] Panel created: {panel}")
                 # Register it
-                self.settings_frame.register_category(category_name, panel, save_callback, load_callback)
+                try:
+                    self.settings_frame.register_category(category_name, panel, save_callback,
+                                                          load_callback, parent=parent)
+                except TypeError:
+                    # A settings window from before categories could nest.
+                    self.settings_frame.register_category(category_name, panel, save_callback,
+                                                          load_callback)
                 print(f"[ComponentManager] Successfully registered settings category: {category_name}")
             except Exception as e:
                 print(f"Error registering settings category {category_name}: {e}")

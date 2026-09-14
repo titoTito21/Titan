@@ -98,12 +98,17 @@ def save():
 # --------------------------------------------------------------------------- #
 # Making one
 # --------------------------------------------------------------------------- #
-def _focused():
+def _event(name):
     try:
-        import api
-        return api.getFocusObject()
+        from . import icons
+        icons.play(name)
     except Exception:                                # noqa: BLE001
-        return None
+        pass
+
+
+def _focused():
+    from . import readerApi
+    return readerApi.focus()
 
 
 def mark(obj=None, name=''):
@@ -128,6 +133,7 @@ def mark(obj=None, name=''):
         markers.append({'name': said, 'program': program, 'anchor': anchor})
         number = len(for_program(program))
     save()
+    _event('reader.marker-made')
     if number <= NUMBERED:
         # Translators: said when a place marker is made. {what} is its
         # name, {n} the number it can be reached by.
@@ -211,22 +217,18 @@ def go(marker):
         return False, _('{what} is not here now').format(
             what=marker.get('name') or '')
     said = marker.get('name') or anchors.describe(obj)
-    try:
-        obj.setFocus()
+    from . import readerApi
+    _event('reader.marker-reached')
+    if readerApi.set_focus(obj):
         # Translators: said on arriving at a place marker. {what} is its
         # name.
         return True, _('{what}').format(what=said)
-    except Exception:                                # noqa: BLE001
-        pass
-    try:
-        import api
-        api.setNavigatorObject(obj)
+    if readerApi.navigate_to(obj):
         # Translators: said when a marked control cannot take the keyboard,
         # so the review cursor goes there instead. {what} is its name.
         return True, _('{what}, review cursor').format(what=said)
-    except Exception:                                # noqa: BLE001
-        # Translators: said when a place marker cannot be reached.
-        return False, _('{what} could not be reached').format(what=said)
+    # Translators: said when a place marker cannot be reached.
+    return False, _('{what} could not be reached').format(what=said)
 
 
 def go_to_number(number):

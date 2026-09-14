@@ -16,6 +16,15 @@ from titan_access.app_modules.browser_base import BrowserModule
 
 
 class ChromiumModule(BrowserModule):
+    #: Every Blink-based program this one module serves: the browsers, and
+    #: the Electron applications, which are Chromium with a menu of their
+    #: own and read exactly the same way.
+    process_names = {
+        "chrome", "chromium", "brave", "opera", "opera_gx", "vivaldi",
+        "code", "discord", "teams", "ms-teams", "slack", "spotify",
+        "signal", "whatsapp", "obsidian", "electron", "figma_agent",
+        "1password", "bitwarden", "postman", "notion", "cursor",
+    }
     process_name = "chrome"
 
     @property
@@ -24,6 +33,7 @@ class ChromiumModule(BrowserModule):
 
 
 class EdgeModule(ChromiumModule):
+    process_names = {"msedge", "msedgewebview2"}
     process_name = "msedge"
 
     @property

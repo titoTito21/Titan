@@ -114,6 +114,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         self._watching = threading.Event()
         self._watcher = None
         self._connected = False
+        # A web page is a virtual window made of its lines (see
+        # `virtualWindow.document_rows`), read here through NVDA's own
+        # browse-mode document.
+        try:
+            virtualWindow.document_rows = self._document_rows
+        except Exception:                            # noqa: BLE001
+            pass
         configSpec.register()
         try:
             configSpec.apply()
@@ -135,6 +142,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             # dialog kind on its very first call, and a filter registered
             # after that would miss it.
             interject.start()
+            try:
+                # The speech scheme's braille half: NVDA's own property
+                # renderer wrapped, and put back in `terminate`.
+                from . import speechSchemes
+                speechSchemes.install_braille()
+            except Exception:                        # noqa: BLE001
+                pass
             # **Where an utterance came from is only knowable while NVDA is
             # still in the function that knows.** By the time the filter
             # above sees it, keyboard echo and a message from another
@@ -204,6 +218,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         would outlive the add-on that did it.
         """
         self._watching.set()
+        try:
+            from . import speechSchemes
+            speechSchemes.uninstall_braille()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             agentLink.stop()
             agentLink.stop_variables()
@@ -623,6 +642,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:home': 'ocrHome',
         'kb:end': 'ocrEnd',
         'kb:enter': 'ocrClick',
+        'kb:numpad5': 'ocrClick',
         'kb:f5': 'ocrRefresh',
         'kb:escape': 'ocrLeave',
         # The numpad corners, as in every other walked list: the first and
@@ -631,6 +651,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:numpad9': 'ocrUpRight',
         'kb:numpad1': 'ocrDownLeft',
         'kb:numpad3': 'ocrDownRight',
+        # The arrow layout, on the same Numpad 4/6 and the same setting as
+        # the virtual window and the palette.
+        'kb:numpad4': 'ocrLayoutBack',
+        'kb:numpad6': 'ocrLayout',
     }
 
     #: The reviews' keys once more, for a Titan application described as a
@@ -712,6 +736,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:home': 'appHome',
         'kb:end': 'appEnd',
         'kb:enter': 'appActivate',
+        'kb:numpad5': 'appActivate',
         'kb:space': 'appToggle',
         'kb:f5': 'appRefresh',
         'kb:escape': 'appLeave',
@@ -721,6 +746,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:numpad9': 'appUpRight',
         'kb:numpad1': 'appDownLeft',
         'kb:numpad3': 'appDownRight',
+        'kb:numpad4': 'appLayoutBack',
+        'kb:numpad6': 'appLayout',
     }
 
     def _borrow_app_keys(self, borrow=True):
@@ -792,6 +819,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
 
     def _keep_palette_keys_right(self):
         try:
+            # A palette left open behind a window change is closed first,
+            # or its keys would be kept in the window the user moved to.
+            palette.left_the_window()
             want = palette.walking()
         except Exception:                            # noqa: BLE001
             want = False
@@ -853,6 +883,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._keep_typing_keys_right()
             gesture.send()
             return
+        # **What the palette has just said is not said again.** A move
+        # speaks the row it lands on AND answers it as text, and reporting
+        # that text was every row of a walked Titan window heard twice.
+        # Only an answer the palette did not speak - "Palette closed", a
+        # layout's name, what a command answered - is reported here.
+        before = palette.spoken()
         try:
             _ok, said = act()
         except Exception:                            # noqa: BLE001
@@ -861,7 +897,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         # Running a command, or going back, changes whether these keys are
         # ours at all.
         self._keep_palette_keys_right()
-        if said:
+        if said and palette.spoken() == before:
             dialogs.report(said)
 
     @script(description=_('In the application: the top left corner - the '
@@ -884,6 +920,28 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     def script_appDownRight(self, gesture):
         self._app_move(gesture, lambda: appReview.move_corner(1, 1))
 
+    @script(description=_('In the application: the next arrow layout'),
+            category=CATEGORY)
+    def script_appLayout(self, gesture):
+        if not appReview.reviewing():
+            self._keep_app_keys_right()
+            gesture.send()
+            return
+        _ok, said = appReview.layout_cycle(1)
+        if said:
+            dialogs.report(said)
+
+    @script(description=_('In the application: the previous arrow layout'),
+            category=CATEGORY)
+    def script_appLayoutBack(self, gesture):
+        if not appReview.reviewing():
+            self._keep_app_keys_right()
+            gesture.send()
+            return
+        _ok, said = appReview.layout_cycle(-1)
+        if said:
+            dialogs.report(said)
+
     @script(description=_('In the screen review: the top left corner - the '
                           'start of the first line'), category=CATEGORY)
     def script_ocrUpLeft(self, gesture):
@@ -903,6 +961,28 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
                           'the end of the last line'), category=CATEGORY)
     def script_ocrDownRight(self, gesture):
         self._ocr_move(gesture, lambda: ocrReview.move_corner(1, 1))
+
+    @script(description=_('In the screen review: the next arrow layout'),
+            category=CATEGORY)
+    def script_ocrLayout(self, gesture):
+        if not ocrReview.reviewing():
+            self._keep_ocr_keys_right()
+            gesture.send()
+            return
+        _ok, said = ocrReview.layout_cycle(1)
+        if said:
+            dialogs.report(said)
+
+    @script(description=_('In the screen review: the previous arrow layout'),
+            category=CATEGORY)
+    def script_ocrLayoutBack(self, gesture):
+        if not ocrReview.reviewing():
+            self._keep_ocr_keys_right()
+            gesture.send()
+            return
+        _ok, said = ocrReview.layout_cycle(-1)
+        if said:
+            dialogs.report(said)
 
     @script(description=_('In the command palette: the command above - or, '
                           'in the interaction layout, out of this row'),
@@ -1116,6 +1196,75 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             gesture.send)
         if said:
             dialogs.report(said)
+
+    #: How many lines of a document the virtual window takes, and how long
+    #: it may spend reading them - a long page is read as far as it got.
+    DOCUMENT_LINES = 800
+    DOCUMENT_SECONDS = 1.5
+
+    def _document_rows(self, window):
+        """The focused browse-mode document as rows, or None.
+
+        NVDA already holds a web page as a document - the tree interceptor
+        behind browse mode - and its lines are what a page IS to a reader:
+        the text in reading order, each line knowing the control it starts
+        with. So a page in the virtual window is those lines, with the
+        control's own role for quick navigation and its rectangle for a
+        click, rather than the browser's accessibility tree.
+        """
+        try:
+            import api
+            import textInfos
+        except Exception:                            # noqa: BLE001
+            return None
+        try:
+            focus = api.getFocusObject()
+            interceptor = getattr(focus, 'treeInterceptor', None)
+        except Exception:                            # noqa: BLE001
+            return None
+        if interceptor is None or not getattr(interceptor, 'isReady', True):
+            return None
+        try:
+            root = interceptor.rootNVDAObject
+            if int(getattr(root, 'processID', 0) or 0) != int(
+                    getattr(window, 'processID', 0) or 0):
+                return None
+            info = interceptor.makeTextInfo(textInfos.POSITION_FIRST)
+        except Exception:                            # noqa: BLE001
+            return None
+        rows = []
+        started = time.time()
+        while len(rows) < self.DOCUMENT_LINES \
+                and time.time() - started < self.DOCUMENT_SECONDS:
+            try:
+                line = info.copy()
+                line.expand(textInfos.UNIT_LINE)
+                text = ' '.join(str(line.text or '').split())
+            except Exception:                        # noqa: BLE001
+                break
+            obj, role, rect = None, '', None
+            try:
+                obj = line.NVDAObjectAtStart
+                role = str(getattr(getattr(obj, 'role', None), 'name', '')
+                           or '')
+            except Exception:                        # noqa: BLE001
+                obj = None
+            try:
+                first = line.boundingRects[0]
+                rect = (int(first.left), int(first.top),
+                        int(first.width), int(first.height))
+            except Exception:                        # noqa: BLE001
+                rect = None
+            if text:
+                rows.append({'name': text, 'value': '', 'description': '',
+                             'role': role or 'STATICTEXT', 'level': 0,
+                             'obj': obj, 'rect': rect})
+            try:
+                if info.move(textInfos.UNIT_LINE, 1) == 0:
+                    break
+            except Exception:                        # noqa: BLE001
+                break
+        return rows or None
 
     def _virtual_wants(self):
         """Which keys the virtual window should be holding right now.
@@ -1538,9 +1687,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         category=CATEGORY)
     def script_ocrClick(self, gesture):
         if not ocrReview.reviewing():
+            self._keep_ocr_keys_right()
             gesture.send()
             return
-        _ok, said = ocrReview.click()
+        # A second Enter or Numpad 5 within a moment is a DOUBLE click -
+        # what opens an item - the way a mouse's own double click is two
+        # quick presses. Either key does it, so a second press of EITHER
+        # counts.
+        import time as _time
+        now = _time.time()
+        double = (now - getattr(self, '_ocr_last_click', 0.0)) <= 0.4
+        self._ocr_last_click = 0.0 if double else now
+        _ok, said = ocrReview.click(double=double)
         dialogs.report(said)
 
     @script(
@@ -2306,6 +2464,23 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         category=CATEGORY, gesture='kb:NVDA+alt+l')
     def script_titanLabel(self, gesture):
         commands.label_control()
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Switches to the next speech scheme: how each kind '
+                      'of control is announced, in speech and in braille'),
+        category=CATEGORY, gesture='kb:NVDA+alt+s')
+    def script_titanSpeechScheme(self, gesture):
+        commands.next_speech_scheme()
+
+    @script(
+        # Translators: an NVDA command.
+        description=_('Opens the speech schemes: what is said for each '
+                      'kind of control, in what order, in which voice, '
+                      'with what sound, and how it is shown in braille'),
+        category=CATEGORY)
+    def script_titanSpeechSchemes(self, gesture):
+        commands.speech_schemes()
 
     #: The keys a layer borrows while it is open. Every printable key the
     #: layers use, plus the two that ask for help and the one that leaves -

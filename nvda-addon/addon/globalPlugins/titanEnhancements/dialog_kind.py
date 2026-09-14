@@ -771,11 +771,36 @@ def wanted():
     has not got - and this file is shared between them. Absent, the
     answer is yes: a reader without that switch has not turned it off.
     """
+    from . import switchboard
+    return switchboard.read('dialogKinds', True)
+
+
+def kind_of_window(hwnd):
+    """``(kind, how)`` for a dialog known only by its window handle.
+
+    For a reader whose objects are not NVDA's - Titan Access hands over an
+    `hwnd` and a role string - the same two questions `kind_of` asks: the
+    icon the dialog holds, and failing that the answers it will accept.
+    """
     try:
-        from . import configSpec
-    except Exception:                                # noqa: BLE001
-        return True
-    return bool(configSpec.read().get('dialogKinds', True))
+        hwnd = _root(int(hwnd or 0))
+    except (TypeError, ValueError):
+        return '', ''
+    if not hwnd:
+        return '', ''
+    kind = _icon_kind(hwnd)
+    if kind:
+        with _LOCK:
+            _counted['icon'] += 1
+        return kind, 'icon'
+    kind = _button_kind(hwnd)
+    if kind:
+        with _LOCK:
+            _counted['buttons'] += 1
+        return kind, 'buttons'
+    with _LOCK:
+        _counted['none'] += 1
+    return '', ''
 
 
 def announce(obj):

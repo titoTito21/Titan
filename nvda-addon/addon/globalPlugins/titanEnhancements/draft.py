@@ -144,6 +144,16 @@ def observe(obj):
 
 
 def _top_of(obj):
+    # Through the seam first (`readerApi`): under NVDA that is
+    # `api.getForegroundObject()`, and in Titan Access the window in front
+    # adapted to NVDA's shape - so writing a module works in both readers.
+    try:
+        from . import readerApi
+        found = readerApi.foreground()
+        if found is not None:
+            return found
+    except Exception:                                # noqa: BLE001
+        pass
     api = compat.api
     if api is not None:
         try:

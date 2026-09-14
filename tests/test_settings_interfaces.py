@@ -545,5 +545,58 @@ class TickListOverTheActionsTests(unittest.TestCase):
 
 
 
+class TheReaderSectionsAreASecondList(unittest.TestCase):
+    """The reader's sections are a second list, under the settings
+    categories, shown when the reader's own category is selected - and its
+    sections stay out of the top list, which remains the settings ones."""
+
+    def setUp(self):
+        from src.ui import settingsgui
+        self.frame = settingsgui.SettingsFrame(None)
+        self.addCleanup(self.frame.Destroy)
+        content = self.frame.content_panel
+        self.parent_name = 'Reader test'
+        self.frame.register_category(self.parent_name, wx.Panel(content))
+        self.children = ['Reader test: Speech', 'Reader test: Sounds']
+        for name in self.children:
+            self.frame.register_category(name, wx.Panel(content),
+                                         parent=self.parent_name)
+
+    def test_the_children_are_not_in_the_top_list(self):
+        for name in self.children:
+            self.assertNotIn(name, self.frame.category_order)
+            self.assertIn(name, self.frame.categories)
+        self.assertIn(self.parent_name, self.frame.category_order)
+
+    def test_choosing_the_reader_reveals_its_sections_below(self):
+        self.assertFalse(self.frame.subcategory_list.IsShown())
+        self.frame.ShowCategory(self.parent_name)
+        self.assertTrue(self.frame.subcategory_list.IsShown())
+        self.assertEqual(self.frame.subcategory_list.GetItems(),
+                         ['Speech', 'Sounds'])
+
+    def test_a_plain_category_hides_the_second_list(self):
+        self.frame.ShowCategory(self.parent_name)
+        self.assertTrue(self.frame.subcategory_list.IsShown())
+        other = [name for name in self.frame.category_order
+                 if name != self.parent_name][0]
+        self.frame.ShowCategory(other)
+        self.assertFalse(self.frame.subcategory_list.IsShown())
+
+    def test_a_section_keeps_the_list_up_and_marks_itself(self):
+        self.frame.ShowCategory('Reader test: Sounds')
+        self.assertTrue(self.frame.subcategory_list.IsShown())
+        self.assertEqual(self.frame.subcategory_list.GetSelection(), 1)
+        self.assertIs(self.frame.current_category_panel,
+                      self.frame.categories['Reader test: Sounds'])
+
+    def test_open_at_category_on_a_section_lands_in_the_second_list(self):
+        self.assertTrue(self.frame.open_at_category('Reader test: Speech'))
+        self.assertEqual(
+            self.frame.category_order[self.frame.category_list.GetSelection()],
+            self.parent_name)
+        self.assertEqual(self.frame.subcategory_list.GetSelection(), 0)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

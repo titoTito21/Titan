@@ -99,7 +99,7 @@ msgstr "Brak głosów"
 
 #: src/buffers/ai_buffer.py:82
 msgid "AI"
-msgstr ""
+msgstr "SI"
 
 #: src/buffers/ai_buffer.py:84
 msgid "Conversation"

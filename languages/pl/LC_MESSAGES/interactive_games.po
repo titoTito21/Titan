@@ -196,7 +196,7 @@ msgstr "Wybierz folder do dodania"
 #: src/network/interactive_games.py:457
 #, python-brace-format
 msgid "Total attachments would exceed {limit} MB. Stopping at {added} files."
-msgstr ""
+msgstr "Łączny rozmiar załączników przekroczyłby {limit} MB. Zatrzymano na {added} plikach."
 "Łączny rozmiar załączników przekroczyłby {limit} MB. Zatrzymano na "
 "{added} plikach."
 
@@ -208,7 +208,7 @@ msgstr "Dodano {n} plików z folderu"
 #: src/network/interactive_games.py:502
 #, python-brace-format
 msgid "Found {n} rules file(s) at folder root - manual rules text is optional now"
-msgstr ""
+msgstr "Znaleziono {n} plików z zasadami w głównym folderze - ręczny tekst zasad jest teraz opcjonalny"
 "Znaleziono {n} plik(ów) z zasadami w korzeniu folderu - ręczny tekst "
 "zasad jest teraz opcjonalny"
 

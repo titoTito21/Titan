@@ -390,6 +390,20 @@ def _is_a_field(node):
 # Building it
 # --------------------------------------------------------------------------- #
 def _foreground():
+    # Through the seam first (`readerApi`): under NVDA that is
+    # `api.getForegroundObject()`, and in Titan Access it is the window in
+    # front adapted to NVDA's shape - with a `windowHandle`, which is what
+    # `left_the_window` compares. Asking NVDA's `api` directly answered
+    # None in Titan Access, so the handle it kept was 0 and a virtual
+    # window there never noticed the user leaving: the arrows stayed its
+    # own in whatever window came next.
+    try:
+        from . import readerApi
+        found = readerApi.foreground()
+        if found is not None:
+            return found
+    except Exception:                                # noqa: BLE001
+        pass
     try:
         import api
         return api.getForegroundObject()
@@ -426,6 +440,17 @@ def _role_name(obj):
         return str(getattr(getattr(obj, 'role', None), 'name', '') or '')
     except Exception:                                # noqa: BLE001
         return ''
+
+
+#: **A web page as a virtual window - the ZDSR shape.** A page walked as
+#: an accessibility tree is a browser's chrome and thousands of nodes; a
+#: page walked as its own DOCUMENT is its lines, in reading order, each
+#: knowing the control it starts with, which is what somebody who has
+#: used ZDSR's virtual window means by it. The reader underneath knows
+#: how to read a document as lines - NVDA through its tree interceptor,
+#: Titan Access through its virtual buffer - and installs the answer here:
+#: ``document_rows(window)`` -> rows, or None when the window is not one.
+document_rows = None
 
 
 def nodes_of(window, note=None):
@@ -470,6 +495,16 @@ def nodes_of(window, note=None):
             # nothing, so it falls through rather than answering empty.
     except Exception:                                # noqa: BLE001
         pass
+    if callable(document_rows):
+        try:
+            rows = document_rows(window)
+        except Exception:                            # noqa: BLE001
+            rows = None
+        if rows:
+            _number(rows)
+            note['ms'] = int((time.time() - started) * 1000)
+            note['document'] = True
+            return rows
     found, seen = [], 0
     # **Every node knows which kept node it is inside.** ``parent`` is
     # the id of the nearest ancestor that made it into the list - a
@@ -649,7 +684,7 @@ def start(hwnd=0, speak=True):
                        'ms': int(note.get('ms') or 0),
                        'title': _text(getattr(window, 'name', '')),
                        'hwnd': int(getattr(window, 'windowHandle', 0) or 0)})
-    if not icons.play('open-object'):
+    if not icons.play('reader.virtual-on'):
         _cue(True)
     if note.get('ran_out'):
         # **Said once, because it happened once.** The toggle itself stays
@@ -676,7 +711,7 @@ def stop():
         _state.update({'on': False, 'nodes': [], 'at': 0, 'inner': 0,
                        'hwnd': 0, 'typing': False, 'typed': 0,
                        'field': None, 'menu': None})
-    if was and not icons.play('close-object'):
+    if was and not icons.play('reader.virtual-off'):
         _cue(False)
     # Translators: said when the virtual window is turned off.
     return False, _('Virtual window off')
@@ -1065,6 +1100,7 @@ def layout_cycle(delta=1):
         now = LAYOUTS[(at + (1 if delta > 0 else -1)) % len(LAYOUTS)]
         _state['layout'] = now
         _state['depth'] = None
+    icons.play('reader.layout-changed')
     return True, layout_name(now)
 
 
@@ -1204,12 +1240,14 @@ def _called(node):
 
 
 def _say_in(name, rest):
+    icons.play('reader.interact-in')
     # Translators: said on stepping INTO a control in the interaction
     # layout. {name} is the control; what follows is the first thing in it.
     _say_parts([(_('In {name}').format(name=name), 'place')] + list(rest))
 
 
 def _say_out(name, rest):
+    icons.play('reader.interact-out')
     # Translators: said on stepping OUT of a control in the interaction
     # layout. {name} is the control that was left.
     _say_parts([(_('Out of {name}').format(name=name), 'place')]
@@ -1555,6 +1593,7 @@ def move_diagonal(dx_sign, dy_sign):
         _state['inner'] = 0
         _state['letter'] = 0
         _state['moves'] += 1
+    icons.play('reader.corner')
     return say_here(prefix=[(corner_name(dx_sign, dy_sign), 'place')])
 
 
@@ -1593,7 +1632,7 @@ def explore(x, y):
         _state['inner'] = 0
         _state['letter'] = 0
         _state['moves'] += 1
-    return say_here()
+    return say_here(beep=not icons.play('reader.explore'))
 
 
 def click_mouse():
@@ -2100,6 +2139,7 @@ def say_here(beep=True, prefix=None):
 def _say_parts(parts):
     if not parts:
         return
+    _spoke()
     from . import elements
     sequence = elements.sequence(parts)
     if not sequence or compat.speech is None:
@@ -2129,6 +2169,8 @@ def _beep(at, count):
 
 
 def _edge():
+    if icons.play('reader.edge'):
+        return
     if compat.tones is None:
         return
     try:
@@ -2146,7 +2188,22 @@ def _cue(on):
         pass
 
 
+def spoken():
+    """How many times this list has spoken. A caller that has just asked
+    for a move compares before and after: a move that spoke for itself
+    must not be REPORTED as well, which was every row of a walked list
+    said twice - "Gry, 2 z 13, gry 2 z 13"."""
+    with _LOCK:
+        return int(_state.get('spoke') or 0)
+
+
+def _spoke():
+    with _LOCK:
+        _state['spoke'] = int(_state.get('spoke') or 0) + 1
+
+
 def _say(text):
+    _spoke()
     if compat.speech is None:
         return
     try:

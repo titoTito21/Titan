@@ -159,11 +159,8 @@ def _not_a_game():
     understands what it reads and sends a picture of the screen to a
     provider to do it.
     """
-    try:
-        from . import configSpec
-        answer = str(configSpec.read().get('ocrTier') or '').strip()
-    except Exception:                                # noqa: BLE001
-        answer = ''
+    from . import switchboard
+    answer = str(switchboard.value('ocrTier', '') or '').strip()
     if answer == 'ai':
         return MODE_NATIVE
     if answer == 'both':
@@ -1288,8 +1285,8 @@ def consider(obj, module=None):
 
 
 def _global_on():
-    from . import configSpec
-    return bool(configSpec.read().get('surfaceReading', False))
+    from . import switchboard
+    return switchboard.read('surfaceReading', False)
 
 
 def _begin(obj, module, hwnd):

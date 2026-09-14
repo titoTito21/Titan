@@ -14,6 +14,11 @@ from titan_access.app_modules.browser_base import BrowserModule
 
 
 class FirefoxModule(BrowserModule):
+    #: The Gecko family: the browsers built on Firefox, and Thunderbird,
+    #: whose message list and message body read through the same
+    #: IAccessible2 surface.
+    process_names = {"firefox", "thunderbird", "librewolf", "waterfox",
+                     "floorp", "zen", "palemoon", "seamonkey", "betterbird"}
     process_name = "firefox"
 
     @property

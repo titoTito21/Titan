@@ -208,7 +208,8 @@ def here(obj=None):
     try:
         import api
     except Exception:                                # noqa: BLE001
-        return None
+        from . import readerApi
+        return readerApi.focus() or readerApi.foreground()
     for ask in ('getNavigatorObject', 'getFocusObject',
                 'getForegroundObject'):
         try:
@@ -264,11 +265,8 @@ def watch_this_window(obj=None, name=''):
     what JAWS Frames is really for.
     """
     if obj is None:
-        try:
-            import api
-            obj = api.getForegroundObject()
-        except Exception:                            # noqa: BLE001
-            obj = None
+        from . import readerApi
+        obj = readerApi.foreground()
     return _watch_rect(obj, name,
                        # Translators: said when a window cannot be watched.
                        _('That window has no place on the screen.'))
@@ -491,13 +489,8 @@ def _read_area(rect):
 def _object_at(point):
     if not point or len(point) != 2:
         return None
-    try:
-        import api
-        from NVDAObjects import NVDAObject                    # noqa: F401
-        return api.getDesktopObject().objectFromPoint(int(point[0]),
-                                                      int(point[1]))
-    except Exception:                                # noqa: BLE001
-        return None
+    from . import readerApi
+    return readerApi.object_at(int(point[0]), int(point[1]))
 
 
 def _find_control(monitor):
@@ -511,9 +504,8 @@ def _find_control(monitor):
     if not wanted:
         return None
     try:
-        import api
-        from . import labels
-        window = api.getForegroundObject()
+        from . import labels, readerApi
+        window = readerApi.foreground()
     except Exception:                                # noqa: BLE001
         return None
     if window is None:
@@ -545,8 +537,8 @@ def _find_control(monitor):
 # Watching
 # --------------------------------------------------------------------------- #
 def wanted():
-    from . import configSpec
-    return bool(configSpec.read().get('monitors', True))
+    from . import switchboard
+    return switchboard.read('monitors', True)
 
 
 def _keep_running():
@@ -653,6 +645,11 @@ def _announce(monitor, now, before=None):
     """
     with _LOCK:
         _state['said'] += 1
+    try:
+        from . import icons
+        icons.play('reader.monitor-changed')
+    except Exception:                                # noqa: BLE001
+        pass
     text = now
     if '\n' in str(now or ''):
         arrived = rows_added(before, now)

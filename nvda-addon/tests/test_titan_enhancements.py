@@ -3998,6 +3998,15 @@ class TheManagerIsBuiltForREAL(unittest.TestCase):
         self.addCleanup(setattr, wx, 'MessageBox', real_box)
         self.addCleanup(setattr, wx, 'TextEntryDialog', real_entry)
         self.addCleanup(setattr, wx, 'SingleChoiceDialog', real_choice)
+        # The sound file chooser, answered "cancelled" the same way.
+        from titanEnhancements import dialogs
+        real_choose = dialogs.choose_file
+
+        def no_file(*args, **kw):
+            asked.append(str(args[1]) if len(args) > 1 else 'file')
+            return ''
+        dialogs.choose_file = no_file
+        self.addCleanup(setattr, dialogs, 'choose_file', real_choose)
         return asked
 
     def _built(self):
@@ -4015,7 +4024,7 @@ class TheManagerIsBuiltForREAL(unittest.TestCase):
     #: count fails when a tab is ADDED, which is not a fault, and passes
     #: when one is renamed into nonsense, which is.
     TABS = ('Programs', 'Place markers', 'Watched areas', 'Scripts',
-            'Control names', 'Sound scheme', 'Auditory icons')
+            'Control names', 'Sound scheme', 'Sounds')
 
     def test_every_tab_is_there(self):
         dialog = self._built()
@@ -8064,6 +8073,26 @@ class TheSoundScheme(unittest.TestCase):
         self.assertEqual(words, ['CHECKED', 'SELECTED'])
         self.assertEqual(sounds, [])
 
+    def test_the_speech_schemes_output_mode_governs_the_states(self):
+        # Whether a state (checked, selected) is a sound, a word or both
+        # follows the speech scheme's "sound and speech" option.
+        from titanEnhancements import speechSchemes
+        _temp_config(self)
+        speechSchemes.forget()
+        self.addCleanup(speechSchemes.forget)
+        key = speechSchemes.create('Mine')
+        # Sound only: every state a sound, no word.
+        speechSchemes.set_output(key, 'sound')
+        speechSchemes.use(key)
+        words, sounds = self.schemes.answer(['CHECKED', 'SELECTED'])
+        self.assertEqual(words, [])
+        self.assertEqual(sounds, ['CHECKED', 'SELECTED'])
+        # Speech only: every state a word, no sound.
+        speechSchemes.set_output(key, 'speech')
+        words, sounds = self.schemes.answer(['CHECKED', 'SELECTED'])
+        self.assertEqual(words, ['CHECKED', 'SELECTED'])
+        self.assertEqual(sounds, [])
+
     def test_a_state_given_a_sound_is_played_instead_of_said(self):
         self.schemes.set_way('CHECKED', self.schemes.AS_SOUND)
         words, sounds = self.schemes.answer(['CHECKED', 'SELECTED'])
@@ -8168,8 +8197,19 @@ class TheManagerIsAManagerAndNotAChooser(unittest.TestCase):
         self.assertIn('wx.Notebook', self.source)
 
     def test_it_answers_with_nothing_rather_than_raising_without_wx(self):
-        self.assertIsNone(self.gui.build())
-        self.assertFalse(self.gui.show())
+        # Without NVDA's own GUI it still builds, on the plain wx kit -
+        # that is what shares it with Titan Access. Without wx at all it
+        # answers nothing rather than raising.
+        real = sys.modules.get('wx')
+        sys.modules['wx'] = None
+        try:
+            self.assertIsNone(self.gui.build())
+            self.assertFalse(self.gui.show())
+        finally:
+            if real is None:
+                sys.modules.pop('wx', None)
+            else:
+                sys.modules['wx'] = real
 
     def test_the_command_and_the_menu_both_reach_it(self):
         for name, needle in (
@@ -8417,7 +8457,13 @@ class ProceduresAreRecordedByCONTROLnotByKey(unittest.TestCase):
                             'procedures.py')
         with io.open(path, encoding='utf-8') as handle:
             source = handle.read()
-        self.assertIn('obj.doAction(0)', source)
+        # The press goes through the reader seam now, and the seam is
+        # what does the control's own action.
+        self.assertIn('readerApi.do_action(obj)', source)
+        seam = io.open(os.path.join(ADDON, 'globalPlugins',
+                                    'titanEnhancements', 'readerApi.py'),
+                       encoding='utf-8').read()
+        self.assertIn('obj.doAction(0)', seam)
         self.assertNotIn('SetCursorPos', source)
 
     def test_they_belong_to_a_program(self):
@@ -8918,14 +8964,18 @@ class WalkingTheRecognisedScreen(unittest.TestCase):
         from titanEnhancements import smart
         clicked = []
         before = smart._click
-        smart._click = lambda rect, name: (clicked.append((rect, name)),
-                                           (True, name))[1]
+        smart._click = lambda rect, name, double=False: (
+            clicked.append((rect, name, double)), (True, name))[1]
         try:
             ok, _said = self.review.click()
+            self.assertTrue(ok)
+            self.assertEqual(clicked[0][1], 'New game')
+            self.assertFalse(clicked[0][2])
+            # A double click is offered too - what opens an item.
+            self.review.click(double=True)
+            self.assertTrue(clicked[1][2])
         finally:
             smart._click = before
-        self.assertTrue(ok)
-        self.assertEqual(clicked[0][1], 'New game')
 
     def test_home_and_end_are_the_ends_of_the_line(self):
         self.review.move_end(True)
@@ -8960,6 +9010,21 @@ class WalkingTheRecognisedScreen(unittest.TestCase):
         self.assertIn('kb:enter', ocr)
 
 # --------------------------------------------------------------------------- #
+    def test_the_shared_layout_keys_work_in_the_ocr_review(self):
+        # Numpad 4/6 cycle the SAME arrow layout as the virtual window and
+        # the palette, on the one setting - so it is learned once.
+        from titanEnhancements import virtualWindow
+        ok, name = self.review.layout_cycle(1)
+        self.assertTrue(ok)
+        self.assertTrue(name)
+        self.assertEqual(self.review.layout(), virtualWindow.layout())
+        keys = self.plugin.OCR_KEYS if hasattr(self, 'plugin') else None
+        src = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', '__init__.py'),
+            encoding='utf-8').read()
+        self.assertIn("'kb:numpad4': 'ocrLayoutBack'", src)
+        self.assertIn("'kb:numpad6': 'ocrLayout'", src)
+
 class RunningItForRealInsideNVDA(unittest.TestCase):
     """The check that catches what a stand-in cannot.
 
@@ -9425,13 +9490,10 @@ class TheAuditoryIcons(unittest.TestCase):
     def test_every_kind_of_control_has_an_icon(self):
         from titanEnhancements import appReview
         for kind in ('button', 'check', 'list', 'text', 'gauge', 'label'):
-            self.assertIn(self.icons.for_control(kind), self.icons.NAMES,
+            self.assertIn(self.icons.for_control(kind), self.icons.all_events(),
                           kind)
-
-    def test_an_unknown_kind_still_gets_one(self):
-        """A control kind added later is heard, not silent."""
         self.assertIn(self.icons.for_control('something-new'),
-                      self.icons.NAMES)
+                      self.icons.all_events())
 
 
 class TheNamedVoices(unittest.TestCase):
@@ -10158,7 +10220,10 @@ class AnIconIsNamedWithoutAskingAnybody(unittest.TestCase):
                                       'titanEnhancements', 'dialog_kind.py'),
                          encoding='utf-8').read()
         at = source.index('def wanted(')
-        self.assertIn('except', source[at:at + 700])
+        # Guarded itself, or answered by the switchboard that asks
+        # whichever reader is underneath - either way no bare configSpec.
+        block = source[at:at + 700]
+        self.assertTrue('except' in block or 'switchboard.read(' in block)
 
 
 # --------------------------------------------------------------------------- #
@@ -13514,7 +13579,7 @@ class InstallingNeverLeavesHalfAScreenReader(unittest.TestCase):
         # Everything else is really there, which is the whole point.
         self.assertGreater(sum(len(names) for _b, _d, names
                                in os.walk(self.dir)), 100)
-        self.assertEqual(len(os.listdir(sounds)), 29)
+        self.assertEqual(len(os.listdir(sounds)), 30)  # + earcons/
         with io.open(victim, 'rb') as handle:
             self.assertEqual(handle.read(), b'OLD VERSION')
         # And the user is told which file, rather than being left to find
@@ -15009,5 +15074,1007 @@ class ASoundComesFromWhereTheUserSaid(unittest.TestCase):
         self.assertTrue(any("Titan's own sound" in row for row in rows))
 
 
+class WhatAListSaysIsSaidOnce(unittest.TestCase):
+    """"Gry, 2 z 13, gry 2 z 13": a move speaks the row it lands on AND
+    answers it as text, and the plugin reported that text as well - every
+    row of a walked Titan window, and every control a finger explored,
+    heard twice. What the list has said is counted, and only an answer it
+    did not speak is reported."""
+
+    def setUp(self):
+        from titanEnhancements import palette, virtualWindow, touchWalk
+        self.pal, self.vw, self.tw = palette, virtualWindow, touchWalk
+        palette.forget()
+        touchWalk.forget()
+        self.addCleanup(palette.forget)
+        self.addCleanup(lambda: virtualWindow._state.update(
+            {'on': False, 'nodes': [], 'at': 0, 'inner': 0, 'letter': 0,
+             'layout': 'linear', 'depth': None, 'window_rect': None,
+             'explored': None}))
+
+    def test_a_move_counts_as_spoken_and_a_closed_palette_does_not(self):
+        self.pal.page('one\ntwo', 'Status')
+        before = self.pal.spoken()
+        _ok, said = self.pal.move(1)
+        self.assertTrue(said)
+        self.assertGreater(self.pal.spoken(), before)   # it spoke: not reported
+        before = self.pal.spoken()
+        _ok, said = self.pal.stop()
+        self.assertEqual(self.pal.spoken(), before)     # silent: reported
+        self.assertTrue(said)
+
+    def test_the_plugin_reports_only_what_the_palette_did_not_say(self):
+        source = _source_of('__init__.py')
+        at = source.index('def _palette_key(')
+        block = source[at:source.index('\n    @script', at)]
+        self.assertIn('before = palette.spoken()', block)
+        self.assertIn('palette.spoken() == before', block)
+
+    def test_touch_hands_back_nothing_for_a_move_that_spoke(self):
+        self.pal.page('one\ntwo\nthree', 'Status')
+        handled, said = self.tw.handle('flickdown')
+        self.assertTrue(handled)
+        self.assertEqual(said, '')
+        _w, height = self.tw.screen_size()
+        handled, said = self.tw.handle('hover', x=5, y=height - 1)
+        self.assertEqual(said, '')
+        self.assertEqual(self.pal._state['at'], 2)
+        # A layout's name is answered and not spoken by the list: reported.
+        handled, said = self.tw.handle('3finger_flickdown')
+        self.assertEqual(said, 'Screen layout')
+        self.vw._state['layout'] = 'linear'
+
+    def test_every_walker_counts_what_it_says(self):
+        from titanEnhancements import ocrReview
+        for module in (self.pal, self.vw, ocrReview):
+            self.assertTrue(callable(getattr(module, 'spoken', None)),
+                            module.__name__)
+
+
+class TheOtherReaderGetsGesturesAndSwitches(unittest.TestCase):
+    """What Titan Access lacked and now shares: a recogniser that turns raw
+    contacts into NVDA's own gesture names where there is no NVDA tracker,
+    one switchboard for the shared switches, a dialog kind by window
+    handle, voice-class defaults without NVDA's speech commands, and the
+    other reader's role names in the icon table."""
+
+    def setUp(self):
+        from titanEnhancements import touchRecognizer as tr
+        self.tr = tr
+        tr.forget()
+        self.addCleanup(tr.forget)
+        self.got = []
+        tr.listener = lambda action, x, y: self.got.append((action, x, y))
+        self.addCleanup(lambda: setattr(tr, 'listener', None))
+
+    def _touch(self, path, fingers=1, dt=0.02):
+        """``path`` is a list of (x, y) for the first finger; the others
+        ride beside it. Feeds the reports and lifts everything."""
+        t = 100.0
+        for x, y in path:
+            report = [(0, x, y, True)]
+            for extra in range(1, fingers):
+                report.append((extra, x + 30 * extra, y, True))
+            self.tr.feed(report, now=t)
+            t += dt
+        self.tr.feed([], now=t)
+        return t
+
+    def test_a_short_still_touch_is_a_tap_after_the_double_tap_window(self):
+        self._touch([(100, 100), (102, 101)])
+        self.assertEqual(self.got, [])                # held back for a double
+        self.assertTrue(self.tr.settle())
+        self.assertEqual(self.got[-1][0], 'tap')
+
+    def test_two_taps_inside_the_window_are_a_double_tap(self):
+        end = self._touch([(100, 100)])
+        self.tr.feed([(0, 100, 100, True)], now=end + 0.1)
+        self.tr.feed([], now=end + 0.15)
+        self.assertEqual(self.got[-1][0], 'double_tap')
+
+    def test_a_fast_long_movement_is_a_flick_along_its_axis(self):
+        self._touch([(100, 100), (150, 102), (220, 104)])
+        self.assertEqual(self.got[-1][0], 'flickright')
+        self.got = []
+        self._touch([(300, 300), (298, 240), (301, 180)])
+        self.assertEqual(self.got[-1][0], 'flickup')
+
+    def test_the_finger_count_names_the_gesture(self):
+        self._touch([(100, 100), (160, 100), (230, 101)], fingers=3)
+        self.assertEqual(self.got[-1][0], '3finger_flickright')
+        self.got = []
+        self._touch([(100, 100), (100, 160), (100, 230)], fingers=4)
+        self.assertEqual(self.got[-1][0], '4finger_flickdown')
+
+    def test_one_finger_moving_slowly_hovers(self):
+        t = 100.0
+        for x in (100, 120, 140, 160):
+            self.tr.feed([(0, x, 100, True)], now=t)
+            t += 0.3
+        hovers = [one for one in self.got if one[0] == 'hover']
+        self.assertGreaterEqual(len(hovers), 2)
+        self.assertEqual(hovers[-1][1:], (160, 100))
+
+    def test_the_trackpad_falls_back_to_the_recogniser(self):
+        source = _source_of('trackpad.py')
+        at = source.index('def feed(')
+        block = source[at:source.index('\ndef ', at + 10)]
+        self.assertIn('touchRecognizer.feed(contacts)', block)
+
+    def test_the_switchboard_answers_the_spec_first_and_the_default_last(self):
+        from titanEnhancements import switchboard, icons, schemes, dialog_kind
+        self.assertIsInstance(switchboard.read('auditoryIcons', True), bool)
+        for source_name in ('icons.py', 'schemes.py', 'dialog_kind.py',
+                            'states.py'):
+            source = _source_of(source_name)
+            self.assertIn('switchboard.read(', source, source_name)
+            self.assertNotIn("configSpec.read().get('", source, source_name)
+        self.assertTrue(callable(dialog_kind.kind_of_window))
+        self.assertEqual(dialog_kind.kind_of_window(0), ('', ''))
+
+    def test_the_voice_classes_have_their_numbers_without_nvda(self):
+        from titanEnhancements import classes
+        shipped = classes.SHIPPED
+        self.assertEqual(shipped['kind'], {'pitch': -4})
+        self.assertEqual(shipped['state'], {'pitch': 4})
+        try:
+            from titanEnhancements import voices
+            for tag, profile in voices.VOICES.items():
+                self.assertEqual(shipped.get(tag), profile, tag)
+        except ImportError:
+            pass
+        self.assertIn('kind', classes.defaults())
+
+    def test_titan_accesss_role_names_reach_the_icon_table(self):
+        from titanEnhancements import icons
+        self.assertEqual(icons.for_role('listitem'), 'focus.listitem')
+        self.assertEqual(icons.for_role('checkbox'), 'focus.checkbox')
+        self.assertEqual(icons.for_role('edit'), 'focus.edit')
+        self.assertEqual(icons.for_role('tree'), 'focus.list')
+        self.assertEqual(icons.for_role('heading'), 'focus.heading')
+        self.assertEqual(icons.default_sound('focus.listitem'), 'item')
+
+
+class TheSharedModulesAskTheReaderThroughOneSeam(unittest.TestCase):
+    """Markers, monitors and procedures used to `import api` themselves,
+    which is why they imported cleanly in Titan Access and reached nothing.
+    They ask `readerApi` now, and a reader that is not NVDA installs hooks."""
+
+    def setUp(self):
+        from titanEnhancements import readerApi
+        self.api = readerApi
+        self._hooks = readerApi.hooks
+        self.addCleanup(lambda: setattr(readerApi, 'hooks', self._hooks))
+
+    def test_no_shared_module_imports_nvdas_api_directly(self):
+        for name in ('anchors.py', 'markers.py', 'monitors.py',
+                     'procedures.py'):
+            source = _source_of(name)
+            code = '\n'.join(line for line in source.splitlines()
+                             if not line.strip().startswith('#'))
+            self.assertNotIn('import keyboardHandler', code, name)
+            self.assertNotIn('api.getForegroundObject', code, name)
+            self.assertNotIn('api.getFocusObject', code, name)
+            self.assertNotIn('objectFromPoint', code, name)
+
+    def test_the_hooks_answer_when_nvda_is_not_there(self):
+        import sys
+        if 'api' in sys.modules and getattr(sys.modules['api'],
+                                            'getFocusObject', None):
+            self.skipTest('NVDA is here')
+        calls = []
+
+        class Hooks:
+            def foreground(self):
+                calls.append('foreground'); return 'FG'
+            def focus(self):
+                calls.append('focus'); return 'FOCUS'
+            def object_at(self, x, y):
+                calls.append(('at', x, y)); return 'AT'
+            def send_key(self, name):
+                calls.append(('key', name)); return True
+            def navigate_to(self, obj):
+                calls.append(('nav', obj)); return True
+        self.api.hooks = Hooks()
+        self.assertEqual(self.api.foreground(), 'FG')
+        self.assertEqual(self.api.focus(), 'FOCUS')
+        self.assertEqual(self.api.object_at(3, 4), 'AT')
+        self.assertTrue(self.api.send_key('control+s'))
+        self.assertTrue(self.api.type_text('ab'))
+        self.assertIn(('key', 'a'), calls)
+        self.assertTrue(self.api.navigate_to('X'))
+
+    def test_a_control_with_its_own_action_is_pressed_through_it(self):
+        class Obj:
+            actionCount = 1
+            pressed = 0
+            def doAction(self, index):
+                self.pressed += 1
+        obj = Obj()
+        self.assertTrue(self.api.do_action(obj))
+        self.assertEqual(obj.pressed, 1)
+        self.assertFalse(self.api.do_action(object()))
+
+    def test_the_manager_windows_are_on_the_plain_kit(self):
+        for name in ('managerGui.py', 'classManager.py'):
+            source = _source_of(name)
+            self.assertNotIn('from gui import guiHelper', source, name)
+            self.assertNotIn('gui.mainFrame', source, name)
+            self.assertIn('wxkit', source, name)
+
+    def test_the_plain_kit_builds_a_labelled_control_and_a_button_row(self):
+        try:
+            import wx
+        except ImportError:
+            self.skipTest('no wx')
+        from titanEnhancements import wxkit
+        app = wx.App.Get() or wx.App(False)
+        frame = wx.Dialog(None)
+        try:
+            helpers = wxkit._PlainHelpers
+            box = helpers.BoxSizerHelper(frame, orientation=wx.VERTICAL)
+            choice = box.addLabeledControl('Answer it with', wx.Choice,
+                                           choices=['a', 'b'])
+            self.assertEqual(choice.GetName(), 'Answer it with')
+            buttons = helpers.ButtonHelper(wx.HORIZONTAL)
+            button = buttons.addButton(frame, label='&Hear it')
+            box.addItem(buttons)
+            box.addDialogDismissButtons(frame.CreateButtonSizer(wx.CLOSE))
+            self.assertTrue(isinstance(button, wx.Button))
+            self.assertGreaterEqual(len(box.sizer.GetChildren()), 3)
+        finally:
+            frame.Destroy()
+
+    def test_a_concatenated_part_may_carry_a_volume(self):
+        import io as _io, os as _os
+        here = _os.path.dirname(_os.path.abspath(__file__))
+        source = _io.open(_os.path.join(here, '..', '..', 'src', 'titan_core',
+                                        'stereo_speech.py'),
+                          encoding='utf-8').read()
+        self.assertIn('seg_audio.apply_gain(volume * 1.5)', source)
+
+
+class ASoundBelongsToAnEventOfTheReader(unittest.TestCase):
+    """"dźwięk ma być per akcja NVDA, a nie per nazwa dźwięku": the focus
+    landing on a button, a check box, a list item are events of their own,
+    each with its own sound and source; the reader's own doings - a menu
+    closing, a dialog appearing, the end of a list - are events too; and
+    the manager lists EVENTS in words, never file names."""
+
+    def setUp(self):
+        from titanEnhancements import icons
+        self.icons = icons
+        self.dir = tempfile.mkdtemp()
+        self._path = icons.path
+        icons.path = lambda: os.path.join(self.dir, 'icons.json')
+        icons.forget()
+        self.addCleanup(icons.forget)
+        self.addCleanup(lambda: setattr(icons, 'path', self._path))
+        self.addCleanup(lambda: shutil.rmtree(self.dir, ignore_errors=True))
+
+    def test_every_event_has_words_and_a_built_in_sound_that_exists(self):
+        for event in self.icons.all_events():
+            label = self.icons.label_of(event)
+            self.assertTrue(label and label != event, event)
+            self.assertTrue(self.icons.path_of(self.icons.default_sound(event)),
+                            event)
+
+    def test_a_kind_of_control_is_its_own_event(self):
+        self.assertNotEqual(self.icons.for_role('BUTTON'),
+                            self.icons.for_role('CHECKBOX'))
+        self.assertEqual(self.icons.for_role('BUTTON'), 'focus.button')
+        self.assertEqual(self.icons.for_role(''), '')
+        self.assertEqual(self.icons.for_role('SOMETHING'), 'focus.other')
+
+    def test_a_reader_event_starts_on_titans_sound_and_falls_back(self):
+        played = []
+        self.icons.play_titan = lambda name: played.append(('titan', name)) or False
+        self.icons.play_file = lambda where, wait=False: played.append(('file', where)) or True
+        self.assertEqual(self.icons.source_of('reader.edge')[0],
+                         self.icons.SOURCE_TITAN)
+        self.assertTrue(self.icons.play('reader.edge'))
+        self.assertEqual(played[0], ('titan', 'reader/edge.ogg'))
+        self.assertTrue(played[1][1].endswith('large-movement.wav'))
+
+    def test_the_manager_lists_events_by_their_words(self):
+        rows = self.icons.described()
+        ids = [row['id'] for row in rows]
+        self.assertEqual(ids, self.icons.all_events())
+        for row in rows:
+            self.assertEqual(row['label'], self.icons.label_of(row['id']))
+            self.assertNotEqual(row['label'], row['id'])
+        source = _source_of('managerGui.py')
+        self.assertIn("self.icons.Set([row['label'] for row", source)
+
+    def test_the_events_are_played_where_they_happen(self):
+        for name, events in (
+                ('virtualWindow.py', ('reader.virtual-on', 'reader.virtual-off',
+                                      'reader.edge', 'reader.layout-changed',
+                                      'reader.interact-in', 'reader.interact-out',
+                                      'reader.corner', 'reader.explore')),
+                ('palette.py', ('reader.palette-open', 'reader.palette-close',
+                                'reader.edge', 'reader.corner', 'reader.explore')),
+                ('ocrReview.py', ('reader.review-on', 'reader.edge')),
+                ('interject.py', ("'reader.dialog.'",)),
+                ('states.py', ("'reader.' + which", 'reader.attention')),
+                ('trackpad.py', ('reader.trackpad-on', 'reader.trackpad-off')),
+                ('markers.py', ('reader.marker-made', 'reader.marker-reached')),
+                ('procedures.py', ('reader.procedure-recording',
+                                   'reader.procedure-kept',
+                                   'reader.procedure-done')),
+                ('monitors.py', ('reader.monitor-changed',)),
+                ('live.py', ('reader.live-region',)),
+                ('focus.py', ('reader.menu-left',))):
+            source = _source_of(name)
+            for event in events:
+                self.assertIn(event, source, '%s does not play %s' % (name, event))
+
+
+class AWebPageIsAVirtualWindowOfItsLines(unittest.TestCase):
+    """The ZDSR shape: a page in the virtual window is its lines in reading
+    order, each knowing the control it starts with, handed in by the reader
+    underneath (`virtualWindow.document_rows`)."""
+
+    def setUp(self):
+        from titanEnhancements import virtualWindow
+        self.vw = virtualWindow
+        self._hook = virtualWindow.document_rows
+        self.addCleanup(lambda: setattr(virtualWindow, 'document_rows', self._hook))
+
+    def test_the_hook_answers_before_the_tree_is_walked(self):
+        self.vw.document_rows = lambda window: [
+            {'name': 'Welcome', 'value': '', 'description': '', 'role': 'HEADING',
+             'level': 1, 'obj': None, 'rect': (0, 0, 100, 20)},
+            {'name': 'Read more', 'value': '', 'description': '', 'role': 'LINK',
+             'level': 0, 'obj': None, 'rect': (0, 30, 80, 20)}]
+        note = {}
+        rows = self.vw.nodes_of(object(), note)
+        self.assertEqual([row['name'] for row in rows], ['Welcome', 'Read more'])
+        self.assertTrue(note.get('document'))
+        self.assertEqual([row['id'] for row in rows], [0, 1])
+
+    def test_a_window_that_is_not_a_document_is_walked_as_before(self):
+        self.vw.document_rows = lambda window: None
+
+        class Role:
+            name = 'BUTTON'
+
+        class Obj:
+            name, value, description = 'OK', '', ''
+            role = Role()
+            children = []
+        rows = self.vw.nodes_of(Obj(), {})
+        self.assertEqual([row['name'] for row in rows], ['OK'])
+
+    def test_the_plugin_reads_nvdas_own_document(self):
+        source = _source_of('__init__.py')
+        self.assertIn('virtualWindow.document_rows = self._document_rows', source)
+        self.assertIn('treeInterceptor', source)
+        self.assertIn('textInfos.UNIT_LINE', source)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class AGestureAndAnExplorationEachBeginWithASound(unittest.TestCase):
+    """Two reader events of the trackpad's own: the first finger down is
+    the start of a gesture, and the first finger that moves is the start of
+    exploration - noticed on the raw contacts, so both recognisers report
+    them alike."""
+
+    def setUp(self):
+        from titanEnhancements import trackpad, icons
+        self.trackpad, self.icons = trackpad, icons
+        self.played = []
+        self._play = icons.play
+        icons.play = lambda name, wait=False: self.played.append(name) or True
+        trackpad._touch.update({'down': 0, 'explored': False,
+                                'x0': None, 'y0': None})
+
+    def tearDown(self):
+        self.icons.play = self._play
+        self.trackpad._touch.update({'down': 0, 'explored': False,
+                                     'x0': None, 'y0': None})
+
+    def test_both_events_are_in_the_table_with_a_sound(self):
+        ids = [event[0] for event in self.icons.READER_EVENTS]
+        self.assertIn('reader.gesture-start', ids)
+        self.assertIn('reader.explore-start', ids)
+        labels = self.icons.label_of('reader.gesture-start')
+        self.assertTrue(labels)
+
+    def test_the_first_finger_is_a_gesture_and_the_first_move_is_exploring(self):
+        note = self.trackpad._note_contacts
+        note([(1, 100, 100, True)])
+        self.assertEqual(self.played, ['reader.gesture-start'])
+        note([(1, 103, 101, True)])          # a tremor is not exploring
+        self.assertEqual(self.played, ['reader.gesture-start'])
+        note([(1, 140, 101, True)])
+        self.assertEqual(self.played, ['reader.gesture-start',
+                                       'reader.explore-start'])
+        note([(1, 180, 120, True)])          # said once per touch
+        self.assertEqual(len(self.played), 2)
+        note([(1, 180, 120, False)])
+        note([(1, 50, 50, True)])
+        self.assertEqual(self.played[-1], 'reader.gesture-start')
+
+    def test_two_fingers_begin_a_gesture_and_never_an_exploration(self):
+        note = self.trackpad._note_contacts
+        note([(1, 100, 100, True), (2, 200, 100, True)])
+        note([(1, 150, 100, True), (2, 250, 100, True)])
+        self.assertEqual(self.played, ['reader.gesture-start'])
+
+
+class ASpeechSchemeSaysHowEachKindIsAnnounced(unittest.TestCase):
+    """JAWS's speech and sounds schemes, shared by both readers: per kind
+    of control, which parts are said and in what order, in which voice,
+    called what, with what sound, and how it is shown in braille."""
+
+    def setUp(self):
+        _temp_config(self)
+        from titanEnhancements import speechSchemes, classes
+        speechSchemes.forget()
+        classes.forget()
+        self.schemes = speechSchemes
+        self.addCleanup(speechSchemes.forget)
+
+    def test_four_schemes_ship_and_classic_is_in_force(self):
+        keys = [key for key, _label in self.schemes.names()]
+        self.assertEqual(keys, ['classic', 'terse', 'sounds',
+                                'beginner', 'detailed', 'emacspeak'])
+        self.assertEqual(self.schemes.active(), 'classic')
+        for key in keys:
+            self.assertTrue(self.schemes.label_of(key))
+            self.assertTrue(self.schemes.shipped_meanings().get(key))
+
+    def test_a_role_falls_into_a_kind_whichever_reader_spells_it(self):
+        class Role:
+            name = 'CHECKBOX'
+        self.assertEqual(self.schemes.kind_of(Role()), 'checkbox')
+        self.assertEqual(self.schemes.kind_of('LISTITEM'), 'listitem')
+        self.assertEqual(self.schemes.kind_of('image'), 'graphic')
+        self.assertEqual(self.schemes.kind_of('nothing-like-this'), 'other')
+        self.assertEqual(self.schemes.kind_of(None), 'other')
+        for kind, event in self.schemes.KIND_EVENT.items():
+            self.assertIn(kind, self.schemes.KIND_KEYS)
+            self.assertTrue(event.startswith('focus.'))
+
+    def test_classic_reads_in_the_reading_order_and_terse_drops_the_type(self):
+        made = {'name': [('Save', 'name')], 'kind': [('button', 'kind')],
+                'state': [('pressed', 'state')], 'place': [('3 of 10', 'place')]}
+        classic = self.schemes.arrange('button', made)
+        self.assertEqual([text for text, _v in classic],
+                         ['Save', 'button', 'pressed', '3 of 10'])
+        self.assertTrue(self.schemes.use('terse'))
+        terse = self.schemes.arrange('button', made)
+        self.assertEqual([text for text, _v in terse], ['Save'])
+        # A checkbox keeps its state; a field its value.
+        cb = {'name': [('On', 'name')], 'kind': [('check box', 'kind')],
+              'state': [('checked', 'state')]}
+        self.assertEqual([t for t, _v in self.schemes.arrange('checkbox', cb)],
+                         ['On', 'checked'])
+
+    def test_sounds_replace_the_type_word_and_are_played_on_focus(self):
+        self.schemes.use('sounds')
+        self.assertEqual(self.schemes.sound_for('link'), ('event', 'focus.link'))
+        self.assertTrue(self.schemes.sound_only('link'))
+        made = {'name': [('Home', 'name')], 'kind': [('link', 'kind')]}
+        self.assertEqual(self.schemes.arrange('link', made), [('Home', 'name')])
+        from titanEnhancements import icons
+        played = []
+        saved = icons.play
+        icons.play = lambda name, wait=False: played.append(name) or True
+        try:
+            self.assertTrue(self.schemes.sounded('link'))
+        finally:
+            icons.play = saved
+        self.assertEqual(played, ['focus.link'])
+
+    def test_a_scheme_of_ones_own_is_a_copy_changed_and_survives_a_reload(self):
+        key = self.schemes.create('My quiet one', copy_of='terse')
+        self.assertEqual(key, 'my-quiet-one')
+        self.assertEqual(self.schemes.create('My quiet one'), '')
+        self.assertTrue(self.schemes.set_rule(key, 'button', kind_word='btn',
+                                              voices={'name': 'context'},
+                                              braille={'kind': 'bt',
+                                                       'parts': ['name']}))
+        self.assertTrue(self.schemes.toggle_part(key, 'button', 'kind'))
+        self.assertTrue(self.schemes.move_part(key, 'button', 'kind', -1))
+        self.assertTrue(self.schemes.use(key))
+        self.schemes.forget()
+        self.assertEqual(self.schemes.active(), key)
+        self.assertEqual(self.schemes.parts_for('button'), ['kind', 'name'])
+        made = {'name': [('Save', 'name')], 'kind': [('button', 'kind')],
+                'state': [('pressed', 'state')]}
+        self.assertEqual(self.schemes.arrange('button', made),
+                         [('btn', 'kind'), ('Save', 'context')])
+        # A word the user gave THIS control wins over the scheme's.
+        self.assertEqual(self.schemes.arrange('button', made,
+                                              keep_kind_word=True)[0],
+                         ('button', 'kind'))
+        braille = self.schemes.braille_for('button')
+        self.assertEqual((braille['kind'], braille['parts']), ('bt', ['name']))
+        self.assertTrue(self.schemes.rename(key, 'Quieter'))
+        self.assertEqual(self.schemes.label_of(key), 'Quieter')
+        self.assertFalse(self.schemes.rename('terse', 'x'))
+        self.assertTrue(self.schemes.delete(key))
+        self.assertEqual(self.schemes.active(), 'classic')
+
+    def test_a_shipped_scheme_changed_is_put_back_and_cycling_goes_round(self):
+        self.schemes.set_rule('classic', 'link', sound='event:focus.link')
+        self.assertTrue(self.schemes.is_changed('classic'))
+        self.assertEqual(self.schemes.sound_for('link'), ('event', 'focus.link'))
+        self.assertTrue(self.schemes.delete('classic'))
+        self.assertFalse(self.schemes.is_changed('classic'))
+        self.assertIsNone(self.schemes.sound_for('link'))
+        seen = [self.schemes.cycle(1)[0] for _ in range(6)]
+        self.assertEqual(seen, ['terse', 'sounds', 'beginner',
+                                'detailed', 'emacspeak', 'classic'])
+
+    def test_the_braille_rule_filters_nvdas_properties(self):
+        key = self.schemes.create('Braille test')
+        self.schemes.set_rule(key, 'checkbox',
+                              braille={'kind': '', 'parts': ['name', 'state']})
+        self.schemes.set_rule(key, 'button', braille={'kind': 'btn'})
+        self.schemes.use(key)
+
+        class Role:
+            name = 'CHECKBOX'
+        out = self.schemes._filtered_properties(
+            {'name': 'Bold', 'role': Role(), 'roleText': 'chk',
+             'states': {1}, 'value': 'x', 'positionInfo': {'indexInGroup': 2}})
+        self.assertEqual(set(out), {'name', 'states'})
+        Role.name = 'BUTTON'
+        out = self.schemes._filtered_properties(
+            {'name': 'Save', 'role': Role(), 'states': set()})
+        self.assertEqual(out['roleText'], 'btn')
+        self.assertIn('states', out)
+
+    def test_the_readers_describe_goes_through_the_scheme(self):
+        from titanEnhancements import elements
+
+        class Role:
+            name = 'BUTTON'
+            displayString = 'button'
+
+        class Obj:
+            name = 'Save'
+            role = Role()
+            states = ()
+            value = ''
+            description = ''
+            positionInfo = {}
+        self.schemes.use('terse')
+        parts = elements.describe(Obj())
+        self.assertEqual([text for text, _v in parts], ['Save'])
+        self.schemes.use('classic')
+        parts = elements.describe(Obj())
+        self.assertEqual([text for text, _v in parts][:2], ['Save', 'button'])
+        source = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'focus.py'),
+            encoding='utf-8').read()
+        self.assertIn('_scheme_sound(obj)', source)
+        plugin = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', '__init__.py'),
+            encoding='utf-8').read()
+        self.assertIn('speechSchemes.install_braille()', plugin)
+        self.assertIn('speechSchemes.uninstall_braille()', plugin)
+        self.assertIn('def script_titanSpeechScheme(', plugin)
+
+    def test_the_walked_editor_puts_up_the_levels(self):
+        from titanEnhancements import schemeWalk, palette
+        shown = []
+        saved = palette.show
+
+        def fake_show(rows, title, back=None, kind='', at=0):
+            shown.append((title, [row['label'] for row in rows], at))
+            return True, ''
+        palette.show = fake_show
+        try:
+            self.assertEqual(schemeWalk.open_it(), (True, ''))
+            title, labels, _at = shown[-1]
+            self.assertTrue(any('Classic' in one for one in labels))
+            self.assertTrue(any('form' in one.lower() for one in labels))
+            schemeWalk.open_scheme('terse')
+            title, labels, _at = shown[-1]
+            # Use, pause, earcon kit, output + one per kind.
+            self.assertEqual(len(labels), 4 + len(self.schemes.KIND_KEYS))
+            schemeWalk.open_kind('terse', 'link')
+            title, labels, _at = shown[-1]
+            self.assertTrue(any(one.startswith('Type word') for one in labels))
+            self.assertTrue(any('braille' in one.lower() for one in labels))
+            schemeWalk._toggle_part('terse', 'link', 'kind')
+            self.assertIn('kind', self.schemes.parts_for('link', 'terse'))
+            schemeWalk.open_sound('terse', 'link')
+            title, labels, _at = shown[-1]
+            self.assertTrue(any('No sound' in one for one in labels))
+            schemeWalk.open_voice('terse', 'link', 'name')
+            self.assertTrue(shown[-1][1])
+        finally:
+            palette.show = saved
+
+    def test_the_manager_the_menu_and_the_layer_reach_it(self):
+        from titanEnhancements import managerWalk, layers, commands
+        self.assertIn('schemes', [key for key, _n, _f in managerWalk.PAGES])
+        self.assertIn('schemes', managerWalk.THE_CLASS_MANAGER)
+        keys = layers.LAYERS['manager']['keys'] if hasattr(
+            layers, 'LAYERS') else None
+        if keys is not None:
+            self.assertEqual(keys['e'][0], 'speech_schemes')
+        self.assertTrue(callable(commands.speech_schemes))
+        self.assertTrue(callable(commands.next_speech_scheme))
+        for name in ('speechSchemes.py', 'schemeWalk.py'):
+            self.assertIn(name, io.open(os.path.join(
+                os.path.dirname(os.path.dirname(HERE)), 'src', 'scripts',
+                'vendor_reader_modules.py'),
+                encoding='utf-8').read())
+
+
+class AWalkedListDoesNotOutliveItsWindow(unittest.TestCase):
+    """A palette left open behind a window change swallowed the arrows in
+    the window the user moved to - "the arrow keys sometimes do not work".
+    A change of the top-level window in front closes it, as the virtual
+    window and the OCR review already close."""
+
+    def setUp(self):
+        from titanEnhancements import palette
+        self.palette = palette
+        self._hwnd = palette._foreground_hwnd
+        self._exists = palette._window_exists
+        self.front = {'hwnd': 100}
+        palette._foreground_hwnd = lambda: self.front['hwnd']
+        palette._window_exists = lambda hwnd: hwnd != 999
+        palette.forget()
+
+    def tearDown(self):
+        self.palette._foreground_hwnd = self._hwnd
+        self.palette._window_exists = self._exists
+        self.palette.forget()
+
+    def test_it_closes_when_another_window_comes_to_the_front(self):
+        rows = [{'label': 'one', 'role': ''}, {'label': 'two', 'role': ''}]
+        self.assertEqual(self.palette.show(rows, 'A list')[0], True)
+        self.assertTrue(self.palette.walking())
+        self.assertFalse(self.palette.left_the_window())
+        self.front['hwnd'] = 200
+        self.assertTrue(self.palette.left_the_window())
+        self.assertFalse(self.palette.walking())
+
+    def test_a_dialog_that_has_gone_is_not_a_window_left(self):
+        rows = [{'label': 'one', 'role': ''}]
+        self.front['hwnd'] = 999          # the dialog a row opened
+        self.palette.show(rows, 'A list')
+        self.front['hwnd'] = 100          # the dialog closed, the app is back
+        self.assertFalse(self.palette.left_the_window())
+        self.assertTrue(self.palette.walking())
+        self.front['hwnd'] = 0
+        self.assertFalse(self.palette.left_the_window())
+
+    def test_the_plugin_asks_before_keeping_the_keys(self):
+        source = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', '__init__.py'),
+            encoding='utf-8').read()
+        at = source.index('def _keep_palette_keys_right(')
+        block = source[at:source.index('\n    def ', at + 10)]
+        self.assertIn('palette.left_the_window()', block)
+        window = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'virtualWindow.py'),
+            encoding='utf-8').read()
+        self.assertIn('readerApi.foreground()', window)
+
+
+class TheReaderSchemesAndTheHintPart(unittest.TestCase):
+    """Named schemes modelled on JAWS, Window-Eyes, Dolphin SuperNova and
+    ChromeVox; a Terse that is name-only; a Verbose that is everything; and
+    a hint part - the instructions a control carries."""
+
+    def setUp(self):
+        _temp_config(self)
+        from titanEnhancements import speechSchemes
+        speechSchemes.forget()
+        self.schemes = speechSchemes
+        self.addCleanup(speechSchemes.forget)
+
+    def test_the_hint_part_exists_everywhere_it_must(self):
+        self.assertIn('hint', self.schemes.PARTS)
+        self.assertEqual(self.schemes.PART_VOICE['hint'], 'detail')
+        self.assertIn('hint', self.schemes.part_names())
+        self.assertIn('hint', self.schemes.short_part_names())
+        self.assertIn('hint', self.schemes.BRAILLE_PROPERTIES)
+
+    def test_a_removed_scheme_never_resurfaces_from_the_config(self):
+        # A user who had selected or changed JAWS/VoiceOver left an entry
+        # in the stored config; it must not come back as a "user scheme".
+        import json
+        where = self.schemes.path()
+        with open(where, 'w', encoding='utf-8') as handle:
+            json.dump({'active': 'voiceover', 'schemes': {
+                'voiceover': {'label': 'Like VoiceOver',
+                              'default': {'pause': 90}, 'rules': {}},
+                'jaws': {'label': 'Like JAWS', 'default': {}, 'rules': {}},
+                'my-own': {'label': 'My own',
+                           'default': {'parts': ['name']}, 'rules': {}}},
+            }, handle)
+        self.schemes.forget()
+        keys = [key for key, _label in self.schemes.names()]
+        self.assertNotIn('voiceover', keys)
+        self.assertNotIn('jaws', keys)
+        self.assertIn('my-own', keys)                # a real user scheme stays
+        self.assertEqual(self.schemes.active(), 'classic')
+
+    def test_the_new_schemes_ship_and_the_branded_ones_are_gone(self):
+        keys = [key for key, _label in self.schemes.names()]
+        for one in ('beginner', 'detailed', 'emacspeak'):
+            self.assertIn(one, keys)
+            self.assertTrue(self.schemes.label_of(one))
+            self.assertTrue(self.schemes.shipped_meanings().get(one))
+        for gone in ('jaws', 'window-eyes', 'supernova', 'chromevox',
+                     'talkback', 'voiceover'):
+            self.assertNotIn(gone, keys)
+        # The earcon kits survive as sound OPTIONS a rule can choose.
+        self.assertEqual(self.schemes.earcon_kits(),
+                         ('chromevox', 'talkback', 'voiceover'))
+
+    def test_a_kit_sound_option_plays_and_falls_back_to_focus(self):
+        from titanEnhancements import icons
+        key = self.schemes.create('Mine')
+        self.schemes.set_rule(key, 'button',
+                              sound='set:talkback/button', sound_only=False)
+        self.schemes.use(key)
+        self.assertEqual(self.schemes.sound_for('button'),
+                         ('set', 'talkback/button'))
+        played = []
+        saved = (icons.play_file, icons.play_titan, icons.play)
+        icons.play_file = lambda w, wait=False: (
+            played.append(('file', os.path.basename(w))) or True)
+        icons.play_titan = lambda n: played.append(('titan', n)) or False
+        icons.play = lambda e, wait=False: played.append(('event', e)) or True
+        try:
+            self.assertTrue(self.schemes.sounded('button'))
+            self.assertIn(('file', 'focus_actionable.ogg'), played)
+        finally:
+            icons.play_file, icons.play_titan, icons.play = saved
+
+    def test_terse_is_name_only(self):
+        self.schemes.use('terse')
+        self.assertEqual(self.schemes.parts_for('button'), ['name'])
+        self.assertEqual(self.schemes.parts_for('checkbox'), ['name', 'state'])
+        self.assertEqual(self.schemes.parts_for('edit'), ['name', 'value'])
+
+    def test_beginner_reads_the_hint_and_detailed_names_in_full(self):
+        self.schemes.use('beginner')
+        self.assertIn('hint', self.schemes.parts_for('button'))
+        self.assertEqual(self.schemes.parts_for('text'), ['name'])
+        self.schemes.use('detailed')
+        self.assertEqual(self.schemes.kind_word_for('button'), 'push button')
+        self.assertNotIn('hint', self.schemes.parts_for('button'))
+
+    def test_emacspeak_keeps_the_word_and_plays_the_role_icon(self):
+        self.schemes.use('emacspeak')
+        self.assertEqual(self.schemes.sound_for('button'),
+                         ('event', 'focus.button'))
+        self.assertFalse(self.schemes.sound_only('button'))
+        made = {'name': [('Save', 'name')], 'kind': [('button', 'kind')],
+                'state': [('pressed', 'state')]}
+        said = self.schemes.arrange('button', made)
+        self.assertEqual(said, [('Save', 'name'), ('button', 'context'),
+                                ('pressed', 'alert')])
+
+    def test_each_scheme_has_its_own_voices_and_pacing(self):
+        self.schemes.use('emacspeak')
+        self.assertEqual(self.schemes.voice_for('button', 'kind'), 'context')
+        self.assertEqual(self.schemes.voice_for('button', 'state'), 'alert')
+        self.assertEqual(self.schemes.active_pause(), 30)
+        self.schemes.use('beginner')
+        self.assertEqual(self.schemes.active_pause(), 130)
+        self.schemes.use('terse')
+        self.assertEqual(self.schemes.active_pause(), 0)
+        self.schemes.use('detailed')
+        self.assertEqual(self.schemes.pause_for('button'), 40)
+        self.assertEqual(self.schemes.active_pause(), 40)
+
+    def test_the_scheme_drives_both_reading_settings(self):
+        # The active scheme governs BOTH switches: reading Titan's own
+        # controls (the three tones) and reading every control in every
+        # program (pitchedEverywhere) - both build the reading through
+        # elements.describe, which is the scheme.
+        focus = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'focus.py'),
+            encoding='utf-8').read()
+        # The Titan pitched path.
+        at = focus.index('def handle_gain_focus(')
+        block = focus[at:focus.index('\n\ndef ', at)]
+        self.assertIn('elements.describe(obj)', block)
+        # The everywhere path.
+        at = focus.index('def _windows_reading(')
+        block = focus[at:focus.index('\n\ndef ', at)]
+        self.assertIn('elements.describe(obj)', block)
+        # And the scheme's earcon plays on every focus, in or out of Titan.
+        self.assertIn('_scheme_sound(obj)', focus)
+
+    def test_the_description_is_read_whatever_the_scheme(self):
+        # A description is content (the Run dialog's instructions), not a
+        # verbosity nicety - it is read even by a scheme whose parts leave
+        # it out.
+        from titanEnhancements import elements
+
+        class Role:
+            name = 'EDITABLETEXT'
+            displayString = 'edit'
+
+        class Obj:
+            name = 'Open'
+            role = Role()
+            states = ()
+            value = ''
+            description = 'Type the name of a program to open it.'
+            positionInfo = {}
+        for scheme in ('terse', 'sounds', 'emacspeak', 'beginner',
+                       'classic', 'detailed'):
+            self.schemes.use(scheme)
+            said = [t for t, _v in elements.describe(Obj())]
+            self.assertIn('Type the name of a program to open it.', said,
+                          '%s dropped the description' % scheme)
+
+    def test_the_beginner_scheme_speaks_usage_hints(self):
+        made = {'name': [('Save', 'name')], 'kind': [('button', 'kind')]}
+        self.schemes.use('beginner')
+        said = [t for t, _v in self.schemes.arrange('button', made)]
+        self.assertIn('To activate, press Spacebar', said)
+        self.assertEqual(self.schemes.hint_text('checkbox'),
+                         'To toggle, press Spacebar')
+        self.schemes.use('detailed')
+        said = [t for t, _v in self.schemes.arrange('button', made)]
+        self.assertNotIn('To activate, press Spacebar', said)
+
+    def test_a_pause_becomes_a_break_in_the_nvda_sequence(self):
+        # voices.sequence returns a flat joined string when no synth can
+        # pitch (the test stub), so the break is checked two ways: the
+        # break command builds where NVDA has it, and a pitched sequence
+        # places one. Both without a real synth: assert the wiring.
+        from titanEnhancements import voices
+        # _break_command answers None here (no NVDA speech), never raises.
+        self.assertIsNone(voices._break_command(80))
+        src = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'voices.py'),
+            encoding='utf-8').read()
+        self.assertIn('def sequence(parts, synth=None, separator=\',\', '
+                      'pause_ms=0)', src)
+        self.assertIn('brk = _break_command(pause_ms)', src)
+        self.assertIn('out.append(brk)', src)
+
+    def test_the_pause_reaches_both_readers_speech(self):
+        el = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'elements.py'),
+            encoding='utf-8').read()
+        self.assertIn('pause_ms=pause', el)
+        self.assertIn('speechSchemes.active_pause()', el)
+        eng = io.open(os.path.join(
+            os.path.dirname(os.path.dirname(HERE)), 'data', 'components',
+            'titan access', 'titan_access', 'engine.py'),
+            encoding='utf-8').read()
+        self.assertIn('speak_segments(full, gap_ms=gap)', eng)
+
+    def test_the_hint_is_built_by_both_readers(self):
+        from titanEnhancements import elements
+
+        class Role:
+            name = 'BUTTON'
+            displayString = 'button'
+
+        class Obj:
+            name = 'Save'
+            role = Role()
+            states = ()
+            value = ''
+            description = ''
+            positionInfo = {}
+            help = 'to activate press space'
+        self.schemes.use('beginner')
+        said = [text for text, _v in elements.describe(Obj())]
+        self.assertIn('to activate press space', said)
+        accessible = io.open(os.path.join(
+            os.path.dirname(os.path.dirname(HERE)), 'data', 'components',
+            'titan access', 'titan_access', 'accessible.py'),
+            encoding='utf-8').read()
+        self.assertIn("built['hint'].append", accessible)
+        self.assertIn("'place', 'hint'", accessible)
+
+
+class ASchemeIsAWholeAudioStyle(unittest.TestCase):
+    """A scheme influences ALL the reader's settings, not only the words:
+    choosing it sets the reader's switches (its sounds, whether it reads
+    every program), and its pause can be shortened or lengthened. The
+    reader's own sounds stay default/SRE - the scheme only turns them on
+    or off, never changes a file."""
+
+    def setUp(self):
+        _temp_config(self)
+        from titanEnhancements import speechSchemes
+        speechSchemes.forget()
+        self.schemes = speechSchemes
+        self.addCleanup(speechSchemes.forget)
+
+    def test_choosing_a_scheme_applies_its_reader_switches(self):
+        from titanEnhancements import switchboard
+        wrote = {}
+        saved = switchboard.write
+        switchboard.write = lambda n, v: wrote.__setitem__(n, v) or True
+        try:
+            self.schemes.use('emacspeak')
+        finally:
+            switchboard.write = saved
+        # Emacspeak is an audio desktop: icons everywhere, sound scheme,
+        # read every program.
+        self.assertTrue(wrote.get('auditoryIconsEverywhere'))
+        self.assertTrue(wrote.get('soundScheme'))
+        self.assertTrue(wrote.get('pitchedEverywhere'))
+        # Every setting a scheme names is a real reader switch.
+        for scheme in ('classic', 'terse', 'sounds', 'beginner',
+                       'detailed', 'emacspeak'):
+            for name in self.schemes.scheme_settings(scheme):
+                self.assertIn(name, self.schemes.SCHEME_SETTINGS)
+
+    def test_terse_does_not_take_over_every_program(self):
+        from titanEnhancements import switchboard
+        wrote = {}
+        saved = switchboard.write
+        switchboard.write = lambda n, v: wrote.__setitem__(n, v) or True
+        try:
+            self.schemes.use('terse')
+        finally:
+            switchboard.write = saved
+        self.assertFalse(wrote.get('pitchedEverywhere'))
+        self.assertFalse(wrote.get('auditoryIconsEverywhere'))
+
+    def test_a_scheme_switches_the_earcon_kit_and_the_mode(self):
+        key = self.schemes.create('Mine')
+        # The whole scheme switches to a kit: every kind gets its sound.
+        self.assertTrue(self.schemes.set_earcons(key, 'talkback'))
+        self.schemes.use(key)
+        self.assertEqual(self.schemes.sound_for('button'),
+                         ('set', 'talkback/button'))
+        self.assertEqual(self.schemes.sound_for('link'),
+                         ('set', 'talkback/link'))
+        # Sound and speech, speech only, sound only.
+        self.assertEqual(self.schemes.scheme_output(key), 'both')
+        self.schemes.set_output(key, 'speech')
+        self.assertFalse(self.schemes.sounded('button'))   # speech only
+        self.schemes.set_output(key, 'both')
+        # Back to the reader's own sounds.
+        self.assertTrue(self.schemes.set_earcons(key, ''))
+        self.assertIsNone(self.schemes.sound_for('button'))
+        self.assertEqual([v for v, _l in self.schemes.earcon_kit_choices()],
+                         ['', 'chromevox', 'talkback', 'voiceover'])
+
+    def test_the_scheme_switches_the_sound_scheme_and_icons(self):
+        # Choosing a scheme applies the sound-scheme and auditory-icon
+        # switches - so the scheme switches the sound theme in the manager.
+        from titanEnhancements import switchboard
+        wrote = {}
+        saved = switchboard.write
+        switchboard.write = lambda n, v: wrote.__setitem__(n, v) or True
+        try:
+            self.schemes.use('emacspeak')
+        finally:
+            switchboard.write = saved
+        self.assertIn('soundScheme', wrote)
+        self.assertIn('auditoryIcons', wrote)
+
+    def test_a_pause_can_be_shortened_and_lengthened(self):
+        key = self.schemes.create('Mine')
+        self.assertEqual(self.schemes.set_pause(key, 200), 200)
+        self.schemes.use(key)
+        self.assertEqual(self.schemes.active_pause(), 200)
+        self.assertEqual(self.schemes.set_pause(key, 0), 0)
+        self.assertEqual(self.schemes.active_pause(), 0)
+        # Clamped.
+        self.assertEqual(self.schemes.set_pause(key, 9000), 2000)
+
+    def test_the_walked_editor_has_a_pause_row(self):
+        src = io.open(os.path.join(
+            ADDON, 'globalPlugins', 'titanEnhancements', 'schemeWalk.py'),
+            encoding='utf-8').read()
+        self.assertIn('_cycle_pause', src)
+        self.assertIn('Pause between parts', src)

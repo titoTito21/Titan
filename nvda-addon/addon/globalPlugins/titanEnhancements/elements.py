@@ -283,11 +283,22 @@ def describe(obj):
                 except Exception:                    # noqa: BLE001
                     made[name] = []
 
+        # **The scheme's rule for this KIND of control**, over the reading
+        # order that applies to every control alike: which parts, in what
+        # order, in which voice, with what word or sound for the type.
+        scheme = None
+        kind_key = 'other'
         try:
-            from . import classes
-            wanted = classes.parts_read()
+            from . import speechSchemes as scheme
+            kind_key = scheme.kind_of_object(obj)
+            wanted = scheme.parts_for(kind_key)
         except Exception:                            # noqa: BLE001
-            wanted = list(PARTS_FALLBACK)
+            scheme = None
+            try:
+                from . import classes
+                wanted = classes.parts_read()
+            except Exception:                        # noqa: BLE001
+                wanted = list(PARTS_FALLBACK)
 
         name = _name_of(obj)
 
@@ -365,16 +376,45 @@ def describe(obj):
         def _the_place():
             return [(extra, 'place') for extra in _position_of(obj)]
 
+        def _the_hint():
+            # How to use the control - what JAWS says at Beginner and
+            # SuperNova at High. NVDA has no one field for it; the object's
+            # own help text is the closest true source, so a control that
+            # carries instructions has them and one that does not is silent.
+            try:
+                hint = str(getattr(obj, 'help', '') or getattr(
+                    obj, 'helpText', '') or '').strip()
+            except Exception:                        # noqa: BLE001
+                hint = ''
+            return [(hint, 'detail')] if hint else []
+
         part('name', _the_name)
         part('kind', _the_kind)
         part('state', _the_state)
         part('value', _the_value)
         part('description', _the_description)
         part('place', _the_place)
+        part('hint', _the_hint)
+        # A description is content and is read whatever the scheme, so it
+        # is built even when the scheme's parts leave it out - `arrange`
+        # appends it (`speechSchemes.arrange`).
+        if 'description' not in made:
+            try:
+                made['description'] = _the_description() or []
+            except Exception:                        # noqa: BLE001
+                made['description'] = []
 
         segments = []
-        for chosen in wanted:
-            segments.extend(made.get(chosen) or [])
+        if scheme is not None:
+            try:
+                segments = scheme.arrange(
+                    kind_key, made, wanted,
+                    keep_kind_word=bool(custom.get('role_word')))
+            except Exception:                        # noqa: BLE001
+                segments = []
+        if not segments:
+            for chosen in wanted:
+                segments.extend(made.get(chosen) or [])
         # **A note ADDS; a label replaces.** That is the whole difference
         # between the two, and it is why a note is said last and always:
         # it is what somebody wanted said about this control that nothing
@@ -419,7 +459,13 @@ def sequence(segments):
     # arrives over the wire) or the NAME of a semantic class - a folder, a
     # detail, a disabled control - which is a whole voice rather than one
     # dial. `voices.voice_of` reads both, so nothing had to be respelled.
-    return voices.sequence(segments)
+    pause = 0
+    try:
+        from . import speechSchemes
+        pause = speechSchemes.active_pause()
+    except Exception:                                # noqa: BLE001
+        pause = 0
+    return voices.sequence(segments, pause_ms=pause)
 
 
 def can_pitch():

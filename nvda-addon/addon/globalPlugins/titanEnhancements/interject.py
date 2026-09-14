@@ -176,6 +176,9 @@ def _sound_for(kind):
     if not name:
         return False
     try:
+        from . import icons
+        if icons.play('reader.dialog.' + str(kind)):
+            return True
         from . import earcons
         return bool(earcons.play_named(name))
     except Exception:                                # noqa: BLE001

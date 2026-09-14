@@ -104,11 +104,11 @@ msgstr "wył."
 
 #: src/controller/controller_modes.py:331
 msgid "Caps Lock"
-msgstr ""
+msgstr "Caps Lock"
 
 #: src/controller/controller_modes.py:334
 msgid "Shift"
-msgstr ""
+msgstr "Shift"
 
 #: src/controller/controller_modes.py:336
 msgid "Space"

@@ -264,7 +264,21 @@ def speak_sequence(sequence):
     except Exception:                                # noqa: BLE001
         return False
 
-def sequence(parts, synth=None, separator=','):
+def _break_command(ms):
+    """NVDA's BreakCommand, or None where this NVDA has not got it - a
+    pause is then silently nothing rather than an error on the focus path."""
+    try:
+        from speech.commands import BreakCommand
+        return BreakCommand(time=int(ms))
+    except Exception:                                # noqa: BLE001
+        try:
+            from speech import BreakCommand
+            return BreakCommand(time=int(ms))
+        except Exception:                            # noqa: BLE001
+            return None
+
+
+def sequence(parts, synth=None, separator=',', pause_ms=0):
     """``[(text, class)]`` -> one NVDA speech sequence.
 
     **One utterance per VOICE**, and one utterance in the ordinary case
@@ -317,6 +331,12 @@ def sequence(parts, synth=None, separator=','):
         out.extend(on)
         out.append(text)
         out.extend(off)
+        # The scheme's pacing: a real pause between the parts, after each
+        # but the last. A pause the synthesizer cannot take is nothing.
+        if pause_ms and index != len(parts) - 1:
+            brk = _break_command(pause_ms)
+            if brk is not None:
+                out.append(brk)
     if standing:
         # Put the driver back. Not optional and not best effort: a variant
         # left on is every word the reader says afterwards in the wrong

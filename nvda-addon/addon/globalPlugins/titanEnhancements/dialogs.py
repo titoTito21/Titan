@@ -350,6 +350,27 @@ def ask_text(prompt, title, on_answer=None, default='', on_cancel=None):
     wx.CallAfter(show)
 
 
+def choose_file(parent, title, wildcard):
+    """One file, picked in the platform's own chooser. '' when cancelled.
+
+    Synchronous, unlike everything else here, because it is called from a
+    button inside a dialog that is already modal. One function so that a
+    test can answer it without a window: a file chooser on somebody's
+    desktop waiting for a click is the fault every test here avoids.
+    """
+    wx = _wx()
+    if wx is None:
+        return ''
+    try:
+        with wx.FileDialog(parent, title, wildcard=wildcard,
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as chooser:
+            if chooser.ShowModal() != wx.ID_OK:
+                return ''
+            return str(chooser.GetPath() or '')
+    except Exception:                                # noqa: BLE001
+        return ''
+
+
 def confirm(prompt, title, on_yes=None, on_no=None):
     """Ask a yes/no question. ``on_yes()`` only when the answer is yes.
 

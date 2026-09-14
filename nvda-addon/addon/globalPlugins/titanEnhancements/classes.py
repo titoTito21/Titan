@@ -442,10 +442,31 @@ def save():
 # --------------------------------------------------------------------------- #
 # Reading and changing one
 # --------------------------------------------------------------------------- #
+#: The voices the add-on ships, as `voices.VOICES` has them. `voices` is
+#: NVDA speech commands and is not in the other reader, so the numbers
+#: are here as well - the same numbers, which is what makes a control
+#: sound the same under both readers.
+SHIPPED = {
+    'name': {},
+    'kind': {'pitch': -4},
+    'state': {'pitch': 4},
+    'folder': {'pitch': -4, 'rate': -2},
+    'file': {'pitch': -4},
+    'detail': {'rate': 3},
+    'context': {'pitch': -2, 'rate': -2, 'volume': 2},
+    'place': {'rate': 2, 'volume': -2},
+    'disabled': {'pitch': -2, 'volume': -3},
+    'alert': {'pitch': 2, 'volume': 2},
+}
+
+
 def defaults():
     """Every class this add-on knows, with the voice it ships with."""
-    from . import voices
-    found = dict(voices.VOICES)
+    try:
+        from . import voices
+        found = dict(voices.VOICES)
+    except Exception:                                # noqa: BLE001
+        found = {tag: dict(profile) for tag, profile in SHIPPED.items()}
     for tag, profile in EXTRA.items():
         found.setdefault(tag, profile)
     return found

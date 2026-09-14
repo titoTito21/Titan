@@ -260,6 +260,23 @@ class SettingsFrame(wx.Frame):
         # Settings categories system
         self.categories = {}  # {name: panel}
         self.category_order = []  # List of category names in order
+        # A category inside a category: {child name: parent name}. The
+        # child is registered under its FULL name ("Titan Access: Speech",
+        # so no two components can collide on "Speech") and shown in the
+        # list indented under its parent with only its own part of the
+        # name. Every other reader of the categories - the Invisible UI,
+        # the settings interfaces - sees the full name, which says where
+        # it belongs without a tree of its own.
+        self.category_parents = {}
+        # A parent's children as a SECOND list, shown only when that parent
+        # is selected - "the reader categories are a second list, under the
+        # settings categories, of course when someone has selected the
+        # Titan Access category". {parent: [child full name, ...]}. The
+        # children are NOT in `category_order` (the top list), so the top
+        # list stays the settings categories and the reader's sections
+        # appear beneath it when the reader is chosen.
+        self.child_order = {}
+        self._current_parent = None
         self.current_category_panel = None
         self.category_save_callbacks = {}  # {category_name: save_callback}
         self.category_load_callbacks = {}  # {category_name: load_callback}
@@ -439,7 +456,9 @@ class SettingsFrame(wx.Frame):
         # different category than the one the user is on.
         current_category = None
         try:
-            current_category = self.category_list.GetStringSelection() or None
+            selected = self.category_list.GetSelection()
+            if selected != wx.NOT_FOUND and selected < len(self.category_order):
+                current_category = self.category_order[selected]
         except (RuntimeError, AttributeError):
             current_category = None
 
@@ -452,7 +471,7 @@ class SettingsFrame(wx.Frame):
         # Add all categories
         for idx, category_name in enumerate(self.category_order):
             print(f"[SettingsFrame] Adding [{idx}]: {category_name}")
-            self.category_list.Append(category_name)
+            self.category_list.Append(self._display_name(category_name))
 
         # Force GUI update
         self.category_list.Update()
@@ -488,6 +507,20 @@ class SettingsFrame(wx.Frame):
         self.category_list.Bind(wx.EVT_LISTBOX, self.OnCategorySelected)
         self.category_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         left_vbox.Add(self.category_list, 1, wx.EXPAND | wx.ALL, 5)
+
+        # The second list: the chosen category's own sub-categories. It has
+        # its own label so a screen reader says which list the keyboard is
+        # in, and it is hidden until a category that HAS sub-categories is
+        # selected (today, the Titan Access reader).
+        self.subcategory_label = wx.StaticText(
+            left_panel, label=_("Section of this category"))
+        left_vbox.Add(self.subcategory_label, flag=wx.ALL, border=5)
+        self.subcategory_list = wx.ListBox(left_panel)
+        self.subcategory_list.Bind(wx.EVT_LISTBOX, self.OnSubcategorySelected)
+        self.subcategory_list.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        left_vbox.Add(self.subcategory_list, 1, wx.EXPAND | wx.ALL, 5)
+        self.subcategory_label.Hide()
+        self.subcategory_list.Hide()
 
         left_panel.SetSizer(left_vbox)
         main_sizer.Add(left_panel, 0, wx.EXPAND | wx.ALL, 5)
@@ -613,7 +646,30 @@ class SettingsFrame(wx.Frame):
         # Register the Game controller category now if a pad is already present.
         self._sync_controller_category()
 
-    def register_category(self, name, panel, save_callback=None, load_callback=None):
+    def _display_name(self, name):
+        """What the list shows for a category: a child indented under its
+        parent, with the parent's own name taken off the front."""
+        parent = self.category_parents.get(name)
+        if not parent:
+            return name
+        short = name
+        if name.startswith(parent):
+            short = name[len(parent):].lstrip(' :/-') or name
+        return '    ' + short
+
+    def _insert_under(self, name, parent):
+        """Put a child category right after its parent's last child."""
+        if parent not in self.category_order:
+            self.category_order.append(name)
+            return
+        at = self.category_order.index(parent) + 1
+        while at < len(self.category_order) and \
+                self.category_parents.get(self.category_order[at]) == parent:
+            at += 1
+        self.category_order.insert(at, name)
+
+    def register_category(self, name, panel, save_callback=None, load_callback=None,
+                          parent=None):
         """
         Register a settings category
 
@@ -624,18 +680,32 @@ class SettingsFrame(wx.Frame):
                           Signature: save_callback(panel) -> None
             load_callback: Optional function to call when loading settings
                           Signature: load_callback(panel) -> None
+            parent: Optional name of a registered category this one belongs
+                    inside - a category in a category. The child is listed
+                    indented under it.
         """
         print(f"[SettingsFrame] register_category called for: {name}")
         print(f"[SettingsFrame] is_initializing: {self.is_initializing}")
 
         if name not in self.categories:
             self.categories[name] = panel
-            self.category_order.append(name)
+            if parent:
+                # A child is a row of the SECOND list, shown when its parent
+                # is selected - not a row of the top list.
+                self.category_parents[name] = parent
+                self.child_order.setdefault(parent, [])
+                if name not in self.child_order[parent]:
+                    self.child_order[parent].append(name)
+            else:
+                self.category_order.append(name)
             print(f"[SettingsFrame] Added {name} to category_order (now has {len(self.category_order)} items)")
-            # Only append to list if we're not initializing (list will be rebuilt later)
+            # The list is rebuilt rather than appended to: a child belongs
+            # under its parent, which is not the end of the list.
             if not self.is_initializing:
-                self.category_list.Append(name)
-                print(f"[SettingsFrame] Appended {name} directly to list")
+                try:
+                    self.rebuild_category_list()
+                except Exception as error:
+                    print(f"[SettingsFrame] could not rebuild the list: {error}")
             else:
                 print(f"[SettingsFrame] Skipped append (initializing)")
             panel.Hide()
@@ -661,10 +731,19 @@ class SettingsFrame(wx.Frame):
         print(f"[SettingsFrame] category_order: {self.category_order}")
         print(f"[SettingsFrame] categories keys: {list(self.categories.keys())}")
 
+        selected = None
+        try:
+            at = self.category_list.GetSelection()
+            if at != wx.NOT_FOUND and at < len(self.category_order):
+                selected = self.category_order[at]
+        except Exception:
+            selected = None
         self.category_list.Clear()
         for category_name in self.category_order:
             print(f"[SettingsFrame] Adding to list: {category_name}")
-            self.category_list.Append(category_name)
+            self.category_list.Append(self._display_name(category_name))
+        if selected in self.category_order:
+            self.category_list.SetSelection(self.category_order.index(selected))
 
         print(f"[SettingsFrame] List now has {self.category_list.GetCount()} items")
 
@@ -680,10 +759,58 @@ class SettingsFrame(wx.Frame):
 
         print(f"[SettingsFrame] ========== rebuild complete ==========")
 
+    def _child_display_name(self, name):
+        """A child row shown by its own part of the name, with the parent
+        taken off the front (the child is registered under its FULL name so
+        two components cannot collide)."""
+        parent = self.category_parents.get(name)
+        if parent and name.startswith(parent):
+            return name[len(parent):].lstrip(' :/-') or name
+        return name
+
+    def _show_subcategories(self, parent, chosen=None):
+        """Fill and show the second list with ``parent``'s sections, or hide
+        it when this category has none."""
+        children = self.child_order.get(parent) or []
+        if not parent or not children:
+            self._current_parent = None
+            try:
+                self.subcategory_list.Clear()
+                self.subcategory_label.Hide()
+                self.subcategory_list.Hide()
+                self.Layout()
+            except Exception:
+                pass
+            return
+        self._current_parent = parent
+        try:
+            if self.subcategory_list.GetItems() != [
+                    self._child_display_name(one) for one in children]:
+                self.subcategory_list.Set(
+                    [self._child_display_name(one) for one in children])
+            if chosen in children:
+                self.subcategory_list.SetSelection(children.index(chosen))
+            else:
+                self.subcategory_list.SetSelection(wx.NOT_FOUND)
+            self.subcategory_label.Show()
+            self.subcategory_list.Show()
+            self.Layout()
+        except Exception as error:
+            print(f"[SettingsFrame] could not show the sections: {error}")
+
     def ShowCategory(self, category_name):
-        """Show the selected category panel"""
+        """Show the selected category panel, and the second list of its
+        sections when it has any (the reader's)."""
         if category_name not in self.categories:
             return
+        parent = self.category_parents.get(category_name)
+        if parent:
+            # A section chosen in the second list: keep that list up,
+            # marking which section is shown.
+            self._show_subcategories(parent, chosen=category_name)
+        else:
+            # A top category: show its own sections, or clear the list.
+            self._show_subcategories(category_name)
 
         # Hide current panel
         if self.current_category_panel:
@@ -713,9 +840,16 @@ class SettingsFrame(wx.Frame):
     def OnCategorySelected(self, event):
         """Handle category selection"""
         selection = self.category_list.GetSelection()
-        if selection != wx.NOT_FOUND:
+        if selection != wx.NOT_FOUND and selection < len(self.category_order):
             category_name = self.category_order[selection]
             self.ShowCategory(category_name)
+
+    def OnSubcategorySelected(self, event):
+        """A section of the chosen category, from the second list."""
+        children = self.child_order.get(self._current_parent) or []
+        at = self.subcategory_list.GetSelection()
+        if 0 <= at < len(children):
+            self.ShowCategory(children[at])
 
     def open_at_category(self, category_name):
         """Show the settings window pre-selected on ``category_name``.
@@ -734,6 +868,16 @@ class SettingsFrame(wx.Frame):
         # force_rebuild_categories() ran inside Show(); the category list is now
         # in sync with category_order, so select by index and show the panel.
         try:
+            parent = self.category_parents.get(category_name)
+            if parent and parent in self.category_order:
+                # A reader SECTION: select the reader in the top list, then
+                # the section in the second one, and land the keyboard on
+                # the second list where the section is.
+                self.category_list.SetSelection(
+                    self.category_order.index(parent))
+                self.ShowCategory(category_name)
+                self.subcategory_list.SetFocus()
+                return True
             if category_name in self.category_order:
                 idx = self.category_order.index(category_name)
                 self.category_list.SetSelection(idx)

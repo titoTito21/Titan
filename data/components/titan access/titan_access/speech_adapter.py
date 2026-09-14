@@ -60,14 +60,19 @@ def _estimate_duration(text, cap=2.5):
 class _Utterance(object):
     """One queued unit of speech: plain text, or pitched parts to concatenate."""
 
-    __slots__ = ("text", "position", "pitch", "segments", "generation")
+    __slots__ = ("text", "position", "pitch", "segments", "generation",
+                 "gap_ms")
 
-    def __init__(self, text="", position=0.0, pitch=0, segments=None):
+    def __init__(self, text="", position=0.0, pitch=0, segments=None,
+                 gap_ms=0):
         self.text = text or ""
         self.position = position
         self.pitch = pitch
         self.segments = segments or ()
         self.generation = 0
+        # The silence between the parts a speech scheme asks for, over the
+        # engine's own small default - a scheme's pacing, heard.
+        self.gap_ms = int(gap_ms or 0)
 
     @property
     def has_text(self):
@@ -165,7 +170,16 @@ class SpeechAdapter(object):
         """
         try:
             from src.titan_core import tce_speech
-            self._engine = tce_speech.get_reader_engine()
+            if self._own_voice_wanted():
+                # **A voice of the reader's own.** A private engine, never
+                # the one Titan's apps and games speak through, configured
+                # from the Speech section of this reader's settings.
+                self._engine = tce_speech.get_private_reader_engine()
+                if self._engine is not None:
+                    self._own = True
+                    self._apply_own_voice()
+            if self._engine is None:
+                self._engine = tce_speech.get_reader_engine()
             if self._engine is not None:
                 self._mode = self._MODE_TCE
                 return
@@ -174,6 +188,64 @@ class SpeechAdapter(object):
 
         # No ao3 fallback by design: speak only through Titan TTS, else print.
         self._mode = self._MODE_PRINT
+
+    # ------------------------------------------------------------------ #
+    # The reader's own voice
+    # ------------------------------------------------------------------ #
+    def _own_voice_wanted(self):
+        try:
+            return bool(self._settings.get_bool("Speech", "OwnVoice", False))
+        except Exception:
+            return False
+
+    def _apply_own_voice(self):
+        """Engine, voice, rate, pitch and volume from the Speech section."""
+        engine = self._engine
+        if engine is None:
+            return
+        st = self._settings
+        try:
+            wanted = str(st.get("Speech", "Synthesizer", "") or "")
+            if wanted and hasattr(engine, "set_engine"):
+                engine.set_engine(wanted)
+            voice = str(st.get("Speech", "Voice", "") or "")
+            if voice and hasattr(engine, "set_voice"):
+                try:
+                    engine.set_voice(int(voice))
+                except (TypeError, ValueError):
+                    names = [str(v.get("name") if isinstance(v, dict) else v)
+                             for v in (engine.get_available_voices() or [])]
+                    if voice in names:
+                        engine.set_voice(names.index(voice))
+            for key, setter, default in (("Rate", "set_rate", 0),
+                                         ("Pitch", "set_pitch", 0),
+                                         ("Volume", "set_volume", 100)):
+                value = st.get_int("Speech", key, default)
+                if hasattr(engine, setter):
+                    getattr(engine, setter)(int(value))
+        except Exception as e:
+            print(f"[TitanAccess] own voice: {e}")
+
+    def apply_settings(self):
+        """Re-read the reader's settings. The voice is the part that can
+        change: turning the reader's own voice on or off swaps the engine,
+        and a changed rate or voice is put onto the private one."""
+        try:
+            from src.titan_core import tce_speech
+        except Exception:
+            return
+        wanted = self._own_voice_wanted()
+        if wanted and not getattr(self, "_own", False):
+            engine = tce_speech.get_private_reader_engine()
+            if engine is not None:
+                self._engine, self._own = engine, True
+                self._mode = self._MODE_TCE
+        elif not wanted and getattr(self, "_own", False):
+            engine = tce_speech.get_reader_engine()
+            if engine is not None:
+                self._engine, self._own = engine, False
+        if getattr(self, "_own", False):
+            self._apply_own_voice()
 
     def _underlying_speaker(self):
         """Return the reader's live ``StereoSpeech`` engine, or None.
@@ -239,17 +311,19 @@ class SpeechAdapter(object):
     # waiting.
     speak_async = speak
 
-    def speak_segments(self, segments):
+    def speak_segments(self, segments, gap_ms=0):
         """Speak ``(text, pitch_offset, position)`` tuples as ONE announcement.
 
         Each part keeps its own pitch, and -- this is the contract -- **every**
         part is spoken. Interrupts, like any other element announcement, so
-        rapid navigation always reads the newest element.
+        rapid navigation always reads the newest element. ``gap_ms`` is the
+        silence between the parts a speech scheme asks for.
         """
         segments = [tuple(s) for s in (segments or []) if s and s[0]]
         if not segments:
             return
-        self._enqueue(_Utterance(segments=segments), interrupt=True)
+        self._enqueue(_Utterance(segments=segments, gap_ms=gap_ms),
+                      interrupt=True)
 
     def stop(self):
         """Stop what is speaking and DISCARD everything queued behind it."""
@@ -361,8 +435,9 @@ class SpeechAdapter(object):
             done = False
             if hasattr(eng, "speak_concat"):
                 try:
-                    done = bool(eng.speak_concat(item.segments,
-                                                 gap_ms=self._SEGMENT_GAP_MS))
+                    gap = max(self._SEGMENT_GAP_MS, int(
+                        getattr(item, "gap_ms", 0) or 0))
+                    done = bool(eng.speak_concat(item.segments, gap_ms=gap))
                 except Exception as e:  # pragma: no cover
                     print(f"[TitanAccess] speak_concat error: {e}")
                     done = False
@@ -599,17 +674,6 @@ class SpeechAdapter(object):
             self.set_pitch(self._settings.pitch)
         except Exception as e:  # pragma: no cover
             print(f"[TitanAccess] speech level apply error: {e}")
-
-    def apply_settings(self):
-        """No-op for speech parameters.
-
-        Speech (engine / voice / rate / pitch / volume) is owned by Titan TTS and
-        configured in Titan's own settings, not by the screen reader. This method
-        is kept so callers (the settings panel) can invoke it safely, but it
-        deliberately does not override any Titan TTS parameter.
-        """
-        return
-
 
 # --------------------------------------------------------------------------- #
 # Module factory

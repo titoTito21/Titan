@@ -22,7 +22,7 @@ msgstr ""
 
 #: src/titan_core/app_manager.py:223
 msgid "No openfile specified for application"
-msgstr ""
+msgstr "Aplikacja nie ma podanego pliku do uruchomienia"
 
 #: src/titan_core/app_manager.py:223 src/titan_core/app_manager.py:231
 #: src/titan_core/app_manager.py:246 src/titan_core/app_manager.py:250
@@ -38,15 +38,15 @@ msgstr "Nie znaleziono pliku aplikacji: {}"
 #: src/titan_core/app_manager.py:246
 #, python-brace-format
 msgid "Unsupported file type: {}"
-msgstr ""
+msgstr "Nieobsługiwany typ pliku: {}"
 
 #: src/titan_core/app_manager.py:250
 #, python-brace-format
 msgid "Error running application: {}"
-msgstr ""
+msgstr "Błąd uruchamiania aplikacji: {}"
 
 #: src/titan_core/app_manager.py:285
 #, python-brace-format
 msgid "Cannot run application: {}"
-msgstr ""
+msgstr "Nie można uruchomić aplikacji: {}"
 

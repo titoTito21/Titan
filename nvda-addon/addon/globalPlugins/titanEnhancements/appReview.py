@@ -1008,6 +1008,25 @@ def _cue(on):
         pass
 
 
+def layout():
+    try:
+        from . import virtualWindow
+        return virtualWindow.layout()
+    except Exception:                                # noqa: BLE001
+        return 'linear'
+
+
+def layout_cycle(delta=1):
+    """The one arrow layout, shared with the window, palette and OCR."""
+    try:
+        from . import virtualWindow
+        ok, name = virtualWindow.layout_cycle(delta)
+    except Exception:                                # noqa: BLE001
+        return False, ''
+    _say(name, interrupt=True)
+    return ok, name
+
+
 def _say(text, interrupt=True):
     if compat.speech is None:
         return

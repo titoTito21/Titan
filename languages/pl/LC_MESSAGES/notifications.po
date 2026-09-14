@@ -60,11 +60,11 @@ msgstr "Nie połączono z WiFi"
 
 #: src/ui/notificationcenter.py:49
 msgid "Titan"
-msgstr ""
+msgstr "Titan"
 
 #: src/ui/notificationcenter.py:50
 msgid "Notifications"
-msgstr ""
+msgstr "Powiadomienia"
 
 #: src/ui/notificationcenter.py:210
 msgid "Notification center"

@@ -94,6 +94,13 @@ class ProviderManager:
             if callback not in self._listeners:
                 self._listeners.append(callback)
 
+    def add_state_listener(self, callback) -> None:
+        """A state change (a check box ticked under the focus), from the
+        MSAA WinEvent hook - the one channel that says so for Win32 and,
+        through UI Automation's own bridge, for WinUI and WPF."""
+        if self.msaa is not None and hasattr(self.msaa, "add_state_listener"):
+            self.msaa.add_state_listener(callback)
+
     def start(self) -> bool:
         ok = False
         if self.uia is not None:

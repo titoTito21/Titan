@@ -6729,6 +6729,92 @@ perfectly correct about a question nobody meant to ask.
   configuration folder of their own, because a test that wrote into the
   real one would change the reader of whoever ran it.
 
+#### Braille, and the display model, in Titan Access
+
+`data/components/titan access/titan_access/braille.py`, and the `drawn`
+tier of `virtual_buffer.py`. Two things NVDA gets from injecting into every
+process, done from outside as far as outside reaches.
+
+- **The display model** is the text a program DREW, read rather than
+  photographed. `portable/drawnText.read_window` reads NVDA's display model
+  (`getWindowTextInRect`) for a window whose process has an injected reader
+  helper, exact and free with a rectangle per character; it is a buffer
+  tier (`build_drawn`) between the accessibility tiers and OCR, and a
+  window that draws its text another way answers nothing and falls through
+  to OCR. That fall-through is the honest limit of an out-of-process
+  reader.
+- **Braille** shows the focused control in cells: liblouis translates,
+  BUNDLED in the component's own `lib` (`liblouis.dll` + `lib/louis/
+  tables`, so no NVDA is needed; an installed NVDA's copy is a fall-back
+  only; the table is Titan's language, computer 8-dot by default; the
+  output real Unicode braille),
+  the speech scheme's braille rule shapes the line (which parts, the type's
+  abbreviation), and it goes to a display through BRLTTY's **BrlAPI** or to
+  a **viewer** window when there is none. `engine.announce_object` brailles
+  every control it speaks; a **Braille** reader section switches it on.
+  Off by default.
+
+#### The reader's sections are a second list
+
+`settingsgui.py`. A category's sub-categories are a SECOND list box beneath
+the settings-category list, shown only when a category that has sections is
+selected - which today is the Titan Access reader. Its sections
+(`register_category(..., parent=)`) go into `child_order[parent]` rather
+than the top `category_order`, so the top list stays the settings
+categories; selecting the reader fills and reveals `subcategory_list`
+(`_show_subcategories`), and a section keeps that list up and marks itself.
+The settings interfaces still see every section by its full name
+(`ui_model._category_order` appends anything registered but not in the top
+list).
+
+#### Speech schemes: how each KIND of control is announced
+
+`speechSchemes.py` and `schemeWalk.py`, shared by both readers. JAWS calls
+them speech and sounds schemes: the class manager says what a NAME sounds
+like and the reading order says which parts are read - for every control
+alike - and a scheme says it per kind. A button is its name and nothing
+else because the voice already says "button"; an edit field is its name,
+its type and what is in it; a link plays a sound instead of the word; a
+heading is said in the context voice; in braille a button is "btn" and a
+check box shows its state and no type. Four ship (Classic, Terse, Sounds
+instead of type words, Verbose); the user's own are copies, changed; one
+JSON file in the shared store, so a scheme made under one reader is the
+scheme under the other.
+
+- **Applied in ONE place per reader**: `elements.describe` builds every
+  part into a slot and `speechSchemes.arrange` orders them, replaces the
+  type word and the voice class per part, and leaves the type out where a
+  sound stands for it (`focus._scheme_sound` plays it on every focus);
+  Titan Access does the same in `accessible.describe` and
+  `engine.announce_object`. A word the user gave THIS control
+  (`labels.custom_of`) wins over the scheme's word for its kind.
+- **Braille is NVDA's own renderer, wrapped**: `install_braille` wraps
+  `braille.getPropertiesBraille`, drops the properties of parts the rule
+  leaves out and puts the rule's abbreviation in `roleText`, and is put
+  back in `terminate`. Titan Access has no braille display yet.
+- NVDA+alt+s is the next scheme (Insert+Shift+S in Titan Access); the
+  schemes are a page of the walked manager where every rule is EDITED
+  with Enter - a part toggles, a choice opens as a level, a word is asked
+  for - and a page of the class manager form.
+- A change never closes the list (`_relabel_kind` swaps the rows under
+  the cursor and says the row, whose label now carries its state).
+  Putting the level up again would read the title on top of the answer.
+
+#### A walked list does not outlive its window
+
+Reported as "the arrow keys sometimes do not work outside the virtual
+window". A palette left open behind an Alt+Tab kept the arrows in the
+window the user moved to, and in Titan Access the virtual window never
+noticed the user leaving at all: `virtualWindow._foreground` asked NVDA's
+`api`, which there answers None, so the handle it kept was 0 and
+`left_the_window` could never fire. Now every walker asks the seam
+(`readerApi.foreground`), `palette.left_the_window` exists and is asked
+wherever the plugin keeps the palette's keys right, and Titan Access's
+`on_focus` asks all three walkers (`_walkers_follow_the_focus`). A dialog a
+row opened and then closed is not a window left: the handle it kept was
+the dialog's, and a handle that no longer exists adopts the window in
+front instead of closing the list.
+
 #### A voice belongs to the synthesizer it came from
 
 Reported as "I set a voice on another synthesizer, save, and NVDA fills

@@ -1,0 +1,5 @@
+These sounds are from Google's TalkBack (github.com/google/talkback),
+licensed under the Apache License 2.0. They are redistributed here
+unchanged for the "Like TalkBack" speech-and-sound scheme, with
+attribution, as that licence allows. The full Apache 2.0 text is at
+https://www.apache.org/licenses/LICENSE-2.0 and in the TalkBack repository.

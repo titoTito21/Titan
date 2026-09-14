@@ -109,8 +109,8 @@ def _icons():
     try:
         sources = icons.source_names()
         for row in icons.described():
-            made.append('%s: %s, %s, %s' % (
-                row['id'], row['meaning'],
+            made.append('%s: %s, %s' % (
+                row['label'],
                 # Translators: whether an auditory icon plays.
                 _('on') if row['on'] else _('off'),
                 sources.get(row['source'], row['source'])))
@@ -164,6 +164,9 @@ PAGES = (
     ('scheme', lambda: _('Sound scheme'), _scheme),
     ('voices', lambda: _('Voices'), _voices),
     ('order', lambda: _('Reading order'), _reading_order),
+    # Edited where it is walked, not merely seen: `schemeWalk` is a
+    # manager of its own and this page opens it.
+    ('schemes', lambda: _('Speech schemes'), lambda: []),
 )
 
 
@@ -173,7 +176,24 @@ PAGES = (
 #: Which pages belong to which dialog, so "open as a form" opens the one
 #: that really edits them - the voices and the reading order live in the
 #: class manager, everything else in the manager.
-THE_CLASS_MANAGER = ('voices', 'order')
+THE_CLASS_MANAGER = ('voices', 'order', 'schemes')
+
+
+def _write_a_module():
+    """Write a reader module for the window in front, with Titan's AI, and
+    save it. The same `draft` the add-on's command palette uses."""
+    try:
+        from . import draft
+    except Exception as error:                       # noqa: BLE001
+        return False, '%s: %s' % (type(error).__name__, error)
+    module, said = draft.with_ai(None)
+    if not module:
+        return False, said
+    where, problem = draft.save(module)
+    if not where:
+        return False, problem or said
+    # Translators: said when a reader module has been written.
+    return True, _('Wrote a reader module. {said}').format(said=said)
 
 
 def open_it(only=()):
@@ -199,6 +219,16 @@ def open_it(only=()):
         else 'manager'
     rows.append({'label': _('Open as a form'), 'role': _('page'),
                  'run': (lambda one=which: _as_a_form(one))})
+    # **Write a reader module for the window in front** - the app-module
+    # authoring the add-on has, in both readers now (`draft`, which asks
+    # Titan's AI and reads the window through the seam). Not on the
+    # class-manager sublist.
+    if not (only and set(only) <= set(THE_CLASS_MANAGER)):
+        rows.append({
+            # Translators: a row that writes a reader module for the window.
+            'label': _('Write a reader module for this window'),
+            'role': '', 'icon': 'new-object',
+            'run': _write_a_module})
     with _LOCK:
         _counted['opened'] += 1
     # Translators: the title of the manager, walked.
@@ -207,6 +237,11 @@ def open_it(only=()):
 
 def _open_page(which):
     from . import palette
+    if which == 'schemes':
+        from . import schemeWalk
+        with _LOCK:
+            _counted['pages'] += 1
+        return schemeWalk.open_it(back=open_it)
     for key, name, fetch in PAGES:
         if key != which:
             continue

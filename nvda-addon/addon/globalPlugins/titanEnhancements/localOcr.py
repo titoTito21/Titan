@@ -380,6 +380,27 @@ def _inside_window(hwnd, info):
     return inside
 
 
+def _try_model(hwnd, timeout=12.0):
+    """Titan's local model as a fallback for Windows OCR, when there is a
+    window to read. None when the model is not there or answered nothing -
+    Windows OCR's own reason is then reported instead."""
+    try:
+        if not model_available(timeout=3.0)[0]:
+            return None
+        return read_window_model(int(hwnd), timeout=timeout)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def _or_model(hwnd, why):
+    """The local model where Windows OCR failed, or Windows' own reason."""
+    if hwnd:
+        found = _try_model(hwnd)
+        if found is not None:
+            return found
+    return _note(why)
+
+
 def read(left, top, width, height, hwnd=0):
     """Read a rectangle of the screen. ``Reading`` or None.
 
@@ -408,6 +429,15 @@ def read(left, top, width, height, hwnd=0):
         return _note('this NVDA has no content recognition: %s' % error)
     ok, why = available()
     if not ok:
+        # **Windows OCR failed; Titan's own model can still read it.**
+        # UWP OCR is missing a language, or refuses this display - and the
+        # local model on this machine reads the same window, nothing sent
+        # anywhere. Only with a window to read (the model reads a window,
+        # not an arbitrary rectangle).
+        if hwnd:
+            fallback = _try_model(hwnd)
+            if fallback is not None:
+                return fallback
         return _note(why)
     started = time.time()
     try:
@@ -438,16 +468,16 @@ def read(left, top, width, height, hwnd=0):
     try:
         recognizer.recognize(pixels, info, got)
     except Exception as error:                       # noqa: BLE001
-        return _note('the recogniser refused: %s' % error)
+        return _or_model(hwnd, 'the recogniser refused: %s' % error)
     if not done.wait(TIMEOUT):
         try:
             recognizer.cancel()
         except Exception:                            # noqa: BLE001
             pass
-        return _note('the recogniser did not answer')
+        return _or_model(hwnd, 'the recogniser did not answer')
     result = answer.get('result')
     if isinstance(result, Exception):
-        return _note('the recogniser failed: %s' % result)
+        return _or_model(hwnd, 'the recogniser failed: %s' % result)
     reading = Reading.of(result, info)
     # **What is HIGHLIGHTED, from the same picture, at no extra cost.**
     # In a virtual machine the highlight IS the interface - the menu entry

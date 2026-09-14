@@ -451,3 +451,186 @@ def _role_key(role_int):
         0x33: ROLE_SLIDER, 0x0F: ROLE_DOCUMENT, 0x12: ROLE_DIALOG,
         0x14: ROLE_GROUP,
     }.get(role_int, ROLE_UNKNOWN)
+
+
+# =========================================================================== #
+# The IAccessible2 COM proxy: is it there, and can it be registered here?
+# =========================================================================== #
+# **Why a screen reader needs a DLL it did not write.** IAccessible2 is a COM
+# interface, and a COM call across processes - from this reader into Chrome
+# or Firefox - needs a PROXY/STUB that knows how to marshal the interface's
+# arguments. NVDA builds `IAccessible2Proxy.dll` from the IA2 IDL and
+# registers it per process (DllGetClassObject -> CoRegisterClassObject ->
+# CoRegisterPSClsid, no registry write) inside every process it injects
+# into; Firefox ships the same thing as `ia2marshal.dll` beside its
+# `AccessibleMarshal.dll`; an installed NVDA registers it system-wide. The
+# IA2 community decided long ago that APPLICATIONS must never register it in
+# the registry, because uninstalling one would silently break every other.
+#
+# So this does what NVDA does, in this process only: look in the registry
+# first (an installed NVDA or Firefox has done the work), and otherwise take
+# a proxy DLL already on the machine and register it for this process.
+# Nothing is copied and nothing is written to the registry.
+IA2_INTERFACES = {
+    'IAccessible2': '{E89F726E-C4F4-4C19-BB19-B647D7FA8478}',
+    'IAccessible2_2': '{6C9430E9-299D-4E6F-BD01-A82A1E88D3FF}',
+    'IAccessible2_3': '{5BE18059-762E-4E73-9476-ABA294FED411}',
+    'IAccessibleAction': '{B70D9F59-3B5A-4DBA-AB9E-22012F607DF5}',
+    'IAccessibleApplication': '{D49DED83-5B25-43F4-9B95-93B44595979E}',
+    'IAccessibleComponent': '{1546D4B0-4C98-4BDA-89AE-9A64748BDDE4}',
+    'IAccessibleEditableText': '{A59AA09A-7011-4B65-939D-32B1FB5547E3}',
+    'IAccessibleHyperlink': '{01C20F2B-3DD2-400F-949F-AD00BDAB1D41}',
+    'IAccessibleHypertext': '{6B4F8BBF-F1F2-418E-B11B-DA9AA7A19D2A}',
+    'IAccessibleHypertext2': '{CF64D89F-8287-4B44-8501-A827453A6077}',
+    'IAccessibleImage': '{FE5ABB3D-615E-4F7C-909A-D9C0D1E8DC42}',
+    'IAccessibleRelation': '{7CDF86EE-C3DA-496A-BDA4-281B336E1FDC}',
+    'IAccessibleTable': '{35AD8070-C20C-4FB4-B094-F4F7275DD469}',
+    'IAccessibleTable2': '{6167F295-06F0-4CDD-A1FA-02E25153D869}',
+    'IAccessibleTableCell': '{594116B1-C99F-4847-AD06-0A7A86ECE645}',
+    'IAccessibleText': '{24FD2FFB-3AAD-4A08-8335-A3AD89C0FB4B}',
+    'IAccessibleValue': '{35855B5B-C566-4FD0-A7B1-E65465600394}',
+    'IAccessibleDocument': '{C48C7FCF-4AB5-4056-AFA6-902D6E1D1149}',
+}
+
+#: Where a proxy DLL may be. **Titan Access's own first**: built from the
+#: IA2 IDL (BSD) by `helper/ia2proxy/build.bat` into `lib/`, so a machine
+#: with neither NVDA nor Firefox has one too.
+import os as _os
+OWN_PROXY = _os.path.join(_os.path.dirname(_os.path.dirname(
+    _os.path.abspath(__file__))), 'lib', 'IAccessible2Proxy.dll')
+
+PROXY_FILES = (
+    (_os.path.dirname(OWN_PROXY), 'IAccessible2Proxy.dll'),
+    (r'%ProgramFiles%\NVDA', 'IAccessible2Proxy.dll'),
+    (r'%ProgramFiles(x86)%\NVDA', 'IAccessible2Proxy.dll'),
+    (r'%ProgramFiles%\Mozilla Firefox', 'ia2marshal.dll'),
+    (r'%ProgramFiles(x86)%\Mozilla Firefox', 'ia2marshal.dll'),
+    (r'%ProgramFiles%\Mozilla Firefox', 'AccessibleMarshal.dll'),
+)
+
+_proxy_state = {'how': '', 'path': '', 'why': '', 'registered': []}
+
+
+def proxy_registered(iid=None):
+    """Whether Windows knows a proxy for this interface (the registry).
+
+    ``ProxyStubClsid32`` under ``HKCR\\Interface\\{iid}`` is the whole
+    test: it is what an installed NVDA or Firefox writes.
+    """
+    iid = iid or IA2_INTERFACES['IAccessible2']
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT,
+                            r'Interface\%s\ProxyStubClsid32' % iid) as key:
+            value, _kind = winreg.QueryValueEx(key, '')
+            return bool(value)
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def proxy_candidates():
+    """Proxy DLLs that exist on this machine, in the order to try them."""
+    import os
+    found = []
+    for folder, name in PROXY_FILES:
+        path = os.path.join(os.path.expandvars(folder), name)
+        if os.path.isfile(path) and path not in found:
+            found.append(path)
+    return found
+
+
+def proxy_status():
+    return dict(_proxy_state, in_registry=proxy_registered(),
+                candidates=proxy_candidates())
+
+
+def ensure_proxy():
+    """Make the IA2 interfaces marshallable in THIS process. ``(how, detail)``.
+
+    ``how`` is 'registry' when Windows already has a proxy, 'process' when
+    one was registered here from a DLL found on the machine, and '' when
+    neither could be done - in which case IA2 calls into a browser fail and
+    UI Automation, which needs no proxy, is what the reader has.
+    """
+    if _proxy_state['how']:
+        return _proxy_state['how'], _proxy_state['path']
+    if proxy_registered():
+        _proxy_state['how'] = 'registry'
+        return 'registry', ''
+    candidates = proxy_candidates()
+    if not candidates:
+        _proxy_state['why'] = 'no IA2 proxy DLL on this machine'
+        return '', _proxy_state['why']
+    for path in candidates:
+        ok, why = _register_in_process(path)
+        if ok:
+            _proxy_state['how'] = 'process'
+            _proxy_state['path'] = path
+            return 'process', path
+        _proxy_state['why'] = why
+    return '', _proxy_state['why']
+
+
+_kept = []      # the class factory and the library, alive for the process
+
+
+def _register_in_process(path):
+    """DllGetClassObject -> CoRegisterClassObject -> CoRegisterPSClsid."""
+    import ctypes
+    from ctypes import wintypes
+    try:
+        from comtypes import GUID, IUnknown
+        from comtypes.server import IClassFactory  # noqa: F401
+        import comtypes
+    except Exception as error:                       # noqa: BLE001
+        return False, 'comtypes is not here: %s' % error
+    try:
+        library = ctypes.WinDLL(path)
+        get_class_object = library.DllGetClassObject
+    except Exception as error:                       # noqa: BLE001
+        return False, '%s would not load: %s' % (path, error)
+    ole32 = ctypes.windll.ole32
+    # **The proxy's class id is one of the interfaces it proxies** - MIDL
+    # makes it the FIRST interface in the file unless told otherwise, and
+    # which one that is differs between NVDA's build, Firefox's and ours.
+    # So every IA2 interface id is tried as the class id until the DLL
+    # answers with a factory; asking is free and the right one is certain.
+    # A proxy/stub class object is an IPSFactoryBuffer, not an IClassFactory.
+    iid_factory = GUID('{D5F569D0-593B-101A-B569-08002B2DBF7A}')
+    factory = ctypes.c_void_p()
+    clsid = None
+    last = 0
+    for candidate in ([IA2_INTERFACES['IAccessibleHyperlink']]
+                      + list(IA2_INTERFACES.values())):
+        trial = GUID(candidate)
+        try:
+            result = get_class_object(ctypes.byref(trial),
+                                      ctypes.byref(iid_factory),
+                                      ctypes.byref(factory))
+        except Exception as error:                   # noqa: BLE001
+            return False, 'DllGetClassObject raised: %s' % error
+        if result == 0 and factory:
+            clsid = trial
+            break
+        last = result
+    if clsid is None:
+        return False, 'DllGetClassObject answered 0x%08X for every class id' % (
+            last & 0xFFFFFFFF)
+    CLSCTX_INPROC_SERVER, REGCLS_MULTIPLEUSE = 1, 1
+    cookie = wintypes.DWORD()
+    result = ole32.CoRegisterClassObject(ctypes.byref(clsid), factory,
+                                         CLSCTX_INPROC_SERVER, REGCLS_MULTIPLEUSE,
+                                         ctypes.byref(cookie))
+    if result != 0:
+        return False, 'CoRegisterClassObject answered 0x%08X' % (result & 0xFFFFFFFF)
+    _kept.append((library, factory, cookie))
+    done = []
+    for name, iid in IA2_INTERFACES.items():
+        try:
+            if ole32.CoRegisterPSClsid(ctypes.byref(GUID(iid)),
+                                       ctypes.byref(clsid)) == 0:
+                done.append(name)
+        except Exception:                            # noqa: BLE001
+            continue
+    _proxy_state['registered'] = done
+    return bool(done), '' if done else 'CoRegisterPSClsid refused every interface'

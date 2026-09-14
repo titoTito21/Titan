@@ -143,20 +143,38 @@ def handle(action, x=None, y=None):
     with _LOCK:
         _state['handled'] += 1
         _state['last'] = action
+    # **A move that spoke for itself is not reported as well.** Every
+    # walker says the row it lands on and ALSO answers it as text; a
+    # caller that spoke that text again was every explored control said
+    # twice. The count of what the list has said is compared before and
+    # after, and only an answer nothing has spoken - a layout's name, a
+    # refusal - goes back to be said.
+    before = _spoken_by(module)
     try:
         if action in ('hover', 'hoverdown'):
             if x is None or y is None:
                 return True, ''
             with _LOCK:
                 _state['explored'] += 1
-            return True, _said(module.explore(int(x), int(y)))
-        table = _TABLE.get(name) or {}
-        found = table.get(action)
-        if found is None:
-            return True, ''
-        return True, _said(found(module))
+            answer = _said(module.explore(int(x), int(y)))
+        else:
+            table = _TABLE.get(name) or {}
+            found = table.get(action)
+            if found is None:
+                return True, ''
+            answer = _said(found(module))
     except Exception:                                # noqa: BLE001
         return True, ''
+    if _spoken_by(module) != before:
+        return True, ''
+    return True, answer
+
+
+def _spoken_by(module):
+    try:
+        return int(module.spoken())
+    except Exception:                                # noqa: BLE001
+        return 0
 
 
 def _said(answer):

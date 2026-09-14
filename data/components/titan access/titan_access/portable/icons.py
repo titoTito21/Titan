@@ -76,7 +76,7 @@ def meanings():
         'warn-user': _('refused - it will not do that'),
         'alert-user': _('something wants attention'),
         'ask-question': _('a question, waiting for an answer'),
-        'help': _('help'),
+        'help': _('help is opened'),
         'new-mail': _('something arrived'),
         'progress': _('it is still going'),
         'search-hit': _('found'),
@@ -87,6 +87,216 @@ def meanings():
 
 
 NAMES = tuple(sorted(meanings().keys()))
+
+
+#: **A sound belongs to an EVENT of the reader, not to a file.** The user
+#: asked for exactly that: "dźwięk ma być per akcja NVDA, a nie per nazwa
+#: dźwięku". So the focus landing on a button is an event of its own, the
+#: focus landing on a check box another, and each has its own sound and
+#: its own source - where before every one of them shared "select-object"
+#: and the manager listed the FILE names. The Emacspeak names stay as the
+#: built-in SOUNDS an event plays by default; they are not what the user
+#: chooses between.
+#:
+#: ``focus.<kind>`` events, in the order the manager shows them, with the
+#: built-in icon each plays unless the user says otherwise.
+FOCUS_EVENTS = (
+    ('focus.button', 'button'),
+    ('focus.checkbox', 'select-object'),
+    ('focus.radiobutton', 'select-object'),
+    ('focus.edit', 'select-object'),
+    ('focus.combobox', 'open-object'),
+    ('focus.listitem', 'item'),
+    ('focus.list', 'open-object'),
+    ('focus.treeitem', 'item'),
+    ('focus.tablecell', 'item'),
+    ('focus.link', 'yank-object'),
+    ('focus.heading', 'section'),
+    ('focus.menuitem', 'item'),
+    ('focus.menu', 'open-object'),
+    ('focus.tab', 'section'),
+    ('focus.slider', 'progress'),
+    ('focus.progressbar', 'progress'),
+    ('focus.dialog', 'ask-question'),
+    ('focus.document', 'open-object'),
+    ('focus.text', 'paragraph'),
+    ('focus.graphic', 'paragraph'),
+    ('focus.toolbar', 'section'),
+    ('focus.pane', 'section'),
+    ('focus.other', 'select-object'),
+)
+FOCUS_DEFAULTS = dict(FOCUS_EVENTS)
+
+
+def focus_labels():
+    return {
+        # Translators: a reader event, in the sounds manager: the focus
+        # lands on this kind of control.
+        'focus.button': _('The focus lands on a button'),
+        'focus.checkbox': _('The focus lands on a check box'),
+        'focus.radiobutton': _('The focus lands on a radio button'),
+        'focus.edit': _('The focus lands on an edit field'),
+        'focus.combobox': _('The focus lands on a combo box'),
+        'focus.listitem': _('The focus lands on a list item'),
+        'focus.list': _('The focus lands on a list'),
+        'focus.treeitem': _('The focus lands on a tree item'),
+        'focus.tablecell': _('The focus lands on a table cell'),
+        'focus.link': _('The focus lands on a link'),
+        'focus.heading': _('The focus lands on a heading'),
+        'focus.menuitem': _('The focus lands on a menu item'),
+        'focus.menu': _('The focus lands on a menu'),
+        'focus.tab': _('The focus lands on a tab'),
+        'focus.slider': _('The focus lands on a slider'),
+        'focus.progressbar': _('The focus lands on a progress bar'),
+        'focus.dialog': _('A dialog comes up'),
+        'focus.document': _('The focus lands on a document'),
+        'focus.text': _('The focus lands on plain text'),
+        'focus.graphic': _('The focus lands on a picture'),
+        'focus.toolbar': _('The focus lands on a toolbar'),
+        'focus.pane': _('The focus lands on a pane or a group'),
+        'focus.other': _('The focus lands on anything else'),
+    }
+
+
+#: NVDA's role names (upper case) -> the focus event each is.
+ROLE_EVENTS = {
+    'BUTTON': 'focus.button', 'TOGGLEBUTTON': 'focus.button',
+    'SPLITBUTTON': 'focus.button', 'MENUBUTTON': 'focus.button',
+    'DROPDOWNBUTTON': 'focus.button',
+    'CHECKBOX': 'focus.checkbox', 'RADIOBUTTON': 'focus.radiobutton',
+    'EDITABLETEXT': 'focus.edit', 'PASSWORDEDIT': 'focus.edit',
+    'COMBOBOX': 'focus.combobox',
+    'LISTITEM': 'focus.listitem', 'DATAITEM': 'focus.listitem',
+    'LIST': 'focus.list', 'TREEVIEW': 'focus.list', 'TABLE': 'focus.list',
+    'TREEVIEWITEM': 'focus.treeitem', 'TABLECELL': 'focus.tablecell',
+    'LINK': 'focus.link', 'HEADING': 'focus.heading',
+    'MENUITEM': 'focus.menuitem', 'MENU': 'focus.menu',
+    'POPUPMENU': 'focus.menu', 'MENUBAR': 'focus.menu',
+    'TAB': 'focus.tab', 'SLIDER': 'focus.slider', 'SPINBUTTON': 'focus.slider',
+    'SCROLLBAR': 'focus.slider', 'PROGRESSBAR': 'focus.progressbar',
+    'DIALOG': 'focus.dialog', 'ALERT': 'focus.dialog',
+    'DOCUMENT': 'focus.document', 'TERMINAL': 'focus.document',
+    'STATICTEXT': 'focus.text', 'GRAPHIC': 'focus.graphic',
+    'TOOLBAR': 'focus.toolbar', 'PANE': 'focus.pane', 'WINDOW': 'focus.pane',
+    'PROPERTYPAGE': 'focus.pane', 'GROUPING': 'focus.pane',
+}
+
+
+#: **Everything else the reader DOES**, each an event with a sound of its
+#: own: ``(id, built-in icon, Titan's reader sound)``. The built-in icon
+#: is what plays with no Titan; Titan's is the reader's own set
+#: (`sfx/<theme>/SRE/`), which is what these events have always sounded
+#: like under Titan Access, so a reader event starts on Titan's sound.
+READER_EVENTS = (
+    ('reader.virtual-on', 'open-object', 'reader/vscreenOn.ogg'),
+    ('reader.virtual-off', 'close-object', 'reader/vscreenOff.ogg'),
+    ('reader.palette-open', 'open-object', 'reader/sr_menu.ogg'),
+    ('reader.palette-close', 'close-object', 'reader/sr_menu_close.ogg'),
+    ('reader.review-on', 'open-object', 'reader/vscreenOn.ogg'),
+    ('reader.review-off', 'close-object', 'reader/vscreenOff.ogg'),
+    ('reader.edge', 'large-movement', 'reader/edge.ogg'),
+    ('reader.corner', 'large-movement', 'reader/srcursor_item.ogg'),
+    ('reader.layout-changed', 'section', 'reader/system_item.ogg'),
+    ('reader.interact-in', 'open-object', 'reader/zoomin.ogg'),
+    ('reader.interact-out', 'close-object', 'reader/zoomout.ogg'),
+    ('reader.gesture-start', 'select-object', 'reader/system_item.ogg'),
+    ('reader.explore-start', 'open-object', 'reader/cursor_static.ogg'),
+    ('reader.explore', 'item', 'reader/cursor.ogg'),
+    ('reader.click', 'button', 'reader/clicked.ogg'),
+    ('reader.menu-open', 'open-object', 'reader/menu_expanded.ogg'),
+    ('reader.menu-close', 'close-object', 'reader/menu_closed.ogg'),
+    ('reader.menu-left', 'close-object', 'reader/sr_menu_close.ogg'),
+    ('reader.dialog.question', 'ask-question', 'reader/question_dialog.ogg'),
+    ('reader.dialog.warning', 'warn-user', 'reader/warning_dialog.ogg'),
+    ('reader.dialog.error', 'warn-user', 'reader/error_dialog.ogg'),
+    ('reader.dialog.information', 'help', 'reader/information_dialog.ogg'),
+    ('reader.busy', 'progress', 'reader/ellipses.ogg'),
+    ('reader.ready', 'task-done', 'reader/clicked.ogg'),
+    ('reader.attention', 'alert-user', 'reader/notification.ogg'),
+    ('reader.live-region', 'modified-object', 'reader/notification.ogg'),
+    ('reader.monitor-changed', 'new-mail', 'reader/notification.ogg'),
+    ('reader.marker-made', 'mark-object', 'reader/clicked.ogg'),
+    ('reader.marker-reached', 'search-hit', 'reader/srcursor_item.ogg'),
+    ('reader.procedure-recording', 'on', 'reader/keyon.ogg'),
+    ('reader.procedure-kept', 'save-object', 'reader/keyoff.ogg'),
+    ('reader.procedure-done', 'task-done', 'reader/clicked.ogg'),
+    ('reader.trackpad-on', 'on', 'reader/sron.ogg'),
+    ('reader.trackpad-off', 'off', 'reader/sroff.ogg'),
+    ('reader.titan-connected', 'task-done', 'reader/controller_initialize.ogg'),
+    ('reader.titan-disconnected', 'off', 'reader/controller_uninitialize.ogg'),
+)
+READER_DEFAULTS = {event: icon for event, icon, _titan in READER_EVENTS}
+READER_TITAN = {event: titan for event, _icon, titan in READER_EVENTS}
+
+
+def reader_labels():
+    return {
+        # Translators: a reader event, in the sounds manager.
+        'reader.virtual-on': _('The virtual window is turned on'),
+        'reader.virtual-off': _('The virtual window is turned off'),
+        'reader.palette-open': _('The palette or a message opens'),
+        'reader.palette-close': _('The palette or a message closes'),
+        'reader.review-on': _('The screen review is turned on'),
+        'reader.review-off': _('The screen review is turned off'),
+        'reader.edge': _('The end of a list is reached'),
+        'reader.corner': _('A corner of the window is reached'),
+        'reader.layout-changed': _('The layout of the arrows changes'),
+        'reader.interact-in': _('Stepping into a control'),
+        'reader.interact-out': _('Stepping out of a control'),
+        # Translators: the first finger touches the trackpad.
+        'reader.gesture-start': _('The start of a gesture'),
+        # Translators: one finger begins to move over the trackpad.
+        'reader.explore-start': _('The start of exploration'),
+        'reader.explore': _('A finger explores onto a control'),
+        'reader.click': _('A control is clicked'),
+        'reader.menu-open': _('A menu opens'),
+        'reader.menu-close': _('A menu closes'),
+        'reader.menu-left': _('The menus are left'),
+        'reader.dialog.question': _('A question dialog appears'),
+        'reader.dialog.warning': _('A warning dialog appears'),
+        'reader.dialog.error': _('An error dialog appears'),
+        'reader.dialog.information': _('An information dialog appears'),
+        'reader.busy': _('A program becomes busy'),
+        'reader.ready': _('A program is ready again'),
+        'reader.attention': _('A window asks for attention'),
+        'reader.live-region': _('A live region changes'),
+        'reader.monitor-changed': _('A watched control changes'),
+        'reader.marker-made': _('A marker is made'),
+        'reader.marker-reached': _('A marker is reached'),
+        'reader.procedure-recording': _('A procedure starts recording'),
+        'reader.procedure-kept': _('A procedure is kept'),
+        'reader.procedure-done': _('A procedure has run'),
+        'reader.trackpad-on': _('The trackpad is turned on'),
+        'reader.trackpad-off': _('The trackpad is turned off'),
+        'reader.titan-connected': _('Titan is connected'),
+        'reader.titan-disconnected': _('Titan is disconnected'),
+    }
+
+
+def is_event(name):
+    name = str(name or '')
+    return name in FOCUS_DEFAULTS or name in READER_DEFAULTS
+
+
+def default_sound(name):
+    """The built-in sound an event or an icon plays unless told otherwise."""
+    name = str(name or '')
+    return FOCUS_DEFAULTS.get(name) or READER_DEFAULTS.get(name) or name
+
+
+def all_events():
+    """Every id the manager lists: the focus events, the reader's own
+    events, then the actions."""
+    return ([event for event, _icon in FOCUS_EVENTS]
+            + [event for event, _icon, _titan in READER_EVENTS]
+            + list(NAMES))
+
+
+def label_of(name):
+    """What an event is called, in the user's words."""
+    name = str(name or '')
+    return (focus_labels().get(name) or reader_labels().get(name)
+            or meanings().get(name) or name)
 
 #: Where an icon's sound comes from. **The built-in one** is the wave file
 #: this add-on ships (or the user's own in `titanIcons/`), played by NVDA
@@ -203,11 +413,8 @@ def switched_on():
     A tree with no `configSpec` - Titan Access - has no switch for them
     yet, and absent means yes there too.
     """
-    try:
-        from . import configSpec
-        return bool(configSpec.read().get('auditoryIcons', True))
-    except Exception:                                # noqa: BLE001
-        return True
+    from . import switchboard
+    return switchboard.read('auditoryIcons', True)
 
 
 #: The manager's own store, beside the markers, the monitors and the sound
@@ -286,6 +493,10 @@ def source_of(name):
     _load()
     with _LOCK:
         row = _sources.get(str(name)) or {}
+    if not row and str(name) in READER_DEFAULTS:
+        # A reader event has always sounded like Titan's own set; the
+        # built-in icon stands in when Titan is not there.
+        return SOURCE_TITAN, ''
     return row.get('source', SOURCE_BUILTIN), row.get('file', '')
 
 
@@ -302,8 +513,9 @@ def set_source(name, source, file=''):
 
 
 def titan_name(name):
-    """What Titan calls the sound for this icon, or ''."""
-    return TITAN_SOUNDS.get(str(name), '')
+    """What Titan calls the sound for this icon or event, or ''."""
+    name = str(name or '')
+    return READER_TITAN.get(name) or TITAN_SOUNDS.get(default_sound(name), '')
 
 
 #: What NVDA's own player takes. Anything else - `.ogg` above all, which
@@ -404,7 +616,7 @@ def play_by_source(name, source, file='', wait=False):
         return True
     if source == SOURCE_EXTERNAL and play_file(file, wait=wait):
         return True
-    return play_file(path_of(name), wait=wait)
+    return play_file(path_of(default_sound(name)), wait=wait)
 
 
 def wanted(name):
@@ -430,11 +642,13 @@ def described():
     where its sound comes from."""
     words = meanings()
     rows = []
-    for name in NAMES:
+    for name in all_events():
         source, chosen = source_of(name)
-        rows.append({'id': name, 'meaning': words.get(name, ''),
+        rows.append({'id': name, 'label': label_of(name),
+                     'meaning': words.get(default_sound(name), ''),
                      'on': str(name) not in _load(),
-                     'file': path_of(name),
+                     'file': path_of(default_sound(name)),
+                     'default': default_sound(name),
                      'source': source, 'external': chosen,
                      'titan': titan_name(name)})
     return rows
@@ -451,7 +665,7 @@ def play(name, wait=False):
     if not wanted(name):
         return False
     source, chosen = source_of(name)
-    if source == SOURCE_BUILTIN and not path_of(name):
+    if source == SOURCE_BUILTIN and not path_of(default_sound(name)):
         with _LOCK:
             if name not in _state['missing']:
                 _state['missing'].append(str(name))
@@ -473,19 +687,19 @@ def for_control(kind):
     anything added later cannot disagree about what a button sounds like.
     """
     return {
-        'button': 'button',
-        'check': 'select-object',
-        'choice': 'select-object',
-        'list': 'item',
-        'table': 'item',
-        'tree': 'item',
-        'text': 'select-object',
-        'multiline': 'select-object',
-        'slider': 'progress',
-        'gauge': 'progress',
-        'tabs': 'section',
-        'label': 'paragraph',
-    }.get(str(kind or ''), 'select-object')
+        'button': 'focus.button',
+        'check': 'focus.checkbox',
+        'choice': 'focus.combobox',
+        'list': 'focus.listitem',
+        'table': 'focus.tablecell',
+        'tree': 'focus.treeitem',
+        'text': 'focus.edit',
+        'multiline': 'focus.edit',
+        'slider': 'focus.slider',
+        'gauge': 'focus.progressbar',
+        'tabs': 'focus.tab',
+        'label': 'focus.text',
+    }.get(str(kind or ''), 'focus.other')
 
 
 #: An NVDA control role -> the icon that belongs to it. Roles are NVDA's
@@ -527,15 +741,31 @@ def for_role(role):
         name = str(getattr(role, 'name', '') or role or '')
     except Exception:                                # noqa: BLE001
         name = ''
-    return BY_ROLE.get(name.upper().replace(' ', ''), 'select-object')
+    name = name.upper().replace(' ', '')
+    name = ROLE_ALIASES.get(name, name)
+    return ROLE_EVENTS.get(name) or ('focus.other' if name else '')
+
+
+#: Titan Access spells its roles its own way (`contracts.ROLE_*`); the
+#: same table serves both readers through these.
+ROLE_ALIASES = {
+    'RADIO': 'RADIOBUTTON', 'EDIT': 'EDITABLETEXT', 'IMAGE': 'GRAPHIC',
+    'TEXT': 'STATICTEXT', 'GROUP': 'GROUPING', 'TREE': 'TREEVIEW',
+    'TREEITEM': 'TREEVIEWITEM', 'SPINNER': 'SPINBUTTON',
+    'PASSWORD': 'PASSWORDEDIT', 'CELL': 'TABLECELL', 'GRIDITEM': 'DATAITEM',
+    'SPLIT_BUTTON': 'SPLITBUTTON', 'TABCONTROL': 'TAB', 'GRID': 'TABLE',
+    'ROW': 'LISTITEM', 'STATUSBAR': 'PANE',
+}
 
 
 def everywhere():
-    """Whether icons play on every control, not only in our own windows."""
-    from . import configSpec
-    return switched_on() and bool(
-        configSpec.read().get('auditoryIconsEverywhere', True))
+    """Whether icons play for the focus outside the add-on's own windows.
 
+    Off by default, because it changes how every control on the machine
+    sounds; asked of whichever reader is underneath (`switchboard`).
+    """
+    from . import switchboard
+    return switchboard.read('auditoryIconsEverywhere', False)
 
 def for_focus(obj):
     """Play the icon for the control the focus has reached. Never waits."""

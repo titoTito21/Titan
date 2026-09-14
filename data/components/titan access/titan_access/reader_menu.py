@@ -124,6 +124,26 @@ def _test_nvda_bridge(engine):
     threading.Thread(target=_run, daemon=True).start()
 
 
+def _after_menu(engine, action, delay_ms=200):
+    """Run one of the engine's actions once the popup has really gone.
+
+    A walked list reads the window in FRONT, and while the menu's host
+    frame is still being destroyed that is the host; a moment later it is
+    the window the user was in, which is the one they mean.
+    """
+    def run():
+        try:
+            method = getattr(engine, action, None)
+            if callable(method):
+                method()
+        except Exception as e:  # pragma: no cover - host dependent
+            print(f"[TitanAccess] reader menu action {action}: {e}")
+    try:
+        wx.CallLater(delay_ms, run)
+    except Exception:
+        run()
+
+
 def _set_menu_host(engine, hwnd):
     """Tell the engine which window hosts our popup, so its focus is not read."""
     try:
@@ -152,6 +172,39 @@ def _show_on_gui_thread(engine):
     settings_item = menu.Append(wx.ID_ANY, L("readerMenu.settings"))
     menu.Bind(wx.EVT_MENU,
               lambda _evt: _open_settings_category(launcher), settings_item)
+
+    walked_item = menu.Append(wx.ID_ANY, L("readerMenu.settingsWalk"))
+    menu.Bind(wx.EVT_MENU,
+              lambda _evt: _after_menu(engine, "action_reader_settings_window"),
+              walked_item)
+
+    # **The managers, which the NVDA add-on has and this reader shares**:
+    # the reader manager walked (markers, monitors, procedures, names,
+    # the auditory icons, the sound scheme, the voices, the speech
+    # schemes), and the two forms behind it. They were reachable from a
+    # key nobody could discover; a menu is where somebody looks.
+    managers = wx.Menu()
+    for key, action in (("readerMenu.readerManager", "action_reader_manager"),
+                        ("readerMenu.speechSchemes", "action_speech_schemes"),
+                        ("readerMenu.classManager", "action_class_manager"),
+                        ("readerMenu.soundManager", "action_sound_manager"),
+                        ("readerMenu.nextScheme", "action_speech_scheme")):
+        item = managers.Append(wx.ID_ANY, L(key))
+        menu.Bind(wx.EVT_MENU,
+                  (lambda _evt, name=action: _after_menu(engine, name)), item)
+    menu.AppendSubMenu(managers, L("readerMenu.managers"))
+
+    # The walked windows, each on its key and here for whoever forgot it.
+    windows = wx.Menu()
+    for key, action in (("readerMenu.virtualWindow",
+                         "action_toggle_virtual_window"),
+                        ("readerMenu.palette", "action_command_palette"),
+                        ("readerMenu.titanWindow", "action_titan_window"),
+                        ("readerMenu.titanMenu", "action_titan_menu")):
+        item = windows.Append(wx.ID_ANY, L(key))
+        menu.Bind(wx.EVT_MENU,
+                  (lambda _evt, name=action: _after_menu(engine, name)), item)
+    menu.AppendSubMenu(windows, L("readerMenu.windows"))
 
     bridge_item = menu.Append(wx.ID_ANY, L("readerMenu.testNvdaBridge"))
     menu.Bind(wx.EVT_MENU, lambda _evt: _test_nvda_bridge(engine), bridge_item)
