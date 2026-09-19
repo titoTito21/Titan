@@ -140,7 +140,20 @@ class TitanNetHTTPServer:
         """Setup HTTP routes"""
         self.app.router.add_post('/api/repository/upload', self.handle_upload)
         self.app.router.add_get('/api/repository/apps', self.handle_get_apps)
+        # `pending` is a word, not an id, and aiohttp matches routes in the
+        # order they were registered: registered after `{app_id}` (as it
+        # was), the pending list was answered by the details handler, which
+        # failed on int('pending'). So it comes first.
+        self.app.router.add_get('/api/repository/apps/pending', self.handle_get_pending_apps)
         self.app.router.add_get('/api/repository/apps/{app_id}', self.handle_get_app_details)
+        # Updating a listed package in place, and deleting one at the
+        # address the desktop client has always sent its DELETE to.
+        self.app.router.add_post('/api/repository/apps/{app_id}/update', self.handle_update_app)
+        self.app.router.add_delete('/api/repository/apps/{app_id}', self.handle_delete)
+        # Ratings and reviews
+        self.app.router.add_get('/api/repository/apps/{app_id}/reviews', self.handle_get_app_reviews)
+        self.app.router.add_post('/api/repository/apps/{app_id}/reviews', self.handle_add_app_review)
+        self.app.router.add_delete('/api/repository/reviews/{review_id}', self.handle_delete_app_review)
         self.app.router.add_get('/api/repository', self.handle_get_repository)
         self.app.router.add_get('/api/repository/{category}', self.handle_get_category)
         self.app.router.add_get('/api/pending', self.handle_get_pending)
@@ -264,12 +277,10 @@ class TitanNetHTTPServer:
         self.app.router.add_post('/api/moderation/unban/forum', self.handle_unban_from_forum)
         self.app.router.add_get('/api/moderation/ban/check/{user_id}', self.handle_check_ban_status)
 
-        # App repository moderation routes
+        # App repository moderation routes (the pending list is registered
+        # with the repository routes above, ahead of `{app_id}`)
         self.app.router.add_post('/api/repository/apps/{app_id}/reject', self.handle_reject_app)
-        self.app.router.add_get('/api/repository/apps/pending', self.handle_get_pending_apps)
         self.app.router.add_post('/api/repository/apps/{app_id}/approve', self.handle_approve_app)
-        # TODO: handle_update_app not yet implemented
-        # self.app.router.add_post('/api/repository/apps/{app_id}/update', self.handle_update_app)
 
         # Forum moderation routes
         self.app.router.add_post('/api/forum/topics/{topic_id}/lock', self.handle_lock_topic)
@@ -427,21 +438,200 @@ class TitanNetHTTPServer:
         user = self.db.get_user_by_id(user_id)
         return user and user.get('is_admin', False)
 
-    async def handle_upload(self, request: web.Request) -> web.Response:
-        """Handle file upload to repository.
+    # Whitelist of package extensions. The repository is for TCE data
+    # packages - never raw executables. .exe / .msi / .bat / .ps1 / .sh /
+    # .dll / etc. are rejected up front so an attacker cannot smuggle a
+    # binary through.
+    ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z', '.tca', '.tcd')
+    VALID_CATEGORIES = (
+        'application', 'component', 'sound_theme',
+        'game', 'tce_package', 'language_pack',
+        'status_bar_applet',
+        'launcher', 'im_module', 'gamepad_mode',
+        'tts_engine', 'widget',
+    )
 
-        The file part is streamed to a temp file on disk in chunks rather
-        than buffered fully in memory. This is what makes large (up to
+    async def _receive_package(self, request: web.Request, require_file: bool):
+        """Read a multipart package request: the ``metadata`` part (JSON) and
+        the ``file`` part, streamed to a temp file under pending/ in chunks
+        rather than buffered in memory - which is what makes large (up to
         Config.MAX_UPLOAD_SIZE, default 1GB) TCE packages uploadable without
         the server allocating a gigabyte+ of RAM per concurrent upload. The
         SHA-256 hash and byte count are computed incrementally while writing.
-        """
+
+        Answers ``(received, None)`` or ``(None, error_response)``. ``received``
+        carries ``metadata``, ``filename``, ``file_ext``, ``file_size``,
+        ``file_hash`` and ``temp_path`` - the last is None when no file was
+        sent and none was required (an update of the details alone). The
+        CALLER owns the temp file from here: it moves it into place or
+        removes it."""
         MAX_FILE_SIZE = Config.MAX_UPLOAD_SIZE
         # 4 MB read chunks: large enough that per-chunk overhead is negligible
         # for a 1GB file, small enough to keep memory flat.
         CHUNK_SIZE = 4 * 1024 * 1024
-        ALLOWED_EXTENSIONS = ('.tcepackage', '.zip', '.7z', '.tca', '.tcd')
 
+        # Check Content-Length before reading
+        content_length = request.content_length
+        if content_length and content_length > MAX_FILE_SIZE:
+            return None, web.json_response({
+                'success': False,
+                'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'
+            }, status=413)
+
+        reader = await request.multipart()
+
+        metadata = {}
+        filename = None
+        file_ext = None
+        file_size = 0
+        file_hash = None
+        temp_path = None
+
+        pending_dir = os.path.join(self.upload_dir, 'pending')
+
+        def _discard():
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
+        async for part in reader:
+            if part.name == 'metadata':
+                metadata_text = await part.text()
+                try:
+                    metadata = json.loads(metadata_text)
+                except ValueError:
+                    _discard()
+                    return None, web.json_response({
+                        'success': False,
+                        'error': 'Metadata must be JSON'
+                    }, status=400)
+                if not isinstance(metadata, dict):
+                    _discard()
+                    return None, web.json_response({
+                        'success': False,
+                        'error': 'Metadata must be a JSON object'
+                    }, status=400)
+            elif part.name == 'file':
+                if not part.filename:
+                    continue
+
+                # Sanitize filename and validate extension BEFORE writing
+                # a single byte, so a rejected type never touches disk.
+                filename = re.sub(r'[^a-zA-Z0-9._-]', '_', part.filename)
+                file_ext = os.path.splitext(filename)[1].lower()
+                if file_ext not in self.ALLOWED_EXTENSIONS:
+                    return None, web.json_response({
+                        'success': False,
+                        'error': (
+                            f'Invalid file type: {file_ext or "(no extension)"}. '
+                            f'Allowed: {", ".join(self.ALLOWED_EXTENSIONS)}'
+                        )
+                    }, status=400)
+
+                # Stream the part to a temp file, hashing as we go.
+                hasher = hashlib.sha256()
+                fd, temp_path = tempfile.mkstemp(suffix='.part', dir=pending_dir)
+                oversize = False
+                with os.fdopen(fd, 'wb') as out:
+                    while True:
+                        chunk = await part.read_chunk(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        file_size += len(chunk)
+                        if file_size > MAX_FILE_SIZE:
+                            oversize = True
+                            break
+                        hasher.update(chunk)
+                        out.write(chunk)
+
+                if oversize:
+                    _discard()
+                    return None, web.json_response({
+                        'success': False,
+                        'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'
+                    }, status=413)
+
+                file_hash = hasher.hexdigest()
+
+        if temp_path and file_size == 0:
+            # An empty file is no file.
+            _discard()
+            temp_path = None
+
+        if require_file and (not temp_path or not filename):
+            return None, web.json_response({
+                'success': False,
+                'error': 'File data required'
+            }, status=400)
+
+        return {
+            'metadata': metadata,
+            'filename': filename,
+            'file_ext': file_ext,
+            'file_size': file_size,
+            'file_hash': file_hash,
+            'temp_path': temp_path,
+        }, None
+
+    async def _announce(self, message: Dict[str, Any]) -> None:
+        """Tell every connected client something about the repository, when
+        the live server is there to tell them through. Nothing depends on
+        it: a repository change that could not be announced still happened."""
+        ws_server = getattr(self, 'ws_server', None)
+        if ws_server is None:
+            return
+        try:
+            await ws_server.broadcast(message)
+        except Exception as e:
+            logger.warning(f"Could not announce {message.get('type')}: {e}")
+
+    @staticmethod
+    def _review_refusal(user, app, mine):
+        """What stops THIS caller rating the package, as one word the
+        clients turn into a sentence - or None when nothing does.
+
+        A client used to be told only ``can_review``, and answered a
+        refusal by hiding the form: for somebody who cannot see the
+        screen a missing form is indistinguishable from a broken one,
+        and the commonest reason (every package on a small server is the
+        caller's own) was never said. The reasons, in the order they are
+        checked: ``not_signed_in``, ``not_approved`` (nobody has approved
+        the package yet), ``own_package``, ``already_reviewed`` (this
+        release - once the author updates, they may rate again)."""
+        if not user:
+            return 'not_signed_in'
+        if not app.get('approved'):
+            return 'not_approved'
+        if app.get('author_id') == user['id']:
+            return 'own_package'
+        if mine is not None:
+            return 'already_reviewed'
+        return None
+
+    @staticmethod
+    def _is_author(user: Dict[str, Any], app: Dict[str, Any]) -> bool:
+        """Who may UPDATE a package: only whoever shared it. A moderator
+        reviews and may remove a package, but a new version of somebody
+        else's work is that person's to send."""
+        return app.get('author_id') == user['id']
+
+    def _may_manage(self, user: Dict[str, Any], app: Dict[str, Any]) -> bool:
+        """Who may delete a package: whoever shared it, and the
+        moderators."""
+        if app.get('author_id') == user['id']:
+            return True
+        if self.verify_admin(user['id']):
+            return True
+        try:
+            return bool(self.db.is_moderator(user['id']))
+        except Exception:
+            return False
+
+    async def handle_upload(self, request: web.Request) -> web.Response:
+        """Handle file upload to repository (see ``_receive_package`` for
+        how the file is read)."""
         temp_path = None
         try:
             # Verify authentication
@@ -452,83 +642,12 @@ class TitanNetHTTPServer:
                     'error': 'Authentication required'
                 }, status=401)
 
-            # Check Content-Length before reading
-            content_length = request.content_length
-            if content_length and content_length > MAX_FILE_SIZE:
-                return web.json_response({
-                    'success': False,
-                    'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'
-                }, status=413)
-
-            reader = await request.multipart()
-
-            metadata = {}
-            filename = None
-            file_ext = None
-            file_size = 0
-            file_hash = None
-
+            received, error = await self._receive_package(request, require_file=True)
+            if error is not None:
+                return error
+            temp_path = received['temp_path']
+            metadata = received['metadata']
             pending_dir = os.path.join(self.upload_dir, 'pending')
-
-            async for part in reader:
-                if part.name == 'metadata':
-                    metadata_text = await part.text()
-                    metadata = json.loads(metadata_text)
-                elif part.name == 'file':
-                    if not part.filename:
-                        continue
-
-                    # Sanitize filename and validate extension BEFORE writing
-                    # a single byte, so a rejected type never touches disk.
-                    filename = re.sub(r'[^a-zA-Z0-9._-]', '_', part.filename)
-                    file_ext = os.path.splitext(filename)[1].lower()
-                    # Whitelist allowed package extensions. The repository is
-                    # for TCE data packages — never raw executables. .exe /
-                    # .msi / .bat / .ps1 / .sh / .dll / etc. are rejected up
-                    # front so an attacker cannot smuggle a binary through.
-                    if file_ext not in ALLOWED_EXTENSIONS:
-                        return web.json_response({
-                            'success': False,
-                            'error': (
-                                f'Invalid file type: {file_ext or "(no extension)"}. '
-                                f'Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
-                            )
-                        }, status=400)
-
-                    # Stream the part to a temp file, hashing as we go.
-                    hasher = hashlib.sha256()
-                    fd, temp_path = tempfile.mkstemp(suffix='.part', dir=pending_dir)
-                    oversize = False
-                    with os.fdopen(fd, 'wb') as out:
-                        while True:
-                            chunk = await part.read_chunk(CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            file_size += len(chunk)
-                            if file_size > MAX_FILE_SIZE:
-                                oversize = True
-                                break
-                            hasher.update(chunk)
-                            out.write(chunk)
-
-                    if oversize:
-                        try:
-                            os.remove(temp_path)
-                        except OSError:
-                            pass
-                        temp_path = None
-                        return web.json_response({
-                            'success': False,
-                            'error': f'File too large. Max size: {MAX_FILE_SIZE} bytes'
-                        }, status=413)
-
-                    file_hash = hasher.hexdigest()
-
-            if not temp_path or not filename or file_size == 0:
-                return web.json_response({
-                    'success': False,
-                    'error': 'File data required'
-                }, status=400)
 
             # Validate required fields
             required_fields = ['name', 'description', 'category', 'version']
@@ -540,23 +659,14 @@ class TitanNetHTTPServer:
                     }, status=400)
 
             # Validate category
-            valid_categories = [
-                'application', 'component', 'sound_theme',
-                'game', 'tce_package', 'language_pack',
-                'status_bar_applet',  # already offered by the desktop upload
-                                       # dialog but was missing here -- fixed
-                                       # alongside the .tca/.tcd additions below
-                'launcher', 'im_module', 'gamepad_mode',
-                'tts_engine', 'widget',
-            ]
-            if metadata['category'] not in valid_categories:
+            if metadata['category'] not in self.VALID_CATEGORIES:
                 return web.json_response({
                     'success': False,
-                    'error': f'Invalid category. Must be one of: {", ".join(valid_categories)}'
+                    'error': f'Invalid category. Must be one of: {", ".join(self.VALID_CATEGORIES)}'
                 }, status=400)
 
             # Move the temp file into place under its content-hash name.
-            stored_filename = f"{file_hash}{file_ext}"
+            stored_filename = f"{received['file_hash']}{received['file_ext']}"
             file_path = os.path.join(pending_dir, stored_filename)
             try:
                 os.replace(temp_path, file_path)
@@ -573,7 +683,7 @@ class TitanNetHTTPServer:
             app_id = await self.db.run_write_async(
                 self.db.add_app_to_repository,
                 metadata['name'], metadata['description'], metadata['category'],
-                metadata['version'], user['id'], file_path, file_size, metadata,
+                metadata['version'], user['id'], file_path, received['file_size'], metadata,
             )
 
             logger.info(f"File uploaded: {metadata['name']} by {user['username']} (ID: {app_id})")
@@ -598,6 +708,339 @@ class TitanNetHTTPServer:
                 except OSError:
                     pass
 
+    async def handle_update_app(self, request: web.Request) -> web.Response:
+        """Update a package that is already in the repository, in place.
+
+        Whoever shared it (or a moderator) sends the same multipart shape as
+        an upload, and every part of it is optional: ``metadata`` with any
+        of name / description / category / version, and a ``file``.
+
+        - The details change at once. A name or a description is not
+          something a moderator reviews, and the package keeps its id, its
+          download count and its reviews - which is the whole reason to
+          update rather than delete and share again.
+        - A new FILE for a listed package is staged beside it and waits for
+          a moderator exactly as a first upload does; until then the listed
+          file goes on being downloaded. For a package still waiting for its
+          first review the new file simply replaces the waiting one.
+        """
+        temp_path = None
+        try:
+            user = self.verify_token(request)
+            if not user:
+                return web.json_response({
+                    'success': False,
+                    'error': 'Authentication required'
+                }, status=401)
+
+            try:
+                app_id = int(request.match_info['app_id'])
+            except (TypeError, ValueError):
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
+
+            loop = asyncio.get_event_loop()
+            app = await loop.run_in_executor(None, self.db.get_app, app_id)
+            if not app:
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
+            if not self._is_author(user, app):
+                return web.json_response({
+                    'success': False,
+                    'error': 'Only the author of a package can update it'
+                }, status=403)
+
+            received, error = await self._receive_package(request, require_file=False)
+            if error is not None:
+                return error
+            temp_path = received['temp_path']
+            metadata = received['metadata']
+
+            changes: Dict[str, Any] = {}
+            for field in ('name', 'description'):
+                if field in metadata:
+                    value = str(metadata[field] or '').strip()
+                    if not value:
+                        return web.json_response({
+                            'success': False,
+                            'error': f'{field} cannot be empty'
+                        }, status=400)
+                    changes[field] = value
+            if 'category' in metadata:
+                if metadata['category'] not in self.VALID_CATEGORIES:
+                    return web.json_response({
+                        'success': False,
+                        'error': f'Invalid category. Must be one of: {", ".join(self.VALID_CATEGORIES)}'
+                    }, status=400)
+                changes['category'] = metadata['category']
+            version = str(metadata.get('version') or '').strip() or None
+
+            if temp_path is None:
+                # The details alone.
+                if version:
+                    changes['version'] = version
+                if not changes:
+                    return web.json_response({
+                        'success': False,
+                        'error': 'Nothing to update'
+                    }, status=400)
+                await self.db.run_write_async(self.db.update_app_metadata, app_id, **changes)
+                logger.info(f"App {app_id} details updated by {user['username']}: {sorted(changes)}")
+                return web.json_response({
+                    'success': True,
+                    'app_id': app_id,
+                    'pending_update': False,
+                    'message': 'Package details updated.'
+                })
+
+            # A new file: into place under its content-hash name, then staged.
+            pending_dir = os.path.join(self.upload_dir, 'pending')
+            stored_filename = f"{received['file_hash']}{received['file_ext']}"
+            file_path = os.path.join(pending_dir, stored_filename)
+            try:
+                os.replace(temp_path, file_path)
+                temp_path = None
+            except OSError as e:
+                logger.error(f"Failed to store updated file: {e}")
+                return web.json_response({
+                    'success': False,
+                    'error': 'Failed to save file'
+                }, status=500)
+
+            if changes:
+                await self.db.run_write_async(self.db.update_app_metadata, app_id, **changes)
+
+            result = await self.db.run_write_async(
+                self.db.stage_app_update, app_id, file_path, received['file_size'],
+                version or app.get('version') or '1.0',
+            )
+            if not result.get('success'):
+                try:
+                    os.remove(file_path)
+                except OSError:
+                    pass
+                return web.json_response({
+                    'success': False,
+                    'error': result.get('error', 'Failed to update package')
+                }, status=400)
+
+            old_file = result.get('old_file')
+            if old_file and os.path.abspath(old_file) != os.path.abspath(file_path) and os.path.exists(old_file):
+                try:
+                    os.remove(old_file)
+                except OSError as e:
+                    logger.warning(f"Could not remove superseded file {old_file}: {e}")
+
+            staged = result.get('mode') == 'staged'
+            name = changes.get('name', app.get('name'))
+            logger.info(f"App {app_id} ({name}) {'update staged' if staged else 'file replaced'} "
+                        f"by {user['username']}, version {version or app.get('version')}")
+            await self._announce({
+                "type": "package_pending",
+                "app_id": app_id,
+                "app_name": name,
+                "author_username": app.get('author_username', user['username']),
+                "author_id": app.get('author_id'),
+                "category": changes.get('category', app.get('category')),
+                "version": version or app.get('version'),
+                "update": True,
+                "timestamp": datetime.now().isoformat(),
+            })
+            return web.json_response({
+                'success': True,
+                'app_id': app_id,
+                'pending_update': staged,
+                'message': ('Update uploaded. The current version stays available '
+                            'until a moderator approves the new one.'
+                            if staged else
+                            'Package replaced. Pending admin approval.')
+            })
+
+        except Exception as e:
+            logger.error(f"Update app error: {e}", exc_info=True)
+            return web.json_response({
+                'success': False,
+                'error': describe_error(e)
+            }, status=500)
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
+    async def _approve_update(self, app: Dict[str, Any], user: Dict[str, Any]) -> web.Response:
+        """Make a staged update the listed file: move it from pending/ to
+        approved/, write it into the row, and remove the file it replaced.
+        A database refusal puts the file back where it was."""
+        app_id = app['id']
+        staged = app['update_file_path']
+        new_path = staged
+        moved = False
+        if staged and os.path.exists(staged):
+            new_path = os.path.join(self.upload_dir, 'approved', os.path.basename(staged))
+            if os.path.abspath(new_path) != os.path.abspath(staged):
+                try:
+                    os.replace(staged, new_path)
+                    moved = True
+                except OSError as e:
+                    logger.error(f"Failed to move updated file: {e}")
+                    return web.json_response({
+                        'success': False,
+                        'error': 'Failed to move file'
+                    }, status=500)
+
+        success = await self.db.run_write_async(self.db.approve_app, app_id, user['id'], new_path)
+        if not success:
+            if moved:
+                try:
+                    os.replace(new_path, staged)
+                except OSError:
+                    pass
+            return web.json_response({
+                'success': False,
+                'error': 'Failed to approve update'
+            }, status=400)
+
+        old_file = app.get('file_path')
+        if old_file and os.path.abspath(old_file) != os.path.abspath(new_path) and os.path.exists(old_file):
+            try:
+                os.remove(old_file)
+            except OSError as e:
+                logger.warning(f"Could not remove replaced file {old_file}: {e}")
+
+        logger.info(f"Update of app {app_id} ({app.get('name')}) to version "
+                    f"{app.get('update_version')} approved by {user['username']}")
+        await self._announce({
+            "type": "package_approved",
+            "app_id": app_id,
+            "app_name": app.get('name'),
+            "author_username": app.get('author_username'),
+            "author_id": app.get('author_id'),
+            "category": app.get('category'),
+            "version": app.get('update_version'),
+            "approved_by": user['username'],
+            "update": True,
+            "timestamp": datetime.now().isoformat(),
+        })
+        return web.json_response({
+            'success': True,
+            'update': True,
+            'message': 'Update approved'
+        })
+
+    async def _reject_update(self, app: Dict[str, Any], user: Dict[str, Any]) -> web.Response:
+        """Throw a staged update away; the listed package is untouched."""
+        result = await self.db.run_write_async(self.db.reject_app_update, app['id'], user['id'])
+        if not result.get('success'):
+            return web.json_response({
+                'success': False,
+                'error': result.get('error', 'Failed to reject update')
+            }, status=400)
+        old_file = result.get('old_file')
+        if old_file and os.path.exists(old_file) and old_file != app.get('file_path'):
+            try:
+                os.remove(old_file)
+            except OSError as e:
+                logger.warning(f"Could not remove rejected update {old_file}: {e}")
+        logger.info(f"Update of app {app['id']} rejected by {user['username']}")
+        return web.json_response({'success': True, 'update': True, 'message': 'Update rejected'})
+
+    # ---- Ratings and reviews -------------------------------------------
+
+    async def handle_get_app_reviews(self, request: web.Request) -> web.Response:
+        """Every review of a package with its rating summary - and, for a
+        signed-in caller, whether they may still add one (``can_review``)
+        and what they already said (``my_review``)."""
+        try:
+            try:
+                app_id = int(request.match_info['app_id'])
+            except (TypeError, ValueError):
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
+            loop = asyncio.get_event_loop()
+            app = await loop.run_in_executor(None, self.db.get_app, app_id)
+            if not app:
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
+            reviews = await loop.run_in_executor(None, self.db.get_app_reviews, app_id)
+            rating = await loop.run_in_executor(None, self.db.get_app_rating, app_id)
+
+            user = await loop.run_in_executor(None, self.verify_token, request)
+            mine = None
+            if user:
+                mine = await loop.run_in_executor(
+                    None, self.db.get_user_app_review, app_id, user['id'])
+            refusal = self._review_refusal(user, app, mine)
+
+            return web.json_response({
+                'success': True,
+                'app_id': app_id,
+                'reviews': reviews,
+                'rating_average': rating['rating_average'],
+                'rating_count': rating['rating_count'],
+                'my_review': mine,
+                'can_review': refusal is None,
+                'review_refusal': refusal,
+            })
+        except Exception as e:
+            logger.error(f"Get app reviews error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
+
+    async def handle_add_app_review(self, request: web.Request) -> web.Response:
+        """Rate a package (1-5) and optionally write about it. Once per
+        person per package: a second attempt answers 409."""
+        try:
+            user = self.verify_token(request)
+            if not user:
+                return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+            try:
+                app_id = int(request.match_info['app_id'])
+            except (TypeError, ValueError):
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
+            try:
+                data = await request.json()
+            except Exception:
+                data = {}
+            if not isinstance(data, dict):
+                data = {}
+
+            result = await self.db.run_write_async(
+                self.db.add_app_review, app_id, user['id'], data.get('rating'), data.get('review', ''))
+            if not result.get('success'):
+                status = 409 if result.get('already_reviewed') else 400
+                if result.get('error') == 'App not found':
+                    status = 404
+                return web.json_response(result, status=status)
+
+            loop = asyncio.get_event_loop()
+            rating = await loop.run_in_executor(None, self.db.get_app_rating, app_id)
+            logger.info(f"App {app_id} rated {data.get('rating')} by {user['username']}")
+            return web.json_response({
+                'success': True,
+                'review_id': result['review_id'],
+                'rating_average': rating['rating_average'],
+                'rating_count': rating['rating_count'],
+                'message': 'Thank you for your review.'
+            })
+        except Exception as e:
+            logger.error(f"Add app review error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
+
+    async def handle_delete_app_review(self, request: web.Request) -> web.Response:
+        """Remove a review - its author's own, or any as a moderator."""
+        try:
+            user = self.verify_token(request)
+            if not user:
+                return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
+            try:
+                review_id = int(request.match_info['review_id'])
+            except (TypeError, ValueError):
+                return web.json_response({'success': False, 'error': 'Review not found'}, status=404)
+            success = await self.db.run_write_async(self.db.delete_app_review, review_id, user['id'])
+            if not success:
+                return web.json_response({'success': False, 'error': 'Review not found or permission denied'}, status=403)
+            return web.json_response({'success': True, 'message': 'Review deleted'})
+        except Exception as e:
+            logger.error(f"Delete app review error: {e}", exc_info=True)
+            return web.json_response({'success': False, 'error': describe_error(e)}, status=500)
+
     async def handle_get_apps(self, request: web.Request) -> web.Response:
         """Get apps from repository with filters"""
         try:
@@ -616,8 +1059,8 @@ class TitanNetHTTPServer:
             cursor = conn.cursor()
 
             # Build query based on filters
-            query = """
-                SELECT ar.*, u.username as uploader_username
+            query = f"""
+                SELECT ar.*, u.username as uploader_username, {Database.APP_RATING_COLUMNS}
                 FROM app_repository ar
                 JOIN users u ON ar.author_id = u.id
                 WHERE 1=1
@@ -627,7 +1070,9 @@ class TitanNetHTTPServer:
             if status == 'approved':
                 query += " AND ar.approved = 1"
             elif status == 'pending':
-                query += " AND ar.approved = 0"
+                # Waiting for a moderator: a first upload, or a listed
+                # package's staged update (public_app marks those).
+                query += " AND (ar.approved = 0 OR ar.update_file_path IS NOT NULL)"
             # If status is None, show all
 
             if category:
@@ -638,11 +1083,9 @@ class TitanNetHTTPServer:
             params.append(limit)
 
             cursor.execute(query, params)
-            apps = [dict(row) for row in cursor.fetchall()]
-
-            # Remove file paths from response
-            for app in apps:
-                app.pop('file_path', None)
+            # public_app takes the file paths out and says whether an
+            # update is waiting.
+            apps = [Database.public_app(row) for row in cursor.fetchall()]
 
             conn.close()
 
@@ -661,21 +1104,13 @@ class TitanNetHTTPServer:
     async def handle_get_app_details(self, request: web.Request) -> web.Response:
         """Get details of a specific app"""
         try:
-            app_id = int(request.match_info['app_id'])
+            try:
+                app_id = int(request.match_info['app_id'])
+            except (TypeError, ValueError):
+                return web.json_response({'success': False, 'error': 'App not found'}, status=404)
 
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-
-            # Get app with author username
-            cursor.execute("""
-                SELECT ar.*, u.username as uploader_username
-                FROM app_repository ar
-                JOIN users u ON ar.author_id = u.id
-                WHERE ar.id = ?
-            """, (app_id,))
-
-            app = cursor.fetchone()
-            conn.close()
+            loop = asyncio.get_event_loop()
+            app = await loop.run_in_executor(None, self.db.get_app, app_id)
 
             if not app:
                 return web.json_response({
@@ -683,20 +1118,35 @@ class TitanNetHTTPServer:
                     'error': 'App not found'
                 }, status=404)
 
-            app_dict = dict(app)
-            # Remove file path for security
-            app_dict.pop('file_path', None)
+            # File paths out, rating and pending-update flag in.
+            app_dict = Database.public_app(app)
+            app_dict['my_review'] = None
+            app_dict['can_review'] = False
+            app_dict['review_refusal'] = 'not_signed_in'
+            app_dict['can_manage'] = False
+            app_dict['can_update'] = False
 
             # Best-effort: mark this app as seen for the requesting user so it
-            # clears from their What's New (new apps / app updates). Never let a
-            # failure here break the details response.
+            # clears from their What's New (new apps / app updates), and say
+            # what THIS user may do with it: rate it (once, never their own),
+            # update it (only their own) or delete it (their own, or any as
+            # a moderator). Never let a failure here break the details
+            # response.
             try:
-                loop = asyncio.get_event_loop()
                 user = await loop.run_in_executor(None, self.verify_token, request)
                 if user:
                     await loop.run_in_executor(
                         None, self.db.mark_app_as_seen, user['id'], app_id
                     )
+                    mine = await loop.run_in_executor(
+                        None, self.db.get_user_app_review, app_id, user['id'])
+                    app_dict['my_review'] = mine
+                    refusal = self._review_refusal(user, app, mine)
+                    app_dict['can_review'] = refusal is None
+                    app_dict['review_refusal'] = refusal
+                    app_dict['can_manage'] = await loop.run_in_executor(
+                        None, self._may_manage, user, app)
+                    app_dict['can_update'] = self._is_author(user, app)
             except Exception as seen_err:
                 logger.warning(f"Could not mark app {app_id} as seen: {seen_err}")
 
@@ -814,6 +1264,13 @@ class TitanNetHTTPServer:
                 }, status=403)
 
             app_id = int(request.match_info['app_id'])
+
+            # A listed package with an update waiting is not approved a
+            # second time: approving it makes the update the listed file.
+            loop = asyncio.get_event_loop()
+            current = await loop.run_in_executor(None, self.db.get_app, app_id)
+            if current and current.get('approved') and current.get('update_file_path'):
+                return await self._approve_update(current, user)
 
             # Use transaction to prevent race conditions
             conn = self.db.get_connection()
@@ -1005,11 +1462,10 @@ class TitanNetHTTPServer:
                     'error': 'App not found'
                 }, status=404)
 
-            # Check permissions
-            is_admin = self.verify_admin(user['id'])
-            is_author = app['author_id'] == user['id']
-
-            if not (is_admin or is_author):
+            # Check permissions: the author, an admin, or a moderator (who
+            # approves and rejects packages, and so may remove one) - the
+            # same answer the details give as `can_manage`.
+            if not self._may_manage(user, dict(app)):
                 conn.close()
                 return web.json_response({
                     'success': False,
@@ -1101,8 +1557,9 @@ class TitanNetHTTPServer:
             cursor = conn.cursor()
 
             if category:
-                cursor.execute("""
-                    SELECT ar.*, u.username as author_username
+                cursor.execute(f"""
+                    SELECT ar.*, u.username as author_username, u.username as uploader_username,
+                           {Database.APP_RATING_COLUMNS}
                     FROM app_repository ar
                     JOIN users u ON ar.author_id = u.id
                     WHERE ar.approved = 1 AND ar.category = ?
@@ -1110,8 +1567,9 @@ class TitanNetHTTPServer:
                     ORDER BY ar.uploaded_at DESC
                 """, (category, f'%{query}%', f'%{query}%'))
             else:
-                cursor.execute("""
-                    SELECT ar.*, u.username as author_username
+                cursor.execute(f"""
+                    SELECT ar.*, u.username as author_username, u.username as uploader_username,
+                           {Database.APP_RATING_COLUMNS}
                     FROM app_repository ar
                     JOIN users u ON ar.author_id = u.id
                     WHERE ar.approved = 1
@@ -1119,11 +1577,8 @@ class TitanNetHTTPServer:
                     ORDER BY ar.uploaded_at DESC
                 """, (f'%{query}%', f'%{query}%'))
 
-            apps = [dict(row) for row in cursor.fetchall()]
-
-            # Remove file paths
-            for app in apps:
-                app.pop('file_path', None)
+            # File paths out (public_app)
+            apps = [Database.public_app(row) for row in cursor.fetchall()]
 
             conn.close()
 
@@ -3240,6 +3695,15 @@ class TitanNetHTTPServer:
 
             app_id = int(request.match_info['app_id'])
 
+            # Rejecting a listed package's staged update throws the update
+            # away and leaves the package listed as it was.
+            loop = asyncio.get_event_loop()
+            current = await loop.run_in_executor(None, self.db.get_app, app_id)
+            if current and current.get('approved') and current.get('update_file_path'):
+                if not await loop.run_in_executor(None, self.db.is_moderator, user['id']):
+                    return web.json_response({'success': False, 'error': 'Permission denied'}, status=403)
+                return await self._reject_update(current, user)
+
             success = await self.db.run_write_async(self.db.reject_app, app_id, user['id'])
 
             if success:
@@ -3276,6 +3740,15 @@ class TitanNetHTTPServer:
                 return web.json_response({'success': False, 'error': 'Authentication required'}, status=401)
 
             app_id = int(request.match_info['app_id'])
+
+            # A listed package with an update waiting: approving it makes
+            # the update the listed file (moved into approved/ first).
+            loop = asyncio.get_event_loop()
+            current = await loop.run_in_executor(None, self.db.get_app, app_id)
+            if current and current.get('approved') and current.get('update_file_path'):
+                if not await loop.run_in_executor(None, self.db.is_moderator, user['id']):
+                    return web.json_response({'success': False, 'error': 'Permission denied'}, status=403)
+                return await self._approve_update(current, user)
 
             success = await self.db.run_write_async(self.db.approve_app, app_id, user['id'])
 

@@ -1002,8 +1002,8 @@ msgstr "Strony"
 
 #. Translators: the first entry of every voice list in the class manager.
 #: classManager.py:95
-msgid "(the one NVDA is using)"
-msgstr "(ten, którego używa NVDA)"
+msgid "(the one the reader is using)"
+msgstr "(ten, którego używa czytnik)"
 
 #. Translators: shown for a class that is part of a control's
 #. reading.
@@ -1969,8 +1969,8 @@ msgid "Positioned speech off"
 msgstr "Mowa pozycjonowana wyłączona"
 
 #: commands.py:939
-msgid "NVDA is not reporting a focus."
-msgstr "NVDA nie zgłasza fokusu."
+msgid "The reader is not reporting a focus."
+msgstr "Czytnik nie zgłasza fokusu."
 
 #: commands.py:947
 msgid "There is nothing above this control."
@@ -6469,3 +6469,164 @@ msgstr "Nie udało się przenieść tam kursora przeglądu: {why}"
 
 #~ msgid "{what}, widget"
 #~ msgstr "{what}, widżet"
+
+#. Translators: a row of the palette's first list, and the title of the
+#. list of every key the add-on answers.
+msgid "Keyboard shortcuts"
+msgstr "Skróty klawiszowe"
+
+#. Translators: what a standard shortcut does.
+msgid "Open"
+msgstr "Otwórz"
+
+#. Translators: what a standard shortcut does.
+msgid "Save as"
+msgstr "Zapisz jako"
+
+#. Translators: what a standard shortcut does.
+msgid "New"
+msgstr "Nowy"
+
+#. Translators: what a standard shortcut does.
+msgid "New window"
+msgstr "Nowe okno"
+
+#. Translators: what a standard shortcut does.
+msgid "Close the document"
+msgstr "Zamknij dokument"
+
+#. Translators: what a standard shortcut does.
+msgid "Close the window"
+msgstr "Zamknij okno"
+
+#. Translators: what a standard shortcut does.
+msgid "Print"
+msgstr "Drukuj"
+
+#. Translators: what a standard shortcut does.
+msgid "Undo"
+msgstr "Cofnij"
+
+#. Translators: what a standard shortcut does.
+msgid "Redo"
+msgstr "Ponów"
+
+#. Translators: what a standard shortcut does.
+msgid "Cut"
+msgstr "Wytnij"
+
+#. Translators: what a standard shortcut does.
+msgid "Copy"
+msgstr "Kopiuj"
+
+#. Translators: what a standard shortcut does.
+msgid "Paste"
+msgstr "Wklej"
+
+#. Translators: what a standard shortcut does.
+msgid "Paste as plain text"
+msgstr "Wklej jako zwykły tekst"
+
+#. Translators: what a standard shortcut does.
+msgid "Select all"
+msgstr "Zaznacz wszystko"
+
+#. Translators: what a standard shortcut does.
+msgid "Find"
+msgstr "Znajdź"
+
+#. Translators: what a standard shortcut does.
+msgid "Replace"
+msgstr "Zamień"
+
+#. Translators: what a standard shortcut does.
+msgid "Go to"
+msgstr "Przejdź do"
+
+#. Translators: what a standard shortcut does.
+msgid "Bold"
+msgstr "Pogrubienie"
+
+#. Translators: what a standard shortcut does.
+msgid "Italic"
+msgstr "Kursywa"
+
+#. Translators: what a standard shortcut does.
+msgid "Underline"
+msgstr "Podkreślenie"
+
+#. Translators: what a standard shortcut does.
+msgid "New tab"
+msgstr "Nowa karta"
+
+#. Translators: what a standard shortcut does.
+msgid "Reopen the closed tab"
+msgstr "Otwórz ponownie zamkniętą kartę"
+
+#. Translators: what a standard shortcut does.
+msgid "Next tab"
+msgstr "Następna karta"
+
+#. Translators: what a standard shortcut does.
+msgid "Previous tab"
+msgstr "Poprzednia karta"
+
+#. Translators: what a standard shortcut does.
+msgid "Refresh"
+msgstr "Odśwież"
+
+#. Translators: what a standard shortcut does.
+msgid "Address"
+msgstr "Adres"
+
+#. Translators: what a standard shortcut does.
+msgid "Bookmark"
+msgstr "Zakładka"
+
+#. Translators: what a standard shortcut does.
+msgid "Search"
+msgstr "Szukaj"
+
+#. Translators: what a standard shortcut does.
+msgid "Downloads"
+msgstr "Pobrane"
+
+#. Translators: what a standard shortcut does.
+msgid "Clear browsing data"
+msgstr "Wyczyść dane przeglądania"
+
+#. Translators: what a standard shortcut does.
+msgid "Zoom in"
+msgstr "Powiększ"
+
+#. Translators: what a standard shortcut does.
+msgid "Zoom out"
+msgstr "Pomniejsz"
+
+#. Translators: what a standard shortcut does.
+msgid "Actual size"
+msgstr "Rozmiar rzeczywisty"
+
+#. Translators: what a standard shortcut does.
+msgid "Help"
+msgstr "Pomoc"
+
+#. Translators: what a standard shortcut does.
+msgid "Find next"
+msgstr "Znajdź następny"
+
+#. Translators: what a standard shortcut does.
+msgid "Next pane"
+msgstr "Następny panel"
+
+#. Translators: what a standard shortcut does.
+msgid "Full screen"
+msgstr "Pełny ekran"
+
+#. Translators: what a standard shortcut does.
+msgid "Developer tools"
+msgstr "Narzędzia deweloperskie"
+
+#. Translators: what a standard shortcut does.
+msgid "Say what a shortcut does as it is pressed - Control+O, "Open" - read out of the program's own menu"
+msgstr "Mów, co robi skrót klawiszowy, gdy jest naciskany - Control+O, "Otwórz" - odczytane z własnego menu programu"

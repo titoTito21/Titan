@@ -336,6 +336,55 @@
         xhr.send(form);
       });
     },
+    // Updating a package in place: the same multipart shape as an upload,
+    // every part optional - `file` may be null for a change of the details
+    // alone. A new file waits for a moderator while the listed one stays.
+    updatePackage(appId, file, metadata, onProgress) {
+      return new Promise(function (resolve, reject) {
+        const form = new FormData();
+        form.append('metadata', JSON.stringify(metadata || {}));
+        if (file) form.append('file', file, file.name);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', BASE + '/repository/apps/' + encodeURIComponent(appId) + '/update');
+        const token = Titan.getToken();
+        if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        if (onProgress && xhr.upload) {
+          xhr.upload.addEventListener('progress', function (e) {
+            if (e.lengthComputable) onProgress(e.loaded, e.total);
+          });
+        }
+        xhr.addEventListener('load', function () {
+          let data = null;
+          try { data = JSON.parse(xhr.responseText); } catch (e) {}
+          if (xhr.status >= 200 && xhr.status < 300 && data && data.success !== false) {
+            resolve(data);
+          } else {
+            const err = new Error((data && data.error) || ('HTTP ' + xhr.status));
+            err.status = xhr.status;
+            reject(err);
+          }
+        });
+        xhr.addEventListener('error', function () { reject(new Error(Titan.t('err.network'))); });
+        xhr.addEventListener('abort', function () { reject(new Error(Titan.t('err.network'))); });
+        xhr.send(form);
+      });
+    },
+    deleteApp(appId) {
+      return request('/repository/apps/' + encodeURIComponent(appId), { method: 'DELETE' });
+    },
+    appDetails(appId) { return request('/repository/apps/' + encodeURIComponent(appId)); },
+    // Ratings and reviews: one per person per package.
+    appReviews(appId) {
+      return request('/repository/apps/' + encodeURIComponent(appId) + '/reviews');
+    },
+    addAppReview(appId, rating, review) {
+      return request('/repository/apps/' + encodeURIComponent(appId) + '/reviews', {
+        method: 'POST', body: { rating: rating, review: review || '' },
+      });
+    },
+    deleteAppReview(reviewId) {
+      return request('/repository/reviews/' + encodeURIComponent(reviewId), { method: 'DELETE' });
+    },
     pendingApps() { return request('/repository/apps/pending'); },
     approveApp(appId) {
       return request('/repository/apps/' + encodeURIComponent(appId) + '/approve', { method: 'POST' });

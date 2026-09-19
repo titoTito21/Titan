@@ -93,6 +93,26 @@ class _Speech(object):
         except Exception:                            # noqa: BLE001
             return False
 
+    # **Titan Access's own two**, which NVDA's `speech` has not got: a
+    # whole utterance in a voice CLASS, and one with a profile as it
+    # stands on a dialog. `dialogs.report` and `classes.speak_sample` ask
+    # for them by name and fall back where they are absent.
+    def speak_in_class(self, text, tag, interrupt=False):
+        try:
+            from .. import speech_adapter
+            return bool(speech_adapter.speak_in_class(str(text or ''), tag,
+                                                      interrupt=interrupt))
+        except Exception:                            # noqa: BLE001
+            return False
+
+    def speak_with(self, profile, text, interrupt=True):
+        try:
+            from .. import speech_adapter
+            return bool(speech_adapter.speak_with(profile, str(text or ''),
+                                                  interrupt=interrupt))
+        except Exception:                            # noqa: BLE001
+            return False
+
 
 class _Ui(object):
     """NVDA's ``ui.message``: say one thing, now."""
@@ -176,36 +196,64 @@ class _QueueHandler(object):
 
 
 class _Api(object):
-    """NVDA's ``api``: what has the focus, and what is in front."""
+    """NVDA's ``api``: what has the focus, and what is in front.
+
+    **Answered by THIS reader's focus, through the seam.** The shared
+    commands - where am I, label this control, describe it, customise
+    it, the managers' own pages - all ask ``compat.api.getFocusObject()``
+    and refuse with "the reader is not reporting a focus" when it answers
+    None. It used to look for a focus on the `engine` MODULE (attributes
+    it has never had; the running engine is an instance), so in Titan
+    Access every one of those commands refused, every time, whatever the
+    user was on. `readerApi.hooks` is the engine's own answer - the
+    control it last announced - installed by `nvda_shape.Hooks`, which is
+    also what the markers, monitors and procedures already use.
+    """
+
+    @staticmethod
+    def _hooks():
+        try:
+            from . import readerApi
+            return readerApi.hooks
+        except Exception:                            # noqa: BLE001
+            return None
 
     def getFocusObject(self):
-        try:
-            from .. import engine
-            for name in ('current_focus', 'focused_object', 'focus'):
-                found = getattr(engine, name, None)
-                if callable(found):
-                    return found()
+        hooks = self._hooks()
+        if hooks is not None:
+            try:
+                found = hooks.focus()
                 if found is not None:
                     return found
-        except Exception:                            # noqa: BLE001
-            pass
+            except Exception:                        # noqa: BLE001
+                pass
         return None
 
+    def getNavigatorObject(self):
+        """This reader has no navigator apart from its focus."""
+        return self.getFocusObject()
+
     def getForegroundObject(self):
-        try:
-            from .. import engine
-            for name in ('foreground_object', 'foreground'):
-                found = getattr(engine, name, None)
-                if callable(found):
-                    return found()
+        hooks = self._hooks()
+        if hooks is not None:
+            try:
+                found = hooks.foreground()
                 if found is not None:
                     return found
-        except Exception:                            # noqa: BLE001
-            pass
+            except Exception:                        # noqa: BLE001
+                pass
         return self.getFocusObject()
 
     def getDesktopObject(self):
         return None
+
+    def getMainWindowHandle(self):
+        """Titan's own main window, which is what ``gui.mainFrame`` is."""
+        try:
+            frame = gui.mainFrame
+            return int(frame.GetHandle()) if frame is not None else 0
+        except Exception:                            # noqa: BLE001
+            return 0
 
 
 class _Gui(object):

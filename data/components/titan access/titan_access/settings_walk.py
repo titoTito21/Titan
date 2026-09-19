@@ -120,7 +120,8 @@ SCHEMA = (
             ("attentionState", True), ("liveStatusBars", True),
             ("monitors", True), ("surfaceReading", False),
             ("guestCursor", False), ("agentLink", False),
-            ("windowsSemantics", True),
+            ("windowsSemantics", True), ("speakShortcuts", True),
+            ("uiaNotifications", True),
         ))),
     ('braille', 'settings.section.braille', (
         ('Braille', 'Enabled', 'settings.braille.enabled', 'bool', None, False),

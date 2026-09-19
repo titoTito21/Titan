@@ -464,5 +464,234 @@ class ItIsNeverOnTheFocusPath(unittest.TestCase):
                              'the sync sits inside %s' % event)
 
 
+
+class EveryStoreLivesInOneFolder(unittest.TestCase):
+    """``%APPDATA%/titosoft/Titan/accessibility`` in BOTH readers. Inside
+    NVDA the stores used to be in NVDA's own configuration folder and
+    outside it in Titan's ``screenreader`` folder, so a control named in
+    one reader was unknown to the other."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix='titan-home-')
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self._appdata = os.environ.get('APPDATA')
+        os.environ['APPDATA'] = self.home
+        from titanEnhancements import readerHome
+        from titan_access.portable import readerHome as theirs
+        self.mine, self.theirs = readerHome, theirs
+        readerHome.forget()
+        theirs.forget()
+        self.addCleanup(readerHome.forget)
+        self.addCleanup(theirs.forget)
+
+    def tearDown(self):
+        if self._appdata is None:
+            os.environ.pop('APPDATA', None)
+        else:
+            os.environ['APPDATA'] = self._appdata
+
+    def test_both_readers_answer_the_same_folder(self):
+        import platform
+        if platform.system() != 'Windows':
+            self.skipTest('APPDATA is the Windows spelling')
+        wanted = os.path.join(self.home, 'titosoft', 'Titan', 'accessibility')
+        self.assertEqual(self.mine.folder(), wanted)
+        self.assertEqual(self.theirs.folder(), wanted)
+        self.assertTrue(os.path.isdir(wanted))
+        self.assertNotIn('nvda', wanted.lower())
+        self.assertNotIn('screenreader', wanted.lower())
+
+    def test_every_store_asks_it(self):
+        import platform
+        if platform.system() != 'Windows':
+            self.skipTest('APPDATA is the Windows spelling')
+        import importlib
+        wanted = os.path.join(self.home, 'titosoft', 'Titan', 'accessibility')
+        for name in ('labels', 'classes', 'schemes', 'procedures',
+                     'monitors', 'perProgram', 'markers', 'speechSchemes'):
+            for tree in ('titanEnhancements', 'titan_access.portable'):
+                module = importlib.import_module('%s.%s' % (tree, name))
+                for cached in ('_path',):
+                    if hasattr(module, cached):
+                        setattr(module, cached, '')
+                where = module.path()
+                self.assertTrue(str(where).startswith(wanted),
+                                '%s.%s keeps its store at %s' % (tree, name, where))
+        from titanEnhancements import shared
+        from titan_access import shared_names
+        self.assertEqual(shared.folder(), os.path.join(wanted, 'shared'))
+        self.assertEqual(shared_names.folder(), os.path.join(wanted, 'shared'))
+        from titanEnhancements import readerModules
+        self.assertEqual(readerModules.user_folder(),
+                         os.path.join(wanted, 'window_data'))
+
+    def test_what_was_in_the_old_folders_is_brought_along_once(self):
+        """Copied, never moved: a user who named forty controls in NVDA's
+        folder must not open the reader one day and find them gone."""
+        import platform
+        if platform.system() != 'Windows':
+            self.skipTest('APPDATA is the Windows spelling')
+        old = os.path.join(self.home, 'titosoft', 'Titan', 'screenreader')
+        os.makedirs(os.path.join(old, 'shared'))
+        os.makedirs(os.path.join(old, 'titanReaderModules'))
+        io.open(os.path.join(old, 'titanLabels.json'), 'w').write('{"a": 1}')
+        io.open(os.path.join(old, 'shared', 'controlNames.json'), 'w').write('{}')
+        io.open(os.path.join(old, 'titanReaderModules', 'x.json'), 'w').write('{}')
+        nvda = tempfile.mkdtemp(prefix='nvda-config-')
+        self.addCleanup(shutil.rmtree, nvda, True)
+        io.open(os.path.join(nvda, 'titanVoiceClasses.json'), 'w').write('{"v": 1}')
+        stub = types.ModuleType('globalVars')
+        stub.appArgs = types.SimpleNamespace(configPath=nvda)
+        had = sys.modules.get('globalVars')
+        sys.modules['globalVars'] = stub
+        try:
+            new = self.mine.folder()
+        finally:
+            if had is None:
+                sys.modules.pop('globalVars', None)
+            else:
+                sys.modules['globalVars'] = had
+        self.assertEqual(io.open(os.path.join(new, 'titanLabels.json')).read(), '{"a": 1}')
+        self.assertEqual(io.open(os.path.join(new, 'titanVoiceClasses.json')).read(), '{"v": 1}')
+        self.assertTrue(os.path.isfile(os.path.join(new, 'shared', 'controlNames.json')))
+        self.assertTrue(os.path.isfile(os.path.join(new, 'window_data', 'x.json')))
+        # The old files are still where they were.
+        self.assertTrue(os.path.isfile(os.path.join(old, 'titanLabels.json')))
+        self.assertTrue(os.path.isfile(os.path.join(nvda, 'titanVoiceClasses.json')))
+        self.assertEqual(self.mine.report()['carried'], 4)
+        # A newer file in the new folder is never overwritten by an old one.
+        io.open(os.path.join(new, 'titanLabels.json'), 'w').write('{"a": 2}')
+        self.mine.forget()
+        self.mine.folder()
+        self.assertEqual(io.open(os.path.join(new, 'titanLabels.json')).read(), '{"a": 2}')
+
+
+
+class LabelsAndWindowsAreKeptPerProgram(unittest.TestCase):
+    """``labels/<program>/labels.json`` and ``window_data/<program>/<module>
+    .json``: a program's own knowledge in a folder of its own, so it can be
+    looked at, copied to another machine or given to somebody with the
+    same program - and the one file of before is split once, merging what
+    the TWO readers had each learned."""
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix='titan-home-')
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self._appdata = os.environ.get('APPDATA')
+        os.environ['APPDATA'] = self.home
+        from titanEnhancements import readerHome, readerModules
+        readerHome.forget()
+        labels.forget()
+        readerModules.forget()
+        self.readerHome, self.readerModules = readerHome, readerModules
+        self.addCleanup(readerHome.forget)
+        self.addCleanup(labels.forget)
+        self.addCleanup(readerModules.forget)
+        import platform
+        if platform.system() != 'Windows':
+            self.skipTest('APPDATA is the Windows spelling')
+        self.new = os.path.join(self.home, 'titosoft', 'Titan', 'accessibility')
+
+    def tearDown(self):
+        if self._appdata is None:
+            os.environ.pop('APPDATA', None)
+        else:
+            os.environ['APPDATA'] = self._appdata
+
+    def test_a_label_is_written_into_its_programs_folder(self):
+        labels.put(_control(name='saveButton', klass='SomeApp',
+                            application='someapp'), 'Save')
+        where = os.path.join(self.new, 'labels', 'someapp', 'labels.json')
+        self.assertTrue(os.path.isfile(where), where)
+        data = json.load(io.open(where, encoding='utf-8'))
+        self.assertEqual([row['label'] for row in data.values()], ['Save'])
+        labels.forget()
+        self.assertEqual(labels.get(_control(name='saveButton', klass='SomeApp',
+                                             application='someapp')), 'Save')
+
+    def test_the_two_old_files_are_merged_and_split_once(self):
+        old = os.path.join(self.home, 'titosoft', 'Titan', 'screenreader')
+        os.makedirs(old)
+        io.open(os.path.join(old, 'titanLabels.json'), 'w', encoding='utf-8').write(json.dumps({
+            'vmware': {'VMUIView|PANE|1': {'at': 5, 'label': 'Windows 95', 'source': 'ai'}},
+            'both': {'X|BUTTON|1': {'at': 1, 'label': 'older', 'source': 'ai'}}}))
+        nvda = tempfile.mkdtemp(prefix='nvda-config-')
+        self.addCleanup(shutil.rmtree, nvda, True)
+        io.open(os.path.join(nvda, 'titanLabels.json'), 'w', encoding='utf-8').write(json.dumps({
+            'msedge': {'Chrome|BUTTON|2': {'at': 7, 'label': 'Dots', 'source': 'ai'}},
+            'both': {'X|BUTTON|1': {'at': 9, 'label': 'newer', 'source': 'user'}}}))
+        stub = types.ModuleType('globalVars')
+        stub.appArgs = types.SimpleNamespace(configPath=nvda)
+        had = sys.modules.get('globalVars')
+        sys.modules['globalVars'] = stub
+        try:
+            store = labels._load()
+            self.assertTrue(labels.save())
+        finally:
+            if had is None:
+                sys.modules.pop('globalVars', None)
+            else:
+                sys.modules['globalVars'] = had
+        self.assertEqual(sorted(store), ['both', 'msedge', 'vmware'])
+        self.assertEqual(store['both']['X|BUTTON|1']['label'], 'newer')
+        for program in ('vmware', 'msedge', 'both'):
+            self.assertTrue(os.path.isfile(os.path.join(
+                self.new, 'labels', program, 'labels.json')), program)
+        # The old files are untouched, and a second load reads the split.
+        self.assertTrue(os.path.isfile(os.path.join(old, 'titanLabels.json')))
+        labels.forget()
+        self.assertEqual(labels._load()['vmware']['VMUIView|PANE|1']['label'],
+                         'Windows 95')
+
+    def test_a_reader_module_lives_in_its_programs_folder(self):
+        from titanEnhancements import draft
+        module = {'id': 'hs', 'label': 'Hearthstone',
+                  'match': {'executable': 'hearthstone'},
+                  'surface': {'ocr': 'game'}}
+        where, why = draft.save(module, 'hearthstone')
+        self.assertEqual(why, '')
+        self.assertEqual(where, os.path.join(self.new, 'window_data',
+                                             'hearthstone', 'hearthstone.json'))
+        found = [m for m in self.readerModules.load(force=True)
+                 if getattr(m, 'source', '') == where]
+        self.assertEqual(len(found), 1)
+
+    def test_a_flat_module_from_before_is_sorted_into_its_program(self):
+        flat = os.path.join(self.new, 'window_data')
+        os.makedirs(flat)
+        io.open(os.path.join(flat, 'nvda.json'), 'w', encoding='utf-8').write(json.dumps(
+            {'id': 'nvda', 'label': 'nvda', 'match': {'class': '#32770', 'executable': 'nvda'},
+             'surface': {'ocr': 'game'}}))
+        self.readerModules.load(force=True)
+        self.assertTrue(os.path.isfile(os.path.join(flat, 'nvda', 'nvda.json')))
+        self.assertFalse(os.path.exists(os.path.join(flat, 'nvda.json')))
+
+
+
+class TheSoundIconsAreTheAddOnsInBothReaders(unittest.TestCase):
+    """The add-on's `sounds/` - the built-in cursor sounds `icons.play`
+    falls back to - were never vendored, so Titan Access had the earcon
+    kits and none of the icons themselves. The vendor script carries the
+    whole folder into the component's own `sfx/icons/` now, beside the
+    cursor sounds Titan Access always kept in `sfx/`, and `--check` fails
+    on a sound that drifted."""
+
+    def test_every_sound_is_in_both_trees(self):
+        source = os.path.join(ADDON, 'titanEnhancements', 'sounds')
+        target = os.path.join(ACCESS, 'sfx', 'icons')
+        names = [n for n in os.listdir(source) if n.lower().endswith('.wav')]
+        self.assertGreater(len(names), 20)
+        for name in names:
+            self.assertTrue(os.path.isfile(os.path.join(target, name)), name)
+            self.assertEqual(io.open(os.path.join(source, name), 'rb').read(),
+                             io.open(os.path.join(target, name), 'rb').read(), name)
+
+    def test_titan_access_finds_them(self):
+        from titan_access.portable import icons
+        where = icons.path_of('button')
+        self.assertTrue(where and os.path.isfile(where), where)
+        self.assertIn(os.path.join('sfx', 'icons'), where)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

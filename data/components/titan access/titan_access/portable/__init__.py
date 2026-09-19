@@ -57,6 +57,9 @@ from . import toolkit            # noqa: F401
 from . import trackpad           # noqa: F401
 from . import verify             # noqa: F401
 from . import virtualInput       # noqa: F401
+from . import hostWindow         # noqa: F401
+from . import readerHome         # noqa: F401
+from . import spokenShortcuts    # noqa: F401
 from . import virtualWindow      # noqa: F401
 from . import widgetReview       # noqa: F401
 from . import windowKind         # noqa: F401
@@ -74,5 +77,6 @@ __all__ = [
     'speechSchemes', 'schemeWalk', 'reviews', 'context',
     'shared', 'surface', 'textField', 'titan', 'titanWalk',
     'titanWindow', 'toolkit', 'trackpad', 'verify', 'virtualInput',
-    'virtualWindow', 'widgetReview', 'windowKind', 'windowsAndActions'
+    'virtualWindow', 'widgetReview', 'windowKind', 'windowsAndActions',
+    'hostWindow', 'readerHome', 'spokenShortcuts',
 ]

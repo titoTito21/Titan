@@ -453,7 +453,8 @@ SHARED_SWITCHES = (
     ("soundScheme", True), ("dialogKinds", True), ("busyState", True),
     ("attentionState", True), ("liveStatusBars", True), ("monitors", True),
     ("surfaceReading", False), ("guestCursor", False), ("agentLink", False),
-    ("windowsSemantics", True),
+    ("windowsSemantics", True), ("speakShortcuts", True),
+    ("uiaNotifications", True),
 )
 
 

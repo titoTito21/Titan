@@ -96,6 +96,18 @@ def _record(name):
     return None
 
 
+#: What went wrong that was NOT a missing primitive - an SQL statement the
+#: application got wrong, say. Reported beside `MISSING`, under its own
+#: heading, because "a primitive Cling has not written" sends the reader
+#: to the wrong place.
+NOTED = {}
+
+
+def _note(what):
+    NOTED[what] = NOTED.get(what, 0) + 1
+    return None
+
+
 class Filesystem(object):
     """Klango's virtual file system: mount points, not a search path.
 
@@ -587,7 +599,17 @@ def install(runtime, host, filesystem, loader, app_name='', frames=None):
                                              if a is not None])
                 connection.commit()
             except Exception as error:
-                _record('sqlite: %s' % error)
+                # **An SQL error is the application's, not a primitive
+                # Cling has not written.** ktypist creates its `scores`
+                # table without IF NOT EXISTS and throws the answer away,
+                # so every run after the first "failed" here - and was
+                # reported as a missing primitive, which is the one thing
+                # it is not. Klango's own sqlite answered such a statement
+                # with nothing and the application went on; so does this.
+                # Anything but the harmless "already exists" is still
+                # written down, as what it is.
+                if 'already exists' not in str(error):
+                    _note('sqlite: %s' % error)
                 return table({})
             return rows_of(cursor)
 
@@ -1376,9 +1398,15 @@ def _http_request(table, context, fetch):
         return request
 
     def get_stream(*_a):
-        if not fetch.done() or fetch.status in (web.NO_CONNECTION,
-                                                web.CANCELLED):
-            return None
+        # **Never nil.** `_dialogNetworkProgress` answers `true` when the
+        # user quits it and does NOT cancel the request, and an application
+        # that ignores that answer (Amazon does) asks
+        # `k_GetHTTPResponseError` - which sees status 0 and no error code
+        # and says "no error" - and then indexes what this returns:
+        # `resp:GetStream():ReadAll()`. A nil here ended the application at
+        # amazon.lua:2993. Klango's own stream is what has arrived so far,
+        # which for a request still in flight or one that failed is
+        # nothing - so that is what this answers, as a stream.
         if 'stream' not in stream_holder:
             reader = web.Stream(fetch)
             piece = table({})

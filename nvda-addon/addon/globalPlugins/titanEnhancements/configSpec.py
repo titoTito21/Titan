@@ -185,6 +185,9 @@ SPEC = {
     # icon here is played by this add-on's own surfaces - the reviews, the
     # Titan window - which the user opened deliberately.
     'auditoryIcons': 'boolean(default=True)',
+    # What a shortcut DOES, said as it is pressed - Window-Eyes' idea,
+    # out of the program's own menu rather than a .key file.
+    'speakShortcuts': 'boolean(default=True)',
     # The same icons on every control in every program, not only in this
     # add-on's own windows. It ships ON where `pitchedEverywhere` and
     # `earcons` ship off, and the difference is a real one rather than a

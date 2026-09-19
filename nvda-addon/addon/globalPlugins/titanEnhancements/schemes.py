@@ -141,30 +141,17 @@ def report():
 
 
 def _reader_folder():
-    """NVDA's own configuration folder, or Titan's.
+    """Where this reader keeps it: the folder BOTH readers share.
 
-    This module is byte-identical in Titan Access, which has no NVDA under
-    it; asking for both here is what lets it be. See
-    `src/scripts/vendor_reader_modules.py`.
+    `readerHome.folder()` - ``.../titosoft/Titan/accessibility`` in NVDA
+    and in Titan Access alike, so what one reader learns the other has.
+    It used to be NVDA's own configuration folder inside NVDA and Titan's
+    ``screenreader`` folder outside it, which made this one file two
+    stores; the old ones are carried over the first time it is asked.
     """
     try:
-        import globalVars
-        return globalVars.appArgs.configPath
-    except Exception:                                # noqa: BLE001
-        pass
-    try:
-        import platform
-        system = platform.system()
-        if system == 'Windows':
-            base = os.getenv('APPDATA') or os.path.expanduser('~')
-            base = os.path.join(base, 'titosoft', 'Titan')
-        elif system == 'Darwin':
-            base = os.path.join(os.path.expanduser('~'), 'Library',
-                                'Application Support', 'titosoft', 'Titan')
-        else:
-            base = os.path.join(os.path.expanduser('~'), '.config',
-                                'titosoft', 'Titan')
-        return os.path.join(base, 'screenreader')
+        from . import readerHome
+        return readerHome.folder()
     except Exception:                                # noqa: BLE001
         return ''
 

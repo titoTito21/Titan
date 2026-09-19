@@ -229,5 +229,187 @@ class ConcatEngineAgnosticTests(unittest.TestCase):
             ss._get_engine_registry = original
 
 
+
+class VoiceEngine(ConcatEngine):
+    """An engine with engines and voices, the way Titan's speech has them:
+    a Titan TTS engine answers its voices as dicts with `id` and
+    `display_name`, SAPI as plain names."""
+
+    def __init__(self):
+        ConcatEngine.__init__(self, duration=0.01)
+        self.engine = 'sapi5'
+        self.voice_at = None
+        self.calls = []
+        self.rate = self.pitch = 0
+        self.volume = 100
+
+    def set_engine(self, name):
+        self.engine = name
+        self.calls.append(('engine', name))
+
+    def get_available_voices(self):
+        if self.engine == 'smp':
+            return [{'id': 'pl', 'display_name': 'Polish'}]
+        if self.engine == 'supertonic':
+            return [{'id': 'v1', 'display_name': 'Adam'},
+                    {'id': 'v2', 'display_name': 'Ewa'}]
+        return ['Microsoft Paulina Desktop - Polish', 'Microsoft Adam']
+
+    def set_voice(self, index):
+        self.voice_at = index
+        self.calls.append(('voice', index))
+
+    def set_rate(self, value):
+        self.rate = value
+        self.calls.append(('rate', value))
+
+    def set_pitch(self, value):
+        self.pitch = value
+
+    def set_volume(self, value):
+        self.volume = value
+        self.calls.append(('volume', value))
+
+
+class _Settings(object):
+    """The reader's own voice, as `screenReader.ini` keeps it."""
+
+    def __init__(self, synth='sapi5', voice='Microsoft Adam'):
+        self.values = {('Speech', 'Synthesizer'): synth, ('Speech', 'Voice'): voice,
+                       ('Speech', 'Rate'): 3, ('Speech', 'Pitch'): 0,
+                       ('Speech', 'Volume'): 100}
+        self.rate, self.volume, self.pitch = 3, 100, 0
+
+    def get(self, section, key, default=''):
+        return self.values.get((section, key), default)
+
+    def get_int(self, section, key, default=0):
+        try:
+            return int(self.values.get((section, key), default))
+        except (TypeError, ValueError):
+            return default
+
+
+def _voice_adapter(engine, settings):
+    adapter = make_adapter(engine)
+    adapter._settings = settings
+    return adapter
+
+
+class ATitanTtsVoiceIsTheOneChosen(unittest.TestCase):
+    """The settings panel stores a voice's ID, and a Titan TTS engine's
+    voices are dicts with `id` and `display_name` - neither of which is
+    `name`, so the saved voice matched nothing and every Titan TTS engine
+    spoke in its FIRST voice whatever had been chosen."""
+
+    def test_a_voice_is_found_by_id_display_name_name_or_index(self):
+        from titan_access import speech_adapter as sa
+        engine = VoiceEngine()
+        engine.engine = 'supertonic'
+        self.assertEqual(sa._voice_index(engine, 'v2'), 1)
+        self.assertEqual(sa._voice_index(engine, 'Ewa'), 1)
+        self.assertEqual(sa._voice_index(engine, '1'), 1)
+        self.assertIsNone(sa._voice_index(engine, 'nobody'))
+        self.assertIsNone(sa._voice_index(engine, '7'))
+        engine.engine = 'sapi5'
+        self.assertEqual(sa._voice_index(engine, 'Microsoft Adam'), 1)
+
+    def test_the_readers_own_voice_is_put_on_by_id(self):
+        engine = VoiceEngine()
+        adapter = _voice_adapter(engine, _Settings(synth='supertonic', voice='v2'))
+        adapter._apply_own_voice()
+        self.assertEqual(engine.engine, 'supertonic')
+        self.assertEqual(engine.voice_at, 1)
+
+    def test_a_voice_the_engine_has_not_got_changes_nothing(self):
+        engine = VoiceEngine()
+        adapter = _voice_adapter(engine, _Settings(synth='smp', voice='Ewa'))
+        adapter._apply_own_voice()
+        self.assertEqual(engine.engine, 'smp')
+        self.assertIsNone(engine.voice_at)
+
+
+class AWholeUtteranceIsSpokenInItsClassesOwnVoice(unittest.TestCase):
+    """A voice class for a WHOLE utterance - a notification, an alert - may
+    name a synthesizer and a voice of its own, and this reader stored the
+    choice and never spoke it. The utterance goes to that synthesizer in
+    that voice, and the reader's own voice is put back afterwards."""
+
+    def setUp(self):
+        self.engine = VoiceEngine()
+        self.adapter = _voice_adapter(self.engine, _Settings())
+
+    def _settle(self):
+        for _ in range(200):
+            if not self.adapter.pending_count() and not self.engine.is_speaking:
+                break
+            time.sleep(0.01)
+        time.sleep(0.05)
+
+    def test_the_synthesizer_and_voice_are_borrowed_and_given_back(self):
+        self.adapter.speak('Nowa wiadomość', voice={'synth': 'smp', 'voice': 'pl'})
+        self._settle()
+        self.assertIn('Nowa wiadomość', self.engine.spoken)
+        self.assertIn(('engine', 'smp'), self.engine.calls)
+        borrowed = self.engine.calls.index(('engine', 'smp'))
+        self.assertEqual(self.engine.calls[borrowed + 1], ('voice', 0))
+        # Given back: the reader's own from the settings, after the words.
+        self.assertIn(('engine', 'sapi5'), self.engine.calls[borrowed + 1:])
+        self.assertEqual(self.engine.engine, 'sapi5')
+        self.assertEqual(self.engine.voice_at, 1)
+
+    def test_the_dials_ride_on_top_of_the_readers_own(self):
+        self.adapter.speak('Uwaga', voice={'rate': 2, 'volume': -4})
+        self._settle()
+        self.assertIn(('rate', 5), self.engine.calls)
+        self.assertIn(('volume', 80), self.engine.calls)
+        self.assertEqual(self.engine.rate, 3)
+        self.assertEqual(self.engine.volume, 100)
+
+    def test_a_class_is_asked_by_name(self):
+        from titan_access import speech_adapter as sa
+        from titan_access.portable import classes
+        had = classes.voice_of
+        classes.voice_of = lambda tag: ({'synth': 'smp', 'voice': 'pl'}
+                                        if tag == 'notification' else {})
+        sa._current, was = self.adapter, sa._current
+        try:
+            self.assertTrue(sa.speak_in_class('Zapisano', 'notification'))
+            self._settle()
+        finally:
+            classes.voice_of = had
+            sa._current = was
+        self.assertIn(('engine', 'smp'), self.engine.calls)
+        self.assertIn('Zapisano', self.engine.spoken)
+
+    def test_a_part_class_may_not_name_a_synthesizer(self):
+        """`button` is part of a control's reading; two programs producing
+        one sentence is not something anybody asked for."""
+        from titan_access import speech_adapter as sa
+        from titan_access.portable import classes
+        had = classes.voice_of
+        classes.voice_of = lambda tag: {'synth': 'smp', 'voice': 'pl', 'pitch': -4}
+        sa._current, was = self.adapter, sa._current
+        try:
+            sa.speak_in_class('przycisk', 'kind')
+            self._settle()
+        finally:
+            classes.voice_of = had
+            sa._current = was
+        self.assertNotIn(('engine', 'smp'), self.engine.calls)
+
+    def test_the_shared_report_asks_this_reader_first(self):
+        from titan_access.portable import compat, dialogs
+        asked = []
+        had = compat.speech.speak_in_class
+        compat.speech.speak_in_class = lambda text, tag, interrupt=False: (
+            asked.append((text, tag)) or True)
+        try:
+            dialogs.report('Gotowe', 'notification')
+        finally:
+            compat.speech.speak_in_class = had
+        self.assertEqual(asked, [('Gotowe', 'notification')])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -44,6 +44,7 @@ from . import earcons
 from . import focus
 from . import gestures
 from . import guest
+from . import hostWindow
 from . import i18n
 from . import interject
 from . import link
@@ -63,6 +64,7 @@ from . import procedures
 from . import settingsPanel
 from . import smart
 from . import speaking
+from . import spokenShortcuts
 from . import states
 from . import surface
 from . import terminal
@@ -80,6 +82,18 @@ except Exception:                                    # noqa: BLE001
         return decorate
 
 #: Shown in NVDA's Input Gestures dialog.
+
+def _say_queued(word):
+    """Say one word after whatever is being said, on NVDA's own thread."""
+    try:
+        import queueHandler
+        import ui
+        queueHandler.queueFunction(queueHandler.eventQueue, ui.message,
+                                   str(word))
+    except Exception:                                # noqa: BLE001
+        pass
+
+
 CATEGORY = 'Titan'
 
 #: How often the connection is looked at. This is not a poll of Titan - the
@@ -128,6 +142,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             if compat.log is not None:
                 compat.log.error(f'Titan enhancements: settings: {error}')
         self._panel = settingsPanel.register()
+        # **What a shortcut does, said as it goes through.** NVDA's
+        # `decide_executeGesture` sees every gesture before it is acted
+        # on; this never blocks one, it only queues the word a moment
+        # later, out of the program's own menu (`spokenShortcuts`).
+        try:
+            import inputCore
+            inputCore.decide_executeGesture.register(self._shortcut_seen)
+            self._shortcut_decider = True
+        except Exception:                            # noqa: BLE001
+            self._shortcut_decider = False
         # Every Titan action the user could bind a key to LAST time, put back
         # before Titan is anywhere near running. NVDA starts first on most
         # machines, and a gesture the user bound that is missing until the
@@ -218,6 +242,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         would outlive the add-on that did it.
         """
         self._watching.set()
+        try:
+            if getattr(self, '_shortcut_decider', False):
+                import inputCore
+                inputCore.decide_executeGesture.unregister(self._shortcut_seen)
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
+            hostWindow.destroy()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             from . import speechSchemes
             speechSchemes.uninstall_braille()
@@ -374,6 +408,17 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         made with speech muted rather than skipped.
         """
         self._keep_keys_right()
+        # **The window a walked list holds the keyboard with says
+        # nothing.** The palette, a message and the virtual window each
+        # put a small window of their own in front (`hostWindow`) so a
+        # program that reads its keys itself gets none of the arrows;
+        # the list has already said its title and its row, and NVDA
+        # reading "Commands, window" over that would be everything twice.
+        # The bindings are still kept right - this focus event is the
+        # one a list opened from a menu is waiting for.
+        if hostWindow.is_host_object(obj):
+            self._keep_walk_keys_right()
+            return
         # **The application review is NOT ended by a focus change.** The two
         # reviews above are about a window - a terminal, a recognised
         # screen - and outliving it would swallow the user's arrow keys
@@ -442,6 +487,57 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:                            # noqa: BLE001
             nextHandler()
 
+    def _shortcut_seen(self, gesture=None, **_kw):
+        """Every gesture NVDA is about to act on. Always True: nothing
+        here may stop a key; a shortcut is only NAMED, a moment after."""
+        try:
+            modifiers = set(str(m).lower() for m in
+                            (getattr(gesture, 'modifierNames', None) or ()))
+            if 'nvda' in modifiers:
+                return True                        # the reader's own key
+            key = str(getattr(gesture, 'mainKeyName', '') or '')
+            if not key:
+                return True
+            hwnd = 0
+            try:
+                import api
+                hwnd = int(getattr(api.getForegroundObject(), 'windowHandle',
+                                   0) or 0)
+            except Exception:                        # noqa: BLE001
+                hwnd = 0
+            try:
+                import api
+                module = focus.module_for(api.getFocusObject())
+            except Exception:                        # noqa: BLE001
+                module = None
+            spokenShortcuts.consider(
+                key, 'control' in modifiers, 'alt' in modifiers,
+                'shift' in modifiers, hwnd,
+                lambda word: _say_queued(word),
+                module=getattr(module, 'data', None) if module else None)
+        except Exception:                            # noqa: BLE001
+            pass
+        return True
+
+    def event_focusEntered(self, obj, nextHandler):
+        """NVDA says the name of each container the focus has newly entered;
+        for a walked list's own window that is its title said a second
+        time, so the host is entered in silence."""
+        if hostWindow.is_host_object(obj):
+            return
+        nextHandler()
+
+    def _keep_walk_keys_right(self):
+        """Every walked list's bindings, checked at once."""
+        for keep in (self._keep_app_keys_right, self._keep_virtual_keys_right,
+                     self._keep_widget_keys_right,
+                     self._keep_palette_keys_right,
+                     self._keep_typing_keys_right):
+            try:
+                keep()
+            except Exception:                        # noqa: BLE001
+                continue
+
     def event_foreground(self, obj, nextHandler):
         """A new window is in front.
 
@@ -451,6 +547,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         anything at all. Asking either per control is what made the region
         layer announce "dialog" in front of every button.
         """
+        if hostWindow.is_host_object(obj):
+            # A walked list's own window in front is not somewhere the
+            # user has arrived (see `event_gainFocus`).
+            return
         try:
             # **The kind of window, when the kind of DIALOG is not the
             # question.** `dialog_kind` answers four kinds of dialog well
@@ -2613,7 +2713,7 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._keep_typing_keys_right()
             dialogs.report(said)
             return
-        commands.command_palette(self._open_layer)
+        commands.command_palette(self._open_layer, plugin=self)
         self._keep_palette_keys_right()
 
     @script(

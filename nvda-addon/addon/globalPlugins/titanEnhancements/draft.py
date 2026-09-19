@@ -419,6 +419,8 @@ def save(module, name='', overwrite=False):
         return '', _('That is not a module: {what}').format(
             what='; '.join(wrong[:3]))
     filename = _safe_name(name or module.get('id') or 'module') + '.json'
+    # One folder per program: `window_data/<executable>/<module>.json`.
+    folder = readerModules.program_folder(module) or folder
     where = os.path.join(folder, filename)
     if os.path.exists(where) and not overwrite:
         return '', _('There is already a module called {name}. It has not '

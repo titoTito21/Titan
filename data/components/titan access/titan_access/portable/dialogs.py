@@ -101,6 +101,15 @@ def report(text, voice_class='notification'):
     was. Every one of those ends with the message being said.
     """
     from . import compat
+    # A reader whose speech can take a CLASS itself (Titan Access) is
+    # handed it whole; NVDA's `speech` has no such call and is answered
+    # through its speech commands below.
+    try:
+        ask = getattr(compat.speech, 'speak_in_class', None)
+        if callable(ask) and ask(str(text), voice_class):
+            return
+    except Exception:                                # noqa: BLE001
+        pass
     try:
         from . import voices
         if voices.say_whole(voice_class, text):

@@ -182,6 +182,10 @@ def _page():
             ('auditoryIconsEverywhere',
              _('Play them on every control in every program, not only in '
                'Titan\'s own windows'), 'auditoryIcons'),
+            # Translators: a setting in the Titan enhancements panel.
+            ('speakShortcuts',
+             _('Say what a shortcut does as it is pressed - Control+O, '
+               '"Open" - read out of the program\'s own menu'), ''),
         )),
         # Translators: a group of settings in the Titan panel.
         (_('Titan\'s announcements'),

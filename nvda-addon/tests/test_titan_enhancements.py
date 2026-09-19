@@ -36,6 +36,16 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(HERE), '..'))
 if os.path.join(ADDON, 'globalPlugins') not in sys.path:
     sys.path.insert(0, os.path.join(ADDON, 'globalPlugins'))
 
+# **The suite never reads the user's own stores.** Outside NVDA every
+# shared store - the voice classes, the speech schemes, the labels, the
+# markers - lives under %APPDATA%/titosoft/Titan/screenreader, and seven
+# tests about how a control is read failed on the machine of a user whose
+# ACTIVE scheme was not the shipped default: they were reading that
+# user's choice, not the code. A suite that depends on who runs it is a
+# suite that passes for the wrong reason, so the folder is a fresh one.
+_ISOLATED_APPDATA = tempfile.mkdtemp(prefix='titan-enhancements-tests-')
+os.environ['APPDATA'] = _ISOLATED_APPDATA
+
 # The one name a global plugin cannot do without.
 if 'globalPluginHandler' not in sys.modules:
     _stub = types.ModuleType('globalPluginHandler')
@@ -2696,8 +2706,16 @@ def _temp_config(case):
     stub.appArgs = types.SimpleNamespace(configPath=folder)
     previous = sys.modules.get('globalVars')
     sys.modules['globalVars'] = stub
+    # **The stores live in the folder both readers share** (`readerHome`),
+    # not in NVDA's configuration folder any more - so the folder of this
+    # test is that one too, or a store written here would be read from
+    # somewhere else.
+    from titanEnhancements import readerHome
+    was_folder = readerHome.folder
+    readerHome.folder = lambda: folder
 
     def put_back():
+        readerHome.folder = was_folder
         if previous is None:
             sys.modules.pop('globalVars', None)
         else:
@@ -8897,6 +8915,174 @@ class WhatIsSETInAManagerReallyCHANGESWhatIsRead(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------- #
+class TheBrailleRuleReachesNvdasRealRenderer(unittest.TestCase):
+    """Seen at every start of the user's NVDA: a deprecation warning
+    against this add-on, `braille.getPropertiesBraille is deprecated. Use
+    braille.regions.properties.getPropertiesBraille instead`. The name on
+    `braille` is an alias answered by the module's `__getattr__`; the
+    renderer lives in `braille.regions.properties`, and the regions that
+    braille the focus took it with `from .properties import` - so the
+    wrapper reached alerts and nothing the user tabbed onto."""
+
+    def setUp(self):
+        import sys
+        from titanEnhancements import compat, speechSchemes
+        self.compat, self.schemes = compat, speechSchemes
+        self.sys = sys
+        self.kept = dict((name, sys.modules.get(name)) for name in (
+            'braille', 'braille.regions', 'braille.regions.properties',
+            'braille.regions.NVDAObject', 'NVDAObjects.behaviors'))
+        self.kept_braille = compat.braille
+        self.deprecated = []
+
+        def real(**values):
+            return dict(values)
+
+        properties = types.ModuleType('braille.regions.properties')
+        properties.getPropertiesBraille = real
+        region = types.ModuleType('braille.regions.NVDAObject')
+        region.getPropertiesBraille = real          # from .properties import
+        regions = types.ModuleType('braille.regions')
+        regions.properties = properties
+        braille = types.ModuleType('braille')
+        braille.regions = regions
+        deprecated = self.deprecated
+
+        def module_getattr(name):
+            deprecated.append(name)
+            if name == 'getPropertiesBraille':
+                return real
+            raise AttributeError(name)
+        braille.__getattr__ = module_getattr
+        behaviors = types.ModuleType('NVDAObjects.behaviors')
+        behaviors.braille = braille
+        for module in (braille, regions, properties, region, behaviors):
+            sys.modules[module.__name__] = module
+        compat.braille = braille
+        self.real, self.braille = real, braille
+        self.properties, self.region = properties, region
+        self.schemes.uninstall_braille()
+
+    def tearDown(self):
+        self.schemes.uninstall_braille()
+        self.compat.braille = self.kept_braille
+        for name, module in self.kept.items():
+            if module is None:
+                self.sys.modules.pop(name, None)
+            else:
+                self.sys.modules[name] = module
+
+    def test_the_real_renderer_is_wrapped(self):
+        self.assertTrue(self.schemes.install_braille())
+        self.assertIsNot(self.properties.getPropertiesBraille, self.real)
+
+    def test_a_region_that_imported_the_name_is_wrapped_too(self):
+        self.schemes.install_braille()
+        self.assertIsNot(self.region.getPropertiesBraille, self.real)
+        self.assertIs(self.region.getPropertiesBraille,
+                      self.properties.getPropertiesBraille)
+
+    def test_the_deprecated_alias_is_never_asked_for(self):
+        self.schemes.install_braille()
+        self.assertEqual(self.deprecated, [])
+
+    def test_the_rule_is_applied_where_the_focus_is_brailled(self):
+        key = self.schemes.create('Braille reach test')
+        self.schemes.set_rule(key, 'button', braille={'kind': 'btn'})
+        self.schemes.use(key)
+        self.schemes.install_braille()
+
+        class Role:
+            name = 'BUTTON'
+        out = self.region.getPropertiesBraille(name='Save', role=Role(),
+                                               states=set())
+        self.assertEqual(out['roleText'], 'btn')
+
+    def test_uninstalling_puts_every_name_back(self):
+        self.schemes.install_braille()
+        self.assertTrue(self.schemes.uninstall_braille())
+        self.assertIs(self.properties.getPropertiesBraille, self.real)
+        self.assertIs(self.region.getPropertiesBraille, self.real)
+
+    def test_an_older_nvda_with_only_the_flat_name_still_works(self):
+        del self.braille.__getattr__
+        del self.braille.regions
+        self.braille.getPropertiesBraille = self.real
+        self.sys.modules.pop('braille.regions.properties', None)
+        self.sys.modules.pop('braille.regions', None)
+        self.assertTrue(self.schemes.install_braille())
+        self.assertIsNot(self.braille.getPropertiesBraille, self.real)
+
+
+class ThePictureIsNeverBiggerThanTheRecogniserTakes(unittest.TestCase):
+    """Seen in NVDA's log while the user was in a full-screen game:
+    `UwpOcr::recognize ... Image dimensions are too large! Check
+    MaxImageDimension`, twice, right after `surface` had decided to read
+    the window as a game. NVDA's own resize factor is 4 for anything under
+    a hundred pixels on EITHER side, and the game reader asks for a strip
+    across the whole screen - 2560 wide, 46 tall - so the picture became
+    10240 wide, over the engine's 10000, and was refused. Refused silently
+    on this side: the callback never comes and `read` waited out its
+    whole timeout for it. Measured against NVDA's own helper: 10000 by 8
+    answered, 10001 by 8 refused."""
+
+    class Info:
+        """NVDA's own arithmetic, quoted from `RecogImageInfo.__init__`."""
+        def __init__(self, left, top, width, height, factor):
+            self.screenLeft, self.screenTop = left, top
+            self.screenWidth, self.screenHeight = width, height
+            self.resizeFactor = factor
+            self.recogWidth = int(width * factor)
+            self.recogHeight = int(height * factor)
+
+    class Recogniser:
+        """NVDA's own rule, quoted from `UwpOcr.getResizeFactor`."""
+        def getResizeFactor(self, width, height):
+            return 4 if width < 100 or height < 100 else 1
+
+    def setUp(self):
+        from titanEnhancements import localOcr
+        self.localOcr = localOcr
+
+    def info(self, width, height):
+        return self.localOcr._image_info(self.Info, self.Recogniser(),
+                                         0, 0, width, height)
+
+    def test_a_strip_across_a_full_screen_fits(self):
+        info = self.info(2560, 46)
+        self.assertLessEqual(info.recogWidth, self.localOcr.RECOGNISER_MAX)
+        # Still enlarged as far as it can be - the engine reads small
+        # print badly, which is why NVDA enlarges it at all.
+        self.assertGreater(info.recogHeight, 46 * 3)
+
+    def test_a_small_window_is_still_enlarged_four_times(self):
+        info = self.info(80, 60)
+        self.assertEqual(info.resizeFactor, 4)
+        self.assertEqual((info.recogWidth, info.recogHeight), (320, 240))
+
+    def test_an_ordinary_window_is_left_alone(self):
+        info = self.info(1280, 800)
+        self.assertEqual(info.resizeFactor, 1)
+        self.assertEqual((info.recogWidth, info.recogHeight), (1280, 800))
+
+    def test_a_window_too_big_even_unscaled_is_scaled_down(self):
+        """Three monitors side by side: the capture is a StretchBlt and
+        every rectangle is converted back through the same factor."""
+        info = self.info(12000, 1200)
+        self.assertLess(info.resizeFactor, 1)
+        self.assertLessEqual(info.recogWidth, self.localOcr.RECOGNISER_MAX)
+        self.assertGreater(info.recogWidth, self.localOcr.RECOGNISER_MAX - 2)
+
+    def test_the_rectangles_come_back_through_the_capped_factor(self):
+        info = self.info(2560, 46)
+        # A word at the right-hand edge of the picture is at the right-hand
+        # edge of the screen, not four times past it.
+        self.assertEqual(self.localOcr._scaled(info, info.recogWidth), 2560)
+
+    def test_the_limit_is_the_measured_one(self):
+        self.assertEqual(self.localOcr.RECOGNISER_MAX, 10000)
+
+
 class WalkingTheRecognisedScreen(unittest.TestCase):
     """The terminal review, applied to a screen that was read as a picture.
 
@@ -15453,9 +15639,6 @@ class AWebPageIsAVirtualWindowOfItsLines(unittest.TestCase):
         self.assertIn('textInfos.UNIT_LINE', source)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
 
 class AGestureAndAnExplorationEachBeginWithASound(unittest.TestCase):
     """Two reader events of the trackpad's own: the first finger down is
@@ -15866,8 +16049,13 @@ class TheReaderSchemesAndTheHintPart(unittest.TestCase):
         self.assertEqual(self.schemes.voice_for('button', 'kind'), 'context')
         self.assertEqual(self.schemes.voice_for('button', 'state'), 'alert')
         self.assertEqual(self.schemes.active_pause(), 30)
+        # The beginner scheme is unhurried in its PARTS and not in dead
+        # air: 130 ms between seven parts was most of a second of silence
+        # per control, reported from Titan Access as "the pauses got
+        # longer". It carries no pause of its own, so the reader's own
+        # short gap applies.
         self.schemes.use('beginner')
-        self.assertEqual(self.schemes.active_pause(), 130)
+        self.assertEqual(self.schemes.active_pause(), 0)
         self.schemes.use('terse')
         self.assertEqual(self.schemes.active_pause(), 0)
         self.schemes.use('detailed')
@@ -16078,3 +16266,544 @@ class ASchemeIsAWholeAudioStyle(unittest.TestCase):
             encoding='utf-8').read()
         self.assertIn('_cycle_pause', src)
         self.assertIn('Pause between parts', src)
+
+
+# --------------------------------------------------------------------------- #
+class AWalkedListHasAWindowThatHoldsTheKeyboard(unittest.TestCase):
+    """The palette, a message and the virtual window are lists nothing
+    draws, and the reader borrows the arrows for them. A program that
+    reads its keys ITSELF - Elten, a launcher on a game engine, a game -
+    saw every borrowed arrow anyway and moved its own cursor with it:
+    "the palette works on the desktop and not in Elten or Battle.net".
+    So a walked list has a window of its own that takes the foreground,
+    the way a reader's dialog does, and gives it back on close."""
+
+    def setUp(self):
+        from titanEnhancements import hostWindow, palette, virtualWindow
+        self.host, self.palette, self.virtual = hostWindow, palette, virtualWindow
+        hostWindow.forget()
+        palette.forget()
+        self.addCleanup(hostWindow.forget)
+        self.addCleanup(palette.forget)
+        self._raw = hostWindow._raw_foreground
+        self._take = hostWindow._take
+        self.foreground = [555]
+        self.taken = []
+        hostWindow._raw_foreground = lambda: self.foreground[0]
+        hostWindow._take = lambda target: (self.taken.append(int(target)) or True)
+        self.addCleanup(setattr, hostWindow, '_raw_foreground', self._raw)
+        self.addCleanup(setattr, hostWindow, '_take', self._take)
+
+    def _rows(self):
+        return [{'label': 'Row %d' % n, 'role': 'command',
+                 'run': (lambda: (True, ''))} for n in range(3)]
+
+    def test_without_a_wx_application_the_list_still_works(self):
+        """A test, a console: no window, and the walkers are exactly what
+        they were - `then` runs at once and nothing raises."""
+        self.assertFalse(self.host.available())
+        said = []
+        self.assertFalse(self.host.show('Commands', lambda: True,
+                                        then=lambda: said.append(1)))
+        self.assertEqual(said, [1])
+        self.assertTrue(self.host.up())
+        self.assertEqual(self.host.over(), 555)
+        ok, _said = self.palette.show(self._rows(), 'Commands')
+        self.assertTrue(ok)
+        self.assertEqual(self.palette.here()['label'], 'Row 0')
+
+    def test_the_host_in_front_is_not_the_user_leaving(self):
+        """`left_the_window` compares the window in front against the one
+        the list was opened over; the host taking the foreground is the
+        list being given the keyboard, not the user going somewhere."""
+        self.palette.show(self._rows(), 'Commands')
+        self.host._state['hwnd'] = 777          # the host exists now
+        self.foreground[0] = 777
+        self.assertEqual(self.host.foreground_hwnd(), 555)
+        self.assertFalse(self.palette.left_the_window())
+        self.assertTrue(self.palette.walking())
+        # Somewhere else really is leaving.
+        self.host._state['over'] = 555
+        self.foreground[0] = 999
+        exists = self.palette._window_exists
+        self.palette._window_exists = lambda hwnd: True
+        try:
+            self.assertTrue(self.palette.left_the_window())
+        finally:
+            self.palette._window_exists = exists
+        self.assertFalse(self.palette.walking())
+
+    def test_a_control_inside_the_host_is_the_host(self):
+        self.host._state['hwnd'] = 777
+        root = self.host._root_of
+        self.host._root_of = lambda hwnd: 777 if hwnd == 778 else 0
+        try:
+            self.assertTrue(self.host.is_host(777))
+            self.assertTrue(self.host.is_host(778))
+            self.assertFalse(self.host.is_host(555))
+            self.assertTrue(self.host.is_host_object(
+                types.SimpleNamespace(windowHandle=778)))
+            self.assertTrue(self.host.is_host_object(
+                types.SimpleNamespace(hwnd=777)))
+            self.assertFalse(self.host.is_host_object(None))
+        finally:
+            self.host._root_of = root
+
+    def test_the_virtual_window_asks_for_the_window_under_the_host(self):
+        """The virtual window rebuilds for the window in front - which,
+        while it is up, is its own host. It must ask for the one
+        underneath."""
+        from titanEnhancements import readerApi
+        self.host._state['hwnd'] = 777
+        self.host._state['over'] = 555
+        under = types.SimpleNamespace(windowHandle=555, name='Elten')
+        was_fg, was_win = readerApi.foreground, readerApi.window_object
+        readerApi.foreground = lambda: types.SimpleNamespace(
+            windowHandle=777, name='Commands')
+        readerApi.window_object = lambda hwnd: under if hwnd == 555 else None
+        try:
+            self.assertIs(self.virtual._foreground(), under)
+        finally:
+            readerApi.foreground, readerApi.window_object = was_fg, was_win
+
+    def test_losing_the_foreground_to_the_window_underneath_takes_it_back(self):
+        """The program took the keyboard back (a click, a control that
+        activates its window) and nothing new appeared: the list is still
+        what the user is in."""
+        self.host.show('Commands', lambda: True)
+        self.host._state['hwnd'] = 777
+        self.foreground[0] = 555
+        self.host._after_lost()
+        self.assertEqual(self.taken, [777])
+        self.assertEqual(self.host.report()['retaken'], 1)
+
+    def test_losing_the_foreground_when_the_list_is_gone_hides(self):
+        self.host.show('Commands', lambda: False)
+        self.host._state['hwnd'] = 777
+        self.foreground[0] = 555
+        self.host._after_lost()
+        self.assertEqual(self.taken, [])
+        self.assertFalse(self.host.up())
+
+    def test_a_dialog_of_the_program_is_left_to_the_walker(self):
+        """Another window in front - a dialog the row opened, another
+        program - is the walker's own `left_the_window` to decide, on the
+        focus event that follows; the host does not fight it."""
+        self.host.show('Commands', lambda: True)
+        self.host._state['hwnd'] = 777
+        self.foreground[0] = 999
+        self.host._after_lost()
+        self.assertEqual(self.taken, [])
+        self.assertTrue(self.host.up())
+
+    def test_a_level_over_a_level_keeps_the_first_window(self):
+        self.foreground[0] = 555
+        self.host.show('Commands', lambda: True)
+        self.host._state['hwnd'] = 777
+        self.foreground[0] = 777                # the host is in front now
+        self.host.show('Reading', lambda: True)
+        self.assertEqual(self.host.over(), 555)
+        self.assertEqual(self.host.title(), 'Reading')
+
+    def test_following_a_sub_window_moves_the_host_over_it(self):
+        self.host.show('Notepad', lambda: True)
+        self.host.follow(888, 'Save as')
+        self.assertEqual(self.host.over(), 888)
+        self.assertEqual(self.host.title(), 'Save as')
+
+    def test_the_palette_shows_and_hides_it(self):
+        shown, hidden = [], []
+        was_show, was_hide = self.host.show, self.host.hide
+        self.host.show = lambda title, wanted, then=None: (
+            shown.append(title), then and then(), False)[2]
+        self.host.hide = lambda: hidden.append(True) or True
+        try:
+            self.palette.show(self._rows(), 'Commands')
+            self.palette.show(self._rows(), 'Reading',
+                              back=lambda: (True, ''))
+            self.palette.stop()
+        finally:
+            self.host.show, self.host.hide = was_show, was_hide
+        # Shown once for the first level, retitled for the second, hidden
+        # once at the end.
+        self.assertEqual(shown, ['Commands'])
+        self.assertEqual(hidden, [True])
+
+    def test_the_virtual_window_shows_and_hides_it(self):
+        shown, hidden = [], []
+        was_show, was_hide = self.host.show, self.host.hide
+        self.host.show = lambda title, wanted, then=None: (
+            shown.append(title), then and then(), False)[2]
+        self.host.hide = lambda: hidden.append(True) or True
+        from titanEnhancements import readerApi
+        window = types.SimpleNamespace(
+            windowHandle=555, name='Elten', role='window', children=[],
+            location=(0, 0, 100, 100))
+        was_fg = readerApi.foreground
+        readerApi.foreground = lambda: window
+        was_nodes = self.virtual.nodes_of
+        self.virtual.nodes_of = lambda w, note: [
+            {'label': 'Save', 'role': 'button', 'obj': None, 'rect': None}]
+        try:
+            ok, _said = self.virtual.start()
+            self.assertTrue(ok)
+            self.virtual.stop()
+        finally:
+            self.host.show, self.host.hide = was_show, was_hide
+            readerApi.foreground = was_fg
+            self.virtual.nodes_of = was_nodes
+        self.assertEqual(shown, ['Elten'])
+        self.assertEqual(hidden, [True])
+
+    def test_both_readers_swallow_the_hosts_own_focus(self):
+        """The list has said its own title and its row; a reader reading
+        "Commands, window" over that would say everything twice."""
+        plugin = _source_of('__init__.py')
+        for event in ('def event_gainFocus', 'def event_foreground',
+                      'def event_focusEntered'):
+            at = plugin.index(event)
+            block = plugin[at:plugin.index('\n    def ', at + 10)]
+            self.assertIn('hostWindow.is_host_object(obj)', block, event)
+        engine = io.open(os.path.join(
+            ROOT, 'data', 'components', 'titan access', 'titan_access',
+            'engine.py'), encoding='utf-8').read()
+        at = engine.index('def on_focus(')
+        block = engine[at:engine.index('\n    def ', at + 10)]
+        self.assertIn('hostWindow.is_host(', block)
+
+    def test_it_is_one_source_in_both_readers(self):
+        vendored = os.path.join(ROOT, 'data', 'components', 'titan access',
+                                'titan_access', 'portable', 'hostWindow.py')
+        self.assertTrue(os.path.exists(vendored))
+        mine = os.path.join(ADDON, 'globalPlugins', 'titanEnhancements',
+                            'hostWindow.py')
+        self.assertEqual(io.open(mine, 'rb').read(),
+                         io.open(vendored, 'rb').read())
+
+
+# --------------------------------------------------------------------------- #
+class ThePaletteListsEveryKeyTheAddOnAnswers(unittest.TestCase):
+    """The layers are the commands with no key of their own; somebody who
+    has just found the palette does not know the keys either. So the first
+    list carries every key this add-on answers as one more level, read out
+    of NVDA's own `inputCore` - what Input Gestures shows, the keys the
+    user rebound included - and never a table kept here."""
+
+    class FakePlugin(object):
+        _FakePlugin__gestures = {'kb:NVDA+shift+space': 'titanPalette'}
+
+        def __init__(self):
+            self.ran = []
+
+        def script_titanPalette(self, gesture):
+            self.ran.append(('palette', gesture))
+
+        def script_paletteUp(self, gesture):
+            self.ran.append(('up', gesture))
+
+        def script_titanStatus(self, gesture):
+            self.ran.append(('status', gesture))
+
+    def setUp(self):
+        from titanEnhancements import gestures, commands, palette
+        self.gestures, self.commands, self.palette = gestures, commands, palette
+        palette.forget()
+        self.addCleanup(palette.forget)
+        self.plugin = self.FakePlugin()
+        self.plugin.script_titanStatus.__func__.gestures = ['kb:NVDA+shift+t']
+
+    def _info(self, name, script, keys):
+        return types.SimpleNamespace(cls=self.FakePlugin, displayName=name,
+                                     scriptName=script, gestures=list(keys),
+                                     category='Titan')
+
+    def _with_input_core(self, mappings):
+        stub = types.ModuleType('inputCore')
+        stub.normalizeGestureIdentifier = lambda identifier: str(identifier).lower()
+        stub.getDisplayTextForGestureIdentifier = lambda identifier: (
+            'Keyboard', str(identifier).split(':', 1)[-1])
+
+        class _UserMap(object):
+            def getScriptsForAllGestures(self):
+                return iter(())
+        stub.manager = types.SimpleNamespace(
+            getAllGestureMappings=lambda: mappings,
+            userGestureMap=_UserMap())
+        had = sys.modules.get('inputCore')
+        sys.modules['inputCore'] = stub
+
+        def put_back():
+            if had is None:
+                sys.modules.pop('inputCore', None)
+            else:
+                sys.modules['inputCore'] = had
+        self.addCleanup(put_back)
+
+    def test_without_nvda_there_is_no_row(self):
+        self.assertEqual(self.gestures.bound_shortcuts(self.plugin), [])
+        self.assertEqual(self.commands.shortcut_rows(self.plugin), [])
+        ok, _said = self.commands.command_palette(plugin=self.plugin)
+        self.assertTrue(ok)
+        labels = [row['label'] for row in self.palette._state['rows']]
+        self.assertFalse([one for one in labels
+                          if one.startswith('Keyboard shortcuts')])
+
+    def test_every_bound_key_is_a_row_and_a_borrowed_arrow_is_not(self):
+        self._with_input_core({'Titan': {
+            'Opens the palette': self._info(
+                'Opens the palette', 'titanPalette',
+                ['kb:nvda+shift+space', 'kb:upArrow']),
+            'Says the status': self._info(
+                'Says the status', 'titanStatus', ['kb:nvda+shift+t']),
+            'Palette up': self._info('Palette up', 'paletteUp',
+                                     ['kb:upArrow']),
+            'Not ours': types.SimpleNamespace(
+                cls=str, displayName='Not ours', scriptName='x',
+                gestures=['kb:a'], category='Other'),
+        }})
+        rows = self.gestures.bound_shortcuts(self.plugin)
+        self.assertEqual([row['label'] for row in rows],
+                         ['Opens the palette (nvda+shift+space)',
+                          'Says the status (nvda+shift+t)'])
+        self.assertEqual(rows[0]['keys'], ['kb:nvda+shift+space'])
+
+    def test_the_palette_offers_them_and_enter_does_what_the_key_does(self):
+        self._with_input_core({'Titan': {
+            'Opens the palette': self._info(
+                'Opens the palette', 'titanPalette', ['kb:nvda+shift+space']),
+        }})
+        ok, _said = self.commands.command_palette(plugin=self.plugin)
+        self.assertTrue(ok)
+        rows = self.palette._state['rows']
+        self.assertEqual(rows[-1]['label'], 'Keyboard shortcuts (1)')
+        self.palette.move_end(True)
+        self.palette.activate()
+        self.assertEqual(self.palette._state['title'], 'Keyboard shortcuts')
+        self.assertEqual(self.palette.here()['role'], 'shortcut')
+        self.palette.activate()
+        self.assertEqual(self.plugin.ran, [('palette', None)])
+        # Closed BEFORE the script ran, as before any command.
+        self.assertFalse(self.palette.walking())
+
+    def test_escape_goes_back_to_the_first_list(self):
+        self._with_input_core({'Titan': {
+            'Opens the palette': self._info(
+                'Opens the palette', 'titanPalette', ['kb:nvda+shift+space']),
+        }})
+        self.commands.keyboard_shortcuts(self.plugin)
+        self.palette.back()
+        self.assertTrue(self.palette.walking())
+        self.assertEqual(self.palette._state['title'], 'Commands')
+
+    def test_the_plugin_hands_itself_over(self):
+        source = _source_of('__init__.py')
+        self.assertIn('commands.command_palette(self._open_layer, plugin=self)',
+                      source)
+
+    def test_titan_access_offers_its_own_keys_the_same_way(self):
+        engine = io.open(os.path.join(
+            ROOT, 'data', 'components', 'titan access', 'titan_access',
+            'engine.py'), encoding='utf-8').read()
+        self.assertIn('def _shortcut_rows(self)', engine)
+        self.assertIn('L("palette.shortcuts")', engine)
+        for lang in ('en', 'pl'):
+            words = json.load(io.open(os.path.join(
+                ROOT, 'data', 'components', 'titan access', 'locale',
+                lang + '.json'), encoding='utf-8'))
+            self.assertIn('palette.shortcuts', words)
+            self.assertIn('gesture.sayAll.name', words)
+            self.assertIn('gesture.objnav_next.name', words)
+
+
+
+class AShortcutSaysWhatItDoes(unittest.TestCase):
+    """Window-Eyes said "Open" as Control+O went through, out of a .key
+    file per program. This says it out of the program's own menu, the
+    reader module and what a key means everywhere - and never takes the
+    key."""
+
+    def setUp(self):
+        from titanEnhancements import spokenShortcuts
+        self.s = spokenShortcuts
+        spokenShortcuts.forget()
+        self.addCleanup(spokenShortcuts.forget)
+
+    def test_a_key_has_one_spelling(self):
+        self.assertEqual(self.s.identifier('o', ctrl=True), 'control+o')
+        self.assertEqual(self.s.identifier('S', True, False, True), 'control+shift+s')
+        self.assertEqual(self.s.identifier('F4', alt=True), 'alt+f4')
+        self.assertEqual(self.s.from_text('Ctrl+Shift+S'), 'control+shift+s')
+        self.assertEqual(self.s.from_text('Strg+O'), 'control+o')
+        self.assertEqual(self.s.from_text('F5'), 'f5')
+        self.assertEqual(self.s.from_text('Ctrl++'), 'control++')
+        self.assertEqual(self.s.from_text(''), '')
+
+    def test_what_is_worth_saying(self):
+        self.assertTrue(self.s.worth_saying('o', ctrl=True))
+        self.assertTrue(self.s.worth_saying('f5'))
+        self.assertTrue(self.s.worth_saying('f4', alt=True))
+        self.assertFalse(self.s.worth_saying('o'))               # typing
+        self.assertFalse(self.s.worth_saying('f', alt=True))     # a menu opening
+        self.assertFalse(self.s.worth_saying('right', ctrl=True))  # a caret jump
+        self.assertFalse(self.s.worth_saying('control', ctrl=True))
+
+    def test_the_programs_own_menu_is_asked_first(self):
+        self.s.menu_of = lambda hwnd: {'control+o': 'Otwórz projekt'} if hwnd == 7 else {}
+        self.assertEqual(self.s.describe('o', ctrl=True, hwnd=7), 'Otwórz projekt')
+        self.assertEqual(self.s.describe('o', ctrl=True, hwnd=8), 'Open')
+
+    def test_a_reader_module_may_carry_shortcuts_as_data(self):
+        self.s.menu_of = lambda hwnd: {}
+        module = {'id': 'x', 'shortcuts': {'Ctrl+Shift+P': 'Command palette'}}
+        self.assertEqual(self.s.describe('p', True, False, True, hwnd=1,
+                                         module=module), 'Command palette')
+
+    def test_a_key_nobody_knows_says_nothing(self):
+        self.s.menu_of = lambda hwnd: {}
+        self.assertEqual(self.s.describe('q', ctrl=True, hwnd=1), '')
+
+    def test_a_menu_label_is_cleaned(self):
+        self.assertEqual(self.s._clean_label('&Otwórz...'), 'Otwórz')
+        self.assertEqual(self.s._clean_label('Save && Close'), 'Save & Close')
+
+    def test_the_word_is_said_a_moment_after_and_the_key_is_not_taken(self):
+        self.s.menu_of = lambda hwnd: {}
+        said = []
+        self.assertTrue(self.s.consider('s', True, False, False, 1,
+                                        said.append, delay=0.0))
+        time.sleep(0.2)
+        self.assertEqual(said, ['Save'])
+        self.assertFalse(self.s.consider('s', False, False, False, 1,
+                                         said.append, delay=0.0))
+
+    def test_the_switch_turns_it_off(self):
+        self.s.set_switched_on(False)
+        try:
+            self.assertFalse(self.s.consider('s', True, False, False, 1,
+                                             lambda w: None, delay=0.0))
+        finally:
+            self.s.set_switched_on(True)
+
+    def test_both_readers_are_wired(self):
+        plugin = _source_of('__init__.py')
+        self.assertIn('inputCore.decide_executeGesture.register(self._shortcut_seen)', plugin)
+        at = plugin.index('def _shortcut_seen(')
+        block = plugin[at:plugin.index('\n    def ', at + 10)]
+        self.assertIn('return True', block)
+        self.assertNotIn('return False', block)
+        engine = io.open(os.path.join(ROOT, 'data', 'components', 'titan access',
+                                      'titan_access', 'engine.py'), encoding='utf-8').read()
+        self.assertIn('spokenShortcuts.consider(', engine)
+        from titanEnhancements import configSpec
+        self.assertIn('speakShortcuts', configSpec.SPEC if hasattr(configSpec, 'SPEC')
+                      else _source_of('configSpec.py'))
+
+    def test_the_words_are_in_polish(self):
+        from titanEnhancements import spokenShortcuts
+        source = _source_of('spokenShortcuts.py')
+        po = io.open(os.path.join(ADDON, 'locale', 'pl', 'LC_MESSAGES', 'nvda.po'),
+                     encoding='utf-8').read()
+        for word in ('Open', 'Save', 'Save as', 'Copy', 'Paste', 'Select all',
+                     'Close the window', 'Refresh', 'Help'):
+            self.assertIn("_('%s')" % word, source, word)
+            self.assertIn('msgid "%s"\n' % word, po, word)
+
+
+
+class APaletteRowSaysARealKey(unittest.TestCase):
+    """"Voices and reading order (o)" taught a letter that is a key only
+    inside an armed layer. The command has a key of its own - the same
+    script the letter runs - and that is what the row says; one with no
+    key of its own says the whole way to it."""
+
+    class FakePlugin(object):
+        _FakePlugin__gestures = {'kb:NVDA+shift+space': 'titanPalette',
+                                 'kb:NVDA+shift+j': 'manager'}
+
+        def script_titanPalette(self, gesture):
+            pass
+
+        def script_manager(self, gesture):
+            pass
+
+    def setUp(self):
+        from titanEnhancements import commands, palette, layers
+        self.commands, self.palette, self.layers = commands, palette, layers
+        palette.forget()
+        self.addCleanup(palette.forget)
+        stub = types.ModuleType('inputCore')
+        stub.normalizeGestureIdentifier = lambda identifier: str(identifier).lower()
+        stub.getDisplayTextForGestureIdentifier = lambda identifier: (
+            'Keyboard', str(identifier).split(':', 1)[-1])
+        plugin_cls = self.FakePlugin
+        infos = {
+            'Opens the palette': types.SimpleNamespace(
+                cls=plugin_cls, displayName='Opens the palette',
+                scriptName='titanPalette', gestures=['kb:nvda+shift+space']),
+            'The manager': types.SimpleNamespace(
+                cls=plugin_cls, displayName='The manager',
+                scriptName='manager', gestures=['kb:nvda+shift+j']),
+        }
+
+        class _UserMap(object):
+            def getScriptsForAllGestures(self):
+                return iter(())
+        stub.manager = types.SimpleNamespace(
+            getAllGestureMappings=lambda: {'Titan': infos},
+            userGestureMap=_UserMap())
+        had = sys.modules.get('inputCore')
+        sys.modules['inputCore'] = stub
+
+        def put_back():
+            if had is None:
+                sys.modules.pop('inputCore', None)
+            else:
+                sys.modules['inputCore'] = had
+        self.addCleanup(put_back)
+        self.plugin = self.FakePlugin()
+
+    def _labels(self):
+        return [row['label'] for row in self.palette._state['rows']]
+
+    def test_a_command_with_its_own_key_says_that_key(self):
+        self.commands.layer_commands('manager', plugin=self.plugin)
+        labels = self._labels()
+        self.assertIn('The manager (nvda+shift+j)', labels)
+        self.assertFalse([one for one in labels if one.endswith(' (m)')])
+
+    def test_a_command_with_no_key_of_its_own_says_the_whole_way(self):
+        self.commands.layer_commands('manager', plugin=self.plugin)
+        labels = self._labels()
+        self.assertIn('The local recogniser (nvda+shift+space, Managers, O)',
+                      labels)
+
+    def test_without_nvda_the_way_is_still_real(self):
+        sys.modules.pop('inputCore', None)
+        self.commands.layer_commands('reading')
+        labels = self._labels()
+        self.assertIn('Where am I (NVDA+shift+space, Reading, W)', labels)
+
+    def test_every_script_named_really_runs_that_command(self):
+        import re
+        source = _source_of('__init__.py')
+        blocks = re.split(r'\n    def script_(\w+)\(', source)
+        runs = {}
+        for at in range(1, len(blocks), 2):
+            body = blocks[at + 1].split('\n    @script(')[0].split('\n    def ')[0]
+            runs[blocks[at]] = set(re.findall(r'commands\.(\w+)\(', body))
+        for command, script in self.layers.SCRIPT_OF.items():
+            self.assertIn(script, runs, script)
+            self.assertIn(command, runs[script],
+                          '%s does not run commands.%s' % (script, command))
+
+    def test_titan_access_says_its_own_gesture_or_nothing(self):
+        engine = io.open(os.path.join(
+            ROOT, 'data', 'components', 'titan access', 'titan_access',
+            'engine.py'), encoding='utf-8').read()
+        self.assertIn('def _layer_key_text(self, command)', engine)
+        self.assertIn("if own else text", engine)
+        self.assertNotIn("'label': '%s (%s)' % (text, key), 'role': ''", engine)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

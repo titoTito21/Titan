@@ -414,6 +414,12 @@ class KlangoSession(object):
                          'not written: ' +
                          ', '.join('%s (%d)' % (name, count) for name, count
                                    in sorted(natives.MISSING.items())))
+        noted = getattr(natives, 'NOTED', None)
+        if noted:
+            lines.append("the application's own mistakes, answered the way "
+                         'Klango answered them: ' +
+                         ', '.join('%s (%d)' % (what, count) for what, count
+                                   in sorted(noted.items())))
         return lines
 
 

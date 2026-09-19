@@ -397,6 +397,15 @@ class Hooks:
             obj = None
         return adapt(obj, provider)
 
+    def window_object(self, hwnd):
+        provider = self._provider()
+        if provider is None or not hwnd:
+            return None
+        try:
+            return adapt(provider.object_from_handle(int(hwnd)), provider)
+        except Exception:                            # noqa: BLE001
+            return None
+
     def focus(self):
         obj = getattr(self.engine, 'current_object', None)
         if obj is None:

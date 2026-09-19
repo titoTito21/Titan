@@ -55,23 +55,14 @@ def _text(value):
 def folder():
     """Titan's own shared folder for readers. ``''`` when there is none.
 
-    Found the way Titan Access finds its own settings, because it has to
-    be the SAME folder - a second guess at where Titan keeps things is a
-    second folder, and then nothing is shared at all.
+    ``.../titosoft/Titan/accessibility/shared`` - beside every other store
+    both readers keep (`readerHome`), and the SAME folder Titan Access's
+    `shared_names.py` reads, because a second guess at where Titan keeps
+    things is a second folder, and then nothing is shared at all.
     """
     try:
-        import platform
-        system = platform.system()
-        if system == 'Windows':
-            base = os.getenv('APPDATA') or os.path.expanduser('~')
-            base = os.path.join(base, 'titosoft', 'Titan')
-        elif system == 'Darwin':
-            base = os.path.join(os.path.expanduser('~'), 'Library',
-                                'Application Support', 'titosoft', 'Titan')
-        else:
-            base = os.path.join(os.path.expanduser('~'), '.config',
-                                'titosoft', 'Titan')
-        return os.path.join(base, 'screenreader', 'shared')
+        from . import readerHome
+        return readerHome.shared_folder()
     except Exception:                                # noqa: BLE001
         return ''
 

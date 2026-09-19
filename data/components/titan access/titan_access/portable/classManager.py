@@ -48,33 +48,94 @@ except ImportError:
         except Exception:                            # noqa: BLE001
             return None
 
+    def _registry():
+        try:
+            from src.tts.engine_registry import get_engine_registry
+            return get_engine_registry()
+        except Exception:                            # noqa: BLE001
+            return None
+
     class speaking:                                  # noqa: N801
-        """Titan's engines and their voices, where NVDA's are not."""
+        """Titan's engines and their voices, where NVDA's are not.
+
+        **Listing a synthesizer's voices must not switch the reader to
+        it.** This used to call `set_engine` on the reader's own engine to
+        ask what voices it had, so walking the synthesizer list changed
+        what the reader spoke with as you went. The voices are read off
+        the engine registry (a Titan TTS engine) or off the shared
+        speaker's own lists (SAPI, eSpeak) instead, and a voice is keyed
+        by its ID - which is what the reader's `set_voice` resolves.
+        """
 
         @staticmethod
         def synthesizers():
+            found = []
             try:
                 from src.titan_core import tce_speech
-                return [(str(one), str(one))
-                        for one in (tce_speech.get_available_engines() or [])]
+                ids = list(tce_speech.get_available_engines() or [])
             except Exception:                        # noqa: BLE001
-                return []
+                ids = []
+            registry = _registry()
+            for one in ids:
+                label = str(one)
+                try:
+                    engine = registry.get_titantts_engine(one) if registry \
+                        else None
+                    if engine is not None and getattr(engine, 'engine_name', ''):
+                        label = str(engine.engine_name)
+                except Exception:                    # noqa: BLE001
+                    pass
+                found.append((str(one), {'sapi5': 'SAPI 5', 'espeak': 'eSpeak',
+                                         'espeak_dll': 'eSpeak'}.get(
+                    str(one), label)))
+            return found
 
         @staticmethod
-        def voices_of(synth):
-            engine = _titan_engine()
-            if engine is None or not synth:
-                return []
+        def _raw_voices(synth):
+            synth = str(synth or '')
+            registry = _registry()
             try:
-                engine.set_engine(str(synth))
-                found = []
-                for voice in (engine.get_available_voices() or []):
-                    name = (voice.get('name') or voice.get('id')
-                            if isinstance(voice, dict) else str(voice))
-                    found.append((str(name), str(name)))
-                return found
+                if registry and registry.is_titantts_engine(synth):
+                    engine = registry.get_titantts_engine(synth)
+                    return list(engine.get_voices() or []) if engine else []
             except Exception:                        # noqa: BLE001
                 return []
+            try:
+                from src.titan_core import tce_speech
+                tce_speech._init()
+                speaker = getattr(tce_speech, '_speaker', None)
+            except Exception:                        # noqa: BLE001
+                speaker = None
+            if speaker is None:
+                return []
+            try:
+                if synth == 'sapi5':
+                    return [str(v.get('name')) + (' (32-bit)' if v.get('is_32bit')
+                                                  else '')
+                            for v in (speaker._get_all_sapi_voices() or [])]
+                if synth in ('espeak', 'espeak_dll'):
+                    return list(speaker.get_espeak_voices() or [])
+                if getattr(speaker, 'engine', '') == synth:
+                    return list(speaker.get_available_voices() or [])
+            except Exception:                        # noqa: BLE001
+                return []
+            return []
+
+        @classmethod
+        def voices_of(cls, synth):
+            if not synth:
+                return []
+            found = []
+            for voice in cls._raw_voices(synth):
+                if isinstance(voice, dict):
+                    key = str(voice.get('id') or voice.get('name') or '')
+                    label = str(voice.get('display_name') or voice.get('name')
+                                or key)
+                else:
+                    key = label = str(voice)
+                if key:
+                    found.append((key, label))
+            return found
 
         @staticmethod
         def variants_of(synth, voice):
@@ -84,6 +145,16 @@ except ImportError:
         def refused():
             return {}
 
+        @staticmethod
+        def speak_with(profile, text):
+            """The Try button: the profile as it stands, on the reader."""
+            try:
+                from . import compat
+                ask = getattr(compat.speech, 'speak_with', None)
+                return bool(callable(ask) and ask(dict(profile or {}), text))
+            except Exception:                        # noqa: BLE001
+                return False
+
 _ = i18n.install(globals())
 
 #: The one entry that means "leave it alone". Every name in a profile is
@@ -92,7 +163,7 @@ _ = i18n.install(globals())
 #: user has not touched.
 def _inherit():
     # Translators: the first entry of every voice list in the class manager.
-    return _('(the one NVDA is using)')
+    return _('(the one the reader is using)')
 
 
 def build():

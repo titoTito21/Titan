@@ -160,6 +160,7 @@ class TitanAccessEngine:
         self.speech = None
         self.sound = None
         self.provider = None
+        self.notifications = None    # UIA notifications + live regions
         self.keyboard = None
         self.gestures = None
         self.browse = None
@@ -334,6 +335,7 @@ class TitanAccessEngine:
             if hasattr(p, "add_state_listener"):
                 p.add_state_listener(self.on_state_change)
             p.start()
+            self._start_notifications(getattr(p, "uia", None))
             return p
         self.provider = _try(_mk_provider, "provider_manager")
         if self.provider is None:
@@ -342,6 +344,7 @@ class TitanAccessEngine:
                 p = UIAProvider()
                 p.add_focus_listener(self.on_focus)
                 p.start()
+                self._start_notifications(p)
                 return p
             self.provider = _try(_mk_uia, "uia_focus")
 
@@ -807,6 +810,13 @@ class TitanAccessEngine:
             self._live_stop.set()
         except Exception:
             pass
+        # The notification listeners first: they hang off the provider's
+        # own client, and `provider.stop()` removes every handler anyway.
+        try:
+            if self.notifications is not None:
+                self.notifications.stop()
+        except Exception:
+            pass
         for name in ("keyboard", "provider", "nvda_ctl", "progress"):
             obj = getattr(self, name, None)
             if obj is not None and hasattr(obj, "stop"):
@@ -1236,6 +1246,20 @@ class TitanAccessEngine:
                 and getattr(obj, "hwnd", 0) == self._menu_host_hwnd
                 and obj.role not in ("menu", "menuitem")):
             return
+        # **And the window a walked list holds the keyboard with.** The
+        # palette, a message and the virtual window each put a small
+        # window of their own in front (`portable/hostWindow`) so a
+        # program that reads its keys itself - Elten, a launcher on a
+        # game engine, a game - gets none of the arrows. The list has
+        # said its own title and row; the host itself is never read, and
+        # `current_object` stays the control the user was on.
+        try:
+            from .portable import hostWindow
+            if hostWindow.is_host(getattr(obj, "hwnd", 0)):
+                self._walkers_follow_the_focus()
+                return
+        except Exception:                            # noqa: BLE001
+            pass
         self.current_object = obj
         # **A walked list must not outlive its window.** The add-on ends a
         # review whose window has gone from `event_gainFocus`; nothing here
@@ -1736,6 +1760,43 @@ class TitanAccessEngine:
                    'pageup', 'pagedown', 'return', 'enter', 'escape',
                    'backspace', 'delete', 'f5', 'space', 'tab')
 
+    # ==================================================================== #
+    # UI Automation notifications and live regions
+    # ==================================================================== #
+    def _start_notifications(self, uia_provider):
+        """What a program says WITHOUT moving the focus - a UIA notification
+        ("copied", "new message") or a live region's new text - registered
+        on the same client and the same apartment as the focus listener
+        (`uia_notifications`). Said through the ordinary queue; a
+        notification that asked to be important interrupts."""
+        client = getattr(uia_provider, "_uia", None) if uia_provider else None
+        if client is None:
+            try:
+                from titan_access import uia_cache
+                client = uia_cache.client()
+            except Exception:
+                client = None
+        try:
+            from titan_access.uia_notifications import UIANotifications
+            from titan_access.portable import switchboard
+        except Exception as e:
+            print(f"[TitanAccess] notifications unavailable: {e}")
+            return
+        listener = UIANotifications(
+            lambda text, interrupt: self.speak(text, interrupt=bool(interrupt)),
+            muted=self._muted_for_foreground,
+            switched_on=lambda: switchboard.read("uiaNotifications", True))
+        try:
+            if listener.start(client):
+                self.notifications = listener
+                print("[TitanAccess] notifications: %s"
+                      % ("notifications + live regions" if listener.notifications_on
+                         else "live regions only (%s)" % listener.why_not))
+            else:
+                print(f"[TitanAccess] notifications not listening: {listener.why_not}")
+        except Exception as e:
+            print(f"[TitanAccess] notifications start error: {e}")
+
     def _walkers_follow_the_focus(self):
         """End any walked list whose window is no longer in front."""
         for name in ('virtualWindow', 'ocrReview', 'palette'):
@@ -2004,7 +2065,30 @@ class TitanAccessEngine:
                     return True
         except Exception as e:
             print(f"[TitanAccess] app plain-key error: {e}")
+        # **What the shortcut does, said as it goes through** (`portable/
+        # spokenShortcuts`): Control+O, "Open" - out of the program's own
+        # menu. The key is not taken; the word is queued a moment later,
+        # after the program has answered it.
+        try:
+            if not self._muted_for_foreground():
+                from .portable import spokenShortcuts
+                spokenShortcuts.consider(
+                    key_name, ctrl, alt, shift, self._foreground_hwnd(),
+                    lambda word: self.speak(word, interrupt=False),
+                    module=self._reader_module_data())
+        except Exception as e:
+            print(f"[TitanAccess] spoken shortcut error: {e}")
         return False
+
+    def _reader_module_data(self):
+        """The reader module for the program in front, as data, or None."""
+        try:
+            from .portable import readerModules
+            module = readerModules.for_object(self._adapted(self.current_object)) \
+                if self.current_object is not None else None
+            return getattr(module, 'data', None) if module is not None else None
+        except Exception:                            # noqa: BLE001
+            return None
 
     def on_char_typed(self, ch):
         if self._muted_for_foreground():
@@ -2335,8 +2419,95 @@ class TitanAccessEngine:
                 'role': '',
                 'run': (lambda chosen=name: self._palette_layer(chosen)),
             })
+        # **Every key this reader answers**, as one more level: the
+        # layers are the commands with no key of their own, and somebody
+        # who has just found the palette does not know the keys either.
+        # Read out of the gesture manager, so it is what is really bound.
+        shortcuts = self._shortcut_rows()
+        if shortcuts:
+            rows.append({
+                'label': '%s (%d)' % (L("palette.shortcuts"), len(shortcuts)),
+                'role': '',
+                'run': self._palette_shortcuts,
+            })
         ok, _said = palette.show(rows, "Titan")
         return bool(ok)
+
+    def _shortcut_rows(self):
+        """Every key bound in this reader, one row per action.
+
+        An action registered under several keys (the virtual window is on
+        Insert+W, Insert+NumPad minus and Insert+minus) is one row naming
+        them all; the object-navigation keys are rows like any other.
+        """
+        try:
+            from .portable import palette
+        except Exception:                            # noqa: BLE001
+            return []
+        by_action = {}
+        order = []
+        for binding in getattr(self.gestures, '_bindings', None) or ():
+            action = str(getattr(binding, 'action_id', '') or '')
+            if not action:
+                continue
+            if action not in by_action:
+                by_action[action] = {'binding': binding, 'keys': []}
+                order.append(action)
+            key = self._shortcut_key_text(binding)
+            if key and key not in by_action[action]['keys']:
+                by_action[action]['keys'].append(key)
+        rows = []
+        for action in order:
+            binding = by_action[action]['binding']
+            name = str(getattr(binding, 'name', '') or action)
+            rows.append({
+                'label': '%s (%s)' % (name, ', '.join(by_action[action]['keys'])),
+                'role': L("palette.shortcut"),
+                'run': (lambda handler=binding.handler:
+                        self._palette_run_handler(handler)),
+                'description': str(getattr(binding, 'description', '') or ''),
+            })
+        rows.sort(key=lambda row: row['label'].lower())
+        return rows
+
+    #: The NumPad keys the hook dispatches BARE (NumLock off, no reader
+    #: modifier) - object navigation. Everything else registered with the
+    #: gesture manager is reached with the reader modifier held, which a
+    #: spec like "w" does not say: it is written as the hook gates it.
+    _BARE_NUMPAD = ('numpad2', 'numpad4', 'numpad5', 'numpad6', 'numpad8',
+                    'numpadenter')
+
+    @classmethod
+    def _shortcut_key_text(cls, binding):
+        """What a binding's key is CALLED, modifier included."""
+        text = str(binding.readable() or '')
+        if not text:
+            return ''
+        base = str(getattr(binding, 'base', '') or '').lower()
+        if getattr(binding, 'insert', False) or base in cls._BARE_NUMPAD:
+            return text
+        return 'Insert+' + text
+
+    def _palette_run_handler(self, handler):
+        """Enter on a shortcut row does what its key does - with the
+        palette closed first, as before any command, because the handler
+        may put up a list of its own."""
+        from .portable import palette
+        palette.stop()
+        try:
+            handler()
+        except Exception as error:                   # noqa: BLE001
+            self._say(str(error))
+            return False, ''
+        return True, ''
+
+    def _palette_shortcuts(self):
+        from .portable import palette
+        rows = self._shortcut_rows()
+        if not rows:
+            return False, ''
+        return palette.show(rows, L("palette.shortcuts"),
+                            back=self.action_command_palette)
 
     def _palette_layer(self, layer):
         """One layer's commands. Enter runs the one the cursor is on."""
@@ -2348,10 +2519,34 @@ class TitanAccessEngine:
                 text = said() if callable(said) else str(command)
             except Exception:                        # noqa: BLE001
                 text = str(command)
-            rows.append({'label': '%s (%s)' % (text, key), 'role': '',
+            # **A real key, or none.** This reader has no layer letters
+            # (the list is walked, Enter runs), so "(o)" was a key that
+            # did nothing; what a command HAS here is its own gesture,
+            # where it has one, and that is what is said.
+            own = self._layer_key_text(command)
+            rows.append({'label': '%s (%s)' % (text, own) if own else text,
+                         'role': '',
                          'run': (lambda one=command: self._palette_run(one))})
         return palette.show(rows, layers.label(layer),
                             back=self.action_command_palette)
+
+    def _layer_key_text(self, command):
+        """The key this reader really has for a palette command, or ''."""
+        try:
+            from .portable import layers
+            action = layers.GESTURE_OF.get(str(command or ''), '')
+        except Exception:                            # noqa: BLE001
+            action = ''
+        if not action:
+            return ''
+        keys = []
+        for binding in getattr(self.gestures, '_bindings', None) or ():
+            if str(getattr(binding, 'action_id', '')) != action:
+                continue
+            text = self._shortcut_key_text(binding)
+            if text and text not in keys:
+                keys.append(text)
+        return ', '.join(keys)
 
     #: Palette commands this reader answers ITSELF rather than through the
     #: shared `commands` module - because what they mean here is genuinely

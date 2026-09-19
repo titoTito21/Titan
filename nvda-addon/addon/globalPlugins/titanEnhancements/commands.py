@@ -914,8 +914,10 @@ def toggle_position():
 # Where the keyboard is
 # --------------------------------------------------------------------------- #
 def _focused():
-    """The object NVDA is on, or None. Read on NVDA's own thread by the
-    caller - every one of these commands runs on it."""
+    """The object the READER is on, or None. In NVDA that is NVDA's focus,
+    read on its own thread by the caller; in Titan Access it is the
+    control the engine last announced, through `compat.api`, which
+    answers out of the seam there."""
     from . import compat
     api = compat.api
     if api is None:
@@ -936,7 +938,7 @@ def where_am_i():
     """
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     from . import ancestry
     from . import focus as focus_mod
@@ -1002,7 +1004,7 @@ def label_control():
     from . import labels
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     key, strong = labels.key_of(obj)
     if not key:
@@ -1057,7 +1059,7 @@ def what_is_this_written_in():
     from . import toolkit
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     said = toolkit.describe(obj)
     if not said:
@@ -1090,7 +1092,7 @@ def describe_control():
     from . import labels
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     key, _strong = labels.key_of(obj)
     remembered, _kind = labels.description_of(obj)
@@ -1285,7 +1287,7 @@ def customise_control():
     from . import labels
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     key, _strong = labels.key_of(obj)
     if not key:
@@ -1349,7 +1351,7 @@ def customise_control():
         ], keep)
 
 
-def command_palette(open_layer=None):
+def command_palette(open_layer=None, plugin=None):
     """Open the palette: the layers, walked.
 
     **A list in the same shape as the virtual window, not a dialog.** A
@@ -1365,6 +1367,11 @@ def command_palette(open_layer=None):
     key - offered as the last row rather than being what choosing a layer
     does, because somebody who has just found the palette does not know
     the letters yet.
+
+    ``plugin`` is the global plugin, and with it the palette's first list
+    carries **every key this add-on answers** as one more level: the
+    layers are the commands with no key of their own, and somebody who
+    has just found the palette does not know the keys either.
     """
     from . import layers
     from . import palette
@@ -1379,19 +1386,113 @@ def command_palette(open_layer=None):
             # Translators: what a row of the palette's first list is.
             'role': _('layer'),
             'icon': 'open-object',
-            'run': (lambda chosen=name: layer_commands(chosen, open_layer)),
+            'run': (lambda chosen=name: layer_commands(chosen, open_layer,
+                                                       plugin)),
+        })
+    shortcuts = shortcut_rows(plugin)
+    if shortcuts:
+        rows.append({
+            # Translators: a row of the palette's first list, with how
+            # many keys are listed under it.
+            'label': '%s (%d)' % (_('Keyboard shortcuts'), len(shortcuts)),
+            'role': _('layer'),
+            'icon': 'open-object',
+            'run': (lambda: keyboard_shortcuts(plugin, open_layer)),
         })
     # Translators: the title of the command palette.
     return palette.show(rows, _('Commands'))
 
 
-def layer_commands(layer, open_layer=None):
-    """One layer's commands, walked. Enter runs the one the cursor is on."""
+def shortcut_rows(plugin=None):
+    """Every key this add-on answers, as rows of the palette.
+
+    Read out of the reader itself (`gestures.bound_shortcuts`), which is
+    what the Input Gestures dialog shows - the keys the user rebound
+    included. ``[]`` where there is no reader to ask, so the row is simply
+    not offered rather than offered empty.
+    """
+    try:
+        from . import gestures
+        found = gestures.bound_shortcuts(plugin)
+    except Exception:                                # noqa: BLE001
+        return []
+    rows = []
+    for row in found or []:
+        rows.append({
+            'label': row.get('label', ''),
+            # Translators: what a row of the keyboard-shortcut list is.
+            'role': _('shortcut'),
+            'run': (lambda run=row.get('run'): _run_shortcut(run)),
+        })
+    return rows
+
+
+def _run_shortcut(run):
+    """The palette is closed BEFORE the key's script runs, as it is before
+    any command: the script may put a window up, say something or borrow
+    keys of its own, and a palette still holding the arrows underneath it
+    would swallow the first thing pressed."""
+    from . import palette
+    palette.stop()
+    if not callable(run):
+        return False, ''
+    try:
+        return run()
+    except Exception as error:                       # noqa: BLE001
+        return False, str(error)
+
+
+def keyboard_shortcuts(plugin=None, open_layer=None):
+    """Every key this add-on answers, walked. Enter does what the key does.
+
+    Escape goes back to the palette's first list, so the keys and the
+    layers are one thing to walk.
+    """
+    from . import palette
+    rows = shortcut_rows(plugin)
+    if not rows:
+        return False, ''
+    return palette.show(rows, _('Keyboard shortcuts'),
+                        back=lambda: command_palette(open_layer, plugin))
+
+
+def _real_keys(plugin):
+    """``{script name: key text}`` for every key this add-on really
+    answers, and the palette's own key - read out of NVDA, so a key the
+    user rebound is the key that is said."""
+    by_script = {}
+    opener = ''
+    try:
+        from . import gestures
+        for row in gestures.bound_shortcuts(plugin) or []:
+            keys = row.get('keys') or []
+            text = ', '.join(gestures._key_text(k) for k in keys)
+            if row.get('script') and text:
+                by_script[row['script']] = text
+        opener = by_script.get('titanPalette', '')
+    except Exception:                                # noqa: BLE001
+        pass
+    return by_script, opener
+
+
+def layer_commands(layer, open_layer=None, plugin=None):
+    """One layer's commands, walked. Enter runs the one the cursor is on.
+
+    **The key beside each command is a real one.** A layer's letter is
+    only a key inside an armed layer, and a list of bare letters taught
+    "o" for something that is really NVDA+Shift+J. So a command that has
+    a key of its own - the same script the letter runs - says THAT key,
+    as NVDA has it bound right now; one that has not says the whole way
+    to it: the palette key, the layer, the letter.
+    """
     from . import layers
     from . import palette
     keys = layers.keys_of(layer)
     if not keys:
         return False, ''
+    by_script, opener = _real_keys(plugin)
+    if not opener:
+        opener = 'NVDA+shift+space'
     rows = []
     for key in sorted(keys):
         command, said = keys[key]
@@ -1399,11 +1500,9 @@ def layer_commands(layer, open_layer=None):
             text = said() if callable(said) else str(command)
         except Exception:                            # noqa: BLE001
             text = str(command)
+        own = by_script.get(layers.SCRIPT_OF.get(command, ''), '')
         rows.append({
-            # The key is named beside the command rather than instead of
-            # it: this list is where somebody LEARNS the letter, and a
-            # list of bare letters would teach nothing.
-            'label': '%s (%s)' % (text, key),
+            'label': '%s (%s)' % (text, own or layers.chord(opener, layer, key)),
             # Translators: what a row of a layer's command list is.
             'role': _('command'),
             'run': (lambda name=command: run_command(name)),
@@ -1606,7 +1705,7 @@ def check_module():
     from . import verify
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     module = readerModules.for_object(obj)
     if not module:
@@ -1629,7 +1728,7 @@ def draft_module():
     from . import draft
     obj = _focused()
     if obj is None:
-        _refused(_('NVDA is not reporting a focus.'))
+        _refused(_('The reader is not reporting a focus.'))
         return
     dialogs.report(_('Looking at this program.'))
 

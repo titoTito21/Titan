@@ -543,3 +543,143 @@ def installed():
     """How many Titan actions are bindable right now."""
     with _LOCK:
         return len(_installed)
+
+
+# --------------------------------------------------------------------------- #
+# Every key this add-on answers, for the palette
+# --------------------------------------------------------------------------- #
+def _stable_identifiers(plugin):
+    """The gesture identifiers bound for the LIFE of the plugin.
+
+    A walked list borrows the arrows while it is up (`bindGesture` on the
+    instance), and those bindings are in the same map as everything else -
+    so a list of "every key this add-on answers" read while the palette is
+    open would say that Up Arrow is a palette command. What is stable is
+    what the class declares (its ``__gestures`` and the `@script` decorator
+    gestures) and what the user bound in Input Gestures.
+    """
+    found = set()
+    try:
+        import inputCore
+        normalize = inputCore.normalizeGestureIdentifier
+    except Exception:                                # noqa: BLE001
+        return found
+    for cls in type(plugin).__mro__:
+        table = getattr(cls, '_%s__gestures' % cls.__name__, None) or {}
+        for identifier in table:
+            try:
+                found.add(normalize(identifier))
+            except Exception:                        # noqa: BLE001
+                continue
+        for name, script in vars(cls).items():
+            if not name.startswith('script_'):
+                continue
+            for identifier in getattr(script, 'gestures', None) or ():
+                try:
+                    found.add(normalize(identifier))
+                except Exception:                    # noqa: BLE001
+                    continue
+    try:
+        module = type(plugin).__module__
+        for identifier, script in \
+                inputCore.manager.userGestureMap.getScriptsForAllGestures():
+            where = script[0] if isinstance(script, (tuple, list)) else \
+                getattr(script, '__module__', '')
+            if str(where) == module:
+                found.add(normalize(identifier))
+    except Exception:                                # noqa: BLE001
+        pass
+    return found
+
+
+def _key_text(identifier):
+    """What a gesture identifier is called on the screen."""
+    try:
+        import inputCore
+        source, main = inputCore.getDisplayTextForGestureIdentifier(
+            identifier)
+    except Exception:                                # noqa: BLE001
+        return str(identifier).split(':', 1)[-1]
+    text = str(main or identifier)
+    if not str(identifier).lower().startswith('kb'):
+        text = '%s: %s' % (source, text)
+    return text
+
+
+def bound_shortcuts(plugin):
+    """Every key bound to one of this add-on's scripts, for the palette.
+
+    ``[{'label', 'description', 'keys', 'script', 'run'}]``, sorted by
+    what the command does. Read out of NVDA's own ``inputCore``, so the
+    list is what the Input Gestures dialog shows for this add-on - the
+    keys the user rebound included - and never a table kept here that
+    could drift from it. Answers ``[]`` with no NVDA underneath.
+    """
+    if plugin is None:
+        return []
+    try:
+        import inputCore
+        mappings = inputCore.manager.getAllGestureMappings()
+    except Exception:                                # noqa: BLE001
+        return []
+    module = type(plugin).__module__
+    stable = _stable_identifiers(plugin)
+    rows = []
+    for category in (mappings or {}).values():
+        for info in (category or {}).values():
+            cls = getattr(info, 'cls', None)
+            if cls is None or str(getattr(cls, '__module__', '')) != module:
+                continue
+            keys = [identifier for identifier in
+                    (getattr(info, 'gestures', None) or [])
+                    if str(identifier).lower() in stable
+                    or str(identifier) in stable]
+            if not keys:
+                continue
+            description = str(getattr(info, 'displayName', '') or
+                              getattr(info, 'scriptName', '') or '').strip()
+            if not description:
+                continue
+            key_text = ', '.join(_key_text(identifier) for identifier in keys)
+            rows.append({
+                'label': '%s (%s)' % (description, key_text),
+                'description': description,
+                'keys': list(keys),
+                'script': str(getattr(info, 'scriptName', '') or ''),
+                'run': (lambda name=str(getattr(info, 'scriptName', '')),
+                        first=keys[0]: run_script(plugin, name, first)),
+            })
+    rows.sort(key=lambda row: row['description'].lower())
+    return rows
+
+
+def run_script(plugin, script_name, identifier=''):
+    """Run one of the plugin's scripts as its key would. ``(ok, why)``.
+
+    The script is handed a gesture built from its own identifier where
+    one can be built, because that is what it would have been handed by
+    the key - and `scriptHandler.executeScript` where NVDA has it, so the
+    repeat count and the "last script" bookkeeping are NVDA's own.
+    """
+    script = getattr(plugin, 'script_%s' % script_name, None)
+    if not callable(script):
+        return False, 'there is no script called %r' % script_name
+    gesture = None
+    try:
+        if str(identifier).lower().startswith('kb'):
+            import keyboardHandler
+            gesture = keyboardHandler.KeyboardInputGesture.fromName(
+                str(identifier).split(':', 1)[-1])
+    except Exception:                                # noqa: BLE001
+        gesture = None
+    try:
+        import scriptHandler
+        scriptHandler.executeScript(script, gesture)
+        return True, ''
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        script(gesture)
+        return True, ''
+    except Exception as error:                       # noqa: BLE001
+        return False, str(error)

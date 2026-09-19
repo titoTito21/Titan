@@ -36,9 +36,24 @@ def unescape(text):
     return re.sub(r'&([#\w]+);', one, text)
 
 
+#: What is in a document and is not an element or text: a comment, the XML
+#: declaration or another processing instruction, a DOCTYPE. A CDATA
+#: section IS text, with nothing in it to be parsed.
+_NOT_MARKUP = re.compile(r'<!--.*?-->|<\?.*?\?>|<!DOCTYPE[^>]*>', re.S)
+_CDATA = re.compile(r'<!\[CDATA\[(.*?)\]\]>', re.S)
+
+
 def parse(text, make_table):
     """Parse markup into Klango's node shape. Returns the root node, or None."""
     text = str(text or '')
+    # **A comment is not a node.** ktypist's lesson files carry
+    # `<!-- ... -->` between levels; read as tags and text, a comment
+    # became a string child of `<Levels>` and the application's `ipairs`
+    # over the levels ended on it. Klango's parser, like every XML parser,
+    # never showed a comment to the application.
+    text = _NOT_MARKUP.sub('', text)
+    text = _CDATA.sub(lambda match: match.group(1)
+                      .replace('&', '&amp;').replace('<', '&lt;'), text)
     if not text.strip():
         return None
     root = {'name': '', 'attr': {}, 'children': []}
@@ -46,7 +61,7 @@ def parse(text, make_table):
     position = 0
     for match in _TAG.finditer(text):
         before = text[position:match.start()]
-        if before:
+        if _is_text(before):
             stack[-1]['children'].append(unescape(before))
         position = match.end()
         closing, name, attributes, empty = match.groups()
@@ -65,9 +80,29 @@ def parse(text, make_table):
         if not empty and lowered not in VOID:
             stack.append(node)
     tail = text[position:]
-    if tail:
+    if _is_text(tail):
         stack[-1]['children'].append(unescape(tail))
     return _to_lua(root, make_table)
+
+
+def _is_text(piece):
+    """Whether a run between two tags is a text node at all.
+
+    **The indentation of a pretty-printed document is not text.** ktypist
+    reads its lessons out of KTouch's XML, walks `<Levels>` with `ipairs`
+    and asks `ipairs` again of each child - and the "\n\t\t" between one
+    `<Level>` and the next arrived as a string child, so the second `ipairs`
+    was handed a string and ended the application at ktypist.lua:170.
+    Klango's own parser never produced that node. A run of whitespace that
+    holds a newline is layout and is dropped; a bare space between two
+    inline tags of a help text (`</b> <i>`) is the space between two words
+    and is kept.
+    """
+    if not piece:
+        return False
+    if piece.strip():
+        return True
+    return '\n' not in piece and '\r' not in piece
 
 
 def _attributes(text):

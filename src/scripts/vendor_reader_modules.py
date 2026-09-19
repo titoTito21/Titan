@@ -157,6 +157,15 @@ SHARED = (
     # A Titan application described rather than drawn, walked as a window.
     'appScreen.py',
     'appReview.py',
+    # The window a walked list holds the keyboard with, so a program that
+    # reads its keys itself gets none of the arrows. One window, one set
+    # of rules about losing the foreground, in both readers.
+    'hostWindow.py',
+    # The one folder both readers keep every store in.
+    'readerHome.py',
+    # What a shortcut does, said as it is pressed - out of the program's
+    # own menu, never a .key file.
+    'spokenShortcuts.py',
     # Any window, as a virtual window.
     'virtualWindow.py',
     # A Titan widget, reviewed.
@@ -210,6 +219,14 @@ SHARED = (
 #: same knowledge in either reader.
 SHARED_PACKAGES = ('readerModules',)
 
+#: Folders of DATA shared the same way, every file in them, and WHERE
+#: they land: the sound icons the add-on plays go to the component's own
+#: `sfx/icons/`, beside the cursor sounds Titan Access has always kept in
+#: `sfx/` (`icons.own_folders()` looks there). They used to be vendored
+#: nowhere, so Titan Access had the earcon kits and none of the icons.
+SHARED_DATA = {'sounds': os.path.join(ROOT, 'data', 'components',
+                                      'titan access', 'sfx', 'icons')}
+
 #: Beside them in the target, and NOT copied: the shims that answer for
 #: this reader - `_` through its own catalogue, NVDA's services through
 #: its own, and Titan directly rather than over a pipe, because Titan
@@ -229,6 +246,17 @@ def _pairs():
             if name.endswith('.py'):
                 yield (os.path.join(source, name),
                        os.path.join(TARGET, package, name))
+    for folder, target_root in SHARED_DATA.items():
+        source = os.path.join(SOURCE, folder)
+        if not os.path.isdir(source):
+            continue
+        for root, _dirs, names in os.walk(source):
+            for name in sorted(names):
+                if name.startswith('.') or name.endswith('.pyc'):
+                    continue
+                one = os.path.join(root, name)
+                yield one, os.path.join(target_root,
+                                        os.path.relpath(one, source))
 
 
 def check():
@@ -263,6 +291,7 @@ def copy():
         if not os.path.exists(source):
             print('  missing: %s' % source)
             continue
+        os.makedirs(os.path.dirname(target), exist_ok=True)
         shutil.copy2(source, target)
         copied.append(os.path.basename(target))
     return copied

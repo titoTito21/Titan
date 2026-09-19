@@ -401,6 +401,40 @@ def _or_model(hwnd, why):
     return _note(why)
 
 
+#: The largest picture Windows' recogniser takes, in pixels on a side
+#: (`OcrEngine.MaxImageDimension`). Measured against NVDA's own helper on
+#: this machine: 10000 by 8 answered, 10001 by 8 was refused with
+#: "Image dimensions are too large! Check MaxImageDimension" - and refused
+#: SILENTLY on the reader's side, since the callback is never called and
+#: `read` waits out its whole timeout for an answer that is not coming.
+RECOGNISER_MAX = 10000
+
+
+def _image_info(RecogImageInfo, recognizer, left, top, width, height):
+    """NVDA's `RecogImageInfo` for this rectangle, at a size the recogniser
+    will take.
+
+    NVDA's own `UwpOcr.getResizeFactor` answers 4 for anything under a
+    hundred pixels on EITHER side, because the engine reads small print
+    badly - which is right for a small window and wrong for a wide strip:
+    a row across a full-screen game (2560 wide, 46 tall) becomes 10240
+    wide, over the engine's limit, and the whole reading is thrown away.
+    That is exactly the shape the guest and game readers ask for, a key
+    at a time. So the factor is capped at what fits, and a window that is
+    too big even unscaled is scaled DOWN - the capture is a `StretchBlt`
+    either way, and every rectangle that comes back is converted through
+    the same factor, so nothing else has to know.
+    """
+    try:
+        factor = float(recognizer.getResizeFactor(width, height) or 1)
+    except Exception:                                # noqa: BLE001
+        factor = 1.0
+    fits = min(RECOGNISER_MAX / float(width), RECOGNISER_MAX / float(height))
+    if factor > fits:
+        factor = fits
+    return RecogImageInfo(left, top, width, height, factor)
+
+
 def read(left, top, width, height, hwnd=0):
     """Read a rectangle of the screen. ``Reading`` or None.
 
@@ -442,8 +476,8 @@ def read(left, top, width, height, hwnd=0):
     started = time.time()
     try:
         recognizer = _recognizer()
-        info = RecogImageInfo.createFromRecognizer(left, top, width, height,
-                                                   recognizer)
+        info = _image_info(RecogImageInfo, recognizer, left, top, width,
+                           height)
         # NVDA's own capture path (`contentRecog.recogUi._captureWithGdi`),
         # not one of ours: it is the thing that already works on every
         # display, DPI and screen-curtain arrangement people really have.

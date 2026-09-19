@@ -90,6 +90,38 @@ LAYERS = {
     },
 }
 
+#: **The key a palette row says has to be a real one.** A layer's letter
+#: is real only inside an armed layer; the command itself usually has a
+#: key of its own - the same script the letter runs - and THAT is what
+#: somebody reading the list wants to learn. Command -> the NVDA script
+#: that runs it (`tests` check each really calls it) and -> the Titan
+#: Access gesture id that is the same command there.
+SCRIPT_OF = {
+    'where_am_i': 'titanWhereAmI', 'describe_control': 'titanDescribe',
+    'label_control': 'titanLabel', 'customise_control': 'titanCustomise',
+    'read_locally': 'readLocally', 'read_journal': 'journal',
+    'what_is_this_written_in': 'titanWrittenIn',
+    'check_module': 'titanCheckModule', 'draft_module': 'titanDraftModule',
+    'reader_modules': 'titanReaderModules', 'manager': 'manager',
+    'voice_classes': 'titanClasses', 'speech_schemes': 'titanSpeechSchemes',
+    'next_speech_scheme': 'titanSpeechScheme', 'status': 'titanStatus',
+    'titan_menu': 'titanMenu', 'titan_window': 'titanWindow',
+}
+GESTURE_OF = {
+    'manager': 'readerManager', 'next_speech_scheme': 'speechScheme',
+    'titan_window': 'titanWindow', 'titan_menu': 'titanMenu',
+    'read_locally': 'virtualWindow', 'status': 'readWindowTitle',
+    'speech_schemes': 'speechScheme',
+}
+
+
+def chord(opener, layer, key):
+    """The whole way to a layer command by keys, said as one thing:
+    the palette key, the layer, the letter. Every part of it is real."""
+    parts = [str(opener or '').strip(), label(layer), str(key or '').upper()]
+    return ', '.join(part for part in parts if part)
+
+
 _LOCK = threading.RLock()
 _open = ''            # which layer is open, '' for none
 _opened_at = 0.0

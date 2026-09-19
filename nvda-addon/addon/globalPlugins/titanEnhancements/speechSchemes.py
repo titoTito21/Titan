@@ -151,7 +151,8 @@ BRAILLE_PROPERTIES = {
 _LOCK = threading.RLock()
 _store = {'loaded': False, 'active': 'classic', 'schemes': {}}
 _counted = {'arranged': 0, 'sounded': 0, 'brailled': 0, 'switched': 0}
-_braille = {'original': None, 'labels': None, 'installed': False}
+_braille = {'original': None, 'labels': None, 'installed': False,
+            'places': []}
 
 
 def report():
@@ -340,16 +341,21 @@ def shipped():
             'rules': {kind: {'sound': 'event:' + event}
                       for kind, event in KIND_EVENT.items()},
         },
-        # For somebody learning: everything, in full, unhurried, with the
-        # usage hint on every control - "to activate, press Spacebar". Not
-        # a copy of any one reader; the beginner's own scheme.
+        # For somebody learning: everything, in full, with the usage hint
+        # on every control - "to activate, press Spacebar". Not a copy of
+        # any one reader; the beginner's own scheme. **No pause of its
+        # own**: it shipped with 130 ms between every part, and with
+        # seven parts to a control that was most of a second of silence
+        # per control - reported from Titan Access as "the pauses got
+        # longer". Unhurried is what the PARTS are; the silence between
+        # them stays the reader's own short gap, and a user who wants
+        # more sets the scheme's pause themselves.
         'beginner': {
             'label': labels['beginner'],
             'default': {'parts': ['name', 'kind', 'state', 'value',
                                   'description', 'place', 'hint'],
                         'voices': {'kind': 'detail', 'state': 'alert',
-                                   'hint': 'context'},
-                        'pause': 130},
+                                   'hint': 'context'}},
             'settings': {'pitchedEverywhere': True, 'auditoryIcons': True,
                          'dialogKinds': True, 'busyState': True,
                          'attentionState': True, 'liveStatusBars': True,
@@ -1202,22 +1208,26 @@ def _play_kit(icons, where, kind):
 
     The kits live in the ADD-ON's own data - ``sounds/earcons/<kit>/`` next
     to `icons.py`, which in each tree is that reader's own folder (the
-    add-on's `sounds`, Titan Access's `portable/sounds`) - so a kit ships
+    add-on's `sounds`, Titan Access's `sfx/icons`) - so a kit ships
     with the add-on and needs neither a theme nor Titan running. A theme
     that carries the same kit under ``reader/earcons/<kit>/`` is tried too,
     so a user can replace one. ``where`` is ``'<kit>/<kind>'``.
     """
     import os
-    ours = getattr(icons, 'OURS', '')
+    try:
+        folders = list(icons.own_folders())
+    except Exception:                                # noqa: BLE001
+        folders = [getattr(icons, 'OURS', '')]
     kit = str(where).split('/', 1)[0]
     for extension in ('.ogg', '.wav'):
-        own = os.path.join(ours, 'earcons', kit, kind + extension) \
-            if ours else ''
-        if own and _kit_seen.get(own) is not False:
-            if os.path.isfile(own) and icons.play_file(own):
-                _kit_seen[own] = True
-                return True
-            _kit_seen[own] = False
+        for ours in folders:
+            own = os.path.join(ours, 'earcons', kit, kind + extension) \
+                if ours else ''
+            if own and _kit_seen.get(own) is not False:
+                if os.path.isfile(own) and icons.play_file(own):
+                    _kit_seen[own] = True
+                    return True
+                _kit_seen[own] = False
         theme = 'reader/earcons/%s/%s%s' % (kit, kind, extension)
         if _kit_seen.get(theme) is not False and icons.play_titan(theme):
             _kit_seen[theme] = True
@@ -1317,6 +1327,63 @@ def _filtered_properties(values):
     return out
 
 
+def _braille_renderers(braille):
+    """NVDA's braille property renderer, and every name it is kept under.
+
+    `(function, [(module, attribute), ...])`. It moved: it is
+    `braille.regions.properties.getPropertiesBraille` now and the name on
+    `braille` itself is a deprecated alias answered by the module's
+    `__getattr__` - which is why it is read out of `vars()` here and never
+    with `getattr`, or every start of NVDA logs a deprecation warning
+    against this add-on. And the regions that render the focus took the
+    name with `from .properties import`, so wrapping it in ONE module
+    leaves the others calling the original: the whole scheme's braille
+    rule applied to alerts and to nothing the user tabs onto. So every
+    module of NVDA's that holds the very same function is found and each
+    is rebound, and put back the same way.
+    """
+    import sys
+    found = []
+    real = None
+    properties = None
+    regions = vars(braille).get('regions')
+    if regions is not None:
+        properties = vars(regions).get('properties')
+    if properties is None:
+        try:
+            import importlib
+            properties = importlib.import_module('braille.regions.properties')
+        except Exception:                            # noqa: BLE001
+            properties = None
+    if properties is not None:
+        candidate = vars(properties).get('getPropertiesBraille')
+        if callable(candidate):
+            real = candidate
+            found.append((properties, 'getPropertiesBraille'))
+    legacy = vars(braille).get('getPropertiesBraille')
+    if callable(legacy):
+        if real is None:
+            real = legacy
+        if legacy is real:
+            found.append((braille, 'getPropertiesBraille'))
+    if real is None:
+        return None, []
+    for name, module in list(sys.modules.items()):
+        if module is None or module is braille or module is properties:
+            continue
+        if not (name == 'braille' or name.startswith('braille.')
+                or name.startswith('NVDAObjects')):
+            continue
+        try:
+            held = vars(module)
+        except TypeError:
+            continue
+        for attribute, value in list(held.items()):
+            if value is real and (module, attribute) not in found:
+                found.append((module, attribute))
+    return real, found
+
+
 def install_braille():
     """Wrap NVDA's braille property renderer, once. Answers whether."""
     braille = _braille_module()
@@ -1325,8 +1392,8 @@ def install_braille():
     with _LOCK:
         if _braille['installed']:
             return True
-        original = getattr(braille, 'getPropertiesBraille', None)
-        if not callable(original):
+        original, places = _braille_renderers(braille)
+        if not callable(original) or not places:
             return False
 
         def wrapped(**values):
@@ -1339,23 +1406,29 @@ def install_braille():
             return original(**values)
 
         _braille['original'] = original
-        braille.getPropertiesBraille = wrapped
+        _braille['places'] = places
+        for module, attribute in places:
+            try:
+                setattr(module, attribute, wrapped)
+            except Exception:                        # noqa: BLE001
+                pass
         _braille['installed'] = True
     return True
 
 
 def uninstall_braille():
-    braille = _braille_module()
     with _LOCK:
         if not _braille['installed']:
             return False
-        if braille is not None and _braille['original'] is not None:
+        original = _braille['original']
+        for module, attribute in _braille.get('places') or ():
             try:
-                braille.getPropertiesBraille = _braille['original']
+                setattr(module, attribute, original)
             except Exception:                        # noqa: BLE001
                 pass
         _braille['installed'] = False
         _braille['original'] = None
+        _braille['places'] = []
     return True
 
 

@@ -1129,6 +1129,76 @@ class Database:
             )
             """)
 
+            # Migration: a package can be UPDATED in place rather than
+            # deleted and shared again. A new file for an already-listed
+            # package is staged in the update_* columns and the listed file
+            # stays exactly as it was until a moderator approves the new one
+            # (approve_app applies it; reject_app_update throws it away).
+            # updated_at is set when an update goes live, which is what
+            # What's New reads to tell an update from a first version.
+            for _col, _ddl in (
+                ('update_file_path', "ALTER TABLE app_repository ADD COLUMN update_file_path TEXT"),
+                ('update_file_size', "ALTER TABLE app_repository ADD COLUMN update_file_size INTEGER"),
+                ('update_version', "ALTER TABLE app_repository ADD COLUMN update_version TEXT"),
+                ('update_uploaded_at', "ALTER TABLE app_repository ADD COLUMN update_uploaded_at TEXT"),
+                ('updated_at', "ALTER TABLE app_repository ADD COLUMN updated_at TEXT"),
+            ):
+                try:
+                    cursor.execute(f"SELECT {_col} FROM app_repository LIMIT 1")
+                except sqlite3.OperationalError:
+                    cursor.execute(_ddl)
+                    print(f"Migration: Added '{_col}' column to app_repository table")
+
+            # Ratings and reviews of repository packages: a rating of 1..5
+            # and an optional written opinion, ONE PER RELEASE per user - a
+            # review is dated, an update sets the package's updated_at, and
+            # a user may rate again once the package has been updated since
+            # they last did (add_app_review decides, inside the writer
+            # lock). `version` records which release the words were about.
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                rating INTEGER NOT NULL,
+                review TEXT,
+                version TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (app_id) REFERENCES app_repository(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """)
+            # Migration: the first shape of this table had UNIQUE(app_id,
+            # user_id) - one review for ever - and no version. SQLite cannot
+            # drop a constraint, so the table is rebuilt and the rows
+            # carried over, each stamped with its package's current version.
+            cursor.execute("PRAGMA table_info(app_reviews)")
+            if 'version' not in {row[1] for row in cursor.fetchall()}:
+                cursor.execute("ALTER TABLE app_reviews RENAME TO app_reviews_old")
+                cursor.execute("""
+                CREATE TABLE app_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    app_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    rating INTEGER NOT NULL,
+                    review TEXT,
+                    version TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (app_id) REFERENCES app_repository(id),
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """)
+                cursor.execute("""
+                INSERT INTO app_reviews (id, app_id, user_id, rating, review, version, created_at)
+                SELECT o.id, o.app_id, o.user_id, o.rating, o.review,
+                       (SELECT ar.version FROM app_repository ar WHERE ar.id = o.app_id),
+                       o.created_at
+                FROM app_reviews_old o
+                """)
+                cursor.execute("DROP TABLE app_reviews_old")
+                print("Migration: app_reviews rebuilt as one review per release")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_reviews_app ON app_reviews(app_id)")
+
             # =========================================================
             # User blocks (personal "full ignore")
             # =========================================================
@@ -3289,9 +3359,65 @@ class Database:
         conn.close()
         return app_id
 
+    # The rating of a package, as two columns a repository query can carry
+    # beside ``ar.*``: the average (rounded to one place, NULL until somebody
+    # has rated) and how many people rated - of the CURRENT release, which
+    # is every review written since the package was last updated
+    # (``updated_at``; a package never updated counts them all). One
+    # definition, used by every listing, so the desktop client, the web
+    # page and the details answer cannot disagree about a package's rating.
+    APP_RATING_COLUMNS = """
+        (SELECT ROUND(AVG(r.rating), 1) FROM app_reviews r
+          WHERE r.app_id = ar.id AND r.created_at >= COALESCE(ar.updated_at, '')) AS rating_average,
+        (SELECT COUNT(*) FROM app_reviews r
+          WHERE r.app_id = ar.id AND r.created_at >= COALESCE(ar.updated_at, '')) AS rating_count
+    """
+
+    @staticmethod
+    def public_app(app: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """The row as a client may see it. The two file paths are where the
+        package lives on the server's disk and are nobody's business but
+        the download handler's; what a client needs to know instead is
+        whether an update is waiting for review (``pending_update``) and
+        which version it is."""
+        if app is None:
+            return None
+        app = dict(app)
+        app.pop('file_path', None)
+        staged = app.pop('update_file_path', None)
+        app['pending_update'] = bool(staged)
+        if not staged:
+            app.pop('update_version', None)
+            app.pop('update_file_size', None)
+            app.pop('update_uploaded_at', None)
+        return app
+
+    def get_app(self, app_id: int) -> Optional[Dict[str, Any]]:
+        """One repository row with its author's name and its rating, file
+        paths included - for handlers, never for a client as it stands."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            SELECT ar.*, u.username as author_username, u.username as uploader_username,
+                   {self.APP_RATING_COLUMNS}
+            FROM app_repository ar
+            JOIN users u ON ar.author_id = u.id
+            WHERE ar.id = ?
+        """, (app_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
     @_serialized_write
-    def approve_app(self, app_id: int, admin_id: int) -> bool:
-        """Approve application in repository (moderator/developer only)"""
+    def approve_app(self, app_id: int, admin_id: int, new_file_path: Optional[str] = None) -> bool:
+        """Approve application in repository (moderator/developer only).
+
+        A package that is already listed and has an update staged is not
+        approved AGAIN: approving it makes the staged file the listed one.
+        ``new_file_path`` is where the caller has moved that file (the
+        approved directory); left out, the staged path is used as it is.
+        Everybody's "seen" mark on the package is cleared, so the update
+        appears in What's New the way a new package does."""
         # Check if user is moderator or developer
         if not self.is_moderator(admin_id):
             return False
@@ -3301,11 +3427,270 @@ class Database:
 
         approved_at = datetime.now().isoformat()
         cursor.execute("""
-            UPDATE app_repository
-            SET approved = 1, approved_by = ?, approved_at = ?
-            WHERE id = ?
-        """, (admin_id, approved_at, app_id))
+            SELECT approved, update_file_path, update_file_size, update_version
+            FROM app_repository WHERE id = ?
+        """, (app_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.close()
+            return False
 
+        if row['approved'] and row['update_file_path']:
+            cursor.execute("""
+                UPDATE app_repository
+                SET file_path = ?, file_size = ?, version = ?,
+                    approved_by = ?, approved_at = ?, updated_at = ?,
+                    update_file_path = NULL, update_file_size = NULL,
+                    update_version = NULL, update_uploaded_at = NULL
+                WHERE id = ?
+            """, (new_file_path or row['update_file_path'], row['update_file_size'],
+                  row['update_version'], admin_id, approved_at, approved_at, app_id))
+            # rowcount is the LAST statement's: read before the seen marks
+            # are cleared, or approving a package nobody had looked at yet
+            # reports the deletion of nothing as a failure.
+            success = cursor.rowcount > 0
+            cursor.execute("DELETE FROM app_seen_status WHERE app_id = ?", (app_id,))
+        else:
+            cursor.execute("""
+                UPDATE app_repository
+                SET approved = 1, approved_by = ?, approved_at = ?
+                WHERE id = ?
+            """, (admin_id, approved_at, app_id))
+            success = cursor.rowcount > 0
+
+        conn.commit()
+        conn.close()
+        return success
+
+    @_serialized_write
+    def update_app_metadata(self, app_id: int, name: Optional[str] = None,
+                            description: Optional[str] = None,
+                            category: Optional[str] = None,
+                            version: Optional[str] = None) -> bool:
+        """Change what a package SAYS about itself - its name, description,
+        category or version - in place. None leaves a field as it is."""
+        changes = []
+        params: List[Any] = []
+        for column, value in (('name', name), ('description', description),
+                              ('category', category), ('version', version)):
+            if value is not None:
+                changes.append(f"{column} = ?")
+                params.append(value)
+        if not changes:
+            return True
+        params.append(app_id)
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE app_repository SET {', '.join(changes)} WHERE id = ?", params)
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+
+    @_serialized_write
+    def stage_app_update(self, app_id: int, file_path: str, file_size: int,
+                         version: str) -> Dict[str, Any]:
+        """A new file for an existing package.
+
+        For a package that is LISTED the file is staged beside it and the
+        listed one goes on being downloaded until a moderator approves
+        (``mode`` 'staged'). For one still waiting for its first review the
+        file simply replaces the one waiting (``mode`` 'replaced'). Either
+        way ``old_file`` is the file that is no longer needed - the
+        previously staged one, or the replaced one - for the caller to
+        remove; it is None when there is nothing to remove."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT approved, file_path, update_file_path FROM app_repository WHERE id = ?
+        """, (app_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.close()
+            return {'success': False, 'error': 'App not found'}
+
+        now = datetime.now().isoformat()
+        if row['approved']:
+            old_file = row['update_file_path']
+            cursor.execute("""
+                UPDATE app_repository
+                SET update_file_path = ?, update_file_size = ?, update_version = ?,
+                    update_uploaded_at = ?
+                WHERE id = ?
+            """, (file_path, file_size, version, now, app_id))
+            mode = 'staged'
+        else:
+            old_file = row['file_path']
+            cursor.execute("""
+                UPDATE app_repository
+                SET file_path = ?, file_size = ?, version = ?, uploaded_at = ?
+                WHERE id = ?
+            """, (file_path, file_size, version, now, app_id))
+            mode = 'replaced'
+        conn.commit()
+        conn.close()
+        if old_file == file_path:
+            old_file = None
+        return {'success': True, 'mode': mode, 'old_file': old_file}
+
+    @_serialized_write
+    def reject_app_update(self, app_id: int, admin_id: int) -> Dict[str, Any]:
+        """Throw a staged update away (moderator only). The listed package
+        is untouched. Answers with the staged file's path so the caller can
+        remove it."""
+        if not self.is_moderator(admin_id):
+            return {'success': False, 'error': 'Permission denied'}
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT update_file_path FROM app_repository WHERE id = ?", (app_id,))
+        row = cursor.fetchone()
+        if row is None or not row['update_file_path']:
+            conn.close()
+            return {'success': False, 'error': 'No update is waiting for this app'}
+        cursor.execute("""
+            UPDATE app_repository
+            SET update_file_path = NULL, update_file_size = NULL,
+                update_version = NULL, update_uploaded_at = NULL
+            WHERE id = ?
+        """, (app_id,))
+        conn.commit()
+        conn.close()
+        return {'success': True, 'old_file': row['update_file_path']}
+
+    # ---- Ratings and reviews -------------------------------------------
+
+    @staticmethod
+    def _release_since(app) -> str:
+        """The moment the package's current release began: when it was
+        last updated, or the beginning of time for one never updated. A
+        review written at or after it is about the current release."""
+        return (app['updated_at'] if app is not None and app['updated_at'] else '') or ''
+
+    @_serialized_write
+    def add_app_review(self, app_id: int, user_id: int, rating: int,
+                       review: str = '') -> Dict[str, Any]:
+        """Rate a package and, optionally, write about it - once per
+        release.
+
+        A user who has already rated the package since it was last updated
+        is refused (``already_reviewed``); once the author updates it they
+        may rate the new release, and the old words stay, marked with the
+        version they were about. The check and the insert happen inside
+        the writer lock, which is what makes "once" true under two requests
+        at the same moment. An author may not rate their own package, and
+        a package nobody has approved yet cannot be rated at all."""
+        try:
+            rating = int(rating)
+        except (TypeError, ValueError):
+            return {'success': False, 'error': 'Rating must be a number from 1 to 5'}
+        if rating < 1 or rating > 5:
+            return {'success': False, 'error': 'Rating must be a number from 1 to 5'}
+        review = (review or '').strip()
+        if len(review) > 4000:
+            return {'success': False, 'error': 'Review is too long (4000 characters at most)'}
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT author_id, approved, version, updated_at FROM app_repository WHERE id = ?",
+                       (app_id,))
+        app = cursor.fetchone()
+        if app is None:
+            conn.close()
+            return {'success': False, 'error': 'App not found'}
+        if not app['approved']:
+            conn.close()
+            return {'success': False, 'error': 'A package can be rated once it has been approved'}
+        if app['author_id'] == user_id:
+            conn.close()
+            return {'success': False, 'error': 'You cannot rate your own package'}
+        cursor.execute("""
+            SELECT id FROM app_reviews
+            WHERE app_id = ? AND user_id = ? AND created_at >= ?
+        """, (app_id, user_id, self._release_since(app)))
+        if cursor.fetchone() is not None:
+            conn.close()
+            return {'success': False,
+                    'error': 'You have already rated this version of the package. '
+                             'You can rate it again after it is updated.',
+                    'already_reviewed': True}
+
+        cursor.execute("""
+            INSERT INTO app_reviews (app_id, user_id, rating, review, version, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (app_id, user_id, rating, review, app['version'], datetime.now().isoformat()))
+        review_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return {'success': True, 'review_id': review_id}
+
+    def get_app_reviews(self, app_id: int) -> List[Dict[str, Any]]:
+        """Every review of a package, newest first, with who wrote it, the
+        version it was about, and ``current`` - whether it is about the
+        release that is listed now."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.app_id, r.user_id, r.rating, r.review, r.version, r.created_at,
+                   u.username,
+                   CASE WHEN r.created_at >= COALESCE(ar.updated_at, '') THEN 1 ELSE 0 END AS current
+            FROM app_reviews r
+            JOIN users u ON u.id = r.user_id
+            JOIN app_repository ar ON ar.id = r.app_id
+            WHERE r.app_id = ?
+            ORDER BY r.created_at DESC, r.id DESC
+        """, (app_id,))
+        reviews = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return reviews
+
+    def get_app_rating(self, app_id: int) -> Dict[str, Any]:
+        """The average and the count of the current release, as the
+        listings carry them."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            SELECT {self.APP_RATING_COLUMNS}
+            FROM app_repository ar WHERE ar.id = ?
+        """, (app_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row is None:
+            return {'rating_average': None, 'rating_count': 0}
+        return {'rating_average': row['rating_average'], 'rating_count': row['rating_count']}
+
+    def get_user_app_review(self, app_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """What this user said about the CURRENT release of the package,
+        if anything - which is how a client knows to offer "rate" or to
+        show what was already said instead. An older review, about a
+        release since replaced, answers None: they may rate again."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT updated_at FROM app_repository WHERE id = ?", (app_id,))
+        app = cursor.fetchone()
+        cursor.execute("""
+            SELECT id, app_id, user_id, rating, review, version, created_at
+            FROM app_reviews
+            WHERE app_id = ? AND user_id = ? AND created_at >= ?
+            ORDER BY created_at DESC, id DESC LIMIT 1
+        """, (app_id, user_id, self._release_since(app)))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    @_serialized_write
+    def delete_app_review(self, review_id: int, user_id: int) -> bool:
+        """Remove a review: its author may, and a moderator may."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM app_reviews WHERE id = ?", (review_id,))
+        row = cursor.fetchone()
+        if row is None:
+            conn.close()
+            return False
+        if row['user_id'] != user_id and not self.is_moderator(user_id):
+            conn.close()
+            return False
+        cursor.execute("DELETE FROM app_reviews WHERE id = ?", (review_id,))
         success = cursor.rowcount > 0
         conn.commit()
         conn.close()
@@ -3345,45 +3730,50 @@ class Database:
         return success
 
     def get_pending_apps(self) -> List[Dict[str, Any]]:
-        """Get apps pending approval"""
+        """Everything waiting for a moderator: packages nobody has approved
+        yet, and listed packages with an UPDATE staged (``pending_update``
+        is 1 on those, and ``update_version`` says which version is waiting
+        while ``version`` is the one still listed). File paths are not in
+        the answer."""
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT ar.*, u.username as author_username
+        cursor.execute(f"""
+            SELECT ar.*, u.username as author_username, u.username as uploader_username,
+                   {self.APP_RATING_COLUMNS}
             FROM app_repository ar
             JOIN users u ON ar.author_id = u.id
-            WHERE ar.approved = 0
-            ORDER BY ar.uploaded_at DESC
+            WHERE ar.approved = 0 OR ar.update_file_path IS NOT NULL
+            ORDER BY COALESCE(ar.update_uploaded_at, ar.uploaded_at) DESC
         """)
 
-        apps = [dict(row) for row in cursor.fetchall()]
+        apps = [self.public_app(row) for row in cursor.fetchall()]
         conn.close()
         return apps
 
     def get_approved_apps(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get approved apps from repository"""
+        """Get approved apps from repository (with their rating; no file paths)"""
         conn = self.get_connection()
         cursor = conn.cursor()
 
         if category:
-            cursor.execute("""
-                SELECT ar.*, u.username as author_username
+            cursor.execute(f"""
+                SELECT ar.*, u.username as author_username, {self.APP_RATING_COLUMNS}
                 FROM app_repository ar
                 JOIN users u ON ar.author_id = u.id
                 WHERE ar.approved = 1 AND ar.category = ?
                 ORDER BY ar.uploaded_at DESC
             """, (category,))
         else:
-            cursor.execute("""
-                SELECT ar.*, u.username as author_username
+            cursor.execute(f"""
+                SELECT ar.*, u.username as author_username, {self.APP_RATING_COLUMNS}
                 FROM app_repository ar
                 JOIN users u ON ar.author_id = u.id
                 WHERE ar.approved = 1
                 ORDER BY ar.uploaded_at DESC
             """)
 
-        apps = [dict(row) for row in cursor.fetchall()]
+        apps = [self.public_app(row) for row in cursor.fetchall()]
         conn.close()
         return apps
 
@@ -3702,6 +4092,7 @@ class Database:
             LEFT JOIN app_seen_status ass ON ass.app_id = ar.id AND ass.user_id = ?
             WHERE ar.approved = 1 AND ar.approved_at IS NOT NULL
             AND datetime(ar.approved_at) > datetime('now', '-7 days')
+            AND ar.updated_at IS NULL
             AND (ar.version = '1.0' OR ar.version = '0.1')
             AND ass.app_id IS NULL
             ORDER BY ar.approved_at DESC
@@ -3710,7 +4101,10 @@ class Database:
         result['new_apps'] = len(new_apps)
         result['new_apps_items'] = new_apps
 
-        # App updates (version > 1.0/0.1) - with details. Excludes already-viewed.
+        # App updates - a package updated in place (updated_at is set when
+        # the new file goes live, and everybody's seen mark is cleared then)
+        # or, as before, a first upload whose version is past 1.0/0.1.
+        # Excludes already-viewed.
         cursor.execute("""
             SELECT ar.id, ar.name, ar.version, u.username as author
             FROM app_repository ar
@@ -3718,7 +4112,7 @@ class Database:
             LEFT JOIN app_seen_status ass ON ass.app_id = ar.id AND ass.user_id = ?
             WHERE ar.approved = 1 AND ar.approved_at IS NOT NULL
             AND datetime(ar.approved_at) > datetime('now', '-7 days')
-            AND ar.version != '1.0' AND ar.version != '0.1'
+            AND (ar.updated_at IS NOT NULL OR (ar.version != '1.0' AND ar.version != '0.1'))
             AND ass.app_id IS NULL
             ORDER BY ar.approved_at DESC
         """, (user_id,))
@@ -5129,15 +5523,15 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT ar.*, u.username as author_username
+        cursor.execute(f"""
+            SELECT ar.*, u.username as author_username, {self.APP_RATING_COLUMNS}
             FROM app_repository ar
             JOIN users u ON ar.author_id = u.id
             WHERE ar.author_id = ?
             ORDER BY ar.uploaded_at DESC
         """, (user_id,))
 
-        apps = [dict(row) for row in cursor.fetchall()]
+        apps = [self.public_app(row) for row in cursor.fetchall()]
         conn.close()
         return apps
 
@@ -5147,23 +5541,23 @@ class Database:
         cursor = conn.cursor()
 
         if approved_only:
-            cursor.execute("""
-                SELECT ar.*, u.username as author_username
+            cursor.execute(f"""
+                SELECT ar.*, u.username as author_username, {self.APP_RATING_COLUMNS}
                 FROM app_repository ar
                 JOIN users u ON ar.author_id = u.id
                 WHERE ar.approved = 1 AND (ar.name LIKE ? OR ar.description LIKE ?)
                 ORDER BY ar.downloads DESC, ar.uploaded_at DESC
             """, (f'%{query}%', f'%{query}%'))
         else:
-            cursor.execute("""
-                SELECT ar.*, u.username as author_username
+            cursor.execute(f"""
+                SELECT ar.*, u.username as author_username, {self.APP_RATING_COLUMNS}
                 FROM app_repository ar
                 JOIN users u ON ar.author_id = u.id
                 WHERE ar.name LIKE ? OR ar.description LIKE ?
                 ORDER BY ar.approved DESC, ar.uploaded_at DESC
             """, (f'%{query}%', f'%{query}%'))
 
-        apps = [dict(row) for row in cursor.fetchall()]
+        apps = [self.public_app(row) for row in cursor.fetchall()]
         conn.close()
         return apps
 

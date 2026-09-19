@@ -299,12 +299,20 @@
       status.textContent = apps.length ? t('mod.repo_count', apps.length) : t('mod.repo_empty');
       apps.forEach(function (app) {
         const titleId = 'mod-app-' + app.id;
+        // A listed package's UPDATE waits here beside first uploads:
+        // approving it makes the new file the listed one, rejecting it
+        // leaves the package as it is.
+        const isUpdate = !!app.pending_update;
         list.appendChild(ui.el('li', {}, [
           ui.el('article', { class: 'card', 'aria-labelledby': titleId }, [
-            ui.el('h3', { id: titleId, text: app.name }),
+            ui.el('h3', { id: titleId, text: isUpdate
+              ? t('mod.repo_update_title', app.name, app.update_version || '?')
+              : app.name }),
             ui.el('p', { class: 'meta', text: [
               t('repo.by', app.uploader_username || app.author_username || '?'),
-              app.category, app.version, ui.bytes(app.file_size),
+              app.category,
+              isUpdate ? t('mod.repo_update_listed', app.version || '?') : app.version,
+              ui.bytes(isUpdate ? app.update_file_size : app.file_size),
             ].filter(Boolean).join(' · ') }),
             ui.el('p', { text: app.description || '' }),
             ui.el('div', { class: 'flex card-actions' }, [

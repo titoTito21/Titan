@@ -19,7 +19,8 @@ attribute names the shared modules read (`windowClassName`, `role.name`,
 """
 
 #: The reader underneath, when it is not NVDA: an object answering
-#: ``foreground()``, ``focus()``, ``object_at(x, y)``, ``set_focus(obj)``,
+#: ``foreground()``, ``focus()``, ``window_object(hwnd)``, ``object_at(x, y)``,
+#: ``set_focus(obj)``,
 #: ``navigate_to(obj)``, ``do_action(obj)``, ``send_key(name)`` and
 #: ``type_text(text)``. Any of them may be missing; a missing one answers
 #: None or False.
@@ -52,6 +53,30 @@ def foreground():
         return None
     try:
         return ask()
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def window_object(hwnd):
+    """The reader's object for a top-level window handle, or None."""
+    try:
+        hwnd = int(hwnd or 0)
+    except (TypeError, ValueError):
+        return None
+    if not hwnd:
+        return None
+    api = _nvda_api()
+    if api is not None:
+        try:
+            from NVDAObjects.window import Window
+            return Window(windowHandle=hwnd)
+        except Exception:                            # noqa: BLE001
+            return None
+    ask = _hook('window_object')
+    if ask is None:
+        return None
+    try:
+        return ask(hwnd)
     except Exception:                                # noqa: BLE001
         return None
 

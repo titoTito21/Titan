@@ -60,6 +60,14 @@ def _text(value):
 
 
 def _foreground_hwnd():
+    # Through the host window, which answers the window UNDER itself while
+    # it is up: the host taking the foreground is the palette being given
+    # the keyboard, not the user going somewhere else.
+    try:
+        from . import hostWindow
+        return int(hostWindow.foreground_hwnd() or 0)
+    except Exception:                                # noqa: BLE001
+        pass
     try:
         import ctypes
         user32 = ctypes.windll.user32
@@ -286,17 +294,36 @@ def show(rows, title, back=None, kind='', at=0):
         _counted['opened'] += 1
     if first:
         icons.play('reader.palette-open')
-    if title:
-        _say(_text(title))
-    if kind == 'text':
-        # **An answer says that it IS one.** Somebody who asked a
-        # question and is handed a list needs to know they are in the
-        # answer rather than in a menu - and that Escape is how they
-        # leave it. The pair has to be symmetrical or they have to
-        # listen to work out which state they are in.
-        # Translators: said on opening a long answer as a page to walk.
-        _say(_('Message'))
-    say_here()
+
+    def announce():
+        if title:
+            _say(_text(title))
+        if kind == 'text':
+            # **An answer says that it IS one.** Somebody who asked a
+            # question and is handed a list needs to know they are in the
+            # answer rather than in a menu - and that Escape is how they
+            # leave it. The pair has to be symmetrical or they have to
+            # listen to work out which state they are in.
+            # Translators: said on opening a long answer as a page to walk.
+            _say(_('Message'))
+        say_here()
+
+    # **The palette has a window of its own, and that window has the
+    # keyboard.** A program that reads its keys itself - Elten, a
+    # launcher on a game engine, a game - saw every arrow the reader
+    # borrowed and moved its own cursor with it. The host takes the
+    # foreground the way a reader's dialog does, and gives it back on
+    # close; the title is said once the keyboard has moved, so a reader
+    # that cancels speech on a focus change cannot cut it off.
+    try:
+        from . import hostWindow
+        if first:
+            hostWindow.show(_text(title), walking, then=announce)
+        else:
+            hostWindow.retitle(_text(title))
+            announce()
+    except Exception:                                # noqa: BLE001
+        announce()
     return True, ''
 
 
@@ -695,6 +722,11 @@ def stop():
             _counted['closed'] += 1
     if was:
         icons.play('reader.palette-close')
+        try:
+            from . import hostWindow
+            hostWindow.hide()
+        except Exception:                            # noqa: BLE001
+            pass
     if kind == 'text':
         # Translators: said when a long answer being walked is closed.
         # The pair with 'Message'.

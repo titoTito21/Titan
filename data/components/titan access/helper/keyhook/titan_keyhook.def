@@ -1,0 +1,8 @@
+LIBRARY titan_keyhook
+EXPORTS
+    TitanHook_Install
+    TitanHook_Uninstall
+    TitanHook_SetTimeout
+    TitanHook_Status
+    TitanHook_Rehook
+    TitanHook_IsWindowResponding

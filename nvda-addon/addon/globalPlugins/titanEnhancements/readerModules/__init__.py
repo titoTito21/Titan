@@ -23,7 +23,12 @@ from . import schema
 #: Where a user's own modules live. NVDA's own configuration folder, so
 #: they survive an add-on update and are backed up with everything else the
 #: user has set.
-FOLDER = 'titanReaderModules'
+#: ``.../accessibility/window_data`` - what is known about a program's
+#: windows, one folder per program (the executable the module matches),
+#: one file per module inside it. A flat file left over from the old
+#: ``titanReaderModules`` folder is moved into its program's folder the
+#: first time it is read.
+FOLDER = 'window_data'
 
 _LOCK = threading.RLock()
 _modules = None
@@ -32,10 +37,12 @@ _problems = []
 
 
 def user_folder():
-    """The user's own module folder, made on demand. '' with no NVDA."""
+    """The user's own module folder, made on demand - in the folder both
+    readers share (`readerHome`), so a module written in one reader is a
+    module in the other. '' only when there is nowhere to write."""
     try:
-        import globalVars
-        path = os.path.join(globalVars.appArgs.configPath, FOLDER)
+        from .. import readerHome
+        path = os.path.join(readerHome.folder(), FOLDER)
     except Exception:                                # noqa: BLE001
         return ''
     try:
@@ -76,14 +83,8 @@ def _from_disk():
     if not folder:
         return []
     found = []
-    try:
-        names = sorted(os.listdir(folder))
-    except OSError:
-        return []
-    for name in names:
-        if not name.lower().endswith('.json'):
-            continue
-        path = os.path.join(folder, name)
+    for path in user_files(folder):
+        name = os.path.relpath(path, folder)
         try:
             with open(path, encoding='utf-8') as handle:
                 data = json.load(handle)
@@ -94,8 +95,78 @@ def _from_disk():
         if wrong:
             _problems.append('%s: %s' % (name, '; '.join(wrong)))
             continue
+        path = _tidy(folder, path, data)
         found.append(schema.Module(data, source=path))
     return found
+
+
+def user_files(folder):
+    """Every module file the user has: ``<program>/<module>.json``, and any
+    flat ``<module>.json`` left from before there were program folders."""
+    out = []
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return out
+    for name in names:
+        one = os.path.join(folder, name)
+        if os.path.isdir(one):
+            try:
+                inner = sorted(os.listdir(one))
+            except OSError:
+                continue
+            out.extend(os.path.join(one, item) for item in inner
+                       if item.lower().endswith('.json'))
+        elif name.lower().endswith('.json'):
+            out.append(one)
+    return out
+
+
+def program_of(module):
+    """The folder a module belongs in: the program it matches, by the
+    executable, then by its id. A name that could not be a folder is
+    made one."""
+    match = module.get('match') if isinstance(module, dict) else None
+    name = ''
+    if isinstance(match, dict):
+        name = str(match.get('executable') or match.get('titan') or '')
+    if not name and isinstance(module, dict):
+        name = str(module.get('id') or '')
+    name = name.strip().lower()
+    for bad in '\\/:*?"<>|':
+        name = name.replace(bad, '_')
+    return name.strip('. ') or 'unknown'
+
+
+def program_folder(module):
+    """``.../window_data/<program>``, made on demand. '' with nowhere."""
+    folder = user_folder()
+    if not folder:
+        return ''
+    where = os.path.join(folder, program_of(module))
+    try:
+        os.makedirs(where, exist_ok=True)
+    except OSError:
+        return ''
+    return where
+
+
+def _tidy(folder, path, data):
+    """A flat module file is moved into its program's folder. The path it
+    ends up at is answered; a move that fails leaves it where it was."""
+    if os.path.dirname(os.path.abspath(path)) != os.path.abspath(folder):
+        return path
+    where = program_folder(data)
+    if not where:
+        return path
+    target = os.path.join(where, os.path.basename(path))
+    if os.path.exists(target):
+        return path
+    try:
+        os.replace(path, target)
+    except OSError:
+        return path
+    return target
 
 
 def load(force=False):

@@ -36,9 +36,13 @@ import os
 import threading
 import time
 
-#: The file, in NVDA's own configuration folder - so labels survive an
-#: add-on update and are backed up with everything else the user has set.
-FILENAME = 'titanLabels.json'
+#: One folder per program under ``.../accessibility/labels/``, each with
+#: this file in it - so a program's labels can be looked at, copied to
+#: another machine or given to somebody with the same program on their own.
+SUBFOLDER = 'labels'
+FILENAME = 'labels.json'
+#: The one file everything used to be in, read once and split.
+LEGACY_FILENAME = 'titanLabels.json'
 
 #: A label is a label, not a paragraph. What arrives from an AI reading of
 #: a button is occasionally a sentence about the button, and a control
@@ -64,47 +68,66 @@ _path = ''
 
 
 def _folder():
-    """Where this reader keeps its own copy.
+    """Where this reader keeps it: the folder BOTH readers share.
 
-    **The same file, in two readers.** Inside NVDA that is NVDA's own
-    configuration folder; inside Titan Access it is Titan's. Asking for
-    both in one function is what lets this module be byte-identical in
-    both trees - see `shared.py` for why they share at all, and
-    `tests/test_shared_names.py` for the check that they have not
-    drifted apart.
+    `readerHome.folder()` - ``.../titosoft/Titan/accessibility`` in NVDA
+    and in Titan Access alike, so what one reader learns the other has.
+    It used to be NVDA's own configuration folder inside NVDA and Titan's
+    ``screenreader`` folder outside it, which made this one file two
+    stores; the old ones are carried over the first time it is asked.
     """
     try:
-        import globalVars
-        return globalVars.appArgs.configPath
-    except Exception:                                # noqa: BLE001
-        pass
-    # Not inside NVDA: Titan's own reader folder, worked out exactly as
-    # Titan Access works out its settings.
-    try:
-        import os
-        import platform
-        system = platform.system()
-        if system == 'Windows':
-            base = os.getenv('APPDATA') or os.path.expanduser('~')
-            base = os.path.join(base, 'titosoft', 'Titan')
-        elif system == 'Darwin':
-            base = os.path.join(os.path.expanduser('~'), 'Library',
-                                'Application Support', 'titosoft', 'Titan')
-        else:
-            base = os.path.join(os.path.expanduser('~'), '.config',
-                                'titosoft', 'Titan')
-        return os.path.join(base, 'screenreader')
+        from . import readerHome
+        return readerHome.folder()
     except Exception:                                # noqa: BLE001
         return ''
 
 
 def path():
+    """The labels folder - ``.../accessibility/labels`` - one folder per
+    application inside it, each holding that program's ``labels.json``.
+    Answered as the folder because there is no longer one file."""
     global _path
     if _path:
         return _path
     folder = _folder()
-    _path = os.path.join(folder, FILENAME) if folder else ''
+    _path = os.path.join(folder, SUBFOLDER) if folder else ''
     return _path
+
+
+def _safe_application(application):
+    """A program's name as a folder name: what `application_of` answers is
+    an executable's stem, but a stray character must not become a path."""
+    name = _text(application).lower()
+    for bad in '\\/:*?"<>|':
+        name = name.replace(bad, '_')
+    return name.strip('. ') or 'unknown'
+
+
+def application_file(application):
+    """Where one program's labels are kept."""
+    where = path()
+    if not where:
+        return ''
+    return os.path.join(where, _safe_application(application), FILENAME)
+
+
+def _legacy_file():
+    """The one file everything used to be in, brought over by `readerHome`."""
+    folder = _folder()
+    return os.path.join(folder, LEGACY_FILENAME) if folder else ''
+
+
+def _read(where):
+    try:
+        with open(where, encoding='utf-8') as handle:
+            data = json.load(handle)
+    except Exception:                                # noqa: BLE001
+        # A file that will not parse is not a reason to lose the session:
+        # the labels are a convenience and the reader is not. It is left
+        # on disk rather than overwritten, so somebody can look at it.
+        return None
+    return data if isinstance(data, dict) else None
 
 
 def _load():
@@ -114,42 +137,108 @@ def _load():
             return _store
         _store = {}
         where = path()
-        if where and os.path.isfile(where):
+        found_any = False
+        if where and os.path.isdir(where):
             try:
-                with open(where, encoding='utf-8') as handle:
-                    data = json.load(handle)
-                if isinstance(data, dict):
-                    _store = {str(app): dict(rows) for app, rows
-                              in data.items() if isinstance(rows, dict)}
-            except Exception:                        # noqa: BLE001
-                # A file that will not parse is not a reason to lose the
-                # session: the labels are a convenience and the reader is
-                # not. It is left on disk rather than overwritten, so
-                # somebody can look at it.
-                _store = {}
+                names = sorted(os.listdir(where))
+            except OSError:
+                names = []
+            for name in names:
+                one = os.path.join(where, name, FILENAME)
+                if not os.path.isfile(one):
+                    continue
+                rows = _read(one)
+                if rows is None:
+                    continue
+                found_any = True
+                _store[str(name)] = dict(rows)
+        if not found_any:
+            # **The old single files, merged and split once.** Everything
+            # used to be one `titanLabels.json` keyed by program - and
+            # there were TWO of them, NVDA's and Titan Access's, each with
+            # what that reader had learned. The first load that finds no
+            # per-program folders reads every one it can find, keeps the
+            # newest row where both name the same control, and the next
+            # save writes it all out program by program. The old files are
+            # left where they are, never deleted.
+            for legacy in _legacy_files():
+                data = _read(legacy) if os.path.isfile(legacy) else None
+                if not data:
+                    continue
+                for app, rows in data.items():
+                    if not isinstance(rows, dict):
+                        continue
+                    mine = _store.setdefault(str(app), {})
+                    for key, row in rows.items():
+                        _merge_row(mine, str(key), row)
         return _store
 
 
+def _legacy_files():
+    """The one-file stores of before, wherever they were kept."""
+    found = []
+    first = _legacy_file()
+    if first:
+        found.append(first)
+    try:
+        from . import readerHome
+        for old in readerHome.legacy_folders():
+            found.append(os.path.join(old, LEGACY_FILENAME))
+    except Exception:                                # noqa: BLE001
+        pass
+    out = []
+    for one in found:
+        if one and one not in out:
+            out.append(one)
+    return out
+
+
+def _merge_row(mine, key, row):
+    """Keep the newer of two rows for one control; a row nobody else has
+    is kept as it is."""
+    have = mine.get(key)
+    if not isinstance(row, dict):
+        return
+    if not isinstance(have, dict):
+        mine[key] = dict(row)
+        return
+    try:
+        newer = float(row.get('at') or 0) > float(have.get('at') or 0)
+    except (TypeError, ValueError):
+        newer = False
+    if newer:
+        mine[key] = dict(row)
+
+
 def forget():
-    """Throw away what is in memory - the next read goes to the file."""
-    global _store
+    """Throw away what is in memory - the next read goes to the files."""
+    global _store, _path
     with _LOCK:
         _store = None
+        _path = ''
 
 
 def save():
+    """Every program's labels into its own folder. True when all were."""
     where = path()
     if not where:
         return False
     with _LOCK:
         data = json.loads(json.dumps(_load()))
-    try:
-        with open(where, 'w', encoding='utf-8') as handle:
-            json.dump(data, handle, ensure_ascii=False, indent=1,
-                      sort_keys=True)
-        return True
-    except Exception:                                # noqa: BLE001
-        return False
+    wrote = True
+    for application, rows in data.items():
+        target = application_file(application)
+        if not target:
+            wrote = False
+            continue
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, 'w', encoding='utf-8') as handle:
+                json.dump(rows, handle, ensure_ascii=False, indent=1,
+                          sort_keys=True)
+        except Exception:                            # noqa: BLE001
+            wrote = False
+    return wrote
 
 
 # --------------------------------------------------------------------------- #

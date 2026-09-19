@@ -49,9 +49,10 @@ _markers = None
 
 
 def path():
+    """The markers file, in the folder both readers share (`readerHome`)."""
     try:
-        import globalVars
-        return os.path.join(globalVars.appArgs.configPath, FILENAME)
+        from . import readerHome
+        return readerHome.path(FILENAME)
     except Exception:                                # noqa: BLE001
         return ''
 

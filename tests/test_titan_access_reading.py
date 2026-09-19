@@ -16,6 +16,8 @@ import json
 import os
 import sys
 import tempfile
+import types
+import time
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -620,6 +622,282 @@ class TheWordsAreInBothLanguages(unittest.TestCase):
             self.assertNotEqual(pl[key], '')
         self.assertEqual(pl['toggle.checked'], 'zaznaczone')
         self.assertEqual(pl['toggle.unchecked'], 'odznaczone')
+
+
+
+class TheSharedCommandsAskThisReadersFocus(unittest.TestCase):
+    """Where am I, label this control, describe it, customise it, the
+    managers' own pages: every one asks `compat.api.getFocusObject()` and
+    refuses when it answers None. It used to look for a focus on the
+    `engine` MODULE - attributes it never had - so in Titan Access every
+    one of those commands refused, every time, whatever the user was on,
+    and said it was NVDA that was not reporting a focus."""
+
+    def setUp(self):
+        from titan_access.portable import compat, readerApi
+        self.compat, self.readerApi = compat, readerApi
+        self._hooks = readerApi.hooks
+        self.addCleanup(setattr, readerApi, 'hooks', self._hooks)
+
+    def test_the_focus_is_this_readers_own_through_the_seam(self):
+        focus = object()
+        front = object()
+        self.readerApi.hooks = types.SimpleNamespace(
+            focus=lambda: focus, foreground=lambda: front)
+        self.assertIs(self.compat.api.getFocusObject(), focus)
+        self.assertIs(self.compat.api.getNavigatorObject(), focus)
+        self.assertIs(self.compat.api.getForegroundObject(), front)
+
+    def test_with_no_seam_it_answers_nothing_rather_than_raising(self):
+        self.readerApi.hooks = None
+        self.assertIsNone(self.compat.api.getFocusObject())
+        self.assertIsNone(self.compat.api.getForegroundObject())
+
+    def test_the_engine_installs_the_seam(self):
+        from titan_access import nvda_shape
+        hooks = nvda_shape.Hooks(types.SimpleNamespace(
+            provider=None, current_object='the control'))
+        self.assertTrue(callable(getattr(hooks, 'window_object', None)))
+        self.readerApi.hooks = hooks
+        # `adapt` of a string answers something wrapping it; what matters
+        # is that the engine's current object is what comes back.
+        self.assertIsNotNone(self.compat.api.getFocusObject())
+
+    def test_the_refusal_names_the_reader_and_not_nvda(self):
+        for name in ('commands.py', 'classManager.py'):
+            source = _source('portable', name)
+            self.assertNotIn('NVDA is not reporting a focus', source, name)
+            self.assertNotIn('(the one NVDA is using)', source, name)
+        pl = json.load(io.open(os.path.join(COMPONENT, 'locale', 'pl.json'),
+                               encoding='utf-8'))
+        self.assertEqual(pl['The reader is not reporting a focus.'],
+                         'Czytnik nie zgłasza fokusu.')
+
+
+class ThePaletteListsEveryKeyThisReaderAnswers(unittest.TestCase):
+    """One row per action, naming every key it is on, read out of the
+    gesture manager - so it is what is really bound."""
+
+    def _engine(self):
+        from titan_access import engine as engine_module
+        from titan_access.gestures import GestureManager
+        fake = types.SimpleNamespace(gestures=GestureManager(None),
+                                     said=[])
+        fake._say = lambda text: fake.said.append(text)
+        fake.gestures.register('virtualWindow', 'w', lambda: fake.said.append('vw'))
+        fake.gestures.register('virtualWindow', 'numpadsubtract',
+                               lambda: fake.said.append('vw'))
+        fake.gestures.register('sayAll', 'a', lambda: fake.said.append('all'))
+        fake.gestures.register('readCurrentElement', 'numpad5',
+                               lambda: fake.said.append('here'))
+        fake._shortcut_rows = types.MethodType(
+            engine_module.TitanAccessEngine._shortcut_rows, fake)
+        fake._palette_run_handler = types.MethodType(
+            engine_module.TitanAccessEngine._palette_run_handler, fake)
+        fake._shortcut_key_text = \
+            engine_module.TitanAccessEngine._shortcut_key_text
+        return fake
+
+    def test_one_row_per_action_with_all_its_keys(self):
+        from titan_access import localization
+        localization.set_language('en')
+        rows = self._engine()._shortcut_rows()
+        labels = [row['label'] for row in rows]
+        self.assertIn('Virtual window (Insert+w, Insert+numpadsubtract)',
+                      labels)
+        # Object navigation works with the NumPad alone (NumLock off),
+        # so its keys are named bare.
+        self.assertIn('Read the current element (numpad5)', labels)
+        self.assertIn('Say all (Insert+a)', labels)
+        self.assertEqual(rows[0]['role'], 'shortcut')
+
+    def test_enter_does_what_the_key_does(self):
+        fake = self._engine()
+        rows = fake._shortcut_rows()
+        row = [one for one in rows if one['label'].startswith('Say all')][0]
+        row['run']()
+        self.assertEqual(fake.said, ['all'])
+
+    def test_every_registered_gesture_has_a_name_in_both_languages(self):
+        import re
+        source = _source('engine.py')
+        ids = set(re.findall(r'g\.register\("([^"]+)"', source))
+        ids.update('objnav_%s' % d for d in
+                   ('prev', 'next', 'parent', 'child', 'current', 'activate'))
+        for lang in ('en', 'pl'):
+            words = json.load(io.open(os.path.join(
+                COMPONENT, 'locale', lang + '.json'), encoding='utf-8'))
+            for action in sorted(ids):
+                self.assertIn('gesture.%s.name' % action, words,
+                              '%s has no %s name' % (action, lang))
+
+
+class AWalkedListHasAWindowThatHoldsTheKeyboardHereToo(unittest.TestCase):
+    """The host window is shared with the add-on; this reader swallows its
+    focus and answers the seam's `window_object` so the virtual window can
+    ask for the window UNDER the host."""
+
+    def test_the_engine_swallows_the_hosts_focus(self):
+        source = _source('engine.py')
+        at = source.index('def on_focus(')
+        block = source[at:source.index('\n    def ', at + 10)]
+        self.assertIn('hostWindow.is_host(', block)
+        self.assertIn('_walkers_follow_the_focus()', block)
+
+    def test_the_seam_answers_a_window_by_handle(self):
+        from titan_access import nvda_shape
+        made = []
+
+        class Provider(object):
+            def object_from_handle(self, hwnd):
+                made.append(hwnd)
+                return types.SimpleNamespace(role='window', name='Elten',
+                                             hwnd=hwnd)
+        hooks = nvda_shape.Hooks(types.SimpleNamespace(provider=Provider()))
+        found = hooks.window_object(555)
+        self.assertEqual(made, [555])
+        self.assertEqual(found.name, 'Elten')
+        self.assertIsNone(hooks.window_object(0))
+
+    def test_it_is_the_add_ons_own_file(self):
+        from titan_access.portable import hostWindow
+        self.assertTrue(callable(hostWindow.is_host))
+        self.assertIn('hostWindow', _source('portable', '__init__.py'))
+
+
+
+class TheKeyboardTheReaderCannotLose(unittest.TestCase):
+    """`lib/titan_keyhook.dll` owns the low-level hook on a thread of its
+    own and answers Windows within a deadline whatever Python is doing;
+    `tests/check_native_hook.py` is the live proof (a slow decision is
+    late, the hook is still there, the next key is seen). This pins the
+    Python side and the wiring."""
+
+    def test_the_dll_is_built_and_loads(self):
+        import platform
+        if platform.system() != 'Windows':
+            self.skipTest('Windows only')
+        from titan_access import native_hook
+        self.assertTrue(os.path.isfile(native_hook.dll_path()),
+                        'run helper/keyhook/build.bat')
+        self.assertTrue(native_hook.available(), native_hook.why_not())
+        status = native_hook.status()
+        self.assertTrue(status.get('available'))
+        for key in ('installed', 'events', 'late', 'reinstalls', 'timeoutMs'):
+            self.assertIn(key, status)
+        # Not a window, asked with a deadline.
+        self.assertEqual(native_hook.window_responding(0x12345, 100), -1)
+
+    def test_the_keyboard_hook_asks_for_it_first_and_keeps_its_own(self):
+        source = _source('keyboard_hook.py')
+        self.assertIn('native_hook.NativeHook(self._decide_native)', source)
+        self.assertIn('SetWindowsHookExW(', source)      # the fallback stays
+        self.assertIn('def _decide_native', source)
+        self.assertIn('_INJECT_SENTINEL', source[source.index('def _decide_native'):])
+
+    def test_a_hung_window_is_not_read(self):
+        source = _source('virtual_buffer.py')
+        at = source.index('def build_for_window')
+        self.assertIn('native_hook.window_responding(hwnd', source[at:at + 2500])
+
+    def test_the_dlls_source_is_shipped_with_its_build(self):
+        for name in ('titan_keyhook.c', 'titan_keyhook.def', 'build.bat'):
+            self.assertTrue(os.path.isfile(os.path.join(
+                COMPONENT, 'helper', 'keyhook', name)), name)
+
+
+
+class WhatAProgramSaysWithoutMovingTheFocus(unittest.TestCase):
+    """UI Automation notifications ("copied", "new message") and live
+    regions never reached a reader that listened only for the focus.
+    `uia_notifications` registers both on the focus listener's own client;
+    `tests/check_uia_notifications.py` is the live proof. This pins what is
+    said, when it interrupts, and what is said only once."""
+
+    def _listener(self, muted=False, on=True):
+        from titan_access import uia_notifications
+        said = []
+        listener = uia_notifications.UIANotifications(
+            lambda text, interrupt: said.append((text, interrupt)),
+            muted=lambda: muted, switched_on=lambda: on)
+        return listener, said
+
+    def test_an_important_notification_interrupts_and_an_ordinary_one_queues(self):
+        listener, said = self._listener()
+        self.assertTrue(listener.notification(None, 2, 0, 'Skopiowano', 'a'))
+        self.assertTrue(listener.notification(None, 0, 3, 'Nowa wiadomość', 'b'))
+        self.assertEqual(said, [('Skopiowano', True), ('Nowa wiadomość', False)])
+        self.assertEqual(listener.report()['interrupted'], 1)
+
+    def test_the_same_words_inside_a_second_are_said_once(self):
+        listener, said = self._listener()
+        listener.notification(None, 2, 3, 'Zapisano', '')
+        listener.notification(None, 2, 3, 'Zapisano', '')
+        self.assertEqual(said, [('Zapisano', False)])
+        self.assertEqual(listener.report()['repeated'], 1)
+
+    def test_nothing_is_said_when_muted_or_switched_off(self):
+        listener, said = self._listener(muted=True)
+        self.assertFalse(listener.notification(None, 2, 0, 'Skopiowano', ''))
+        listener, said = self._listener(on=False)
+        self.assertFalse(listener.notification(None, 2, 0, 'Skopiowano', ''))
+        self.assertEqual(said, [])
+
+    def test_a_live_region_says_its_new_text_and_not_the_old_one_again(self):
+        listener, said = self._listener()
+        sender = types.SimpleNamespace(CachedName='Łączenie...',
+                                       GetRuntimeId=lambda: (1, 2, 3))
+        self.assertTrue(listener.live_region(sender))
+        self.assertFalse(listener.live_region(sender))        # unchanged
+        sender.CachedName = 'Połączono'
+        time.sleep(0.35)
+        self.assertTrue(listener.live_region(sender))
+        self.assertEqual(said, [('Łączenie...', False), ('Połączono', False)])
+
+    def test_a_notification_with_no_words_is_nothing(self):
+        listener, said = self._listener()
+        self.assertFalse(listener.notification(None, 2, 0, '', 'x'))
+        self.assertEqual(said, [])
+
+    def test_the_engine_starts_it_beside_the_focus_listener_and_has_a_switch(self):
+        source = _source('engine.py')
+        self.assertIn('self._start_notifications(', source)
+        self.assertIn('switchboard.read("uiaNotifications", True)', source)
+        self.assertIn('self.notifications.stop()', source)
+        for lang in ('en', 'pl'):
+            words = json.load(io.open(os.path.join(COMPONENT, 'locale',
+                                                   lang + '.json'), encoding='utf-8'))
+            self.assertIn('settings.reader.uiaNotifications', words)
+        self.assertIn('"uiaNotifications", True', _source('settings_walk.py'))
+        self.assertIn('"uiaNotifications", True', _source('settings_panel.py'))
+
+
+
+class APaletteRowSaysThisReadersOwnKey(unittest.TestCase):
+    """Titan Access has no layer letters - its palette is walked and Enter
+    runs - so "(o)" beside a command was a key that did nothing. A command
+    with a gesture of its own here says it; the rest say no key at all."""
+
+    def _engine(self):
+        from titan_access import engine as engine_module
+        from titan_access.gestures import GestureManager
+        fake = types.SimpleNamespace(gestures=GestureManager(None))
+        fake.gestures.register('readerManager', 'shift+j', lambda: None)
+        fake.gestures.register('titanWindow', 'i', lambda: None)
+        fake._shortcut_key_text = engine_module.TitanAccessEngine._shortcut_key_text
+        fake._layer_key_text = types.MethodType(
+            engine_module.TitanAccessEngine._layer_key_text, fake)
+        return fake
+
+    def test_a_command_with_a_gesture_here_says_it(self):
+        fake = self._engine()
+        self.assertEqual(fake._layer_key_text('manager'), 'Insert+Shift+j')
+        self.assertEqual(fake._layer_key_text('titan_window'), 'Insert+i')
+
+    def test_a_command_with_none_says_nothing(self):
+        fake = self._engine()
+        self.assertEqual(fake._layer_key_text('local_model'), '')
+        self.assertEqual(fake._layer_key_text('voice_classes'), '')
 
 
 if __name__ == '__main__':

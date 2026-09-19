@@ -1387,6 +1387,84 @@ class KlangoNatives(ClingCase):
         runtime.run('v = _Voice_Create({})\nkind = type(v)\n')
         self.assertEqual(runtime.get_global('kind'), 'table')
 
+    def test_an_sql_mistake_of_the_applications_own_is_not_a_missing_primitive(self):
+        """ktypist creates its `scores` table without IF NOT EXISTS and throws
+        the answer away, so every run after the first was reported as a
+        primitive Cling has not written - the one thing it is not. Klango's
+        own sqlite answered nothing and the application went on."""
+        from clingkit.klango import natives
+        _host, runtime, _keys = self.host_and_runtime()
+        natives.MISSING.clear()
+        natives.NOTED.clear()
+        runtime.run('local db = k_NewSqlite("/user/app/t.sdb")\n'
+                    'db:Exec("CREATE TABLE scores (id INTEGER)")\n'
+                    'db:Exec("CREATE TABLE scores (id INTEGER)")\n'
+                    'rows = db:Exec("SELECT * FROM scores")\n'
+                    'db:Exec("SELEC nonsense")\n')
+        self.assertEqual([k for k in natives.MISSING if 'sqlite' in k], [])
+        self.assertEqual([k for k in natives.NOTED if 'already exists' in k],
+                         [])
+        self.assertTrue(any('nonsense' in k or 'syntax' in k
+                            for k in natives.NOTED), natives.NOTED)
+        self.assertIsNotNone(runtime.get_global('rows'))
+
+    def test_a_response_stream_is_never_nil(self):
+        """`_dialogNetworkProgress` answers true when the user quits it and
+        does not cancel the request; Amazon ignores that, asks
+        `k_GetHTTPResponseError` (status 0, no error code: "no error") and
+        then does `resp:GetStream():ReadAll()`. A nil stream ended it at
+        amazon.lua:2993. What has arrived so far is nothing, as a stream."""
+        _host, runtime, _keys = self.host_and_runtime()
+        runtime.run('local ctx = k_NewHttp()\n'
+                    'local req = ctx:NewRequest{ url = "nothing://x", '
+                    'method = "GET" }\n'
+                    'local resp = req:GetResponse()\n'
+                    'status = resp:GetStatusCode()\n'
+                    'local s = resp:GetStream()\n'
+                    'kind = type(s)\n'
+                    'body = s:ReadAll()\n')
+        self.assertEqual(runtime.get_global('status'), 0)
+        self.assertEqual(runtime.get_global('kind'), 'table')
+        self.assertEqual(runtime.get_global('body'), '')
+
+    def test_the_indentation_of_a_document_is_not_a_text_node(self):
+        """ktypist walks `<Levels>` with `ipairs` and asks `ipairs` of each
+        child; the "\\n\\t" between two `<Level>`s arrived as a string child
+        and ended it at ktypist.lua:170. A space between two inline tags
+        of a help text is still the space between two words."""
+        _host, runtime, _keys = self.host_and_runtime()
+        runtime.run('local doc = k_XMLParse("<Levels>\\n\\t<Level>'
+                    '<Line>ff jj</Line>\\n\\t</Level>\\n\\t<Level>'
+                    '<Line>kk</Line></Level>\\n</Levels>")\n'
+                    'levels = doc[1]\n'
+                    'kinds = {}\n'
+                    'for i, level in ipairs(levels) do '
+                    'kinds[#kinds + 1] = type(level) end\n'
+                    'count = #kinds\n'
+                    'first = kinds[1]\n'
+                    'local help = k_XMLParsePS("<z><b>two</b> <i>three</i></z>")\n'
+                    'space = help[1][2]\n')
+        self.assertEqual(runtime.get_global('count'), 2)
+        self.assertEqual(runtime.get_global('first'), 'table')
+        self.assertEqual(runtime.get_global('space'), ' ')
+
+    def test_a_comment_is_not_a_node(self):
+        """Four of ktypist's lesson files carry `<!-- ... -->` between the
+        levels; read as tags and text, the comment became a string child
+        of `<Levels>`, and that is where ktypist.lua:170 really died."""
+        _host, runtime, _keys = self.host_and_runtime()
+        runtime.run('local doc = k_XMLParse("<?xml version=\\"1.0\\"?>'
+                    '<Levels>\\n\\t<!-- the first level -->\\n\\t<Level>'
+                    '<Line><![CDATA[a < b]]></Line></Level>'
+                    '<!-- \\n <Level>never</Level> -->\\n</Levels>")\n'
+                    'kinds = {}\n'
+                    'for i, level in ipairs(doc[1]) do '
+                    'kinds[#kinds + 1] = type(level) end\n'
+                    'count = #kinds\n'
+                    'line = doc[1][1][1][1]\n')
+        self.assertEqual(runtime.get_global('count'), 1)
+        self.assertEqual(runtime.get_global('line'), 'a < b')
+
     def test_a_missing_global_string_answers_nil_not_empty(self):
         """Every Lua string is true, including ''. Answering '' made the
         library overwrite the application's language with nothing."""

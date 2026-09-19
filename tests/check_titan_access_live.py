@@ -241,7 +241,48 @@ def scenario_checkbox(engine, process=None):
     return process
 
 
+def scenario_web(engine, process=None):
+    """A web page in a browser, read as a document: the reader's own
+    virtual buffer over the browser's UI Automation tree, with NVDA off.
+    Down walks the lines, `h` jumps between headings, `k` between links,
+    Tab reaches the form."""
+    page = os.environ.get('TITAN_WEB_PAGE') or ''
+    if not page:
+        # The page written beside this check, or one in %TEMP%: an
+        # environment variable does not cross from a WSL shell into the
+        # Windows Python, so the path is looked for rather than only asked.
+        for candidate in (os.path.join(HERE, 'titan_web_test.html'),
+                          os.path.join(os.environ.get('TEMP', ''),
+                                       'titan_web_test.html')):
+            if candidate and os.path.isfile(candidate):
+                page = 'file:///' + candidate.replace('\\', '/')
+                break
+    exe = ''
+    for candidate in (r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+                      r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                      r'C:\Program Files\Mozilla Firefox\firefox.exe'):
+        if os.path.isfile(candidate):
+            exe = candidate
+            break
+    if not exe or not page:
+        print('no browser or no TITAN_WEB_PAGE', flush=True)
+        return None
+    process = subprocess.Popen([exe, '--new-window', page])
+    time.sleep(5.0)
+    mark('page open (browse mode by itself?)')
+    time.sleep(1.0)
+    for _ in range(4):
+        mark('down'); plain(engine, 'down', 0x28); time.sleep(0.6)
+    mark('h (next heading)'); plain(engine, 'h', 0x48); time.sleep(0.7)
+    mark('h (next heading)'); plain(engine, 'h', 0x48); time.sleep(0.7)
+    mark('k (next link)'); plain(engine, 'k', 0x4B); time.sleep(0.7)
+    mark('shift+h (previous heading)'); plain(engine, 'h', 0x48, shift=True); time.sleep(0.7)
+    mark('control+home'); engine.on_plain_key(0x24, 'home', True, False, False); time.sleep(0.7)
+    return process
+
+
 SCENARIOS = {
+    'web': scenario_web,
     'menu': scenario_menu, 'sysmenu': scenario_sysmenu,
     'alttab': scenario_alttab, 'columns': scenario_columns,
     'vw': scenario_vw, 'palette': scenario_palette,

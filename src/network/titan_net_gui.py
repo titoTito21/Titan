@@ -4566,6 +4566,10 @@ class TitanNetMainWindow(wx.Frame):
 
                 for app in self.repository_apps_cache:
                     display_text = f"{app['name']} v{app.get('version', '1.0')} - {app['uploader_username']}"
+                    if app.get('rating_count'):
+                        # The rating is part of choosing, so it is on the row.
+                        display_text += " - " + _format_rating(
+                            app.get('rating_average'), app.get('rating_count'))
                     self.main_listbox.Append(display_text)
 
                 if getattr(self, '_main_listbox_dnd', None) is not None:
@@ -4600,40 +4604,174 @@ class TitanNetMainWindow(wx.Frame):
         threading.Thread(target=load_thread, daemon=True).start()
 
     def _display_app_details_dialog(self, result):
-        """Display app details in dialog"""
+        """Display app details in a window of their own (`AppDetailsDialog`):
+        the details as a list, and underneath what can be done with the
+        package - download it, rate and review it, read the reviews, and
+        for whoever shared it (or a moderator) update or delete it.
+
+        The window only ASKS: the download, the update and the deletion run
+        from here once it has closed, because each of them puts up a
+        progress or confirmation dialog of its own and those belong to the
+        main window, not to a details window that is about to go."""
         if not result.get('success'):
             speak_notification(_("Failed to load app details"), 'error')
             return
 
         app = result.get('app', {})
-
-        # Create details message
-        details = f"{_('Name')}: {app.get('name', 'N/A')}\n"
-        details += f"{_('Version')}: {app.get('version', 'N/A')}\n"
-        details += f"{_('Author')}: {app.get('uploader_username', 'N/A')}\n"
-        details += f"{_('Category')}: {app.get('category', 'N/A')}\n"
-        # **`downloads`, which is what the column is called.** The row comes
-        # straight out of `app_repository` (`SELECT ar.*`), the web
-        # repository reads `app.downloads` and the server sums
-        # `SUM(downloads)` - this was the one place in Titan that asked for
-        # `download_count`, a name nothing writes, so `.get(..., 0)` handed
-        # back the default and every application in the repository reported
-        # nought downloads however many it had.
-        details += f"{_('Downloads')}: {app.get('downloads', 0)}\n\n"
-        details += f"{_('Description')}:\n{app.get('description', _('No description'))}\n\n"
-        details += _("Do you want to download this app?")
-
-        dlg = _new_message_dialog(
-            self,
-            details,
-            _("App Details"),
-            wx.YES_NO | wx.ICON_QUESTION
-        )
-
-        if dlg.ShowModal() == wx.ID_YES:
-            self.download_app(app['id'], app)
-
+        dlg = AppDetailsDialog(self, self.titan_client, app,
+                               is_moderator=self.is_moderator,
+                               current_username=getattr(self.titan_client, 'username', None))
+        dlg.ShowModal()
+        action = dlg.action
+        app = dlg.app
         dlg.Destroy()
+
+        if action == AppDetailsDialog.ACTION_DOWNLOAD:
+            self.download_app(app['id'], app)
+        elif action == AppDetailsDialog.ACTION_UPDATE:
+            self.show_update_app_dialog(app)
+        elif action == AppDetailsDialog.ACTION_DELETE:
+            self.delete_package(app)
+
+    def show_update_app_dialog(self, app):
+        """Update one of the user's own packages in place, so that a new
+        version does not mean deleting the old one and sharing again.
+
+        The name, description and version are asked for with the current
+        values filled in; a new file is optional - No changes the details
+        alone. A new file is staged on the server and waits for a
+        moderator while the listed version stays available."""
+        name_dlg = _new_text_entry_dialog(
+            self, _("Package name:"), _("Update Package"), app.get('name', ''))
+        if name_dlg.ShowModal() != wx.ID_OK:
+            name_dlg.Destroy()
+            return
+        name = name_dlg.GetValue().strip()
+        name_dlg.Destroy()
+
+        desc_dlg = _new_text_entry_dialog(
+            self, _("Description:"), _("Update Package"), app.get('description', '') or '')
+        if desc_dlg.ShowModal() != wx.ID_OK:
+            desc_dlg.Destroy()
+            return
+        description = desc_dlg.GetValue().strip()
+        desc_dlg.Destroy()
+
+        ver_dlg = _new_text_entry_dialog(
+            self, _("Version (e.g. 1.0.0):"), _("Update Package"), app.get('version', '1.0') or '1.0')
+        if ver_dlg.ShowModal() != wx.ID_OK:
+            ver_dlg.Destroy()
+            return
+        version = ver_dlg.GetValue().strip()
+        ver_dlg.Destroy()
+
+        ask = _new_message_dialog(
+            self,
+            _("Do you want to upload a new package file?\n\n"
+              "Yes: choose the new file. It will wait for a moderator, and the "
+              "current version stays available until it is approved.\n"
+              "No: change only the name, description and version."),
+            _("Update Package"),
+            wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION)
+        answer = ask.ShowModal()
+        ask.Destroy()
+        if answer == wx.ID_CANCEL:
+            return
+
+        file_path = None
+        if answer == wx.ID_YES:
+            dlg = wx.FileDialog(
+                self,
+                _("Select package file (.TCA/.TCD)"),
+                wildcard="Titan Packages (*.tca;*.tcd)|*.tca;*.tcd|"
+                         "TCE Packages (*.TCEPACKAGE)|*.TCEPACKAGE|"
+                         "All files (*.*)|*.*",
+                style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+            )
+            if dlg.ShowModal() != wx.ID_OK:
+                dlg.Destroy()
+                return
+            file_path = dlg.GetPath()
+            dlg.Destroy()
+
+        speak_titannet(_("Updating package..."))
+        progress = wx.ProgressDialog(
+            _("Updating Package"),
+            _("Starting upload..."),
+            maximum=100,
+            parent=self,
+            style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_SMOOTH
+        )
+        on_progress = self._make_transfer_progress(progress, _("Uploading: {percent}%"))
+
+        def update_thread():
+            try:
+                result = self.titan_client.update_app(
+                    app['id'],
+                    file_path=file_path,
+                    name=name or None,
+                    version=version or None,
+                    description=description or None,
+                    progress_callback=on_progress
+                )
+                wx.CallAfter(self._on_update_done, result, progress)
+            except Exception as e:
+                wx.CallAfter(self._on_update_done, {"success": False, "error": str(e)}, progress)
+
+        threading.Thread(target=update_thread, daemon=True).start()
+
+    def _on_update_done(self, result, progress):
+        """Close the update progress bar and report the outcome."""
+        try:
+            progress.Destroy()
+        except Exception:
+            pass
+        if result.get('success'):
+            if result.get('pending_update'):
+                speak_titannet(_("Update uploaded"))
+                speak_notification(
+                    _("Update uploaded. The current version stays available "
+                      "until a moderator approves the new one."), 'success')
+            else:
+                speak_titannet(_("Package updated"))
+                speak_notification(_("Package updated"), 'success')
+            if self.current_view == "repository":
+                self.refresh_repository()
+        else:
+            error_msg = result.get('error', result.get('message', _("Failed to update package")))
+            speak_notification(error_msg, 'error')
+
+    def delete_package(self, app):
+        """Remove one of the user's own packages (or any, as a moderator)
+        from the repository, after asking."""
+        confirm = _new_message_dialog(
+            self,
+            _("Are you sure you want to delete {name} from the repository? "
+              "Its downloads, ratings and reviews go with it.").format(name=app.get('name', '')),
+            _("Delete Package"),
+            wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
+        answer = confirm.ShowModal()
+        confirm.Destroy()
+        if answer != wx.ID_YES:
+            return
+
+        def delete_thread():
+            try:
+                result = self.titan_client.delete_app(app['id'])
+            except Exception as e:
+                result = {"success": False, "error": str(e)}
+            wx.CallAfter(self._on_package_deleted, result)
+
+        threading.Thread(target=delete_thread, daemon=True).start()
+
+    def _on_package_deleted(self, result):
+        if result.get('success'):
+            speak_titannet(_("Package deleted"))
+            speak_notification(_("Package deleted"), 'success')
+            if self.current_view == "repository":
+                self.refresh_repository()
+        else:
+            speak_notification(result.get('error', _("Failed to delete package")), 'error')
 
     def download_app(self, app_id, app):
         """Download and save app (streams to disk with a progress bar)."""
@@ -5531,8 +5669,13 @@ class TitanNetMainWindow(wx.Frame):
             play_sound('apprepo/appupdate.ogg')
         except Exception as e:
             print(f"[TITAN-NET] Failed to play apprepo sound: {e}")
-        notification_text = _("App Repository: new package {app} from {user}, waiting for moderation").format(
-            app=app_name, user=author_username)
+        if message.get('update'):
+            # A new version of a package that is already listed.
+            notification_text = _("App Repository: update of {app} from {user}, waiting for moderation").format(
+                app=app_name, user=author_username)
+        else:
+            notification_text = _("App Repository: new package {app} from {user}, waiting for moderation").format(
+                app=app_name, user=author_username)
         # play_sound_effect=False because we already played the apprepo earcon.
         speak_notification(notification_text, 'info', play_sound_effect=False)
         print(f"[TITAN-NET] New package: {app_name} by {author_username} (pending approval)")
@@ -5547,8 +5690,13 @@ class TitanNetMainWindow(wx.Frame):
             play_sound('apprepo/appupdate.ogg')
         except Exception as e:
             print(f"[TITAN-NET] Failed to play apprepo sound: {e}")
-        notification_text = _("App Repository: {app} from {user} approved by {moderator}").format(
-            app=app_name, user=author_username, moderator=approved_by)
+        if message.get('update'):
+            notification_text = _("App Repository: {app} from {user} updated to version {version}, approved by {moderator}").format(
+                app=app_name, user=author_username, version=message.get('version', '?'),
+                moderator=approved_by)
+        else:
+            notification_text = _("App Repository: {app} from {user} approved by {moderator}").format(
+                app=app_name, user=author_username, moderator=approved_by)
         speak_notification(notification_text, 'success', play_sound_effect=False)
         print(f"[TITAN-NET] Package approved: {app_name} by {author_username} (approved by {approved_by})")
 
@@ -7974,7 +8122,14 @@ class TitanNetMainWindow(wx.Frame):
         app_list = []
         for app in apps:
             uploader = app.get('uploader_username', app.get('author_username', 'Unknown'))
-            app_list.append(f"{app['name']} v{app.get('version', '?')} by {uploader}")
+            if app.get('pending_update'):
+                # A listed package whose new version is waiting: approving
+                # it makes the new file the listed one.
+                app_list.append(_("{name}: update to v{new} by {user} (listed: v{old})").format(
+                    name=app['name'], new=app.get('update_version', '?'),
+                    user=uploader, old=app.get('version', '?')))
+            else:
+                app_list.append(f"{app['name']} v{app.get('version', '?')} by {uploader}")
 
         title = _("Pending Packages (Preview)") if preview_mode else _("Moderate Packages")
         dlg = wx.SingleChoiceDialog(self, _("Select package:"), title, app_list)
@@ -8948,6 +9103,632 @@ class TitanNetMainWindow(wx.Frame):
 
         self.panel.Layout()
         speak_titannet(_("Found {count} packages").format(count=len(apps)))
+
+
+def _format_rating(average, count):
+    """A package's rating as one sentence that SAYS it is the average -
+    "average 4.5 of 5, 3 ratings" - or that nobody has rated it yet. Read
+    aloud, "5 of 5 (5 ratings)" was three fives in a row and nothing to
+    tell the listener which was which."""
+    try:
+        count = int(count or 0)
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0 or average is None:
+        return _("No ratings yet")
+    try:
+        average_text = f"{float(average):.1f}".rstrip('0').rstrip('.')
+    except (TypeError, ValueError):
+        average_text = str(average)
+    if count == 1:
+        return _("average {average} of 5, one rating").format(average=average_text)
+    return _("average {average} of 5, {count} ratings").format(average=average_text, count=count)
+
+
+def _date_text(iso):
+    """An ISO timestamp as the date and time a person reads: the seconds
+    and the microseconds are noise."""
+    if not iso:
+        return ''
+    text = str(iso).replace('T', ' ')
+    return text[:16]
+
+
+def _review_refusal_text(reason):
+    """Why THIS user cannot rate a package, as a sentence - from the word
+    the server answers in ``review_refusal``. An older server answers no
+    word at all, and gets the general sentence."""
+    return {
+        'not_signed_in': _("Sign in to rate this package."),
+        'not_approved': _("A package can be rated once a moderator has approved it."),
+        'own_package': _("This is your own package, so you cannot rate it."),
+        'already_reviewed': _("You have already rated this release. "
+                              "After the package is updated you can rate it again."),
+    }.get(reason or '', _("You cannot rate this package at the moment."))
+
+
+class RatingSlider(wx.Slider):
+    """The rating, 1 to 5, as a slider - which is what a rating IS: one
+    number on a short scale, moved with the arrows. A reader says the
+    number as the slider moves; Titan says the word that goes with it
+    ("3 - Average"), and the label beside the slider shows the same word,
+    so the scale is never five bare digits."""
+
+    @classmethod
+    def words(cls):
+        return {
+            5: _("5 - Excellent"),
+            4: _("4 - Good"),
+            3: _("3 - Average"),
+            2: _("2 - Poor"),
+            1: _("1 - Bad"),
+        }
+
+    @classmethod
+    def word(cls, value):
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 5
+        return cls.words().get(value, cls.words()[5])
+
+    def __init__(self, parent, word_label, value=5):
+        super().__init__(parent, value=value, minValue=1, maxValue=5,
+                         style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
+        self.word_label = word_label
+        self.SetName(_("Your rating, from 1 to 5"))
+        self.SetLineSize(1)
+        self.SetPageSize(1)
+        self.Bind(wx.EVT_SLIDER, self._on_move)
+        self._show_word()
+
+    def _show_word(self):
+        if self.word_label:
+            self.word_label.SetLabel(self.word(self.GetValue()))
+
+    def _on_move(self, event):
+        self._show_word()
+        speak_titannet(self.word(self.GetValue()))
+        event.Skip()
+
+    def rating(self):
+        """The number the slider stands on, always 1 to 5."""
+        return max(1, min(5, int(self.GetValue())))
+
+
+class RateAppDialog(wx.Dialog):
+    """Rate a package (1-5) and, if wanted, write about it.
+
+    The rating is a `RatingSlider`: one number on a short scale, moved
+    with the arrows, with the word for it said and shown beside it. Once
+    sent, the server keeps it for good - one rating and one review per
+    person per release - so the dialog says so before the user commits."""
+
+    RATINGS = (5, 4, 3, 2, 1)
+
+    @staticmethod
+    def rating_labels():
+        """The five words, best first - what the slider says at each
+        step, in one list for whoever wants them as a list."""
+        return [RatingSlider.word(value) for value in RateAppDialog.RATINGS]
+
+    def __init__(self, parent, app_name):
+        super().__init__(parent, title=_("Rate and review: {name}").format(name=app_name))
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        note = wx.StaticText(panel, label=_(
+            "You can rate each release of a package once. "
+            "What you send cannot be changed afterwards; after the package "
+            "is updated you can rate it again."))
+        sizer.Add(note, 0, wx.ALL, 10)
+
+        rating_label = wx.StaticText(panel, label=_("Your rating (1 to 5):"))
+        sizer.Add(rating_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        self.rating_word = wx.StaticText(panel, label='')
+        self.rating_slider = RatingSlider(panel, self.rating_word)
+        sizer.Add(self.rating_slider, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
+        sizer.Add(self.rating_word, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        review_label = wx.StaticText(panel, label=_("Your review (optional):"))
+        sizer.Add(review_label, 0, wx.LEFT | wx.RIGHT, 10)
+        self.review_text = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_WORDWRAP, size=wx.Size(400, 140))
+        self.review_text.SetName(_("Your review"))
+        sizer.Add(self.review_text, 1, wx.ALL | wx.EXPAND, 10)
+
+        buttons = wx.BoxSizer(wx.HORIZONTAL)
+        send_button = wx.Button(panel, wx.ID_OK, _("Send"))
+        send_button.SetDefault()
+        cancel_button = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
+        buttons.Add(send_button, 0, wx.RIGHT, 10)
+        buttons.Add(cancel_button, 0)
+        sizer.Add(buttons, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+        panel.SetSizer(sizer)
+        sizer.Fit(panel)
+        self.Fit()
+        self.Centre()
+        self.rating_slider.SetFocus()
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+
+    def rating(self):
+        """The number the slider stands on."""
+        return self.rating_slider.rating()
+
+    def review(self):
+        return self.review_text.GetValue().strip()
+
+
+class AppReviewsDialog(wx.Dialog):
+    """The reviews and ratings of a package: the summary, one row per
+    review ("who: rating of 5, when"), the chosen review's text in a
+    read-only field the reader's own cursor can walk, and underneath - for
+    somebody who has not yet - the button to add one.
+
+    The list is loaded off the GUI thread and filled in when it arrives;
+    a dialog the user has closed by then is left alone."""
+
+    def __init__(self, parent, client, app, is_moderator=False, current_username=None):
+        name = app.get('name', '')
+        super().__init__(parent, title=_("Reviews and ratings: {name}").format(name=name),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.client = client
+        self.app = app
+        self.is_moderator = is_moderator
+        self.current_username = current_username
+        self.reviews = []
+        self.added = None  # the review sent from here, if any
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.summary = wx.StaticText(panel, label=_("Loading reviews..."))
+        sizer.Add(self.summary, 0, wx.ALL, 10)
+
+        list_label = wx.StaticText(panel, label=_("Reviews:"))
+        sizer.Add(list_label, 0, wx.LEFT | wx.RIGHT, 10)
+        self.review_list = wx.ListBox(panel, size=wx.Size(420, 160))
+        self.review_list.SetName(_("Reviews"))
+        self.review_list.Bind(wx.EVT_LISTBOX, self._on_select)
+        sizer.Add(self.review_list, 1, wx.ALL | wx.EXPAND, 10)
+
+        text_label = wx.StaticText(panel, label=_("Review text:"))
+        sizer.Add(text_label, 0, wx.LEFT | wx.RIGHT, 10)
+        self.review_text = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP,
+                                       size=wx.Size(420, 100))
+        self.review_text.SetName(_("Review text"))
+        sizer.Add(self.review_text, 1, wx.ALL | wx.EXPAND, 10)
+
+        # The rating form lives IN this window: a slider of 1 to 5 and a
+        # field to write in. It is ALWAYS there. It used to be hidden while
+        # this user could not rate - their own package, or one they had
+        # rated already - and for somebody who cannot see the screen a
+        # hidden form is a form that does not exist: on a small server
+        # where every package is one's own, "where do I write a review"
+        # had no answer. So the form stays, the note says WHY a rating
+        # would be refused, and the server refuses it in words if it is
+        # sent anyway. A `wx.StaticBox` is a grouping Windows itself knows
+        # about, so a reader says which part of the window the keyboard
+        # has entered.
+        self.rate_box = wx.StaticBox(panel, label=_("Rate and review"))
+        rate_sizer = wx.StaticBoxSizer(self.rate_box, wx.VERTICAL)
+        self.rate_rule = _(
+            "You can rate each release of a package once. "
+            "What you send cannot be changed afterwards; after the package "
+            "is updated you can rate it again.")
+        self.rate_note_text = self.rate_rule
+        self.rate_note = wx.StaticText(self.rate_box, label=self.rate_rule)
+        rate_sizer.Add(self.rate_note, 0, wx.ALL, 5)
+        rating_label = wx.StaticText(self.rate_box, label=_("Your rating (1 to 5):"))
+        rate_sizer.Add(rating_label, 0, wx.LEFT | wx.RIGHT, 5)
+        self.rating_word = wx.StaticText(self.rate_box, label='')
+        self.rating_slider = RatingSlider(self.rate_box, self.rating_word)
+        rate_sizer.Add(self.rating_slider, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 5)
+        rate_sizer.Add(self.rating_word, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        review_label = wx.StaticText(self.rate_box, label=_("Your review (optional):"))
+        rate_sizer.Add(review_label, 0, wx.LEFT | wx.RIGHT, 5)
+        self.my_review_text = wx.TextCtrl(self.rate_box, style=wx.TE_MULTILINE | wx.TE_WORDWRAP,
+                                          size=wx.Size(420, 80))
+        self.my_review_text.SetName(_("Your review"))
+        rate_sizer.Add(self.my_review_text, 1, wx.ALL | wx.EXPAND, 5)
+        self.send_button = wx.Button(self.rate_box, label=_("Send"))
+        self.send_button.Bind(wx.EVT_BUTTON, self._on_rate)
+        rate_sizer.Add(self.send_button, 0, wx.ALL, 5)
+        sizer.Add(rate_sizer, 0, wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
+
+        buttons = wx.BoxSizer(wx.HORIZONTAL)
+        self.delete_button = wx.Button(panel, label=_("Delete review"))
+        self.delete_button.Bind(wx.EVT_BUTTON, self._on_delete)
+        self.delete_button.Hide()
+        buttons.Add(self.delete_button, 0, wx.RIGHT, 10)
+        close_button = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        close_button.SetDefault()
+        buttons.Add(close_button, 0)
+        sizer.Add(buttons, 0, wx.ALL | wx.ALIGN_CENTER, 10)
+
+        panel.SetSizer(sizer)
+        sizer.Fit(panel)
+        self.Fit()
+        self.SetMinSize(self.GetSize())
+        self.Centre()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+
+        self.review_list.SetFocus()
+        self.load()
+
+    # ---- loading -------------------------------------------------------
+
+    def load(self):
+        def load_thread():
+            try:
+                result = self.client.get_app_reviews(self.app['id'])
+            except Exception as e:
+                result = {'success': False, 'error': str(e)}
+            wx.CallAfter(self._on_loaded, result)
+        threading.Thread(target=load_thread, daemon=True).start()
+
+    def _on_loaded(self, result):
+        if not self:
+            return
+        if not result.get('success'):
+            self.summary.SetLabel(result.get('error', _("Could not load reviews")))
+            speak_notification(result.get('error', _("Could not load reviews")), 'error')
+            return
+        self.fill(result)
+
+    def fill(self, result):
+        """Show what the server answered: the summary, the rows, and which
+        buttons apply to this user."""
+        self.reviews = result.get('reviews', []) or []
+        self.app['rating_average'] = result.get('rating_average')
+        self.app['rating_count'] = result.get('rating_count', len(self.reviews))
+        self.app['my_review'] = result.get('my_review')
+        self.app['can_review'] = bool(result.get('can_review'))
+        self.app['review_refusal'] = result.get('review_refusal')
+
+        summary = _("Rating: {rating}").format(
+            rating=_format_rating(self.app.get('rating_average'), self.app.get('rating_count')))
+        mine = self.app.get('my_review')
+        if mine:
+            summary += ". " + _("Your rating: {rating} of 5").format(rating=mine.get('rating', '?'))
+        self.summary.SetLabel(summary)
+
+        # The form's note: the rule, and - when a rating would be refused -
+        # the reason, in front of it, so it is the first thing read.
+        if self.app['can_review']:
+            self.rate_note_text = self.rate_rule
+        else:
+            self.rate_note_text = _review_refusal_text(self.app.get('review_refusal')) + " " + self.rate_rule
+        self.rate_note.SetLabel(self.rate_note_text)
+        self.rate_note.Wrap(420)
+
+        self.review_list.Clear()
+        for review in self.reviews:
+            self.review_list.Append(self.row_text(review))
+        if self.reviews:
+            self.review_list.SetSelection(0)
+            self._show_selected()
+        else:
+            self.review_text.SetValue(_("Nobody has reviewed this package yet."))
+
+        self._update_delete_button()
+        self.Layout()
+        self.Fit()
+
+    @staticmethod
+    def row_text(review):
+        """One review as one line: who, the rating, when, and whether they
+        wrote anything."""
+        parts = [_("{user}: {rating} of 5").format(
+            user=review.get('username', '?'), rating=review.get('rating', '?'))]
+        if review.get('current') == 0 and review.get('version'):
+            # About a release since replaced: the words still stand, but
+            # for the version they were written about.
+            parts.append(_("about version {version}").format(version=review['version']))
+        when = _date_text(review.get('created_at'))
+        if when:
+            parts.append(when)
+        if not (review.get('review') or '').strip():
+            parts.append(_("rating only"))
+        return ", ".join(parts)
+
+    def _selected(self):
+        index = self.review_list.GetSelection()
+        if 0 <= index < len(self.reviews):
+            return self.reviews[index]
+        return None
+
+    def _show_selected(self):
+        review = self._selected()
+        if review is None:
+            self.review_text.SetValue('')
+            return
+        text = (review.get('review') or '').strip()
+        self.review_text.SetValue(text or _("(rating only, nothing written)"))
+
+    def _on_select(self, event):
+        self._show_selected()
+        self._update_delete_button()
+        event.Skip()
+
+    def _update_delete_button(self):
+        review = self._selected()
+        own = review is not None and self.current_username and review.get('username') == self.current_username
+        self.delete_button.Show(bool(review) and bool(self.is_moderator or own))
+        self.Layout()
+
+    # ---- acting --------------------------------------------------------
+
+    def rating(self):
+        """The number the built-in form's slider stands on."""
+        return self.rating_slider.rating()
+
+    def _on_rate(self, event):
+        """Send what the built-in form holds. The window stays open and
+        shows the new review among the others. A rating the server has
+        already said it would refuse is refused HERE, in the same words,
+        rather than sent: the answer cannot differ and the round trip is
+        a wait for nothing."""
+        if not self.app.get('can_review') and self.app.get('review_refusal'):
+            speak_notification(_review_refusal_text(self.app.get('review_refusal')), 'error')
+            return
+        rating, review = self.rating(), self.my_review_text.GetValue().strip()
+        result = self.client.add_app_review(self.app['id'], rating, review)
+        if result.get('success'):
+            self.added = {'rating': rating, 'review': review}
+            self.app['my_review'] = {'rating': rating, 'review': review}
+            self.app['can_review'] = False
+            self.app['review_refusal'] = 'already_reviewed'
+            self.my_review_text.SetValue('')
+            speak_titannet(_("Thank you for your review"))
+            play_sound('core/SELECT.ogg')
+            self.load()
+            self.review_list.SetFocus()
+        else:
+            speak_notification(result.get('error', _("Could not send the review")), 'error')
+
+    def _on_delete(self, event):
+        review = self._selected()
+        if review is None:
+            return
+        confirm = _new_message_dialog(
+            self, _("Delete the review by {user}?").format(user=review.get('username', '?')),
+            _("Delete review"), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
+        answer = confirm.ShowModal()
+        confirm.Destroy()
+        if answer != wx.ID_YES:
+            return
+        result = self.client.delete_app_review(review['id'])
+        if result.get('success'):
+            speak_titannet(_("Review deleted"))
+            self.load()
+        else:
+            speak_notification(result.get('error', _("Could not delete the review")), 'error')
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.EndModal(wx.ID_CANCEL)
+        else:
+            event.Skip()
+
+
+class AppDetailsDialog(wx.Dialog):
+    """A repository package, in a window of its own.
+
+    The details are a LIST - name, version, author, category, downloads,
+    rating, when it was shared, what this user rated it - because a list
+    is what a screen reader walks row by row, where a message box is one
+    paragraph read in one breath. The description has a read-only field of
+    its own, since it may be long. Underneath: Download (the default, so
+    Enter on the list downloads), Rate and review (only while this user
+    still can: never their own package, never twice), Reviews and ratings,
+    and for whoever shared the package or a moderator, Update and Delete.
+
+    Download, Update and Delete are not carried out here: the window closes
+    with ``action`` set and the main window does it, because each puts up
+    a dialog of its own that belongs to the main window."""
+
+    ACTION_NONE = 0
+    ACTION_DOWNLOAD = 1
+    ACTION_UPDATE = 2
+    ACTION_DELETE = 3
+
+    def __init__(self, parent, client, app, is_moderator=False, current_username=None):
+        name = app.get('name', '')
+        super().__init__(parent, title=_("App Details: {name}").format(name=name),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        self.client = client
+        self.app = dict(app)
+        self.is_moderator = is_moderator
+        self.current_username = current_username
+        self.action = self.ACTION_NONE
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        list_label = wx.StaticText(panel, label=_("Details:"))
+        sizer.Add(list_label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        self.details = wx.ListBox(panel, size=wx.Size(440, 180))
+        self.details.SetName(_("Details"))
+        sizer.Add(self.details, 1, wx.ALL | wx.EXPAND, 10)
+
+        desc_label = wx.StaticText(panel, label=_("Description:"))
+        sizer.Add(desc_label, 0, wx.LEFT | wx.RIGHT, 10)
+        self.description = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_WORDWRAP,
+                                       size=wx.Size(440, 100))
+        self.description.SetName(_("Description"))
+        sizer.Add(self.description, 1, wx.ALL | wx.EXPAND, 10)
+
+        row1 = wx.BoxSizer(wx.HORIZONTAL)
+        self.download_button = wx.Button(panel, label=_("Download"))
+        self.download_button.Bind(wx.EVT_BUTTON, lambda e: self._finish(self.ACTION_DOWNLOAD))
+        self.download_button.SetDefault()
+        row1.Add(self.download_button, 0, wx.RIGHT, 10)
+        self.rate_button = wx.Button(panel, label=_("Rate and review"))
+        self.rate_button.Bind(wx.EVT_BUTTON, self._on_rate)
+        row1.Add(self.rate_button, 0, wx.RIGHT, 10)
+        self.reviews_button = wx.Button(panel, label=_("Reviews and ratings"))
+        self.reviews_button.Bind(wx.EVT_BUTTON, self._on_reviews)
+        row1.Add(self.reviews_button, 0)
+        sizer.Add(row1, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+
+        row2 = wx.BoxSizer(wx.HORIZONTAL)
+        self.update_button = wx.Button(panel, label=_("Update package"))
+        self.update_button.Bind(wx.EVT_BUTTON, lambda e: self._finish(self.ACTION_UPDATE))
+        row2.Add(self.update_button, 0, wx.RIGHT, 10)
+        self.delete_button = wx.Button(panel, label=_("Delete package"))
+        self.delete_button.Bind(wx.EVT_BUTTON, lambda e: self._finish(self.ACTION_DELETE))
+        row2.Add(self.delete_button, 0, wx.RIGHT, 10)
+        close_button = wx.Button(panel, wx.ID_CANCEL, _("Close"))
+        row2.Add(close_button, 0)
+        sizer.Add(row2, 0, wx.ALL, 10)
+
+        panel.SetSizer(sizer)
+        self.refresh()
+        sizer.Fit(panel)
+        self.Fit()
+        self.SetMinSize(self.GetSize())
+        self.Centre()
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+        try:
+            _apply_skin_recursive(self)
+        except Exception:
+            pass
+        self.details.SetFocus()
+
+    def is_author(self):
+        """Whoever shared the package - the only one who may update it."""
+        if self.app.get('can_update'):
+            return True
+        author = self.app.get('uploader_username') or self.app.get('author_username')
+        return bool(self.current_username) and author == self.current_username
+
+    def can_manage(self):
+        """Who may delete: whoever shared the package, and the moderators."""
+        if self.app.get('can_manage'):
+            return True
+        if self.is_moderator:
+            return True
+        return self.is_author()
+
+    def rows(self):
+        """The details, one per row, in the order they are worth hearing."""
+        app = self.app
+        author = app.get('uploader_username') or app.get('author_username') or _("Unknown")
+        version = app.get('version') or _("Unknown")
+        rows = [
+            _("Name: {value}").format(value=app.get('name') or _("Unknown")),
+            _("Version: {value}").format(value=version),
+        ]
+        if app.get('pending_update'):
+            rows.append(_("Update to version {version} is waiting for moderation").format(
+                version=app.get('update_version') or _("Unknown")))
+        rows.append(_("Author: {value}").format(value=author))
+        rows.append(_("Category: {value}").format(value=app.get('category') or _("Unknown")))
+        # `downloads` is what the column is called (see the note that used
+        # to be here about `download_count`, a name nothing writes).
+        rows.append(_("Downloads: {value}").format(value=app.get('downloads', 0) or 0))
+        rows.append(_("Rating: {rating}").format(
+            rating=_format_rating(app.get('rating_average'), app.get('rating_count'))))
+        mine = app.get('my_review')
+        if mine:
+            rows.append(_("Your rating: {rating} of 5").format(rating=mine.get('rating', '?')))
+        elif not app.get('can_review') and app.get('review_refusal'):
+            # Why "Rate and review" will refuse, as a row: the button is
+            # always there, and a reader walking the list should not have
+            # to press it to find out.
+            rows.append(_review_refusal_text(app.get('review_refusal')))
+        shared = _date_text(app.get('approved_at') or app.get('uploaded_at'))
+        if shared:
+            rows.append(_("Shared: {value}").format(value=shared))
+        updated = _date_text(app.get('updated_at'))
+        if updated:
+            rows.append(_("Updated: {value}").format(value=updated))
+        if app.get('file_size'):
+            rows.append(_("Size: {value}").format(value=_format_bytes(app.get('file_size'))))
+        return rows
+
+    def refresh(self):
+        """Put the rows back from `self.app`, keeping the cursor where it was."""
+        selection = self.details.GetSelection()
+        self.details.Clear()
+        for row in self.rows():
+            self.details.Append(row)
+        if self.details.GetCount():
+            self.details.SetSelection(max(0, min(selection, self.details.GetCount() - 1)))
+        self.description.SetValue(self.app.get('description') or _("No description"))
+        # Rate and review is always offered. Hidden while this user could
+        # not rate, it was a button nobody who cannot see the screen could
+        # know had ever existed; pressed, it says why instead.
+        self.rate_button.Show(True)
+        self.update_button.Show(self.is_author())
+        self.delete_button.Show(self.can_manage())
+        self.Layout()
+
+    def _finish(self, action):
+        self.action = action
+        self.EndModal(wx.ID_OK)
+
+    def _on_rate(self, event):
+        if not self.app.get('can_review'):
+            speak_notification(_review_refusal_text(self.app.get('review_refusal')), 'error')
+            return
+        dlg = RateAppDialog(self, self.app.get('name', ''))
+        if dlg.ShowModal() != wx.ID_OK:
+            dlg.Destroy()
+            return
+        rating, review = dlg.rating(), dlg.review()
+        dlg.Destroy()
+        result = self.client.add_app_review(self.app['id'], rating, review)
+        if result.get('success'):
+            self.app['my_review'] = {'rating': rating, 'review': review}
+            self.app['can_review'] = False
+            self.app['review_refusal'] = 'already_reviewed'
+            self.app['rating_average'] = result.get('rating_average', self.app.get('rating_average'))
+            self.app['rating_count'] = result.get('rating_count', self.app.get('rating_count'))
+            speak_titannet(_("Thank you for your review"))
+            play_sound('core/SELECT.ogg')
+            self.refresh()
+            self.details.SetFocus()
+        else:
+            speak_notification(result.get('error', _("Could not send the review")), 'error')
+
+    def _on_reviews(self, event):
+        dlg = AppReviewsDialog(self, self.client, self.app,
+                               is_moderator=self.is_moderator,
+                               current_username=self.current_username)
+        dlg.ShowModal()
+        # The reviews window shares `self.app` and keeps its rating summary
+        # and `my_review` current, so the rows follow.
+        dlg.Destroy()
+        self.refresh()
+        self.details.SetFocus()
+
+    def _on_key(self, event):
+        if event.GetKeyCode() == wx.WXK_ESCAPE:
+            self.EndModal(wx.ID_CANCEL)
+        else:
+            event.Skip()
+
+
+def _format_bytes(n):
+    """A size in the unit a person reads it in."""
+    try:
+        n = float(n)
+    except (TypeError, ValueError):
+        return ''
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024 or unit == 'GB':
+            return f"{n:.1f} {unit}" if n < 10 and unit != 'B' else f"{n:.0f} {unit}"
+        n /= 1024
+    return ''
 
 
 class MOTDDialog(wx.Dialog):

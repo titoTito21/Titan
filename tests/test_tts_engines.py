@@ -153,5 +153,54 @@ class AnEngineThatTranslatesGuardsIt(unittest.TestCase):
                     f"try/except NameError fallback the other engines use.")
 
 
+
+class SMPSaysTheWholeLabel(unittest.TestCase):
+    """SMPRenderer stops dead on most punctuation and takes the rest of the
+    text with it - measured by feeding it "kot <char> pies" for every
+    printable character. "Ctrl+S" came out as "Ctrl", "e-mail" as "e", and
+    a label with a slash, a bracket or a quotation mark lost everything
+    after it. Under NVDA the symbol level had already replaced those before
+    the driver saw them; Titan hands the engine the text as it is, so the
+    engine does it itself: the symbols that mean something when read out
+    become the Polish word for them, the rest become a space."""
+
+    @classmethod
+    def setUpClass(cls):
+        found = [path for name, path in engine_dirs() if name == 'SMP']
+        cls.module = load('SMP', found[0])[1] if found else None
+
+    def normalize(self, text):
+        if self.module is None:
+            self.skipTest('the SMP engine is not shipped')
+        return self.module._normalize_text(text)
+
+    def test_a_dash_a_slash_and_a_bracket_do_not_swallow_the_rest(self):
+        self.assertEqual(self.normalize('e-mail'), 'e mail')
+        self.assertEqual(self.normalize('kot-pies-kura'), 'kot pies kura')
+        self.assertEqual(self.normalize('a/b'), 'a b')
+        self.assertEqual(self.normalize('(nawias) "cytat" [x]'),
+                         'nawias cytat ks')
+        self.assertEqual(self.normalize('dwa – trzy'), 'dwa trzy')
+
+    def test_a_symbol_that_means_something_is_said_as_a_word(self):
+        self.assertEqual(self.normalize('Ctrl+S'), 'Ctrl plus S')
+        self.assertEqual(self.normalize('50%'), '50 procent')
+        self.assertEqual(self.normalize('a & b'), 'a i b')
+
+    def test_the_punctuation_the_bridge_chunks_on_is_kept(self):
+        """`,:.?!;` are where the bridge splits the text for the renderer;
+        taking them out would run the sentences together."""
+        self.assertEqual(self.normalize('lista, 3 z 10.'), 'lista, 3 z 10.')
+        self.assertEqual(self.normalize('Czy? Tak!'), 'Czy? Tak!')
+
+    def test_every_swallowing_character_is_covered(self):
+        """The measured list, so a character put back by accident fails."""
+        for ch in '"#$%&\'()*+-/<=>@[\\]^_`{|}~':
+            said = self.normalize('kot %s pies' % ch)
+            self.assertNotIn(ch, said, ch)
+            self.assertTrue(said.startswith('kot ') and said.endswith(' pies'),
+                            '%r -> %r' % (ch, said))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -197,6 +197,7 @@ class KeyboardHook:
         self.is_in_edit_field = False
 
         self._hook = None
+        self._native = None        # the DLL's hook, when it is there
         self._proc = None          # strong ref to the CFUNCTYPE (avoid GC!)
         self._installed = False
 
@@ -228,6 +229,29 @@ class KeyboardHook:
             return self
         if self._installed:
             return self
+        # **The native hook first** (`native_hook`, lib/titan_keyhook.dll):
+        # it answers Windows within a deadline whatever Python is doing,
+        # and puts itself back when Windows drops it. The Python hook
+        # below is what a machine without the DLL keeps - and what this
+        # one keeps when the DLL will not install.
+        try:
+            from . import native_hook
+            if native_hook.available():
+                self._native = native_hook.NativeHook(self._decide_native)
+                if self._native.install():
+                    self._installed = True
+                    print("[TitanAccess] keyboard_hook: native hook installed "
+                          "(deadline %d ms)" % self._native.timeout_ms)
+                    return self
+                print("[TitanAccess] keyboard_hook: native hook refused; "
+                      "using the Python hook")
+                self._native = None
+            else:
+                print("[TitanAccess] keyboard_hook: no native hook (%s); "
+                      "using the Python hook" % native_hook.why_not())
+        except Exception as e:
+            print(f"[TitanAccess] keyboard_hook: native hook error: {e}")
+            self._native = None
         try:
             self._proc = HOOKPROC(self._hook_proc)
             hmod = _kernel32.GetModuleHandleW(None)
@@ -247,6 +271,15 @@ class KeyboardHook:
         """Remove the hook."""
         if not _IS_WINDOWS or not self._installed:
             return
+        native = getattr(self, '_native', None)
+        if native is not None:
+            try:
+                native.uninstall()
+            except Exception as e:
+                print(f"[TitanAccess] keyboard_hook: native unhook error: {e}")
+            self._native = None
+            self._installed = False
+            return
         try:
             self._user32.UnhookWindowsHookEx(self._hook)
         except Exception as e:
@@ -254,6 +287,31 @@ class KeyboardHook:
         finally:
             self._installed = False
             self._hook = None
+
+    def native_status(self):
+        """The native hook's own counters - keys seen, kept, passed, how
+        many decisions were LATE and how many times the watchdog put the
+        hooks back. Empty when the Python hook is in use."""
+        native = getattr(self, '_native', None)
+        if native is None:
+            return {'native': False}
+        found = native.status()
+        found['native'] = True
+        found['decider_errors'] = native.errors
+        return found
+
+    def _decide_native(self, vk, scan, flags, is_down, extra):
+        """The DLL's question, answered exactly as the Python hook answers
+        its own: the injected CapsLock is passed, everything else goes
+        through `_process`. Runs on the DLL's decider thread."""
+        if int(extra) == _INJECT_SENTINEL:
+            return 0
+        try:
+            return 1 if self._process(int(vk), int(scan), int(flags),
+                                      bool(is_down)) else 0
+        except Exception as e:  # never let an exception reach the DLL
+            print(f"[TitanAccess] keyboard_hook: proc error: {e}")
+            return 0
 
     # ==================================================================== #
     # Hook procedure

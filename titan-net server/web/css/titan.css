@@ -209,6 +209,10 @@ input[type="search"], input[type="number"], textarea, select {
   min-height: 44px; /* WCAG 2.5.8 target size */
 }
 textarea { min-height: 120px; resize: vertical; }
+/* A rating slider: full width, a target big enough to touch, and the
+   word for the number shown beside it. */
+input[type="range"].rating-slider { width: 100%; min-height: 44px; accent-color: var(--accent); }
+.rating-word { display: block; color: var(--fg-muted); font-size: 0.875rem; }
 input[aria-invalid="true"], textarea[aria-invalid="true"] {
   border-color: var(--danger);
   border-width: 2px;
@@ -283,6 +287,11 @@ button[disabled], .btn[aria-disabled="true"] {
 .alert-success {
   background: var(--bg-elev);
   border-color: var(--success);
+  color: var(--fg);
+}
+.alert-info {
+  background: var(--bg-elev);
+  border-color: var(--accent);
   color: var(--fg);
 }
 .alert-warning {

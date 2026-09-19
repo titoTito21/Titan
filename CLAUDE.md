@@ -469,6 +469,70 @@ experience: it is a program that has disappeared.
   HTTP endpoints in `titan-net server/http_server.py` (`/api/repository/*`),
   web UI (`titan-net server/web/repository.html`), and the desktop client's
   Upload Package / Package Folder and Upload dialogs (`src/network/titan_net_gui.py`)
+  - **A package is updated in place, never deleted and shared again.**
+    `POST /api/repository/apps/<id>/update` takes the upload's multipart
+    shape with every part optional: name / description / category /
+    version change at once (a name is not something a moderator reviews),
+    and a new FILE is **staged** in the row's `update_*` columns while the
+    listed file goes on being downloaded. It appears in the pending list
+    (`pending_update`, `update_version`) beside first uploads, and the
+    ordinary approve route (`Database.approve_app`) makes it the listed
+    file - moved into `approved/`, the replaced file removed, `updated_at`
+    set and every `app_seen_status` mark cleared so What's New calls it
+    an update. Reject throws only the staged file away. **Only the author
+    may update** (`_is_author`; a moderator reviews and may delete, but a
+    new version of somebody else's work is theirs to send - `can_update`
+    beside `can_manage` in the details); the desktop client's details
+    window (`AppDetailsDialog`, a LIST a reader walks, not a message box)
+    and the web page's cards offer what applies.
+  - **A rating and a review, once per RELEASE.** `app_reviews` holds 1-5
+    plus an optional text and the `version` it was about; never the
+    author's own, never before approval. "Once" is decided inside the
+    writer lock against the package's `updated_at`: a review written since
+    the last approved update is the current one and a second answers 409;
+    once the author updates, everybody may rate the new release and the
+    old words stay, marked `current = 0` and read out "about version X".
+    The average and the count (`Database.APP_RATING_COLUMNS`) are of the
+    current release only, and both clients say "average X of 5, N
+    ratings" in words - "5 of 5 (5 ratings)" read aloud was three fives.
+    The first shape of the table had UNIQUE(app_id, user_id); a database
+    made with it is rebuilt on start (SQLite cannot drop a constraint).
+    The details answer `my_review` / `can_review` / `can_update` /
+    `can_manage` for the caller, and `GET|POST .../reviews` and `DELETE
+    /api/repository/reviews/<id>` (own, or a moderator's) are the routes.
+    `Database.public_app` is the one place file paths come OFF a row
+    before it reaches a client - `SELECT ar.*` now carries a second path.
+  - **The rating form is ALWAYS there, and says why it would refuse.**
+    Both clients used to hide the form (and the desktop client its
+    "Rate and review" button) while `can_review` was false - and on a
+    small server every package is the caller's own, so the person who
+    asked "where do I write a review" was the one person for whom the
+    form never appeared. To somebody who cannot see the screen a hidden
+    form is a form that does not exist. Now the server names the reason
+    (`review_refusal`: `not_signed_in`, `not_approved`, `own_package`,
+    `already_reviewed`, or null - `_review_refusal`), the form stays with
+    the reason as the first sentence of its note (`_review_refusal_text`
+    on the desktop, `repo.rate_refused.*` on the web), the desktop
+    details list carries it as a row, and Send / the button answer with
+    the same sentence instead of a round trip the server has already
+    said no to. An older server answering no reason gets the general
+    sentence. **The rating is a slider, 1 to 5** (`RatingSlider`, a real
+    `wx.Slider`; `<input type="range">` on the web): a reader says the
+    number, `aria-valuetext` / Titan's own voice say the word for it
+    ("3 - Average") and the same word is shown beside it, so the scale
+    is never five bare digits. The author still cannot rate their own
+    package - that rule is unchanged, it is just said now.
+  - **`/api/repository/apps/pending` was unreachable**: registered after
+    `{app_id}`, and aiohttp matches in registration order, so the web
+    moderation page's pending list was answered by the details handler's
+    `int('pending')`. It comes first now. The DELETE the desktop client
+    has always sent to `/api/repository/apps/<id>` also has a route.
+  - Tests: `titan-net server/test_app_repository.py` (36, the HTTP routes
+    driven through aiohttp's test client - one loop per class, since an
+    Application binds to the first loop that serves it, and a throwaway
+    first user, since the first account on a server is its admin) and
+    `tests/test_app_repository_client.py` (17; the dialogs are built and
+    never shown).
   - **A field read by a name nothing writes is a working-looking zero.**
     The column is `downloads`, the details endpoint answers `SELECT ar.*`,
     the web repository reads `app.downloads` and the server sums
@@ -2629,6 +2693,53 @@ other eleven add-on kinds already follow.
   stopped on. Every fault in this section was found that way and by nothing
   else: they all reach their menu on the first run, and every one of them
   needed playing before it went wrong. All 17 come back clean.
+
+#### An application's own SQL mistake is not a missing primitive
+
+ktypist creates its `scores` table without IF NOT EXISTS and throws the
+answer away, so every run after the first was reported under "primitives an
+application asked for and Cling has not written" - the one thing it is not.
+Klango's own sqlite answered such a statement with nothing and the
+application went on; so does Cling's (`natives.NOTED`, reported under its
+own heading, and "already exists" not at all). Found by a headless sweep
+that opens each of the 17 emulated applications, presses Alt, walks every
+menu entry and plays a little. The same sweep ended Amazon at
+`amazon.lua:2993` - `resp:GetStream():ReadAll()` on a nil:
+`_dialogNetworkProgress` answers true when the user quits it and does NOT
+cancel the request, Amazon ignores that answer, `k_GetHTTPResponseError`
+sees status 0 with no error code and says "no error", and Cling's
+`GetStream()` answered nil for a request still in flight. Klango's own
+stream is what has arrived so far - nothing - so that is what it answers
+now, as a stream, never nil. And ktypist ended at `ktypist.lua:170` with
+"table expected, got string (called as 'ipairs')": Cling's `k_XMLParse`
+kept the indentation of a pretty-printed document - the "\n\t\t" between
+one `<Level>` and the next - as a string child, and the application's
+second `ipairs` was handed it. Klango's own parser never produced that
+node. A whitespace run that holds a newline is layout and is dropped
+(`markup._is_text`); a bare space between two inline tags of a help text
+is the space between two words and is kept. And the parser had never
+heard of a COMMENT: four of ktypist's lesson files carry `<!-- ... -->`
+between the levels, which arrived as the text "<!--", the comment's own
+tags, and "-->" - so comments, the XML declaration and a DOCTYPE are taken
+out before anything is parsed, and a CDATA section is its text. Everything
+else came back clean.
+
+### SMP says the whole label
+
+`data/titantts engines/SMP/__engine__.py`. SMPRenderer stops dead on most
+punctuation and takes the rest of the text with it - measured by feeding it
+"kot <char> pies" for every printable character: after any of
+`"#$%&'()*+-/<=>@[\]^_`{|}~` and the typographic dashes and quotes the audio
+ends at "kot". So "Ctrl+S" was said as "Ctrl", "e-mail" as "e",
+"kot-pies-kura" as "kot", and a label with a slash, a bracket or a quotation
+mark lost everything after it. The bridge only chunks on `,:.?!;` and
+digits, which is what the original NVDA driver did - under NVDA the symbol
+level had already turned every other symbol into a word before the driver
+saw it, and Titan hands the engine the text as it is. `_normalize_text` now
+says the symbols that mean something as the Polish word a screen reader
+says for them (`+` plus, `%` procent, `&` i, `@` małpa, `=` równa się) and
+turns the rest into a space. Tests: `SMPSaysTheWholeLabel` in
+`tests/test_tts_engines.py`.
 
 ### The Elten API bridge: EltenLink's applications, running inside Titan
 
@@ -6815,6 +6926,305 @@ row opened and then closed is not a window left: the handle it kept was
 the dialog's, and a handle that no longer exists adopts the window in
 front instead of closing the list.
 
+#### A walked list has a window of its own, and that window has the keyboard
+
+`hostWindow.py`, shared by both readers. The palette, a message and the
+virtual window are lists nothing draws: the reader borrows the arrows for
+them and the program underneath is never told. Enough on the desktop, in
+Explorer, in a browser; not enough in a program that reads the keyboard
+ITSELF - Elten polls the keys it is interested in, a launcher built on a
+game engine reads raw input, a game does both - because a key the reader's
+hook swallowed still reaches those. So the arrows walked the list AND moved
+the program's own cursor, and Enter chose a row here and pressed something
+there. Reported as "the palette works on the desktop and not in Elten or
+Battle.net".
+
+- **What every reader does for its own dialogs is to give them a window**,
+  and that is the answer: one small tool-window frame, made once, shown
+  while a list is up and put in FRONT with the same input-queue attachment
+  Titan's shell uses to take the keyboard (`AttachThreadInput` +
+  `SetForegroundWindow`; Windows refuses the foreground to a process that
+  does not already own it). The program behind is no longer the foreground
+  and gets no keys. On close the foreground is given BACK to the window the
+  list was opened over.
+- **It says nothing.** Both readers swallow its focus event
+  (`hostWindow.is_host_object` in the plugin's `event_gainFocus`,
+  `event_foreground` and `event_focusEntered`; `hostWindow.is_host` in
+  Titan Access's `on_focus`, beside the existing menu-host guard). The
+  walker says its own title and row - AFTER the keyboard has moved
+  (`show(..., then=announce)`), so a reader that cancels speech on a focus
+  change cannot cut the title off. In NVDA the swallowed event still keeps
+  the bindings right (`_keep_walk_keys_right`), because a list opened from
+  a menu is waiting for exactly that focus event to bind its arrows.
+- **It is never "the window".** Every walker's `left_the_window` compares
+  the window in front against the one it was opened over, so the walkers
+  ask `hostWindow.foreground_hwnd()`, which answers the window UNDER the
+  host; the virtual window's `_foreground()` resolves the host to the
+  window underneath through the seam's new `readerApi.window_object(hwnd)`
+  (NVDA: `NVDAObjects.window.Window`; Titan Access: `nvda_shape.Hooks`).
+- **Losing the foreground is asked about, not acted on.** On a
+  deactivation the host asks the walker whether it is still up: if not, it
+  hides; if the window in front is the one it was opened over (the program
+  took the keyboard back on a click), it takes it again; anything else - a
+  dialog, another program - is left to the walker's own `left_the_window`,
+  which follows a sub-window (`hostWindow.follow`) and stops for a different
+  program. Without wx every call answers False and the walkers work exactly
+  as they did.
+
+#### The shared commands ask THIS reader's focus
+
+Where am I, label this control, describe it, customise it, the managers'
+own pages - every one asks `compat.api.getFocusObject()` and refuses when it
+answers None. Titan Access's `portable/compat.py` looked for a focus on the
+`engine` MODULE (attributes it never had; the running engine is an
+instance), so every one of those commands refused, every time, and said
+"NVDA is not reporting a focus" - in a reader that is not NVDA. `_Api` now
+answers through `readerApi.hooks`, the seam the markers, monitors and
+procedures already used, and the sentence names the reader.
+
+#### The palette lists every key
+
+The layers are the commands with no key of their own, and somebody who has
+just found the palette does not know the keys either. So the palette's
+first list carries **Keyboard shortcuts (N)** as one more level: in the
+add-on, every key bound to one of its scripts, read out of NVDA's own
+`inputCore.manager.getAllGestureMappings()` (what Input Gestures shows, the
+keys the user rebound included) and filtered to the STABLE bindings
+(`gestures._stable_identifiers`: the class `__gestures`, the `@script`
+gestures and the user map), because a walked list borrows the arrows into
+the same map and a list read while the palette is open would otherwise say
+Up Arrow is a palette command; in Titan Access, every binding of its
+`GestureManager`, one row per action naming all its keys, with the reader
+modifier written where the hook implies it ("Insert+w") and the object
+navigation keys bare. Enter does what the key does, with the palette closed
+first. `gestures.bound_shortcuts(plugin)` / `engine._shortcut_rows()`.
+
+#### Every store both readers keep lives in ONE folder
+
+`readerHome.py`, shared: ``%APPDATA%/titosoft/Titan/accessibility``, in
+NVDA and in Titan Access alike. Inside NVDA every store used to be asked
+of ``globalVars.appArgs.configPath`` (NVDA's own folder) and outside it of
+Titan's ``screenreader`` folder, so the same byte-identical module was two
+stores, and a control named in one reader was unknown to the other unless
+`shared.py` merged the two through a third file. Now: `labels`, `classes`,
+`schemes`, `speechSchemes`, `monitors`, `procedures`, `perProgram`,
+`markers`, `icons`, the action catalogue (`gestures`), the reader modules
+and the merged `shared/` store all ask `readerHome`, and Titan Access's own
+`shared_names.py` answers the same `shared/` folder.
+
+- **`labels/<program>/labels.json`** - one folder per program, holding the
+  names given to its controls (the store's rows were keyed by program
+  already; each program's are its own file now). The two old
+  `titanLabels.json` files - NVDA's and Titan Access's - are read on the
+  first load that finds no program folders, merged (the newer row wins
+  where both name a control) and split on the next save; neither is
+  deleted.
+- **`window_data/<program>/<module>.json`** - what is known about a
+  program's windows: the user's own reader modules, filed under the
+  executable the module matches (`readerModules.program_of`). A flat file
+  left from the old `titanReaderModules/` is moved into its program's
+  folder the first time it is read; `draft.save` writes there.
+- **What was in the old folders is brought along, once** - copied, never
+  moved (`readerHome._carry_over`): a user who named forty controls in
+  NVDA's folder must not open the reader one day and find them gone.
+- The add-on's test helper `_temp_config` points `readerHome.folder` at
+  the test's folder as well as NVDA's; tests:
+  `EveryStoreLivesInOneFolder` and `LabelsAndWindowsAreKeptPerProgram` in
+  `tests/test_shared_names.py`.
+
+#### A shortcut says what it does
+
+`spokenShortcuts.py`, shared. Window-Eyes said "Open" as Control+O went
+through, out of a `.key` file per program - which is why it was rare.
+This says it out of what the PROGRAM itself says about its keys: a Win32
+menu carries every accelerator in its item text ("&Otwórz...\tCtrl+O"),
+and `GetMenu` / `GetSubMenu` / `GetMenuStringW` read the whole tree in
+under a millisecond without opening anything on the screen - measured on
+msinfo32: 7 accelerators, 0.4 ms, "Otwórz", "Zapisz", "Znajdź ukryte",
+"Drukuj", in the program's own language. Then a reader module's
+``shortcuts`` (data, `{"Ctrl+Shift+P": "Command palette"}`), then what a
+key means everywhere (`standard()`: Control+C Copy, F5 Refresh, Alt+F4
+Close the window, ~45 of them, translated). A key nobody knows says
+nothing.
+
+- **The key is never taken.** In Titan Access it is asked at the end of
+  `on_plain_key`, after every walked list, browse mode and app module have
+  declined it; in NVDA through `inputCore.decide_executeGesture`, whose
+  handler always answers True. The word is queued on a timer a moment
+  later (`consider(..., delay=0.06)`), after the program has answered, so
+  "Open" is followed by the dialog rather than talking over it, and never
+  interrupts.
+- What is worth saying: Control with anything, Alt+F4, a function key
+  alone. Alt+letter is a menu opening and the menu names itself; a letter
+  is typing; Control with an arrow is a caret jump the reader follows.
+- Switch: `speakShortcuts` (NVDA's settings panel; Titan Access ->
+  Reader, walked and in the panel). Live-verified on the real Titan Access
+  engine: Control+O in msinfo32 said "Otwórz", F5 said "Odśwież".
+
+#### A Titan TTS voice is the one chosen, and a class may have its own
+
+Two faults in Titan Access, one report ("nie można wybrać syntezatora
+Titan TTS; ustawiam głos i jest na pierwszym"):
+
+- **The saved voice matched nothing.** The settings panel stores a
+  voice's ID, and a Titan TTS engine's voices are dicts with `id` and
+  `display_name` - neither of which is `name`, the only key
+  `_apply_own_voice` looked at - so every Titan TTS engine spoke in its
+  FIRST voice whatever had been chosen. `speech_adapter._voice_index`
+  resolves by id, display name, name, then index; a voice the engine has
+  not got changes nothing.
+- **A class's synthesizer was stored and never spoken.** The shared
+  `classes` store carried `synth`/`voice` for a whole-utterance class
+  (notification, alert, controller...) and Titan Access read only its
+  dials. `speech_adapter.speak_in_class(text, tag)` / `speak_with(profile,
+  text)` borrow the private engine for one utterance (`_borrow_voice`:
+  engine, voice, the class's dials on top of the reader's own) and give it
+  back from the settings afterwards; `compat._Speech` offers both, and the
+  shared `dialogs.report` and `classes.speak_sample` ask for them by name
+  before NVDA's speech-command path. The class manager's Titan shim also
+  used to call `set_engine` on the reader's own engine just to LIST a
+  synthesizer's voices - walking the list changed what the reader spoke
+  with; it reads the engine registry and the shared speaker's own lists
+  now, keyed by voice id.
+- Tests: `ATitanTtsVoiceIsTheOneChosen`,
+  `AWholeUtteranceIsSpokenInItsClassesOwnVoice` in
+  `tests/test_titan_access_speech_queue.py`.
+
+#### A web page is a document in Titan Access, with NVDA off - measured
+
+`tests/check_titan_access_live.py web` opens a test page in Edge and drives
+the real engine headlessly (NVDA quit first, because two readers on one
+page is not the question). Browse mode engaged by itself ("strona
+internetowa"), Down walked the lines ("Nagłówek pierwszy", "Akapit
+wprowadzający z", "pierwszym odnośnikiem, łącze"), `h` / `k` / Shift+H
+jumped between headings and links, Control+Home said "Początek dokumentu".
+The buffer for the page is 17 nodes, exactly the document. **No new
+native code was needed for Chromium**: Edge exposes its document through
+UI Automation to any UIA client, and the reader's own `virtual_buffer`
+reads it; the low-level half already shipped is `lib/IAccessible2Proxy.dll`
+(`helper/ia2proxy`), the IA2 tier `ia2.py` falls back to for a browser
+whose UIA says nothing (Gecko), and `titan_access_helper.dll` for the NVDA
+controller. Two oddities seen once in the headless run and not chased: a
+link line read twice, and one heading read as its level alone.
+
+#### The keyboard the reader cannot lose: `lib/titan_keyhook.dll`
+
+Asked as "could there be low-level DLLs that would help with stability,
+window accessibility and Windows processes, so Titan Access can be a full
+reader on Windows". The one native piece that changes what the reader can
+PROMISE is the keyboard hook. Windows gives a `WH_KEYBOARD_LL` hook a few
+hundred milliseconds (`LowLevelHooksTimeout`) to answer each key and
+UNHOOKS one that is late once too often - silently. A reader whose hook
+callback is Python (which takes the interpreter lock, speaks, reads a
+window) goes on believing it has the keyboard while every key goes past
+it; from outside that is "the arrows stopped working", with nothing to
+say why.
+
+`helper/keyhook/titan_keyhook.c` (MSVC x64, `build.bat` ->
+`lib/titan_keyhook.dll`) owns the hook on a thread of its own:
+
+- the hook procedure hands the key to a DECIDER thread and waits at most
+  `timeoutMs` (150) for Python's answer through `native_hook.NativeHook`;
+  a late answer is thrown away and that one key goes through to the
+  application - one key lost instead of the whole keyboard;
+- a WATCHDOG thread compares `GetLastInputInfo` with the hooks' own
+  clock and installs them again when Windows saw input the hooks did not,
+  which is the recovery Windows never offers; a mouse hook rides beside
+  it for that clock;
+- `TitanHook_IsWindowResponding(hwnd, ms)` - `IsHungAppWindow` then
+  `SendMessageTimeout(WM_NULL)` - is what `virtual_buffer.build_for_window`
+  asks before spending seconds of cross-process COM on a window that will
+  never answer (`doc.source = "hung"`).
+
+`keyboard_hook.KeyboardHook.start()` asks for it first and keeps its own
+`SetWindowsHookExW` for a machine without the DLL; `_decide_native` is the
+same `_process` the Python hook runs, on the DLL's decider thread.
+`native_status()` carries the counters (events, swallowed, passed, late,
+reinstalls, longestWaitMs). Live-verified by `tests/check_native_hook.py`:
+a kept key swallowed and counted; a decider asleep for 600 ms counted late
+with the hook STILL installed and the next key seen (`longestWaitMs` 156
+against a 150 ms deadline); the real engine then read the classic-menu
+scenario on the native hook. What is deliberately NOT here: an injected
+in-process helper like NVDA's `nvdaHelperRemote` (the display model, in-
+process IA2) - measured on Edge, UI Automation already answers a web page
+whole, and an injected DLL is the one thing that can take a program down
+with the reader.
+
+#### The sound icons are the add-on's, in Titan Access too
+
+`icons.OURS` is the module's own `sounds/` folder, and the vendor script
+copied only `.py` - so Titan Access had the earcon kits and none of the 29
+built-in cursor sounds `icons.play` falls back to. They live **in the
+component's own `sfx/`** now - `data/components/titan access/sfx/icons/`,
+beside the cursor sounds Titan Access has always kept in `sfx/` - carried
+there byte for byte by `SHARED_DATA` in the vendor script, with `--check`
+failing on a sound that drifted (`TheSoundIconsAreTheAddOnsInBothReaders`).
+`icons.own_folders()` is the list both lookups walk (the icons themselves
+and the earcon kits under `earcons/<kit>/`): the component's `sfx/icons`
+where it exists, then the module's own `sounds/`.
+
+#### What a program says without moving the focus: UIA notifications
+
+`titan_access/uia_notifications.py`. A program tells a reader that
+something happened without moving the focus in two ways UI Automation
+defines - a **notification** (`UiaRaiseNotificationEvent`: Windows 11's
+own "copied", a chat's "new message", the volume flyout) and a **live
+region** (`UIA_LiveRegionChangedEventId`: `aria-live` on the web, a WinUI
+status line). Neither reached Titan Access, which listened only for the
+focus. Both are registered now, beside the focus listener on the same
+apartment (`engine._start_notifications`, right after `provider.start()`):
+notifications through `IUIAutomation5.AddNotificationEventHandler` on the
+root with `TreeScope_Subtree`, live regions through
+`AddAutomationEventHandler` with the name cached. The words go to the
+ordinary speech queue; a notification whose `NotificationProcessing` is
+one of the Important kinds interrupts, the rest queue, the same words
+twice inside a second are said once, a live region is read only when its
+text changed and at most every 0.3 s. Switch `uiaNotifications` (Reader
+section, walked and in the panel); mute-outside-TCE applies.
+
+- **`IUIAutomation5` only exists on a `CUIAutomation8` client.** The
+  vendored `uiautomation` library's client is a plain `CUIAutomation`,
+  which answers `QueryInterface` with "no such interface" - measured - so
+  the module makes a CUIAutomation8 of its own when the client it is
+  given has not got the interface.
+- **A test source has to answer `WM_GETOBJECT`.** A provider that merely
+  calls `UiaRaiseNotificationEvent` from a window that never handed UIA
+  its provider raises with `S_OK` and is heard by nobody; the same call
+  from a window whose procedure answers `WM_GETOBJECT` with
+  `UiaReturnRawElementProvider` arrives. `tests/uia_notification_source.py`
+  is that window, and `tests/check_uia_notifications.py` drives the real
+  engine with it: the important one interrupts, the ordinary one queues,
+  and the second copy inside a second is not said.
+- Tests: `WhatAProgramSaysWithoutMovingTheFocus` in
+  `tests/test_titan_access_reading.py`.
+
+#### A palette row says a real key
+
+"Voices and reading order (o)" taught a letter that is a key only inside
+an armed layer - and Titan Access has no armed layers at all (its palette
+is walked, Enter runs), so there "(o)" was a key that did nothing. Now
+`layers.SCRIPT_OF` names the NVDA script that IS each layer command
+(`tests` check every one really calls it) and `layers.GESTURE_OF` the
+Titan Access gesture; a row says the command's own key as the reader has
+it bound right now (`gestures.bound_shortcuts`, so a rebound key is the
+key said), and a command with no key of its own says the whole way to it
+in NVDA - "NVDA+shift+space, Managers, O" (`layers.chord`) - and no key
+at all in Titan Access. Tests: `APaletteRowSaysARealKey` (add-on),
+`APaletteRowSaysThisReadersOwnKey` (Titan Access).
+
+#### Beginner is unhurried in its PARTS, not in dead air
+
+Reported from Titan Access as "the pauses got longer". The active scheme
+was `beginner`, which shipped with `pause: 130` - and with seven parts to a
+control that is most of a second of silence per control, where the
+reader's own gap is 30 ms. The scheme carries no pause of its own now; a
+user who wants more sets it (`set_pause`). The suite that pins the schemes
+also **reads the user's own store** unless told otherwise: seven tests
+failed on a machine whose active scheme was not the shipped default, so
+`nvda-addon/tests/test_titan_enhancements.py` points `APPDATA` at a fresh
+folder before importing anything - and its `if __name__ == "__main__"`
+block sat in the MIDDLE of the file, so every class after it had never run.
+
 #### A voice belongs to the synthesizer it came from
 
 Reported as "I set a voice on another synthesizer, save, and NVDA fills
@@ -7305,6 +7715,53 @@ Tests: `AGuestInATextModeIsReadExactly` (8) and
 installer's screen with the real glyphs, read it back, and assert every line,
 the grid, the highlighted entry, and that noise, a flat picture and a missing
 library are each refused.
+
+#### A picture wider than the recogniser takes is refused, silently
+
+Seen in NVDA's log while the user was in a full-screen game:
+`UwpOcr::recognize ... Image dimensions are too large! Check
+MaxImageDimension`, twice, right after `surface` had decided to read the
+window as a game. Two of NVDA's own rules met: `UwpOcr.getResizeFactor`
+answers **4 for anything under a hundred pixels on EITHER side** (the
+engine reads small print badly), and the game and guest readers ask for a
+STRIP - a row across the whole screen, 2560 wide and 46 tall - so the
+picture became 10240 wide, over the engine's 10000, and was refused. On
+this side the refusal is silence: the callback is never called and
+`localOcr.read` waited out its whole timeout for it.
+
+- **The limit was measured, not read off a page**: NVDA's own
+  `nvdaHelperLocalWin10.dll`, driven from a plain process, answered 10000
+  by 8 and refused 10001 by 8. `localOcr.RECOGNISER_MAX` is that number.
+- **`_image_info` caps the factor at what fits** and builds NVDA's
+  `RecogImageInfo` directly rather than through `createFromRecognizer`. A
+  small window is still enlarged four times; a strip is enlarged as far
+  as the width allows; a window too big even unscaled (three monitors
+  side by side) is scaled DOWN - the capture is a `StretchBlt` either way,
+  and every rectangle comes back through the same factor.
+- Shared with Titan Access through the vendoring script, like the rest of
+  `localOcr`. Tests: `ThePictureIsNeverBiggerThanTheRecogniserTakes` (6).
+
+#### The braille rule reached alerts and nothing the user tabbed onto
+
+Seen at every start of the user's NVDA: `braille.getPropertiesBraille is
+deprecated. Use braille.regions.properties.getPropertiesBraille instead`,
+logged against `speechSchemes.install_braille`. The warning was the
+smaller half. The renderer MOVED: the name on `braille` is an alias
+answered by the module's `__getattr__`, the function lives in
+`braille.regions.properties`, and the regions that braille the focus took
+it with `from .properties import` - so a wrapper set on `braille` alone
+was called by `NVDAObjects.behaviors` for an alert and by nothing else.
+The speech scheme's braille rule was a dead feature on this NVDA and
+nothing said so.
+
+- `_braille_renderers` finds the real function (read out of `vars()`,
+  never `getattr`, which is what logged the warning) and **every module
+  of NVDA's holding that same object** - `braille`, `braille.regions.*`,
+  `NVDAObjects.*` - and each name is rebound and put back the same way.
+  An older NVDA with only the flat name still works.
+- Tests: `TheBrailleRuleReachesNvdasRealRenderer` (6): the alias is never
+  asked for, a region that imported the name is wrapped too, the rule is
+  applied where the focus is brailled, uninstalling restores every name.
 
 #### Two words on one picture is worse than no picture
 

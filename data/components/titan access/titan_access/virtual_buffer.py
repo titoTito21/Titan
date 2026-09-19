@@ -952,6 +952,18 @@ def build_for_window(hwnd=0, allow_ocr=True, on_status=None,
     doc = VirtualDocument(hwnd=hwnd, title=window_text(hwnd))
     if not hwnd:
         return doc
+    # **A window that will not answer is not read.** Every tier below is
+    # cross-process calls into that window, and a hung one holds each
+    # call for as long as Windows' own timeouts - seconds of a reader
+    # that has stopped, for a window that was never going to answer.
+    # Asked with a deadline through the native helper where it is there.
+    try:
+        from titan_access import native_hook
+        if native_hook.window_responding(hwnd, 300) == 0:
+            doc.source = "hung"
+            return doc
+    except Exception:
+        pass
     deadline = time.time() + BUILD_BUDGET_S
     tiers = []
     if prefer:

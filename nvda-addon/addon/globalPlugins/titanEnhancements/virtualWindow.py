@@ -397,18 +397,31 @@ def _foreground():
     # None in Titan Access, so the handle it kept was 0 and a virtual
     # window there never noticed the user leaving: the arrows stayed its
     # own in whatever window came next.
+    found = None
     try:
         from . import readerApi
         found = readerApi.foreground()
-        if found is not None:
-            return found
+    except Exception:                                # noqa: BLE001
+        found = None
+    if found is None:
+        try:
+            import api
+            found = api.getForegroundObject()
+        except Exception:                            # noqa: BLE001
+            found = None
+    # **The host window is never the window.** While a list is up its
+    # own window holds the keyboard (`hostWindow`), so the window in
+    # front is the host - and the window this review is ABOUT is the one
+    # underneath it, which the host remembers.
+    try:
+        from . import hostWindow
+        from . import readerApi
+        if found is not None and hostWindow.is_host_object(found):
+            under = readerApi.window_object(hostWindow.over())
+            return under if under is not None else None
     except Exception:                                # noqa: BLE001
         pass
-    try:
-        import api
-        return api.getForegroundObject()
-    except Exception:                                # noqa: BLE001
-        return None
+    return found
 
 
 def _text(value):
@@ -686,15 +699,28 @@ def start(hwnd=0, speak=True):
                        'hwnd': int(getattr(window, 'windowHandle', 0) or 0)})
     if not icons.play('reader.virtual-on'):
         _cue(True)
-    if note.get('ran_out'):
-        # **Said once, because it happened once.** The toggle itself stays
-        # two words; this is the one thing about THIS window that the user
-        # would otherwise find out by arrowing to the end and wondering
-        # where the rest of it went.
-        # Translators: said when a window was too big to be walked whole.
-        _say(_('Part of it only'))
-    if speak:
-        say_here()
+
+    def announce():
+        if note.get('ran_out'):
+            # **Said once, because it happened once.** The toggle itself
+            # stays two words; this is the one thing about THIS window
+            # that the user would otherwise find out by arrowing to the
+            # end and wondering where the rest of it went.
+            # Translators: said when a window was too big to be walked whole.
+            _say(_('Part of it only'))
+        if speak:
+            say_here()
+
+    # **The review has a window of its own, and that window has the
+    # keyboard** (`hostWindow`): a program that reads its keys itself saw
+    # every arrow the reader borrowed and moved its own cursor with it.
+    # The first row is said once the keyboard has moved.
+    try:
+        from . import hostWindow
+        hostWindow.show(_text(getattr(window, 'name', '')), reviewing,
+                        then=announce)
+    except Exception:                                # noqa: BLE001
+        announce()
     # **A toggle says which state it is in and nothing else.** It carried
     # the number of controls, which is a fact about this window rather
     # than about the switch - and the first control is spoken straight
@@ -713,6 +739,12 @@ def stop():
                        'field': None, 'menu': None})
     if was and not icons.play('reader.virtual-off'):
         _cue(False)
+    if was:
+        try:
+            from . import hostWindow
+            hostWindow.hide()
+        except Exception:                            # noqa: BLE001
+            pass
     # Translators: said when the virtual window is turned off.
     return False, _('Virtual window off')
 
@@ -864,6 +896,14 @@ def follow(window):
                        'hwnd': int(getattr(window, 'windowHandle', 0) or 0)})
     icons.play('open-object')
     title = _text(getattr(window, 'name', ''))
+    # The host stands over the sub-window now, and takes the keyboard
+    # back from it: the dialog that appeared is what is being walked.
+    try:
+        from . import hostWindow
+        hostWindow.follow(int(getattr(window, 'windowHandle', 0) or 0),
+                          title)
+    except Exception:                                # noqa: BLE001
+        pass
     # Translators: said on arriving in a window that opened over the one
     # being walked. {title} is what it is called.
     _say(_('{title}, sub-window').format(title=title) if title

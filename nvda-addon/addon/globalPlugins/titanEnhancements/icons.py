@@ -45,6 +45,20 @@ _ = i18n.install(globals())
 #: Where the ones this add-on ships live.
 OURS = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds')
 
+#: **Titan Access keeps the reader's sounds in its own `sfx/`**, beside
+#: the cursor sounds it has always shipped there - `sfx/icons/` is the
+#: add-on's `sounds/` carried over by the vendor script. From this module
+#: as vendored (`titan_access/portable/icons.py`) that is three levels up;
+#: in the add-on's own tree the path does not exist and is skipped.
+COMPONENT_SFX = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), 'sfx', 'icons')
+
+
+def own_folders():
+    """Where this reader's own sounds are, in the order they are asked."""
+    return [folder for folder in (COMPONENT_SFX, OURS)
+            if folder and os.path.isdir(folder)]
+
 #: The user's own, looked in first.
 THEIRS = 'titanIcons'
 
@@ -365,13 +379,16 @@ _state = {'played': 0, 'missing': [], 'why': ''}
 def report():
     with _LOCK:
         return dict(_state, names=len(NAMES), folder=OURS,
+                    folders=own_folders(),
                     on=switched_on())
 
 
 def _config():
+    """The folder both readers share (`readerHome`), where the user's own
+    sounds live beside every other store."""
     try:
-        import globalVars
-        return globalVars.appArgs.configPath
+        from . import readerHome
+        return readerHome.folder()
     except Exception:                                # noqa: BLE001
         return ''
 
@@ -392,7 +409,7 @@ def path_of(name):
     name = str(name or '').strip()
     if not name or '/' in name or '\\' in name or name.startswith('.'):
         return ''
-    for folder in (their_folder(), OURS):
+    for folder in [their_folder()] + own_folders():
         if not folder:
             continue
         for suffix in ('.wav', '.ogg'):

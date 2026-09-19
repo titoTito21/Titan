@@ -61,10 +61,10 @@ class _Utterance(object):
     """One queued unit of speech: plain text, or pitched parts to concatenate."""
 
     __slots__ = ("text", "position", "pitch", "segments", "generation",
-                 "gap_ms")
+                 "gap_ms", "voice")
 
     def __init__(self, text="", position=0.0, pitch=0, segments=None,
-                 gap_ms=0):
+                 gap_ms=0, voice=None):
         self.text = text or ""
         self.position = position
         self.pitch = pitch
@@ -73,6 +73,10 @@ class _Utterance(object):
         # The silence between the parts a speech scheme asks for, over the
         # engine's own small default - a scheme's pacing, heard.
         self.gap_ms = int(gap_ms or 0)
+        # A voice class's profile for a WHOLE utterance: a synthesizer of
+        # its own, a voice, dials. Put on the private engine for this
+        # utterance and taken off again once it has been heard.
+        self.voice = dict(voice) if voice else None
 
     @property
     def has_text(self):
@@ -210,13 +214,15 @@ class SpeechAdapter(object):
                 engine.set_engine(wanted)
             voice = str(st.get("Speech", "Voice", "") or "")
             if voice and hasattr(engine, "set_voice"):
-                try:
-                    engine.set_voice(int(voice))
-                except (TypeError, ValueError):
-                    names = [str(v.get("name") if isinstance(v, dict) else v)
-                             for v in (engine.get_available_voices() or [])]
-                    if voice in names:
-                        engine.set_voice(names.index(voice))
+                # **By id, by display name, by name, then by index.** The
+                # settings panel stores a voice's ID, and a Titan TTS
+                # engine's voices are dicts with `id` and `display_name` -
+                # neither of which is `name`, so the saved voice matched
+                # nothing and every Titan TTS engine spoke in its FIRST
+                # voice whatever had been chosen.
+                at = _voice_index(engine, voice)
+                if at is not None:
+                    engine.set_voice(at)
             for key, setter, default in (("Rate", "set_rate", 0),
                                          ("Pitch", "set_pitch", 0),
                                          ("Volume", "set_volume", 100)):
@@ -293,7 +299,8 @@ class SpeechAdapter(object):
     def _mark_speaking(self, text):
         self._speaking_until = time.time() + _estimate_duration(text)
 
-    def speak(self, text, position=0.0, interrupt=True, pitch_offset=0):
+    def speak(self, text, position=0.0, interrupt=True, pitch_offset=0,
+              voice=None):
         """Speak ``text``.
 
         ``interrupt=True`` (the default) drops anything queued and cuts off what
@@ -302,9 +309,12 @@ class SpeechAdapter(object):
         it is spoken in turn (see :meth:`_pump`).
 
         ``position`` is a stereo pan -1..1, ``pitch_offset`` -10..10.
+        ``voice`` is a voice class's whole profile (``synth``, ``voice``,
+        ``rate``, ``pitch``, ``volume``): the utterance is spoken by THAT
+        synthesizer in that voice, and the reader's own is put back after.
         """
         self._enqueue(_Utterance(text=text, position=position,
-                                 pitch=pitch_offset), interrupt)
+                                 pitch=pitch_offset, voice=voice), interrupt)
 
     # ``speak_async`` is kept because callers all over the reader use it. It has
     # always been the same call: nothing here ever blocks, the pump does the
@@ -425,6 +435,60 @@ class SpeechAdapter(object):
             print(f"[TitanAccess] (speech) {item.plain_text}")
             return
         eng = self._engine
+        borrowed = self._borrow_voice(item.voice)
+        try:
+            self._render(item, eng)
+        finally:
+            if borrowed:
+                self._give_voice_back()
+
+    def _borrow_voice(self, profile):
+        """Put a class's own synthesizer and voice on the private engine
+        for one utterance. True when anything was changed."""
+        if not profile:
+            return False
+        engine = self._engine
+        if engine is None:
+            return False
+        changed = False
+        try:
+            synth = str(profile.get("synth") or "").strip()
+            if synth and hasattr(engine, "set_engine"):
+                engine.set_engine(_SYNTH_TO_ENGINE.get(synth.lower(), synth))
+                changed = True
+            voice = profile.get("voice")
+            if voice not in (None, "") and hasattr(engine, "set_voice"):
+                at = _voice_index(engine, voice)
+                if at is not None:
+                    engine.set_voice(at)
+                    changed = True
+            for key, setter, base in (("rate", "set_rate", "Rate"),
+                                      ("pitch", "set_pitch", "Pitch"),
+                                      ("volume", "set_volume", "Volume")):
+                value = profile.get(key)
+                if value in (None, "", 0) or not hasattr(engine, setter):
+                    continue
+                own = self._settings.get_int("Speech", base,
+                                             100 if key == "volume" else 0)
+                if key == "volume":
+                    wanted = max(0, min(100, int(own) + int(value) * 5))
+                else:
+                    wanted = max(-10, min(10, int(own) + int(value)))
+                getattr(engine, setter)(wanted)
+                changed = True
+        except Exception as e:                       # noqa: BLE001
+            print(f"[TitanAccess] class voice: {e}")
+        return changed
+
+    def _give_voice_back(self):
+        """The reader's own engine, voice and dials again, from the
+        settings - the one description of what the reader sounds like."""
+        try:
+            self._apply_own_voice()
+        except Exception as e:                       # noqa: BLE001
+            print(f"[TitanAccess] own voice back: {e}")
+
+    def _render(self, item, eng):
         if item.segments:
             # Preferred path: let the engine synthesize the pitched parts and
             # play them as ONE concatenated clip with a short silence between
@@ -713,7 +777,7 @@ def current():
     return _current
 
 
-def speak(text, position=0.0, interrupt=True, pitch_offset=0):
+def speak(text, position=0.0, interrupt=True, pitch_offset=0, voice=None):
     """Say one thing through the reader's own voice. ``True`` if it went.
 
     Answers False rather than raising when there is no reader speaking
@@ -725,10 +789,73 @@ def speak(text, position=0.0, interrupt=True, pitch_offset=0):
         return False
     try:
         adapter.speak(str(text or ""), position=position,
-                      interrupt=interrupt, pitch_offset=pitch_offset)
+                      interrupt=interrupt, pitch_offset=pitch_offset,
+                      voice=voice)
         return True
     except Exception:                                # noqa: BLE001
         return False
+
+
+def speak_in_class(text, tag, interrupt=False):
+    """Say one whole thing in a voice CLASS - a notification, what another
+    program said, an alert - the way the class manager set it up.
+
+    The shared `classes` store is the same file the NVDA add-on's manager
+    edits, and this reader read only its dials for the parts of a control;
+    a whole-utterance class naming a synthesizer and a voice of its own was
+    stored and never spoken. Now the utterance goes to that synthesizer in
+    that voice, with the class's dials on top of the reader's own, and the
+    reader's own voice is put back afterwards. ``True`` when it was said.
+    """
+    profile = {}
+    try:
+        from .portable import classes
+        profile = dict(classes.voice_of(tag) or {})
+        if not classes.is_whole(tag):
+            profile.pop("synth", None)
+            profile.pop("voice", None)
+    except Exception:                                # noqa: BLE001
+        profile = {}
+    return speak(text, interrupt=interrupt,
+                 pitch_offset=int(profile.get("pitch") or 0),
+                 voice=profile if any(profile.get(k) for k in
+                                      ("synth", "voice", "rate", "volume"))
+                 else None)
+
+
+def speak_with(profile, text, interrupt=True):
+    """Say ``text`` with a whole voice profile as it stands on a dialog -
+    what the class manager's Try button asks, so a change is heard before
+    it is kept."""
+    profile = dict(profile or {})
+    return speak(text, interrupt=interrupt,
+                 pitch_offset=int(profile.get("pitch") or 0), voice=profile)
+
+
+def _voice_index(engine, voice):
+    """Where ``voice`` is in the engine's own list - by id, display name or
+    name for a dict, by text for a string, by number for an index. None
+    when it is nowhere, so a voice this engine has not got changes
+    nothing rather than choosing its first."""
+    if voice in (None, ""):
+        return None
+    try:
+        voices = engine.get_available_voices() or []
+    except Exception:                                # noqa: BLE001
+        voices = []
+    wanted = str(voice).strip()
+    for at, one in enumerate(voices):
+        if isinstance(one, dict):
+            if wanted in (str(one.get("id")), str(one.get("display_name")),
+                          str(one.get("name"))):
+                return at
+        elif str(one).strip() == wanted:
+            return at
+    try:
+        number = int(wanted)
+    except (TypeError, ValueError):
+        return None
+    return number if 0 <= number < len(voices) else None
 
 
 def speak_segments(segments):

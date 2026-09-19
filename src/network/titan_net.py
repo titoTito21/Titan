@@ -2802,49 +2802,86 @@ class TitanNetClient:
                 'category': category
             }
 
-            # Build the multipart/form-data body as a generator so the file is
-            # streamed off disk in 1 MB blocks and never held in RAM.
-            #
-            # NOTE: plain `requests` with files=/a file object does NOT stream
-            # - urllib3's encode_multipart_formdata does fp.read() and assembles
-            # the entire body as one bytes object first. For a multi-GB TCE
-            # package that exhausts client memory and the upload dies BEFORE a
-            # single byte reaches the server (no request even shows up in the
-            # server log). Passing a generator as `data=` makes requests use
-            # chunked transfer-encoding and pull the body lazily, keeping memory
-            # flat regardless of package size. aiohttp dechunks transparently
-            # and request.multipart() reads it exactly as before.
-            boundary = '----TitanNetBoundary' + uuid.uuid4().hex
-            crlf = b'\r\n'
-            dashb = ('--' + boundary).encode('ascii')
+            body, headers = self._package_body(metadata, file_path, progress_callback)
 
-            preamble = (
+            # (connect timeout, read timeout). A multi-GB upload over a slow
+            # link can take many minutes; the read timeout is the gap allowed
+            # between bytes, not the total transfer time.
+            response = requests.post(
+                f"{self.http_url}/api/repository/upload",
+                data=body,
+                headers=headers,
+                timeout=(30, 1800)
+            )
+
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _package_body(self, metadata: Dict, file_path: Optional[str],
+                      progress_callback=None):
+        """The multipart/form-data body of a package upload or update, and
+        the headers to send it with.
+
+        Built as a generator so the file is streamed off disk in 1 MB
+        blocks and never held in RAM.
+
+        NOTE: plain `requests` with files=/a file object does NOT stream
+        - urllib3's encode_multipart_formdata does fp.read() and assembles
+        the entire body as one bytes object first. For a multi-GB TCE
+        package that exhausts client memory and the upload dies BEFORE a
+        single byte reaches the server (no request even shows up in the
+        server log). Passing a generator as `data=` makes requests use
+        chunked transfer-encoding and pull the body lazily, keeping memory
+        flat regardless of package size. aiohttp dechunks transparently
+        and request.multipart() reads it exactly as before.
+
+        ``file_path`` may be None (an update of a package's details with no
+        new file): then the body is the metadata part alone.
+        """
+        import os
+        import uuid
+
+        boundary = '----TitanNetBoundary' + uuid.uuid4().hex
+        crlf = b'\r\n'
+        dashb = ('--' + boundary).encode('ascii')
+
+        preamble = (
+            dashb + crlf
+            + b'Content-Disposition: form-data; name="metadata"\r\n'
+            + b'Content-Type: application/json\r\n\r\n'
+            + json.dumps(metadata).encode('utf-8') + crlf
+        )
+        if file_path:
+            filename = os.path.basename(file_path)
+            preamble += (
                 dashb + crlf
-                + b'Content-Disposition: form-data; name="metadata"\r\n'
-                + b'Content-Type: application/json\r\n\r\n'
-                + json.dumps(metadata).encode('utf-8') + crlf
-                + dashb + crlf
                 + ('Content-Disposition: form-data; name="file"; '
                    'filename="%s"\r\n' % filename).encode('utf-8')
                 + b'Content-Type: application/octet-stream\r\n\r\n'
             )
             epilogue = crlf + dashb + b'--' + crlf
+            file_size = os.path.getsize(file_path)
+        else:
+            epilogue = dashb + b'--' + crlf
+            file_size = 0
 
-            # Total body size for progress reporting (preamble + file + epilogue).
-            total_size = len(preamble) + os.path.getsize(file_path) + len(epilogue)
+        # Total body size for progress reporting (preamble + file + epilogue).
+        total_size = len(preamble) + file_size + len(epilogue)
 
-            def _report(sent):
-                if progress_callback:
-                    try:
-                        progress_callback(sent, total_size)
-                    except Exception:
-                        pass
+        def _report(sent):
+            if progress_callback:
+                try:
+                    progress_callback(sent, total_size)
+                except Exception:
+                    pass
 
-            def body_stream():
-                sent = 0
-                yield preamble
-                sent += len(preamble)
-                _report(sent)
+        def body_stream():
+            sent = 0
+            yield preamble
+            sent += len(preamble)
+            _report(sent)
+            if file_path:
                 with open(file_path, 'rb') as fh:
                     while True:
                         chunk = fh.read(1024 * 1024)
@@ -2853,25 +2890,107 @@ class TitanNetClient:
                         yield chunk
                         sent += len(chunk)
                         _report(sent)
-                yield epilogue
-                sent += len(epilogue)
-                _report(sent)
+            yield epilogue
+            sent += len(epilogue)
+            _report(sent)
 
-            headers = self._http_headers(include_content_type=False)
-            headers['Content-Type'] = (
-                'multipart/form-data; boundary=%s' % boundary
-            )
+        headers = self._http_headers(include_content_type=False)
+        headers['Content-Type'] = (
+            'multipart/form-data; boundary=%s' % boundary
+        )
+        return body_stream(), headers
 
-            # (connect timeout, read timeout). A multi-GB upload over a slow
-            # link can take many minutes; the read timeout is the gap allowed
-            # between bytes, not the total transfer time.
+    def update_app(self, app_id: int, file_path: Optional[str] = None,
+                   name: Optional[str] = None, version: Optional[str] = None,
+                   description: Optional[str] = None,
+                   category: Optional[str] = None,
+                   progress_callback=None) -> Dict:
+        """
+        Update a package already in the repository, in place - so nobody
+        has to delete it and share it again.
+
+        Every argument is optional. Name, description and category change
+        at once; a new file (with its version) is staged and waits for a
+        moderator while the listed version stays available. A version with
+        no file is a correction of the details.
+
+        Returns:
+            Dict with success status, `pending_update` (True when a new
+            file is waiting for review) and a message
+        """
+        try:
+            import os
+
+            if file_path and not os.path.exists(file_path):
+                return {"success": False, "error": "File not found"}
+
+            metadata = {}
+            if name is not None:
+                metadata['name'] = name
+            if version is not None:
+                metadata['version'] = version
+            if description is not None:
+                metadata['description'] = description
+            if category is not None:
+                metadata['category'] = category
+
+            body, headers = self._package_body(metadata, file_path, progress_callback)
             response = requests.post(
-                f"{self.http_url}/api/repository/upload",
-                data=body_stream(),
+                f"{self.http_url}/api/repository/apps/{app_id}/update",
+                data=body,
                 headers=headers,
                 timeout=(30, 1800)
             )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
+    def get_app_reviews(self, app_id: int) -> Dict:
+        """
+        The reviews and ratings of a package.
+
+        Returns:
+            Dict with `reviews` (newest first: username, rating, review,
+            created_at), `rating_average`, `rating_count`, `my_review` (what
+            this user already said, or None) and `can_review`
+        """
+        try:
+            response = requests.get(
+                f"{self.http_url}/api/repository/apps/{app_id}/reviews",
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def add_app_review(self, app_id: int, rating: int, review: str = '') -> Dict:
+        """
+        Rate a package (1-5) and optionally write about it. Once per
+        package: the server refuses a second one.
+
+        Returns:
+            Dict with success status and the package's new rating summary
+        """
+        try:
+            response = requests.post(
+                f"{self.http_url}/api/repository/apps/{app_id}/reviews",
+                json={'rating': int(rating), 'review': review or ''},
+                headers=self._http_headers(),
+                timeout=10
+            )
+            return response.json()
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def delete_app_review(self, review_id: int) -> Dict:
+        """Remove a review - one's own, or any as a moderator."""
+        try:
+            response = requests.delete(
+                f"{self.http_url}/api/repository/reviews/{review_id}",
+                headers=self._http_headers(),
+                timeout=10
+            )
             return response.json()
         except Exception as e:
             return {"success": False, "error": str(e)}

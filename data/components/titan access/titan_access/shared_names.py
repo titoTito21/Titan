@@ -8,7 +8,7 @@ had read once, a note they wanted said. Two copies of that means the work
 is done twice, and switching readers loses the half you are not in.
 
 **The shared place is Titan's own**:
-``%APPDATA%/titosoft/Titan/screenreader/shared/controlNames.json`` - beside
+``%APPDATA%/titosoft/Titan/accessibility/shared/controlNames.json`` - beside
 this reader's settings, which is where it belongs, because Titan Access is
 the half that is always installed when Titan is. The NVDA add-on's
 ``shared.py`` writes the same file with the same rules; this is the reading
@@ -47,23 +47,31 @@ _looked = 0.0
 
 
 def folder():
-    """``…/titosoft/Titan/screenreader/shared``.
+    """``…/titosoft/Titan/accessibility/shared``.
 
-    Worked out the same way :mod:`settings_store` works out its own, and
-    it has to stay that way: a second guess at where Titan keeps things is
-    a second folder, and then nothing is shared at all.
+    The folder both readers keep every store in (`portable/readerHome`),
+    and the SAME one the add-on's `shared.py` writes: a second guess at
+    where Titan keeps things is a second folder, and then nothing is
+    shared at all. The old ``screenreader/shared`` is carried over the
+    first time it is asked.
     """
+    try:
+        from .portable import readerHome
+        return readerHome.shared_folder()
+    except Exception:                                # noqa: BLE001
+        return os.path.join(_titan_folder(), "accessibility", "shared")
+
+
+def _titan_folder():
     system = platform.system()
     if system == "Windows":
         base = os.getenv("APPDATA") or os.path.expanduser("~")
-        base = os.path.join(base, "titosoft", "Titan")
-    elif system == "Darwin":
-        base = os.path.join(os.path.expanduser("~"), "Library",
+        return os.path.join(base, "titosoft", "Titan")
+    if system == "Darwin":
+        return os.path.join(os.path.expanduser("~"), "Library",
                             "Application Support", "titosoft", "Titan")
-    else:
-        base = os.path.join(os.path.expanduser("~"), ".config",
-                            "titosoft", "Titan")
-    return os.path.join(base, "screenreader", "shared")
+    return os.path.join(os.path.expanduser("~"), ".config", "titosoft",
+                        "Titan")
 
 
 def path():
