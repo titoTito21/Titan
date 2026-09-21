@@ -560,7 +560,14 @@ class Stream(object):
         try:
             options = {'user_agent': 'Titan-EltenBridge/1.0',
                        'rw_timeout': '15000000'}
-            container = av.open(self.url, options=options, timeout=15.0)
+            # `metadata_errors='replace'`: a radio station's ICY name is
+            # whatever bytes the station sends, and PyAV decodes them as
+            # UTF-8 STRICTLY by default - so a Polish station whose name
+            # was in Windows-1250 made `av.open` raise "'utf-8' codec
+            # can't decode byte 0xe0", and the media catalogue said "the
+            # station could not be played" about a stream that plays.
+            container = av.open(self.url, options=options, timeout=15.0,
+                                metadata_errors='replace')
         except Exception as error:
             self.error = '%s' % error
             return
@@ -1221,7 +1228,7 @@ class Mixer(object):
         except Exception:
             try:
                 import av
-                container = av.open(path)
+                container = av.open(path, metadata_errors='replace')
                 try:
                     stream = container.streams.audio[0]
                     found = int(stream.rate or DEFAULT_FREQUENCY)
@@ -1477,3 +1484,340 @@ def _handle(value):
         return int(value)
     except (TypeError, ValueError):
         return -1
+
+
+def sound_details(path):
+    """What a file says about itself - Elten's `Sound#info`, `#chapters`,
+    `#bitrate` and `#type` - read with PyAV, never guessed."""
+    details = {'info': {}, 'chapters': [], 'bitrate': 0, 'type': 'unknown',
+               'duration': 0.0}
+    try:
+        import av
+    except Exception:
+        return details
+    try:
+        container = av.open(path, metadata_errors='replace')
+    except Exception:
+        return details
+    try:
+        tags = dict(container.metadata or {})
+        track = next((s for s in container.streams if s.type == 'audio'), None)
+        if track is not None:
+            tags.update(dict(getattr(track, 'metadata', {}) or {}))
+            try:
+                details['type'] = str(track.codec_context.name)
+            except Exception:
+                pass
+            try:
+                details['bitrate'] = int(track.bit_rate or container.bit_rate or 0)
+            except Exception:
+                pass
+        details['info'] = {
+            'title': tags.get('title', ''), 'artist': tags.get('artist', ''),
+            'album': tags.get('album', ''), 'track': tags.get('track', ''),
+            'copyright': tags.get('copyright', '')}
+        try:
+            details['chapters'] = [
+                {'time': float(chapter.start * chapter.time_base),
+                 'name': chapter.metadata.get('title') or 'Chapter %d' % (index + 1)}
+                for index, chapter in enumerate(getattr(container, 'chapters', []) or [])]
+        except Exception:
+            details['chapters'] = []
+        if container.duration:
+            details['duration'] = float(container.duration) / 1000000.0
+    finally:
+        try:
+            container.close()
+        except Exception:
+            pass
+    return details
+
+
+class Recorder(object):
+    """The microphone, into a file - Elten's `Recorder`, on Titan's own
+    input (sounddevice, which Titan-Net's voice chat and the assistant
+    already record through) and PyAV's encoders.
+
+    `fmt` is `wav` (PCM), `ogg` (Vorbis) or `opus`; the file manager
+    records in all three and the Tyflopodcast client's voice message is
+    Opus. The capture thread only queues; the encoder runs on a thread of
+    its own, because an encoder that stalled the callback is a recording
+    with holes in it.
+    """
+
+    RATE = 48000
+
+    def __init__(self, path, fmt='wav', bitrate=64000, time_limit=0.0):
+        self.path = str(path)
+        self.fmt = str(fmt or 'wav').lower().lstrip('.')
+        self.bitrate = int(bitrate or 64000)
+        self.time_limit = float(time_limit or 0.0)
+        self.error = None
+        self.paused = False
+        self.stopped = False
+        self.seconds = 0.0
+        self._frames = 0
+        self._queue = []
+        self._lock = threading.Lock()
+        self._container = None
+        self._stream = None
+        self._input = None
+        self._worker = None
+        self._start()
+
+    def _start(self):
+        try:
+            from src.system import mic_permission
+            allowed, reason = mic_permission.check_microphone()
+            if not allowed:
+                self.error = mic_permission.explain(reason)
+                return
+        except Exception:
+            pass
+        try:
+            import av
+            import sounddevice
+        except Exception as error:
+            self.error = 'no recorder: %s' % error
+            return
+        codec = {'wav': 'pcm_s16le', 'ogg': 'libvorbis', 'opus': 'libopus'}.get(self.fmt)
+        if codec is None:
+            self.error = 'unknown recording format %r' % self.fmt
+            return
+        container_format = {'wav': 'wav', 'ogg': 'ogg', 'opus': 'ogg'}[self.fmt]
+        try:
+            folder = os.path.dirname(self.path)
+            if folder:
+                os.makedirs(folder, exist_ok=True)
+            self._container = av.open(self.path, 'w', format=container_format)
+            self._stream = self._container.add_stream(codec, rate=self.RATE)
+            try:
+                self._stream.layout = 'mono'
+            except Exception:
+                pass
+            if codec != 'pcm_s16le':
+                try:
+                    self._stream.bit_rate = self.bitrate
+                except Exception:
+                    pass
+        except Exception as error:
+            self.error = 'the recording could not be started: %s' % error
+            self._close_container()
+            return
+        try:
+            self._input = sounddevice.InputStream(
+                samplerate=self.RATE, channels=1, dtype='int16',
+                callback=self._on_audio)
+            self._input.start()
+        except Exception as error:
+            self.error = 'the microphone could not be opened: %s' % error
+            self._close_container()
+            return
+        self._worker = threading.Thread(target=self._encode, daemon=True)
+        self._worker.start()
+
+    def _on_audio(self, indata, frames, _time, _status):
+        if self.paused or self.stopped:
+            return
+        block = indata.copy()
+        with self._lock:
+            self._queue.append(block)
+        self.seconds += float(frames) / self.RATE
+        if self.time_limit and self.seconds >= self.time_limit:
+            self.stopped = True
+
+    def _encode(self):
+        import av
+        import numpy
+        while not self.stopped or self._queue:
+            with self._lock:
+                blocks, self._queue = self._queue, []
+            if not blocks:
+                time.sleep(0.05)
+                continue
+            for block in blocks:
+                try:
+                    samples = numpy.ascontiguousarray(block.reshape(1, -1))
+                    frame = av.AudioFrame.from_ndarray(samples, format='s16', layout='mono')
+                    frame.sample_rate = self.RATE
+                    frame.pts = self._frames
+                    self._frames += samples.shape[1]
+                    for packet in self._stream.encode(frame):
+                        self._container.mux(packet)
+                except Exception as error:
+                    self.error = 'encoding failed: %s' % error
+                    self.stopped = True
+                    break
+        try:
+            for packet in self._stream.encode(None):
+                self._container.mux(packet)
+        except Exception:
+            pass
+        self._close_container()
+
+    def _close_container(self):
+        container, self._container = self._container, None
+        if container is not None:
+            try:
+                container.close()
+            except Exception:
+                pass
+
+    def pause(self, paused=True):
+        self.paused = bool(paused)
+        return True
+
+    def stop(self):
+        """Finish the file. Returns the seconds recorded."""
+        if self.stopped and self._worker is None:
+            return self.seconds
+        self.stopped = True
+        stream, self._input = self._input, None
+        if stream is not None:
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass
+        worker, self._worker = self._worker, None
+        if worker is not None:
+            worker.join(10.0)
+        return self.seconds
+
+    def status(self):
+        return {'recording': not self.stopped and self.error is None,
+                'paused': self.paused, 'seconds': self.seconds,
+                'error': self.error, 'path': self.path}
+
+
+class PcmStream(Stream):
+    """Raw PCM an application PUSHES, played through Titan's mixer.
+
+    Elten's `Sound.open_pcm(frequency:, channels:, type:, buffer:)` is a
+    BASS push stream: the application writes sample frames into it
+    (`write_pcm`) as fast as the sound is played, and says when there will
+    be no more (`BASS_StreamPutData(..., BASS_STREAMPROC_END)`). Spotify is
+    made of exactly that - librespot decodes in a native library, the
+    application reads 40 ms of float samples out of it per pump and writes
+    them here - so a port with no PCM sink is a Spotify that can browse,
+    search and queue and never make a sound.
+
+    It is a `Stream` fed from a queue instead of from a decoder: the same
+    channel, the same theme volume, pan, pitch and tempo, and the same
+    `stream_do` surface. Sample type and rate are converted to whatever
+    format the live mixer is in, because handing pygame a buffer at the
+    wrong rate plays it at the wrong speed.
+    """
+
+    #: Pushed audio arrives 40 ms at a time and a pause must be heard at
+    #: once, so the pieces handed to the mixer are short.
+    CHUNK_SECONDS = 0.25
+    BUFFER_CHUNKS = 16
+
+    def __init__(self, mixer, frequency=44100, channels=2, sample_type='float',
+                 label=''):
+        self.frequency = max(8000, int(frequency or 44100))
+        self.channels = 2 if int(channels or 2) >= 2 else 1
+        self.sample_type = str(sample_type or 'float').lower().lstrip(':')
+        self.written_frames = 0
+        self.ended = False
+        self._spare = None
+        Stream.__init__(self, mixer, 'pcm://%s' % label, label)
+
+    def _start(self):
+        # Nothing to decode: the application is the decoder. Opened at once.
+        self.opened = True
+        self.duration = None
+
+    # ------------------------------------------------------------- pushing
+    def write(self, data):
+        """Sample frames as the application wrote them; answers how many
+        BYTES were taken (Elten's `write_pcm` answers the same)."""
+        if self._closed or not data:
+            return 0
+        try:
+            import numpy
+        except Exception as error:
+            self.error = 'no numpy: %s' % error
+            return 0
+        frames = self._to_frames(numpy, data)
+        if frames is None or not len(frames):
+            return 0
+        self.written_frames += len(frames)
+        rate, channels = self._format()
+        frames = self._fit(numpy, frames, rate, channels)
+        spare = self._spare if self._spare is not None else numpy.zeros((0, channels), dtype=numpy.int16)
+        spare = numpy.concatenate((spare, frames))
+        want = int(rate * self.CHUNK_SECONDS)
+        while len(spare) >= want:
+            self._offer(spare[:want])
+            spare = spare[want:]
+        self._spare = spare
+        return len(data)
+
+    def end(self):
+        """No more will be written: what is left is handed over and the
+        stream finishes when it has been played."""
+        if self.ended:
+            return True
+        self.ended = True
+        try:
+            if self._spare is not None and len(self._spare):
+                self._offer(self._spare)
+        except Exception:
+            pass
+        self._spare = None
+        self.finished = True
+        return True
+
+    def queued_frames(self):
+        """How many of the frames written have not been played yet - what
+        the application bounds its own reading by."""
+        played = int(self._played * self.frequency)
+        return max(0, self.written_frames - played)
+
+    def _to_frames(self, numpy, data):
+        kind = self.sample_type
+        if kind in ('float', 'float32', 'f32'):
+            dtype, scale = numpy.float32, 32767.0
+        elif kind in ('short', 'int16', 's16', '16'):
+            dtype, scale = numpy.int16, None
+        elif kind in ('byte', 'int8', 's8', '8'):
+            dtype, scale = numpy.int8, 256.0
+        else:
+            dtype, scale = numpy.float32, 32767.0
+        width = numpy.dtype(dtype).itemsize * self.channels
+        usable = (len(data) // width) * width
+        if usable <= 0:
+            return None
+        samples = numpy.frombuffer(bytes(data[:usable]), dtype=dtype)
+        frames = samples.reshape(-1, self.channels)
+        if scale is not None:
+            frames = numpy.clip(frames.astype(numpy.float32) * (scale if dtype is not numpy.int8 else scale), -32768, 32767).astype(numpy.int16)
+        return frames
+
+    def _fit(self, numpy, frames, rate, channels):
+        if self.channels != channels:
+            if channels == 2:
+                frames = numpy.repeat(frames, 2, axis=1)
+            else:
+                frames = frames.mean(axis=1, dtype=numpy.float32).astype(numpy.int16).reshape(-1, 1)
+        if self.frequency != rate and len(frames) > 1:
+            count = max(1, int(len(frames) * rate / float(self.frequency)))
+            source = numpy.linspace(0.0, 1.0, len(frames))
+            target = numpy.linspace(0.0, 1.0, count)
+            frames = numpy.stack([numpy.interp(target, source, frames[:, index]) for index in range(channels)],
+                                 axis=1).astype(numpy.int16)
+        return frames
+
+    def seek(self, _seconds):
+        return False
+
+    def status(self):
+        answer = Stream.status(self)
+        answer.update({'pcm': True, 'written_frames': self.written_frames,
+                       'queued_frames': self.queued_frames(),
+                       'frequency': self.frequency, 'channels': self.channels,
+                       'ended': self.ended,
+                       'finished': bool(self.ended and not self.playing() and not self._chunks)})
+        return answer

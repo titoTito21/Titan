@@ -52,14 +52,51 @@ module EltenNetwork
 
     require 'fileutils'
     FileUtils.mkdir_p(File.dirname(destination.to_s))
-    content = read_url(source, cancellation_token: cancellation_token)
-    return nil if content.nil?
-
-    File.binwrite(destination.to_s, content)
+    # STREAMED to the disk, never read into memory: `read_url` is capped
+    # (a page is small and an application reading one into a string
+    # should not be handed a gigabyte), but a download is a FILE - the
+    # YouTube client fetches a 40 MB Deno and refused its own dependency
+    # with "the response is too large", then stopped on the nil.
+    _stream_to_file(source.to_s, destination.to_s, cancellation_token)
     destination.to_s
   rescue StandardError => error
     Log.warning("#{source} could not be downloaded: #{error.message}")
+    File.delete(destination.to_s) if File.exist?(destination.to_s) rescue nil
     nil
+  end
+
+  MAX_DOWNLOAD_REDIRECTS = 8
+
+  def _stream_to_file(url, destination, token, redirects = 0)
+    require 'net/http'
+    require 'uri'
+    raise 'too many redirects' if redirects > MAX_DOWNLOAD_REDIRECTS
+
+    parsed = URI.parse(url)
+    unless parsed.is_a?(URI::HTTP) || parsed.is_a?(URI::HTTPS)
+      raise "refused to fetch #{parsed.scheme.inspect}: only http and https"
+    end
+
+    Net::HTTP.start(parsed.host, parsed.port, use_ssl: parsed.is_a?(URI::HTTPS),
+                    open_timeout: MAX_SECONDS, read_timeout: MAX_SECONDS) do |http|
+      request = Net::HTTP::Get.new(parsed)
+      request['User-Agent'] = 'Titan-EltenBridge/1.0'
+      http.request(request) do |response|
+        if response.is_a?(Net::HTTPRedirection) && response['location']
+          return _stream_to_file(URI.join(url, response['location']).to_s,
+                                 destination, token, redirects + 1)
+        end
+        raise "HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+        File.open(destination, 'wb') do |file|
+          response.read_body do |chunk|
+            _raise_if_cancelled(token)
+            file.write(chunk)
+          end
+        end
+      end
+    end
+    destination
   end
 
   def html_decode(text)

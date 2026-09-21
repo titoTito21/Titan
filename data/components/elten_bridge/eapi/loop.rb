@@ -36,6 +36,7 @@ module EltenLoop
   end.freeze
 
   @pressed = {}
+  @repeated = {}
   @released = {}
   @held = {}
   @time = 0.0
@@ -57,6 +58,7 @@ module EltenLoop
     def pump(wait = 0.02)
       ensure_somewhere_for_keys
       @pressed = {}
+      @repeated = {}
       @released = {}
       @time = EltenBridge.now
       first = true
@@ -155,8 +157,21 @@ module EltenLoop
       key
     end
 
-    def key_pressed?(name)
-      any?(@pressed, name)
+    # `repeat: true` is Elten's own: a key held down counts again on every
+    # auto-repeat, which is how Freesound's preview seeks while Shift+Right
+    # is held rather than once per press.
+    def key_pressed?(name, repeat: false)
+      return true if any?(@pressed, name)
+
+      repeat && any?(@repeated, name)
+    end
+
+    # Forget this frame's presses, so a key that closed a nested window is
+    # not read again by the screen under it (`KeyboardState.clear_current_frame`).
+    def clear_frame
+      @pressed = {}
+      @repeated = {}
+      @released = {}
     end
 
     def key_released?(name)
@@ -237,6 +252,7 @@ module EltenLoop
         # An auto-repeat is "still down", not a second press - which is the
         # difference between walking and teleporting.
         @pressed[name] = true unless event['repeat']
+        @repeated[name] = true
         @held[name] = true
       when 'key_up'
         name = event['name'].to_s.downcase
@@ -248,6 +264,9 @@ module EltenLoop
         # A control somebody is showing was used. Whichever loop is running
         # dispatches it, because either may be the one that is.
         EltenForms.dispatch(event) if defined?(EltenForms)
+      when 'widget'
+        # A row of a main-tab widget, pressed in Titan's main window.
+        EltenWidgets.deliver(event) if defined?(EltenWidgets)
       when 'close'
         @closed = true
       end
@@ -265,8 +284,8 @@ module Kernel
     EltenLoop.time
   end
 
-  def key_pressed?(name)
-    EltenLoop.key_pressed?(name)
+  def key_pressed?(name, repeat: false)
+    EltenLoop.key_pressed?(name, repeat: repeat)
   end
 
   def key_released?(name)

@@ -72,11 +72,32 @@ class Session(object):
             self._blame(error)
             return False
 
-    def key_down(self, name, modifiers=()):
-        return self._half('key_down', name, modifiers)
+    def key_down(self, name, modifiers=(), character=None):
+        if not self.started:
+            return False
+        try:
+            if character is None:
+                return bool(self.engine.key_down(name, modifiers))
+            return bool(self.engine.key_down(name, modifiers, character=character))
+        except TypeError:
+            # An engine written before characters travelled apart from keys.
+            return self._half('key_down', name, modifiers)
+        except Exception as error:
+            self._blame(error)
+            return False
 
     def key_up(self, name, modifiers=()):
         return self._half('key_up', name, modifiers)
+
+    def character(self, text):
+        """A character the window typed - see `Keyboard.character`."""
+        if not self.started:
+            return False
+        try:
+            return bool(getattr(self.engine, 'character', lambda _t: False)(text))
+        except Exception as error:
+            self._blame(error)
+            return False
 
     def _half(self, which, name, modifiers):
         if not self.started:

@@ -542,11 +542,11 @@ def action_list(**_kwargs):
 
 def action_run(name='', **_kwargs):
     if not name:
-        return needs('name', "Which Cling application should I open?",
+        return needs('name', _("Which Cling application should I open?"),
                      options=[app.name(_language()) for app in applications()])
     app = find_application(name)
     if app is None:
-        return fails("There is no Cling application called '%s'." % name)
+        return fails(_("There is no Cling application called '%s'.") % name)
     if app.locked:
         return fails(app.locked_reason())
     try:
@@ -559,31 +559,31 @@ def action_run(name='', **_kwargs):
 
 def action_details(name='', **_kwargs):
     if not name:
-        return needs('name', "Which application do you mean?")
+        return needs('name', _("Which application do you mean?"))
     app = find_application(name)
     if app is None:
-        return fails("There is no Cling application called '%s'." % name)
+        return fails(_("There is no Cling application called '%s'.") % name)
     if app.locked:
         return app.locked_reason()
     lines = ['%s (%s)' % (app.name(_language()), app.id),
              app.summary(_language()) or '',
-             'Engine: %s' % app.engine,
-             'Category: %s' % app.category,
-             'Version: %s' % (app.version or '-'),
-             'Language: %s' % (app.texts.locale if app.texts else '-'),
-             'Folder: %s' % app.path,
-             ('Original Klango package: %s' % app.package)
+             '%s: %s' % (_('Engine'), app.engine),
+             '%s: %s' % (_('Category'), app.category),
+             '%s: %s' % (_('Version'), app.version or '-'),
+             '%s: %s' % (_('Language'), app.texts.locale if app.texts else '-'),
+             '%s: %s' % (_('Folder'), app.path),
+             ('%s: %s' % (_('Original Klango package'), app.package))
              if app.package else '']
-    lines.extend('Problem: %s' % problem for problem in app.problems)
+    lines.extend('%s: %s' % (_('Problem'), problem) for problem in app.problems)
     return '\n'.join(line for line in lines if line)
 
 
 def action_scores(name='', **_kwargs):
     if not name:
-        return needs('name', "Which application's scores?")
+        return needs('name', _("Which application's scores?"))
     app = find_application(name)
     if app is None:
-        return fails("There is no Cling application called '%s'." % name)
+        return fails(_("There is no Cling application called '%s'.") % name)
     local = store.Store(app.id, cling_account.profile())
     rows = local.scores()
     lines = ['%d. %s: %d' % (position, entry.get('name') or '-',
@@ -624,10 +624,10 @@ def action_emulate(name='', **_kwargs):
     that is actually in the way.
     """
     if not name:
-        return needs('name', "Which application's own code should I load?")
+        return needs('name', _("Which application's own code should I load?"))
     app = find_application(name)
     if app is None:
-        return fails("There is no Cling application called '%s'." % name)
+        return fails(_("There is no Cling application called '%s'.") % name)
     try:
         from clingkit import host as host_module, klango
     except Exception as error:

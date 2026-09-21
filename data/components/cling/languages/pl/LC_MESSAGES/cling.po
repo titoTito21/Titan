@@ -162,3 +162,51 @@ msgstr "tekst"
 
 msgid "{tab}: {n} applications"
 msgstr "{tab}: aplikacji: {n}"
+
+msgid "Titan's settings are open."
+msgstr "Ustawienia Titana są otwarte."
+
+msgid "Titan's help is open."
+msgstr "Pomoc Titana jest otwarta."
+
+msgid "The Titan Feedback Hub is open."
+msgstr "Centrum opinii Titana jest otwarte."
+
+msgid "Feedback goes to Titan-Net, and nobody is signed in. Open Titan-Net once and sign in, then try again."
+msgstr "Opinie trafiają do Titan-Net, a nikt nie jest zalogowany. Otwórz raz Titan-Net, zaloguj się i spróbuj ponownie."
+
+msgid "Titan's settings could not be opened"
+msgstr "Nie udało się otworzyć ustawień Titana"
+
+msgid "Titan's help could not be opened"
+msgstr "Nie udało się otworzyć pomocy Titana"
+
+msgid "The Feedback Hub could not be opened"
+msgstr "Nie udało się otworzyć Centrum opinii"
+
+msgid "%s - installed as a Klango package Cling cannot open yet"
+msgstr "%s - zainstalowana jako pakiet Klango, którego Cling jeszcze nie otwiera"
+
+msgid "Original Klango package"
+msgstr "Oryginalny pakiet Klango"
+
+msgid "Which application do you mean?"
+msgstr "Którą aplikację masz na myśli?"
+
+msgid "There is no Cling application called '%s'."
+msgstr "Nie ma aplikacji Cling o nazwie '%s'."
+
+msgid "Klango application"
+msgstr "aplikacja Klango"
+
+msgid "Which Cling application should I open?"
+msgstr "Którą aplikację Cling mam otworzyć?"
+
+msgid "Which application's scores?"
+msgstr "Wyniki której aplikacji?"
+
+msgid "Which application's own code should I load?"
+msgstr "Której aplikacji własny kod mam załadować?"
+
+msgid "Titan's help"
+msgstr "Pomoc Titana"

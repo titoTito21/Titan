@@ -22,6 +22,7 @@ require_relative 'audio'
 require_relative 'media'
 require_relative 'paths'
 require_relative 'childproc'
+require_relative 'platform'
 require_relative 'eltenlink'
 require_relative 'live_sessions'
 require_relative 'eltenapi'
@@ -95,9 +96,19 @@ begin
   # The manifest reaches the instance through the class instead, which is
   # where a `Program` looks for everything else about itself.
   Program.manifest = manifest
-  program = klass.new
-  Program.current = program
-  program.run
+  if ENV['ELTEN_BRIDGE_BACKGROUND'] == '1'
+    # Started for what `activate` declared - a main-tab widget, a
+    # background tick - and not opened: Elten runs every installed
+    # application's extensions whether or not it is open, and this is the
+    # nearest thing. No instance is made and `program_main` never runs;
+    # the frame is pumped until Titan closes the pipe.
+    loop_update(0.05) until EltenLoop.closed?
+    status = 'closed'
+  else
+    program = klass.new
+    Program.current = program
+    program.run
+  end
 rescue EltenBridge::Closed
   status = 'closed'
 rescue SystemExit

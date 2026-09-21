@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 
 import atexit as _atexit
@@ -2749,12 +2750,11 @@ class AChangeToAWindowReallyArrives(unittest.TestCase):
 
     def test_the_notifications_an_application_really_sends_are_handled(self):
         import re
-        source = io.open(os.path.join(COMPONENT, 'eapi', 'controls.rb'),
-                         encoding='utf-8').read()
-        source += io.open(os.path.join(COMPONENT, 'eapi', 'boot.rb'),
-                          encoding='utf-8').read()
-        source += io.open(os.path.join(COMPONENT, 'eapi', 'bridge.rb'),
-                          encoding='utf-8').read()
+        source = ''
+        for name in sorted(os.listdir(os.path.join(COMPONENT, 'eapi'))):
+            if name.endswith('.rb'):
+                source += io.open(os.path.join(COMPONENT, 'eapi', name),
+                                  encoding='utf-8').read()
         sent = set(re.findall(r"EltenBridge\.notify\(\s*'([a-z_]+)'", source))
         self.assertTrue(sent, 'no notifications found at all')
         missing = sorted(sent - set(bridge.NOTIFICATIONS))
@@ -3715,6 +3715,994 @@ class TheRealWidgetsReportThroughTheRealSendEvent(unittest.TestCase):
         self.assertEqual(ticked[-1].get('index'), 1)
         self.assertTrue(ticked[-1].get('checked'))
         gui.close()
+
+
+# ---------------------------------------------------------------------------
+# Found by opening every installed application headlessly and reading what it
+# stopped on (the sweep in the scratchpad this was written from): a name a
+# program calls that Elten has and the port had not, a method the port defined
+# TWICE so that Ruby kept the wrong one, a signature two Elten versions behind.
+# Each test here pins one of those, on the real interpreter against the real
+# platform, with the wire replaced by a table of answers.
+
+class _RubyAnswers(_RubyAsk):
+    """`_RubyAsk`, with a table of answers for the wire: `$answers['op']`
+    is what `EltenBridge.call('op', ...)` returns (a proc is called with
+    the arguments), and everything else goes to the preamble's stub."""
+
+    ANSWERS = """
+$answers = {}
+class << EltenBridge
+  alias_method :call_before_answers, :call
+  def call(op, args = {})
+    ($calls ||= []) << [op, args]
+    if $answers.key?(op)
+      value = $answers[op]
+      return value.respond_to?(:call) ? value.call(args) : value
+    end
+    call_before_answers(op, args)
+  end
+end
+module Kernel
+  def loop_update(wait = 0.02)
+    $pumped = ($pumped || 0) + 1
+    EltenLoop.pump(0.0) if defined?(EltenLoop) && EltenLoop.respond_to?(:pump)
+  end
+end
+"""
+
+    def answer(self, source):
+        # The interpreter writes CRLF on Windows.
+        return self.ask(self.ANSWERS + source).replace('\r', '')
+
+
+class TheSoundIsEltensSound(_RubyAnswers):
+    """`Sound.new(file)` - a sound from a FILE, a URL or bytes - was absent:
+    Freesound's preview, the file manager's preview and playlist all stop on
+    `uninitialized constant Sound` inside their own rescue."""
+
+    def test_a_file_is_a_held_sound_whose_length_is_asked(self):
+        answer = self.answer("""
+$answers['sound_open'] = 7
+$answers['sound_length'] = 2.5
+$answers['sound_playing'] = false
+sound = Sound.new(__FILE__)
+puts sound.class
+puts sound.length
+puts $calls.map(&:first).include?('sound_open')
+puts sound.status.playing?
+puts(sound.status == :stopped)
+""")
+        self.assertEqual(answer.split(), ['Sound', '2.5', 'true', 'false', 'true'])
+
+    def test_length_is_no_longer_defined_twice_as_zero(self):
+        """`length` was defined twice in `EltenSound` and Ruby keeps the
+        LAST definition - which answered 0.0 for every sound, so every
+        preview was 0 seconds long. So was `wait`, whose survivor slept
+        instead of pumping the frame."""
+        source = io.open(os.path.join(COMPONENT, 'eapi', 'eapi.rb'),
+                         encoding='utf-8').read()
+        body = source[source.index('class EltenSound'):source.index('class SoundStatus')]
+        import re
+        names = re.findall(r'^\s*def\s+([a-z_]\w*[?!=]?)', body, re.M)
+        twice = sorted({name for name in names if names.count(name) > 1})
+        self.assertEqual(twice, [], 'defined twice, and the second silently wins')
+
+    def test_wait_pumps_the_frame_rather_than_sleeping(self):
+        answer = self.answer("""
+$answers['sound_open'] = 7
+$asked = 0
+$answers['sound_playing'] = proc { $asked += 1; $asked < 3 }
+sound = Sound.new(__FILE__)
+sound.wait
+puts $pumped.to_i >= 2
+""")
+        self.assertEqual(answer, 'true')
+
+    def test_a_url_is_titans_stream_opened_paused(self):
+        answer = self.answer("""
+$answers['stream_open'] = { 'handle' => 3, 'duration' => 10.0, 'playing' => false }
+$answers['stream_do'] = proc { |args| { 'duration' => 10.0, 'playing' => args['do'] == 'play', 'position' => 1.5 } }
+sound = Sound.new('http://example.invalid/x.mp3')
+puts sound.class
+opened = $calls.find { |op, _| op == 'stream_open' }
+puts opened[1]['autoplay'].inspect
+puts sound.length
+sound.play
+puts $calls.map(&:first).last(1).inspect
+puts sound.position
+""")
+        self.assertEqual(answer.split('\n'), ['RemoteSound', 'false', '10.0', '["stream_do"]', '1.5'])
+
+    def test_a_missing_file_raises_as_eltens_does_and_pcm_is_taken(self):
+        answer = self.answer("""
+$answers['pcm_open'] = {'handle' => 3, 'opened' => true}
+begin
+  Sound.new('/no/such/file.wav')
+  puts 'opened'
+rescue IOError => error
+  puts 'refused'
+end
+begin
+  pcm = Sound.open_pcm(frequency: 48000, channels: 2, type: :float, buffer: ''.b)
+  puts pcm.is_a?(Sound) && pcm.channel == 3 ? 'pcm' : 'wrong'
+rescue Sound::UnsupportedOperation
+  puts 'unsupported'
+end
+""")
+        self.assertEqual(answer.split(), ['refused', 'pcm'])
+
+
+class TheControlsAnswerEltensOwnNames(_RubyAnswers):
+    def test_checkbox_checked_editbox_settext_listbox_sayoption_tablebox_sel(self):
+        answer = self.answer("""
+box = CheckBox.new('x', checked: true)
+puts box.checked
+edit = EditBox.new('h', max_length: 5)
+edit.settext('abc')
+puts edit.text
+puts edit.max_length
+edit.audiostream = 'stream'
+edit.clear_audio_player
+puts edit.audiostream.inspect
+list = ListBox.new(['one', 'two'], header: 'L')
+list.sayoption
+puts $calls.any? { |op, args| op == 'speak' && args['text'].to_s.include?('one') }
+table = TableBox.new(['a'], [['1']])
+puts table.sel.equal?(table)
+""")
+        self.assertEqual(answer.split('\n'), ['true', 'abc', '5', 'nil', 'true', 'true'])
+
+    def test_a_context_translation_falls_back_to_the_text_alone(self):
+        """The wire strips U+0004, so a catalogue with no entry answered
+        "WeatherMainly clear." and it was taken for a translation."""
+        answer = self.answer("""
+$answers['translate'] = proc { |args| args['text'].to_s.delete("\\u0004") }
+puts p_('Weather', 'Mainly clear.')
+""")
+        self.assertEqual(answer, 'Mainly clear.')
+
+
+class AnExtensionServiceIsEltens(_RubyAnswers):
+    """What `extension(:name) { |service| ... }` hands over answers
+    everything Elten's `Registration` does: Neighborhood Radar asks
+    `registered?`, Spotify places a `command`, Weather declares a
+    `main_tab` and reads `context.token` in its `every` block."""
+
+    def test_registered_command_every_and_a_main_tab_widget(self):
+        answer = self.answer("""
+class ProgramX < Program; end
+reg = ProgramX.extension(:x) do |service|
+  $command = service.command(:c, label: 'C') { }.place(:main_menu)
+  $task = service.every(:t, seconds: 1, persistent: false, first: :immediately) { |context| $context = context }
+  service.main_tab(:w, label: 'Widget') do |context|
+    box = context.current_control || ListBox.new(['first', 'second'], header: 'Widget')
+    box.on(:select) { |index| $chosen = index }
+    context.state[:built] = (context.state[:built] || 0) + 1
+    box
+  end
+end
+puts reg.registered?
+puts reg.menu_items.size
+puts $context.token.class
+EltenWidgets.tick(EltenBridge.now)
+widgets = ($notices || []).select { |name, _| name == 'widgets' }
+puts widgets.last[1]['tabs'][0]['rows'].inspect
+EltenWidgets.deliver({ 'event' => 'widget', 'key' => 'w', 'index' => 1, 'name' => 'select' })
+puts $chosen
+reg.unregister
+puts reg.registered?
+""")
+        self.assertEqual(answer.split('\n'),
+                         ['true', '1', 'Tasks::CancellationToken',
+                          '["first", "second"]', '1', 'false'])
+
+    def test_the_notification_classes_and_the_runtime(self):
+        answer = self.answer("""
+notification = Programs::AppNotification.new(id: 1, app_uuid: 'u', type: 't', sender: 's', created_at: 0, metadata: {})
+shown = notification.presentation(title: 'T', body: 'B')
+puts shown.alert
+puts shown.suppress_default!.default_suppressed?
+class ProgramY < Program; end
+ProgramY.manifest = { 'name' => 'Why', 'uuid' => 'abc' }
+puts ProgramY.app_runtime.app_name
+puts ProgramY.app_runtime.app_uuid
+puts ProgramY.new.respond_to?(:finalize)
+puts ProgramY.instance_method(:finalize).parameters.inspect
+""")
+        lines = answer.split('\n')
+        self.assertEqual(lines[:4], ['T: B', 'true', 'Why', 'abc'])
+        self.assertEqual(lines[4], 'true')
+        self.assertIn(':reason', lines[5], 'finalize(v = nil, reason: :normal), as Elten has it')
+
+    def test_a_recorder_that_cannot_record_says_so_and_never_raises(self):
+        answer = self.answer("""
+$answers['record_start'] = { 'error' => 'no microphone' }
+recorder = Recorder.wave_recording('x.wav')
+puts recorder.error
+puts recorder.recording?
+puts recorder.stop
+puts recorder.paused
+opus = Recorder.opus_recording('y.opus', 192, 20)
+puts opus.encoder.format
+""")
+        self.assertEqual(answer.split('\n'), ['no microphone', 'false', '0.0', 'false', 'opus'])
+
+    def test_an_alert_and_a_notification_reach_the_buffer(self):
+        answer = self.answer("""
+alert('hello there', false)
+process_notification({ 'alert' => 'news' })
+buffers = ($notices || []).select { |name, _| name == 'buffer' }.map { |_, args| [args['buffer'], args['text']] }
+puts buffers.inspect
+""")
+        self.assertEqual(answer, '[["messages", "hello there"], ["notifications", "news"]]')
+
+
+class TheHostSideOfSoundAndRecording(unittest.TestCase):
+    """The Python half: a sound opened from any file, its details read with
+    PyAV, a recorder that refuses honestly, and what the wire's new
+    notifications do."""
+
+    def setUp(self):
+        self.root = scratch('elten-host-')
+        self.wav = os.path.join(self.root, 'tone.wav')
+        import wave
+        with wave.open(self.wav, 'wb') as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(8000)
+            out.writeframes(b'\x00\x00' * 4000)
+        entry = catalogue.Application('', dict(MANIFEST), None, 'test')
+        paths = host.Paths(self.root, os.path.join(self.root, 'd'),
+                           os.path.join(self.root, 'c'))
+        self.app = bridge.Application(entry, paths, speaker=_SilentSpeaker(),
+                                      sounds=host.Sounds(_NoMixer()), ui=None)
+
+    def test_a_sound_is_opened_from_any_file_and_a_missing_one_is_none(self):
+        self.assertIsNone(bridge._op_sound_open(self.app, {'path': os.path.join(self.root, 'no.wav')}))
+        handle = bridge._op_sound_open(self.app, {'path': self.wav})
+        self.assertIsInstance(handle, int)
+        details = bridge._op_sound_details(self.app, {'handle': handle})
+        try:
+            import av                                   # noqa: F401
+        except ImportError:
+            self.skipTest('no PyAV')
+        self.assertAlmostEqual(details['duration'], 0.5, places=1)
+        self.assertIn('info', details)
+
+    def test_a_recorder_without_a_microphone_answers_an_error_not_a_crash(self):
+        from unittest import mock
+        with mock.patch('src.system.mic_permission.check_microphone',
+                        return_value=(False, 'privacy')):
+            recorder = host.Recorder(os.path.join(self.root, 'r.wav'), 'wav')
+        self.assertTrue(recorder.error)
+        self.assertEqual(recorder.stop(), 0.0)
+        answer = bridge._op_record_start(self.app, {'path': os.path.join(self.root, 'r2.wav')})
+        # Either a handle (this machine has a microphone) or an error - never nothing.
+        self.assertTrue(isinstance(answer, dict) and ('handle' in answer or 'error' in answer))
+        if 'handle' in answer:
+            bridge._op_record_stop(self.app, answer)
+
+    def test_the_buffer_and_widgets_notifications(self):
+        from unittest import mock
+        pushed = []
+        with mock.patch('src.buffers.buffer_bus.push', lambda *a, **k: pushed.append((a, k)) or True):
+            bridge._note_buffer(self.app, {'buffer': 'notifications', 'text': 'hi'})
+            bridge._note_buffer(self.app, {'buffer': 'elsewhere', 'text': 'x'})
+            bridge._note_buffer(self.app, {'buffer': 'messages', 'text': '   '})
+        self.assertEqual(len(pushed), 2)
+        self.assertEqual(pushed[0][0][:3], ('elten_api', 'notifications', 'hi'))
+        self.assertEqual(pushed[1][0][1], 'messages', 'an unknown buffer is a message')
+        told = []
+        self.app.on_widgets = told.append
+        bridge._note_widgets(self.app, {'tabs': [{'key': 'w', 'rows': ['a']}, 'junk']})
+        self.assertEqual(self.app.widgets, [{'key': 'w', 'rows': ['a']}])
+        self.assertEqual(told, [self.app])
+
+    def test_a_download_is_streamed_to_the_disk(self):
+        source = io.open(os.path.join(COMPONENT, 'eapi', 'network.rb'), encoding='utf-8').read()
+        body = source[source.index('def download_file'):source.index('def html_decode')]
+        self.assertNotIn('read_url(', body, 'read into memory, and capped')
+        self.assertIn('read_body', body)
+
+    def test_metadata_of_a_stream_is_decoded_leniently(self):
+        source = io.open(os.path.join(COMPONENT, 'eltenkit', 'host.py'), encoding='utf-8').read()
+        self.assertGreaterEqual(source.count("metadata_errors='replace'"), 3)
+
+
+class AWidgetReachesTitanFromABackgroundApplication(AnApplicationReallyRuns):
+    """The whole chain, on the real interpreter: an application started in
+    the BACKGROUND (`activate` only, no `program_main`) declares a
+    `main_tab`, its rows arrive as `widgets`, and a row pressed in Titan
+    comes back as `select` on the very control the application built."""
+
+    def test_rows_arrive_and_a_row_pressed_runs_the_applications_handler(self):
+        manifest = dict(MANIFEST)
+        path = os.path.join(self.root, 'widget.eltenapp')
+        build_package(path, manifest, files=[('__app.rb',
+            'class ProgramTest < Program\n'
+            '  def self.activate\n'
+            '    extension(:t) do |service|\n'
+            '      service.main_tab(:w, label: "Widget") do |context|\n'
+            '        box = context.current_control || ListBox.new(["first", "second"], header: "Widget")\n'
+            '        box.on(:select) { |*| speak("chosen #{box.index}") }\n'
+            '        box\n'
+            '      end\n'
+            '    end\n'
+            '  end\n'
+            '  def program_main\n'
+            '    speak("MAIN RAN")\n'
+            '  end\n'
+            'end\n')])
+        entry = catalogue.Application(path, manifest, None, 'test')
+        entry.localise('en')
+        folder, _package = launcher.unpack(entry)
+        paths = host.Paths(folder, os.path.join(self.root, 'data'), os.path.join(self.root, 'cache'))
+        paths.ensure('data')
+        paths.ensure('cache')
+        application = bridge.Application(entry, paths, speaker=_SilentSpeaker(),
+                                         sounds=host.Sounds(_NoMixer()), ui=None,
+                                         background=True)
+        application._on_gui = lambda call, default=None: call()
+        application.start()
+        try:
+            deadline = time.time() + 20.0
+            while time.time() < deadline and not application.widgets:
+                time.sleep(0.1)
+            self.assertTrue(application.widgets, application.detail or application.log[-5:])
+            tab = application.widgets[0]
+            self.assertEqual(tab['key'], 'w')
+            self.assertEqual(tab['rows'], ['first', 'second'])
+            application.send_event('widget', key='w', index=1, name='select')
+            deadline = time.time() + 10.0
+            while time.time() < deadline and 'chosen 1' not in application.speaker.spoken:
+                time.sleep(0.1)
+            self.assertIn('chosen 1', application.speaker.spoken)
+            self.assertNotIn('MAIN RAN', application.speaker.spoken, 'background: never opened')
+            self.assertFalse(application.ended.is_set(), 'it keeps running for its widgets')
+        finally:
+            application.stop()
+
+
+class EachWidgetIsAPanelOfItsOwn(unittest.TestCase):
+    """Elten's main screen is a column of sections walked with Tab, and so
+    is Titan's main window now: one side panel per `main_tab`, named as
+    the widget names itself, holding its rows, between the current view
+    and the status bar - added when the rows arrive, taken away when the
+    widget goes. Driven against the REAL `SidePanels` on a bare frame,
+    which is what the main window delegates to."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import wx
+        except Exception as error:                     # pragma: no cover
+            raise unittest.SkipTest('no wx here: %s' % error)
+        cls.wx = wx
+        cls.app = wx.App(False) if wx.GetApp() is None else wx.GetApp()
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'elten_bridge_init_for_test', os.path.join(COMPONENT, 'init.py'))
+        cls.init = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.init)
+
+    class _MainWindow(object):
+        """What `init.py` reads off Titan's window: the panel, and the
+        two side-panel calls, which go to the real `SidePanels`."""
+
+        def __init__(self, wx):
+            from src.ui.side_panels import SidePanels
+            self.frame = wx.Frame(None)
+            self.main_panel = wx.Panel(self.frame)
+            self.sizer = wx.BoxSizer(wx.VERTICAL)
+            self.view = wx.ListBox(self.main_panel)
+            self.sizer.Add(self.view, proportion=1)
+            self.statusbar_label = wx.StaticText(self.main_panel, label='Status Bar:')
+            self.sizer.Add(self.statusbar_label)
+            self.statusbar_listbox = wx.ListBox(self.main_panel)
+            self.sizer.Add(self.statusbar_listbox, proportion=1)
+            self.main_panel.SetSizer(self.sizer)
+            self.side_panels = SidePanels(self.main_panel, self.sizer, self.statusbar_label,
+                                          lambda: self.view, self.statusbar_listbox)
+
+        def add_side_panel(self, panel_id, label, control, on_activate=None):
+            return self.side_panels.add(panel_id, label, control, on_activate)
+
+        def remove_side_panel(self, panel_id):
+            return self.side_panels.remove(panel_id)
+
+        def windows(self):
+            return [item.GetWindow() for item in self.sizer.GetChildren() if item.IsWindow()]
+
+    class _Entry(object):
+        def __init__(self, key, name):
+            self.key, self.name, self.stem = key, name, key
+
+    class _Application(object):
+        def __init__(self, widgets):
+            self.widgets = widgets
+            self.events = []
+
+        def send_event(self, event, **fields):
+            self.events.append((event, fields))
+
+    def setUp(self):
+        self.window = self._MainWindow(self.wx)
+        self.init._gui_app = self.window
+        self.init._widget_panels.clear()
+        del self.init._running[:]
+        del self.init._background[:]
+
+    def tearDown(self):
+        self.init._widget_panels.clear()
+        del self.init._running[:]
+        del self.init._background[:]
+        self.init._gui_app = None
+        self.window.frame.Destroy()
+
+    def test_one_panel_per_widget_between_the_view_and_the_status_bar(self):
+        application = self._Application([
+            {'key': 'weather', 'label': 'Weather', 'rows': ['Mainly clear.', 'Temperature: 16 C.']},
+            {'key': 'moon', 'label': 'Moon', 'rows': ['First quarter']},
+        ])
+        self.init._running.append((self._Entry('w', 'Weather app'), application, None))
+        self.init._fill_widgets()
+        panels = self.window.side_panels
+        self.assertEqual(panels.ids(), ['elten_widget:w:weather', 'elten_widget:w:moon'])
+        column = self.window.windows()
+        self.assertIs(column[0], self.window.view)
+        self.assertEqual(column[1].GetLabel(), 'Weather:')
+        self.assertIs(column[2], panels.find('elten_widget:w:weather')['control'])
+        self.assertEqual(column[3].GetLabel(), 'Moon:')
+        self.assertIs(column[-2], self.window.statusbar_label, 'the status bar comes last')
+        self.assertIs(column[-1], self.window.statusbar_listbox)
+        box = column[2]
+        self.assertEqual([box.GetString(i) for i in range(box.GetCount())], ['Mainly clear.', 'Temperature: 16 C.'])
+        self.assertEqual(box.GetName(), 'Weather', 'named for the reader')
+        # The Tab ring: view, the panels, the status bar, round again.
+        ring = panels.ring()
+        self.assertEqual(ring, [self.window.view, column[2], column[4], self.window.statusbar_listbox])
+        self.assertIs(panels.next_after(self.window.view), column[2])
+        self.assertIs(panels.next_after(column[4]), self.window.statusbar_listbox)
+        self.assertIs(panels.next_after(self.window.statusbar_listbox), self.window.view)
+        self.assertIs(panels.next_after(column[2], backwards=True), self.window.view)
+
+    def test_the_rows_follow_the_widget_and_the_cursor_stays(self):
+        application = self._Application([{'key': 'w', 'label': 'W', 'rows': ['a', 'b', 'c']}])
+        self.init._running.append((self._Entry('x', 'X'), application, None))
+        self.init._fill_widgets()
+        box = self.window.side_panels.find('elten_widget:x:w')['control']
+        box.SetSelection(2)
+        application.widgets = [{'key': 'w', 'label': 'W', 'rows': ['a', 'b', 'changed']}]
+        self.init._fill_widgets()
+        self.assertEqual(self.window.side_panels.ids(), ['elten_widget:x:w'], 'the same panel, not a second one')
+        self.assertEqual(box.GetString(2), 'changed')
+        self.assertEqual(box.GetSelection(), 2)
+
+    def test_enter_on_a_row_is_select_on_the_applications_control(self):
+        application = self._Application([{'key': 'w', 'label': 'W', 'rows': ['a', 'b']}])
+        self.init._running.append((self._Entry('x', 'X'), application, None))
+        self.init._fill_widgets()
+        box = self.window.side_panels.find('elten_widget:x:w')['control']
+        box.SetSelection(1)
+        self.assertTrue(self.window.side_panels.activate(box))
+        self.assertEqual(application.events, [('widget', {'key': 'w', 'index': 1, 'name': 'select'})])
+        self.assertFalse(self.window.side_panels.activate(self.window.view), 'not a panel')
+
+    def test_a_widget_that_goes_takes_its_panel_with_it(self):
+        application = self._Application([{'key': 'w', 'label': 'W', 'rows': ['a']},
+                                         {'key': 'v', 'label': 'V', 'rows': ['b']}])
+        self.init._running.append((self._Entry('x', 'X'), application, None))
+        self.init._fill_widgets()
+        self.assertEqual(len(self.window.windows()), 7)
+        application.widgets = [{'key': 'w', 'label': 'W', 'rows': ['a']}]
+        self.init._fill_widgets()
+        self.assertEqual(self.window.side_panels.ids(), ['elten_widget:x:w'])
+        self.assertEqual(len(self.window.windows()), 5, 'its label went with it')
+        del self.init._running[:]
+        self.init._fill_widgets()
+        self.assertEqual(self.window.side_panels.ids(), [], 'the application ended: no widgets, no panels')
+        self.assertEqual([w for w in self.window.windows()],
+                         [self.window.view, self.window.statusbar_label, self.window.statusbar_listbox])
+        self.assertEqual(self.init._widget_panels, {})
+
+
+class ThePlatformEltensApplicationsReach(_RubyAnswers):
+    """Names an installed application calls that are not in `program.rb`
+    at all - the clipboard, the window, the reader, the scene it goes back
+    to, the TLS store, the notification groups, the keyboard state - each
+    read out of Elten's own source. A name that is not there is a
+    `NameError` inside somebody else's `rescue Exception`, where it is a
+    feature quietly not working: Freesound could not copy a link, Weather
+    could not finish, the Game Room could not save its settings.
+    """
+
+    def platform(self, source):
+        return self.answer("require 'platform'\n" + source)
+
+    def test_the_clipboard_is_titans(self):
+        out = self.platform(
+            "$answers['clipboard'] = proc { |a| a['do'] == 'get' ? 'copied' : true }\n"
+            "Clipboard.set_data('hello')\n"
+            "Clipboard.text = 'again'\n"
+            "puts $calls.select { |op, _| op == 'clipboard' }.map { |_, a| a['text'] }.inspect\n"
+            "puts Clipboard.text\n"
+            "puts Clipboard.get_data.inspect\n")
+        self.assertEqual(out.split('\n'), ['["hello", "again"]', 'copied', '"copied"'])
+
+    def test_the_window_answers_about_the_applications_own_window(self):
+        out = self.platform(
+            "$answers['window_state'] = {'active' => false, 'minimized' => true}\n"
+            "puts [EltenWindow.active_or_child?, EltenWindow.minimized?, EltenWindow.window_thread?].inspect\n"
+            "$answers.delete('window_state')\n"
+            "puts [EltenWindow.active_or_child?, EltenWindow.minimized?].inspect\n")
+        self.assertEqual(out.split('\n'), ['[false, true, true]', '[true, false]'])
+
+    def test_nvda_is_honest_and_braille_reaches_titan(self):
+        out = self.platform(
+            "puts NVDA.check.inspect\n"
+            "NVDA.braille('')\n"
+            "puts $notices.select { |op, _| op == 'braille' }.size\n")
+        self.assertEqual(out.split('\n'), ['false', '1'])
+
+    def test_going_back_to_the_main_scene_is_leaving(self):
+        out = self.platform(
+            "$scene = Scene_Main.new\n"
+            "$scene.main\n"
+            "insert_scene(Scene_Main.new)\n"
+            "puts Scene_Loading.new.is_a?(Scene_Main)\n")
+        self.assertEqual(out, 'true')
+
+    def test_the_tls_store_verifies(self):
+        out = self.platform(
+            "store = EltenAPI::TLS.certificate_store\n"
+            "ctx = EltenAPI::TLS.client_context\n"
+            "puts [store.is_a?(OpenSSL::X509::Store), ctx.verify_mode == OpenSSL::SSL::VERIFY_PEER].inspect\n")
+        self.assertEqual(out, '[true, true]')
+
+    def test_a_chapter_is_eltens_chapter(self):
+        out = self.platform(
+            "item = AudioInfo::Chapter.new\n"
+            "item.name = 'Intro'\n"
+            "item.time = '12.5'.to_f\n"
+            "puts [item.name, item.time, item.id].inspect\n")
+        self.assertEqual(out, '["Intro", 12.5, nil]')
+
+    def test_notification_groups_are_kept_and_labelled(self):
+        out = self.platform(
+            "helper = Object.new.extend(NotificationGroups)\n"
+            "g = NotificationGroups::NotificationGroup.new(key: 'virtual:x:1', cat: 'app',\n"
+            "  category: helper.category_label('app'), label: '', date: 0, revoked: false, ids: [],\n"
+            "  payload: {'title' => 'T'}, fallback_text: 'New podcast: T', event_count: 1, virtual: true)\n"
+            "changed = NotificationGroups.store_virtual_notification_groups([g])\n"
+            "again = NotificationGroups.store_virtual_notification_groups([g])\n"
+            "kept = NotificationGroups.virtual_notification_groups\n"
+            "puts [changed, again, kept.size, kept.first.label, kept.first.key].inspect\n")
+        self.assertEqual(out, '[true, false, 1, "Programs: New podcast: T", "virtual:x:1"]')
+
+    def test_keyboard_state_clears_the_frame_and_the_held_keys(self):
+        out = self.platform(
+            "EltenLoop.send(:deliver, {'event' => 'key', 'name' => 'key_escape'})\n"
+            "before = [EltenLoop.key_pressed?(:key_escape), EltenLoop.key_held?(:key_escape)]\n"
+            "EltenAPI::KeyboardState.suppress_held_until_release\n"
+            "EltenAPI::KeyboardState.clear_current_frame\n"
+            "after = [EltenLoop.key_pressed?(:key_escape), EltenLoop.key_held?(:key_escape)]\n"
+            "puts [before, after].inspect\n")
+        self.assertEqual(out, '[[true, true], [false, false]]')
+
+    def test_a_held_key_counts_again_only_when_repeat_is_asked_for(self):
+        out = self.platform(
+            "EltenLoop.send(:deliver, {'event' => 'key', 'name' => 'key_right', 'repeat' => true})\n"
+            "puts [key_pressed?(:key_right), key_pressed?(:key_right, repeat: true)].inspect\n")
+        self.assertEqual(out, '[false, true]')
+
+    def test_a_keyboard_action_is_the_key_eltens_scheme_binds(self):
+        out = self.platform(
+            "EltenLoop.send(:deliver, {'event' => 'key', 'name' => 'key_home'})\n"
+            "puts keyboard_action_pressed?(:player_start, :player_end).inspect\n"
+            "puts EltenAPI::KeyboardScheme.binding(:select_all).inspect\n"
+            "puts keyboard_action_pressed?(:player_end).inspect\n")
+        self.assertEqual(out.split('\n'), [':player_start', '[:a, :control]', 'nil'])
+
+    def test_executeprocess_waits_and_answers_the_exit_code(self):
+        out = self.platform(
+            "code = executeprocess('cmd /c exit 3', true, 0, false)\n"
+            "late = executeprocess('cmd /c ping -n 5 127.0.0.1 > nul', true, 0.5, false)\n"
+            "puts [code, late].inspect\n")
+        self.assertEqual(out, '[3, -1]')
+
+    def test_the_small_helpers_answer(self):
+        out = self.platform(
+            "puts [licensetext.include?('GNU'), createdebuginfo.include?('Ruby:'), restart_to_developer_mode].inspect\n"
+            "puts EltenSystemHelpers.locale_sort_key('Zebra') < EltenSystemHelpers.locale_sort_key('apple')\n"
+            "puts EltenLink::Client.session_object.respond_to?(:name)\n"
+            "puts Programs::Extensions.refresh_ui.inspect\n")
+        self.assertEqual(out.split('\n'), ['[true, true, false]', 'false', 'true', 'true'])
+
+    def test_a_child_process_reports_its_exit_status(self):
+        out = self.platform(
+            "p = ChildProc.new('cmd /c exit 7', nil)\n"
+            "50.times { break if p.finished?; sleep 0.05 }\n"
+            "puts p.exitstatus.inspect\n"
+            "puts ChildProc.new('', nil).finished?\n")
+        self.assertEqual(out.split('\n'), ['7', 'true'])
+
+
+class TheEventsAreEltensEvents(_RubyAnswers):
+    """An event an application binds that the port never fires is a
+    feature that silently does nothing. Every one here is bound by an
+    installed application, and every one is fired by Elten's own control.
+    """
+
+    def test_a_tick_box_and_a_field_fire_change(self):
+        out = self.answer(
+            "box = CheckBox.new('T')\n"
+            "field = EditBox.new('F')\n"
+            "seen = []\n"
+            "box.on(:change) { seen << :box }\n"
+            "field.on(:change) { seen << :field }\n"
+            "form = Form.new([box, field]); form.present\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'changed', 'checked' => true})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 1, 'name' => 'changed', 'text' => 'x'})\n"
+            "puts seen.inspect\n"
+            "puts [box.checked?, field.text].inspect\n")
+        self.assertEqual(out.split('\n'), ['[:box, :field]', '[true, "x"]'])
+
+    def test_right_on_a_list_is_expand_and_left_is_collapse(self):
+        out = self.answer(
+            "l = ListBox.new(%w[a b])\n"
+            "seen = []\n"
+            "l.on(:expand) { |i| seen << [:expand, i] }\n"
+            "l.on(:collapse) { |i| seen << [:collapse, i] }\n"
+            "l.on(:key_right) { seen << :key_right }\n"
+            "form = Form.new([l]); form.present\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'changed', 'index' => 1})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'key_right'})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'key_left', 'shift' => true})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'key_left'})\n"
+            "puts seen.inspect\n")
+        self.assertEqual(out, '[:key_right, [:expand, [1]], [:collapse, [1]]]')
+
+    def test_the_keyboard_arriving_is_blur_before_focus_focus_and_move(self):
+        out = self.answer(
+            "a = ListBox.new(%w[a]); b = EditBox.new('B')\n"
+            "seen = []\n"
+            "a.on(:blur) { seen << :a_blur }\n"
+            "b.on(:before_focus) { seen << :b_before }\n"
+            "b.on(:focus) { seen << :b_focus }\n"
+            "form = Form.new([a, b]); form.present\n"
+            "form.on(:move) { |i| seen << [:move, i] }\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'focus'})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 1, 'name' => 'focus'})\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 1, 'name' => 'focus'})\n"
+            "puts seen.inspect\n"
+            "puts form.index\n")
+        self.assertEqual(out.split('\n'), ['[[:move, [0]], :a_blur, :b_before, :b_focus, [:move, [1]]]', '1'])
+
+    def test_a_forms_own_menu_joins_the_controls(self):
+        out = self.answer(
+            "l = ListBox.new(%w[a])\n"
+            "l.bind_context { |m| m.option('Mine') {} }\n"
+            "form = Form.new([l]); form.present\n"
+            "form.bind_context { |m| m.option('Forms') {} }\n"
+            "def form.popup_menu(_c, items); $seen = items; nil; end\n"
+            "form.dispatch_event({'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'context'})\n"
+            "puts $seen.map { |i| i['label'] }.inspect\n"
+            "puts form.hascontext\n")
+        self.assertEqual(out.split('\n'), ['["Mine", "Forms"]', 'true'])
+
+    def test_a_players_chapters_are_the_sounds_chapters(self):
+        out = self.answer(
+            "require 'platform'\n"
+            "$answers['stream_open'] = {'handle' => 1, 'position' => 20.0, 'duration' => 100.0, 'chapters' => []}\n"
+            "$answers['stream_do'] = proc { |a| $sought = a['position'] if a['do'] == 'seek'; {'handle' => 1, 'position' => 20.0} }\n"
+            "player = Player.new('x.mp3', label: 'P')\n"
+            "sound = player.sound\n"
+            "marks = [[ 'One', 5.0 ], ['Two', 50.0]].map { |n, t| c = AudioInfo::Chapter.new; c.name = n; c.time = t; c }\n"
+            "sound.define_singleton_method(:chapters) { marks }\n"
+            "player.next_chapter\n"
+            "puts $sought.inspect\n"
+            "player.previous_chapter\n"
+            "puts $sought.inspect\n")
+        self.assertEqual(out.split('\n'), ['50.0', '5.0'])
+
+
+class TheWindowReportsEltensEvents(TheRealWidgetsReportThroughTheRealSendEvent):
+    """The Titan side of the same events, in real wx."""
+
+    def test_every_key_elten_reports_is_reported(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'L', 'options': ['alpha', 'beta']}])
+        widget = self.widget_of(gui, form_id, 0)
+        for name, key in (('key_delete', wx.WXK_DELETE), ('key_backspace', wx.WXK_BACK),
+                          ('key_insert', wx.WXK_INSERT), ('key_3', ord('3')),
+                          ('key_comma', ord(',')), ('key_d', ord('D'))):
+            self.fire_char(widget.listbox, key)
+            self.assertTrue(self.messages(recorder, name), 'the application was not told about %s' % name)
+
+    def test_the_keyboard_arriving_on_a_control_is_reported_once(self):
+        wx = self.wx
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [
+            {'kind': 'listbox', 'header': 'L', 'options': ['a']},
+            {'kind': 'checkbox', 'label': 'T'}])
+        form = gui._forms[form_id]
+        second = self.widget_of(gui, form_id, 1)
+        for _twice in range(2):
+            event = wx.ChildFocusEvent(second.window)
+            form.panel.GetEventHandler().ProcessEvent(event)
+        arrivals = self.messages(recorder, 'focus')
+        self.assertEqual([m["control"] for m in arrivals], [0, 1], "the first control on opening, then the second, once")
+
+    def test_the_platform_operations_are_in_the_table(self):
+        for operation in ('clipboard', 'window_state'):
+            self.assertIn(operation, bridge.OPERATIONS)
+        self.assertIn('braille', bridge.NOTIFICATIONS)
+
+
+class RawPcmReachesTheMixer(unittest.TestCase):
+    """`Sound.open_pcm` - Spotify's whole sound. The samples the
+    application pushes become the mixer's format on the way in."""
+
+    def test_float_frames_become_the_mixers_int16(self):
+        try:
+            import numpy
+        except Exception as error:
+            self.skipTest('no numpy: %s' % error)
+        stream = host.PcmStream.__new__(host.PcmStream)
+        stream.frequency, stream.channels, stream.sample_type = 44100, 2, 'float'
+        frames = stream._to_frames(numpy, numpy.array([0.5, -0.5, 1.0, -1.0], dtype=numpy.float32).tobytes())
+        self.assertEqual(frames.dtype, numpy.int16)
+        self.assertEqual(frames.shape, (2, 2))
+        self.assertEqual(frames[0].tolist(), [16383, -16383])
+        # a stereo 22050 Hz source into a mono 44100 Hz mixer: twice the
+        # frames, one channel
+        stream.frequency = 22050
+        fitted = stream._fit(numpy, frames, 44100, 1)
+        self.assertEqual(fitted.shape[1], 1)
+        self.assertEqual(len(fitted), 4)
+        # an incomplete frame at the end is left out, never misread
+        short = stream._to_frames(numpy, b'\x00' * 9)
+        self.assertEqual(short.shape, (1, 2))
+
+    def test_the_pcm_operations_are_in_the_table(self):
+        for operation in ('pcm_open', 'pcm_write', 'pcm_end'):
+            self.assertIn(operation, bridge.OPERATIONS)
+        for note in ('pcm_write', 'pcm_end'):
+            self.assertIn(note, bridge.NOTIFICATIONS)
+
+    def test_a_push_stream_opens_writes_and_ends_without_a_mixer(self):
+        recorder = TheDispatchTable.Recorder()
+        recorder.ui = None
+        answer = bridge._op_pcm_open(recorder, {'frequency': 44100, 'channels': 2, 'type': 'float'})
+        self.assertIsInstance(answer, dict)
+        handle = answer['handle']
+        self.assertTrue(answer['opened'])
+        import base64
+        try:
+            import numpy
+        except Exception as error:
+            self.skipTest('no numpy: %s' % error)
+        data = base64.b64encode(numpy.zeros(44100 * 2, dtype=numpy.float32).tobytes()).decode('ascii')
+        taken = bridge._op_pcm_write(recorder, {'handle': handle, 'data': data})
+        self.assertEqual(taken, 44100 * 2 * 4)
+        status = bridge._op_stream_do(recorder, {'handle': handle, 'do': 'status'})
+        self.assertEqual(status['written_frames'], 44100)
+        self.assertTrue(bridge._op_pcm_end(recorder, {'handle': handle}))
+        self.assertTrue(bridge._op_stream_do(recorder, {'handle': handle, 'do': 'status'})['ended'])
+        bridge._op_stream_do(recorder, {'handle': handle, 'do': 'close'})
+
+
+class ThePcmSoundIsEltensPcmSound(_RubyAnswers):
+    def test_open_pcm_answers_the_surface_spotify_uses(self):
+        out = self.answer(
+            "require 'platform'\n"
+            "$answers['pcm_open'] = {'handle' => 7, 'opened' => true, 'playing' => false, 'paused' => true}\n"
+            "$answers['stream_do'] = proc { |a| {'playing' => true, 'paused' => false, 'position' => 0.5} }\n"
+            "s = Sound.open_pcm(frequency: 44100, channels: 2, type: :float, buffer: ''.b)\n"
+            "s.volume = 0.5\n"
+            "s.buffer_attribute.value = 0.0 if s.channel != s.source_channel\n"
+            "n = s.write_pcm(([0.0] * 8).pack('e*'))\n"
+            "begin; s.write_pcm('abc'); rescue ArgumentError => e; err = e.class; end\n"
+            "s.play\n"
+            "st = s.status\n"
+            "Bass::BASS_StreamPutData.call(s.source_channel, nil, Bass::BASS_STREAMPROC_END)\n"
+            "writes = $notices.select { |op, _| op == 'pcm_write' }.size\n"
+            "ends = $notices.select { |op, a| op == 'pcm_end' && a['handle'] == 7 }.size\n"
+            "puts [s.channel, n, err, st.playing?, st == SoundStatus::Playing, writes, ends, s.tempo_attribute.available?, s.written_frames].inspect\n")
+        self.assertEqual(out, '[7, 32, ArgumentError, true, true, 1, 1, true, 4]')
+
+    def test_bass_is_honest_about_its_encoders(self):
+        out = self.answer(
+            "require 'platform'\n"
+            "puts [Bass::BASSENCMP3, Bass::BASSENC, Bass::BASS_ErrorGetCode.call, Bass::BASS_UNICODE > 0].inspect\n")
+        self.assertEqual(out, '[nil, nil, 0, true]')
+
+
+class TheRestOfEltensPlatform(_RubyAnswers):
+    """The language, the notification service, the quick actions and the
+    two globals Elten's own screens read."""
+
+    def test_the_language_is_titans_and_configuration_reads_it(self):
+        out = self.answer(
+            "require 'platform'\n"
+            "$answers['language'] = 'pl'\n"
+            "puts [EltenGettext.language, Configuration.language].inspect\n")
+        self.assertEqual(out, '["pl", "pl"]')
+
+    def test_the_notification_service_and_quick_actions_answer(self):
+        out = self.answer(
+            "require 'platform'\n"
+            "$answers['elten'] = proc { |a| a['method'] == 'server_time' ? 1234 : [{'id' => 5}] }\n"
+            "t = EltenAPI::NotificationService.server_time\n"
+            "rows = EltenAPI::NotificationService.active_notifications\n"
+            "puts [t, rows.size, rows.first.id, EltenAPI::NotificationService.revoke_active_notifications([5])].inspect\n"
+            "puts EltenAPI::QuickActions.hotkey_actions(1).inspect\n"
+            "mod = Module.new { define_method(:hotkey_actions) { |k| k == 2 ? [:mine] : super(k) } }\n"
+            "EltenAPI::QuickActions.singleton_class.prepend(mod)\n"
+            "puts [EltenAPI::QuickActions.hotkey_actions(2), EltenAPI::QuickActions.hotkey_actions(3)].inspect\n"
+            "puts [EltenAPI::LiveSessions::StackFull, EltenAPI::LiveSessions::StackPacketTooLarge].map { |c| c < EltenAPI::LiveSessions::Error }.inspect\n")
+        self.assertEqual(out.split('\n'), ['[1234, 1, 5, true]', '[]', '[[:mine], []]', '[true, true]'])
+
+    def test_the_open_forms_are_the_active_controls_and_focus_is_honoured(self):
+        out = self.answer(
+            "l = ListBox.new(%w[a])\n"
+            "form = Form.new([l]); form.present\n"
+            "puts $activecontrols.map(&:class).inspect\n"
+            "$focus = true\n"
+            "def form.focus_control(i); ($focused ||= []) << i; true; end\n"
+            "Thread.new { sleep 0.2; form.resume }\n"
+            "form.wait\n"
+            "puts [$focus, $focused].inspect\n"
+            "puts $activecontrols.inspect\n")
+        self.assertEqual(out.split('\n'), ['[Form]', '[false, [0]]', '[]'])
+
+
+class FocusTakesEltensOwnArguments(_RubyAnswers):
+    """`ListBox#focus(index, count, header, spk)` - four positional, which
+    the Game Room's card list passes straight on with `super`. A `focus`
+    that took three was `ArgumentError` on the first card dealt."""
+
+    def test_a_subclass_passing_all_four_on_is_accepted(self):
+        out = self.answer(
+            "class Cards < ListBox\n"
+            "  def focus(index = nil, count = nil, header = @header, spk = true)\n"
+            "    super(index, count, header, spk)\n"
+            "  end\n"
+            "end\n"
+            "l = Cards.new(%w[a b]); Form.new([l]).present\n"
+            "l.focus(nil, nil, '', true)\n"
+            "b = CheckBox.new('t'); Form.new([b]).present\n"
+            "b.focus(0, 1, true, true)\n"
+            "g = GridBox.new(2, 2); Form.new([g]).present\n"
+            "g.focus(nil, nil, true, include_header: false)\n"
+            "puts 'ok'\n")
+        self.assertEqual(out, 'ok')
+
+
+class AFolderHasNoUpOneLevelRow(_RubyAsk):
+    """Elten's tree lists the folder (`Dir.each_child`) and nothing else;
+    going up is Left or Backspace. A "Up one level" row at the top of every
+    folder was a second way up Elten has not got, read out first each time."""
+
+    def test_a_folder_lists_only_what_is_in_it(self):
+        source = ('require "tmpdir"\n'
+                  'Dir.mktmpdir do |home|\n'
+                  '  Dir.mkdir(File.join(home, "sub")); File.write(File.join(home, "a.txt"), "x")\n'
+                  '  t = FilesTree.new("F", path: home)\n'
+                  '  puts t.entries.inspect\n'
+                  '  puts t.send(:labels).inspect\n'
+                  'end\n')
+        answer = self.ask(source).replace('\r', '').split('\n')
+        self.assertEqual(answer[0], '["sub", "a.txt"]')
+        self.assertEqual(answer[1], '["sub, folder", "a.txt"]')
+
+
+class WaitForItemAnswersTheRow(_RubyAnswers):
+    """`ListBox#wait_for_item` - Elten's `form_field.rb`: the row on a
+    select or an expand, nil on a collapse or Escape. The version that
+    shipped answered nil for everything, so `while list.wait_for_item`
+    (Tyflopodcast's main screen) ended the application on the first Enter."""
+
+    def test_select_answers_the_row_and_collapse_answers_nil(self):
+        out = self.answer(
+            "l = ListBox.new(%w[news podcasts])\n"
+            "t = Thread.new do\n"
+            "  sleep 0.3\n"
+            "  EltenLoop.send(:deliver, {'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'changed', 'index' => 1})\n"
+            "  EltenLoop.send(:deliver, {'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'select', 'index' => 1})\n"
+            "  sleep 0.5\n"
+            "  EltenLoop.send(:deliver, {'event' => 'control', 'form' => 1, 'control' => 0, 'name' => 'key_left'})\n"
+            "  sleep 0.5\n"
+            "  EltenLoop.send(:deliver, {'event' => 'control', 'form' => 1, 'control' => nil, 'name' => 'escape'})\n"
+            "end\n"
+            "answers = [l.wait_for_item, l.wait_for_item, l.wait_for_item]\n"
+            "t.join\n"
+            "puts answers.inspect\n")
+        self.assertEqual(out, '["podcasts", nil, nil]')
+
+
+class TheRealWindowSurvivesWhatTheDoubleCannotSee(TheRealWidgetsReportThroughTheRealSendEvent):
+    """Found by driving the real window: a choice list's rows cleaned as a
+    table's (MileByMile could not open its setup screen), and a focus into
+    a control whose screen had been replaced (which ended Freesound)."""
+
+    def test_a_choice_lists_rows_keep_their_shape(self):
+        clean = bridge._clean_control_spec({'kind': 'choicelist', 'header': 'Card set',
+                                            'rows': [{'label': '', 'options': ['a', 'b'], 'index': 1}]})
+        self.assertEqual(clean['rows'], [{'label': '', 'options': ['a', 'b'], 'index': 1}])
+        table = bridge._clean_control_spec({'kind': 'tablebox', 'rows': [['x', 'y'], 'z']})
+        self.assertEqual(table['rows'], [['x', 'y'], ['z']])
+        recorder, gui = self.make()
+        form_id = gui.open_form(recorder, [clean])
+        self.assertEqual(self.widget_of(gui, form_id, 0).kind, 'choicelist')
+
+    def test_focusing_a_control_of_a_replaced_screen_answers_false(self):
+        recorder, gui = self.make()
+        first = gui.open_form(recorder, [{'kind': 'listbox', 'header': 'L', 'options': ['a']}])
+        second = gui.open_form(recorder, [{'kind': 'button', 'label': 'B'}])
+        self.assertNotEqual(first, second)
+        self.assertFalse(gui.focus_control(first, 0), 'a destroyed control must not raise')
+        self.assertFalse(gui.set_control(first, 0, {'options': ['b']}))
+
+
+class AContextTranslationIsAskedWithItsContext(unittest.TestCase):
+    """`p_("Weather", "Main menu")` - a `.mo` keys it as `Weather U+0004
+    Main menu`, and U+0004 is a control character the wire strips out of a
+    text. Sent inside the text it arrived as "WeatherMain menu", matched
+    nothing, and every one of Weather's 236 strings was English on a
+    Polish desktop. The context is its own field, and Titan asks its
+    catalogue with `pgettext`."""
+
+    def _catalogue(self):
+        import gettext
+        catalogue = gettext.GNUTranslations()
+        catalogue._catalog = {'Weather\x04Main menu': 'Menu g\u0142\u00f3wne', 'Back': 'Wstecz',
+                              ('Weather\x04%d day', 0): '%d dzie\u0144', ('Weather\x04%d day', 1): '%d dni'}
+        catalogue.plural = lambda n: 0 if n == 1 else 1
+        return catalogue
+
+    def test_titan_looks_the_context_up_with_pgettext(self):
+        recorder = TheDispatchTable.Recorder()
+        recorder.translator = self._catalogue()
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Main menu', 'context': 'Weather'}), 'Menu g\u0142\u00f3wne')
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Back'}), 'Wstecz')
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Main menu'}), 'Main menu', 'no context, no context entry')
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Nothing', 'context': 'Weather'}), 'Nothing')
+        self.assertEqual(bridge._op_translate_plural(recorder, {'one': '%d day', 'other': '%d days', 'count': 3, 'context': 'Weather'}), '%d dni')
+
+    def test_a_plain_translation_is_asked_under_the_applications_name_first(self):
+        """Elten's `_()` tries the program's manifest name as the context
+        before the plain key (`dictionary.rb`), and Youtube, Spotify,
+        Freesound and Weather key every string that way while calling
+        plain `_()`. Asked without the name, not one of them matched."""
+        import gettext
+        recorder = TheDispatchTable.Recorder()
+        recorder.entry.manifest['name'] = 'Youtube'
+        catalogue = gettext.GNUTranslations()
+        catalogue._catalog = {'Youtube\x04Search Youtube': 'Przeszukaj Youtube', 'Cancel': 'Anuluj',
+                              ('Youtube\x04%d video', 0): '%d film', ('Youtube\x04%d video', 1): '%d filmy'}
+        catalogue.plural = lambda n: 0 if n == 1 else 1
+        recorder.translator = catalogue
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Search Youtube'}), 'Przeszukaj Youtube')
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Cancel'}), 'Anuluj', 'the plain key still answers')
+        self.assertEqual(bridge._op_translate(recorder, {'text': 'Nothing'}), 'Nothing')
+        self.assertEqual(bridge._op_translate_plural(recorder, {'one': '%d video', 'other': '%d videos', 'count': 2}), '%d filmy')
+
+
+class TheRubySideSendsTheContextApart(_RubyAnswers):
+    def test_p_and_np_send_the_context_as_its_own_field(self):
+        out = self.answer(
+            "$answers['translate'] = proc { |a| a['context'] == 'Weather' && a['text'] == 'Main menu' ? 'Menu glowne' : a['text'] }\n"
+            "$answers['translate_plural'] = proc { |a| a['context'] == 'Weather' ? \"#{a['count']} dni\" : nil }\n"
+            "puts p_('Weather', 'Main menu')\n"
+            "puts p_('Weather', 'Unknown')\n"
+            "puts np_('Weather', '%d day', '%d days', 3)\n"
+            "sent = $calls.find { |op, a| op == 'translate' && a['context'] == 'Weather' }\n"
+            "puts sent[1]['text'].include?(\"\\u0004\").inspect\n")
+        self.assertEqual(out.split('\n'), ['Menu glowne', 'Unknown', '3 dni', 'false'])
 
 
 if __name__ == '__main__':

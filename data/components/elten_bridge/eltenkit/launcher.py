@@ -131,7 +131,7 @@ def translator_for(folder, language):
     return None
 
 
-def run(entry, ui=None, language='en', speaker=None, sounds=None):
+def run(entry, ui=None, language='en', speaker=None, sounds=None, background=False):
     """Start one application. Answers the `Application`, running or failed.
 
     Never raises: a package that cannot be opened, an interpreter that is
@@ -155,7 +155,8 @@ def run(entry, ui=None, language='en', speaker=None, sounds=None):
 
     application = bridge_module.Application(
         entry, paths, speaker=speaker, sounds=sounds,
-        translator=translator_for(folder, language), ui=ui, language=language)
+        translator=translator_for(folder, language), ui=ui, language=language,
+        background=background)
     application.start()
     return application
 

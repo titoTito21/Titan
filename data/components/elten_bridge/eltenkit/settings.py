@@ -44,3 +44,38 @@ def set_use_titan_sounds(value):
     except Exception as error:
         print(f"[elten bridge] could not save the sound setting: {error}")
         return False
+
+
+# ---------------------------------------------------------------- widgets
+# The applications started in the BACKGROUND for their main-tab widgets
+# (Weather's forecast, for one): Elten runs every installed application's
+# extensions whether or not it is open, and a widget the user has to open
+# the application to see is not a widget. Kept as the applications' keys.
+WIDGET_APPS_KEY = 'elten_bridge_widget_apps'
+
+
+def widget_apps():
+    """The keys of the applications to start in the background. Never
+    raises."""
+    try:
+        from src.settings.settings import get_setting
+        value = get_setting(WIDGET_APPS_KEY, [])
+    except Exception:
+        return []
+    if isinstance(value, str):
+        value = [part for part in value.split('|') if part]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def set_widget_apps(keys):
+    try:
+        from src.settings.settings import save_settings, load_settings
+        settings = load_settings()
+        settings[WIDGET_APPS_KEY] = [str(key) for key in keys]
+        save_settings(settings)
+        return True
+    except Exception as error:
+        print(f"[elten bridge] could not save the widget applications: {error}")
+        return False

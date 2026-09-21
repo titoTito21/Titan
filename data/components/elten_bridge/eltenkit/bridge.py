@@ -72,7 +72,7 @@ class Application(object):
     """One running application. Started by `start`, stopped by `stop`."""
 
     def __init__(self, entry, paths, speaker=None, sounds=None,
-                 translator=None, ui=None, language='en'):
+                 translator=None, ui=None, language='en', background=False):
         #: The catalogue entry - what is being run.
         self.entry = entry
         self.paths = paths
@@ -84,6 +84,16 @@ class Application(object):
         #: What draws: dialogs, lists, progress. None means a headless run,
         #: which is what the tests use and what an action-API call gets.
         self.ui = ui
+        # The main-tab widgets the application's extensions declared, as
+        # Titan last heard them (`_note_widgets`), and whoever wants to be
+        # told when they change.
+        self.widgets = []
+        self.on_widgets = None
+        # Started for its EXTENSIONS - widgets, background ticks - rather
+        # than opened: `activate` runs, `program_main` does not.
+        self.background = bool(background)
+        self._recorders = {}
+        self._recorder_next = 0
 
         self.process = None
         self.status = ''
@@ -124,13 +134,13 @@ class Application(object):
             return self._fail('the application was not unpacked')
 
         manifest = json.dumps(self.entry.manifest, ensure_ascii=False)
+        extra = {'ELTEN_BRIDGE_BACKGROUND': '1'} if self.background else {}
         try:
             self.process = subprocess.Popen(
-                [interpreter.path, '--disable-gems', boot, directory, manifest]
-                if False else [interpreter.path, boot, directory, manifest],
+                [interpreter.path, boot, directory, manifest],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, cwd=directory,
-                env=interpreter.environment(),
+                env=interpreter.environment(extra),
                 creationflags=_no_window(), bufsize=0)
         except OSError as error:
             return self._fail('the application could not be started: %s' % error)
@@ -174,6 +184,14 @@ class Application(object):
         for stream in streams:
             try:
                 stream.close()
+            except Exception:
+                pass
+        # A recording left running after its window has gone is a
+        # microphone left open; stopping it also finishes the file.
+        recorders, self._recorders = list(self._recorders.values()), {}
+        for recorder in recorders:
+            try:
+                recorder.stop()
             except Exception:
                 pass
         try:
@@ -468,23 +486,46 @@ def _our_words(language):
 
 def _op_translate(app, args):
     text = host_module._text(args.get('text'))
+    context = host_module._text(args.get('context'))
     # The application's own words first - they are its own and it knows
     # them best - and the bridge's only for what the application has never
-    # heard of.
-    if app.translator is not None:
-        try:
-            answer = app.translator.gettext(text)
-            if answer != text:
-                return answer
-        except Exception:
-            pass
-    ours = _our_words(app.language)
-    if ours is not None:
-        try:
-            return ours.gettext(text)
-        except Exception:
-            pass
+    # heard of. A CONTEXT (`p_("Weather", "Main menu")`) is looked up with
+    # `pgettext`, which is `context U+0004 text` in the catalogue - the
+    # separator the wire would strip if it travelled inside the text.
+    #
+    # **A plain `_()` is asked under the application's own NAME first.**
+    # Elten's `dictionary.rb` does exactly that (`program_translation_
+    # context` is the manifest's name) - and Youtube, Spotify, Freesound and
+    # Weather key EVERY string in their catalogues under that context while
+    # calling plain `_("Search Youtube")` for most of them. Asked without
+    # the name, none of those catalogues matched a single string, and the
+    # four of them were English on a Polish desktop.
+    contexts = [context] if context else [_program_context(app), '']
+    for catalogue in (app.translator, _our_words(app.language)):
+        if catalogue is None:
+            continue
+        for wanted in contexts:
+            try:
+                if wanted:
+                    answer = catalogue.pgettext(wanted, text)
+                else:
+                    answer = catalogue.gettext(text)
+            except Exception:
+                continue
+            if answer and answer != text:
+                # Elten strips a context the translation itself still carries.
+                return answer.replace(wanted + '\x04', '') if wanted else answer
     return text
+
+
+def _program_context(app):
+    """The manifest's own name - not the localised one the list shows -
+    which is what Elten keys a program's context translations under."""
+    try:
+        manifest = getattr(app.entry, 'manifest', None) or {}
+        return str(manifest.get('name') or '')
+    except Exception:
+        return ''
 
 
 def _op_translate_plural(app, args):
@@ -494,12 +535,21 @@ def _op_translate_plural(app, args):
         count = int(args.get('count', 1))
     except (TypeError, ValueError):
         count = 1
+    context = host_module._text(args.get('context'))
+    fallback = one if count == 1 else other
     if app.translator is None:
-        return one if count == 1 else other
-    try:
-        return app.translator.ngettext(one, other, count)
-    except Exception:
-        return one if count == 1 else other
+        return fallback
+    for wanted in ([context] if context else [_program_context(app), '']):
+        try:
+            if wanted:
+                answer = app.translator.npgettext(wanted, one, other, count)
+            else:
+                answer = app.translator.ngettext(one, other, count)
+        except Exception:
+            continue
+        if answer and answer not in (one, other):
+            return answer.replace(wanted + '\x04', '') if wanted else answer
+    return fallback
 
 
 def _op_path(app, args):
@@ -536,13 +586,17 @@ def _op_unlock(app, args):
 
 
 def _op_stream_open(app, args):
-    """A URL to play - a radio station, a podcast episode."""
+    """A URL to play - a radio station, a podcast episode. `autoplay`
+    false opens it paused, which is what `Sound.new(url)` wants: Elten's
+    sound does not play until it is told to."""
     stream = host_module.Stream(app.sounds.mixer, args.get('url'),
                                 args.get('label') or '')
     if stream.error and not stream.opened:
         app._note('bridge', 'stream: %s' % stream.error)
         stream.close()
         return None
+    if args.get('autoplay') is False:
+        stream.pause()
     with app._stream_lock:
         app._stream_next += 1
         handle = app._stream_next
@@ -662,6 +716,68 @@ def _op_sound_create(app, args):
     return app.sounds.create(path, bool(args.get('spatial')),
                              args.get('position', 0.0),
                              bool(args.get('loop')))
+
+
+def _op_sound_open(app, args):
+    """`Sound.new(path)` - a sound made from any FILE the application
+    names, not one of its assets: the file manager's preview, its
+    playlist, a recording just made. A Ruby process reads the disk
+    anyway, so the path is not confined; what is refused is a file that
+    is not there, answered as None so `Sound.new` can raise the way
+    Elten's does."""
+    path = str(args.get('path') or '')
+    if not path or not os.path.isfile(path):
+        return None
+    return app.sounds.create(path, bool(args.get('spatial')),
+                             args.get('position', 0.0),
+                             bool(args.get('loop')))
+
+
+def _op_sound_details(app, args):
+    """Tags, chapters, bit rate and codec of a held sound's file."""
+    entry = app.sounds._entry(args.get('handle'))
+    if entry is None:
+        return None
+    return host_module.sound_details(entry['path'])
+
+
+# ---- recording -------------------------------------------------------
+def _op_record_start(app, args):
+    recorder = host_module.Recorder(str(args.get('path') or ''),
+                                    args.get('format') or 'wav',
+                                    args.get('bitrate') or 64000,
+                                    args.get('time_limit') or 0)
+    if recorder.error:
+        app._note('bridge', 'recording: %s' % recorder.error)
+        return {'error': recorder.error}
+    app._recorder_next += 1
+    handle = app._recorder_next
+    app._recorders[handle] = recorder
+    return {'handle': handle}
+
+
+def _recorder_of(app, args):
+    return app._recorders.get(host_module._handle(args.get('handle')))
+
+
+def _op_record_pause(app, args):
+    recorder = _recorder_of(app, args)
+    if recorder is None:
+        return False
+    return recorder.pause(args.get('paused', True))
+
+
+def _op_record_stop(app, args):
+    recorder = app._recorders.pop(host_module._handle(args.get('handle')), None)
+    if recorder is None:
+        return None
+    seconds = recorder.stop()
+    return {'path': recorder.path, 'seconds': seconds, 'error': recorder.error}
+
+
+def _op_record_status(app, args):
+    recorder = _recorder_of(app, args)
+    return None if recorder is None else recorder.status()
 
 
 def _op_sound_play(app, args):
@@ -991,6 +1107,24 @@ def _op_input_text(app, args):
         lambda: app.ui.input_text(prompt, default, multiline, password), None)
 
 
+def _clean_row(row):
+    """One row of a table (a list of cells) or of a choice list (a dict
+    with the label, the options and which one is chosen)."""
+    if isinstance(row, dict):
+        options = row.get('options')
+        options = options if isinstance(options, list) else []
+        try:
+            index = int(row.get('index') or 0)
+        except (TypeError, ValueError):
+            index = 0
+        return {'label': host_module._label(row.get('label')),
+                'options': [host_module._label(item) for item in options[:host_module.MAX_ENTRIES]],
+                'index': index}
+    if isinstance(row, list):
+        return [host_module._label(cell) for cell in row[:64]]
+    return [host_module._label(row)]
+
+
 def _clean_control_spec(spec):
     """A control's description, sanitised the way any string reaching a
     widget must be - through `host_module`'s own limits, never trusted raw.
@@ -1035,10 +1169,14 @@ def _clean_control_spec(spec):
     if 'rows' in spec:
         rows = spec.get('rows')
         if isinstance(rows, list):
-            clean['rows'] = [
-                [host_module._label(cell) for cell in row[:64]]
-                if isinstance(row, list) else [host_module._label(row)]
-                for row in rows[:host_module.MAX_ENTRIES]]
+            # A TABLE's row is a list of cells; a CHOICE LIST's row is a
+            # dict - `{label, options, index}` - and cleaning it as a
+            # table's turned it into a one-cell list the widget then asked
+            # `.get` of. That was `form_open raised: 'list' object has no
+            # attribute 'get'`: MileByMile's setup screen, and every
+            # options screen with a choice row on it, could not open.
+            clean['rows'] = [_clean_row(row)
+                             for row in rows[:host_module.MAX_ENTRIES]]
     if 'header' in spec:
         clean['header'] = host_module._label(spec.get('header'))
     if 'empty_label' in spec:
@@ -1150,7 +1288,7 @@ _APP_TABLE_OPS = ('select', 'insert', 'upsert', 'update', 'delete',
 #: for the same reason `CALLS` is: an application names one of these or it
 #: reaches nothing.
 _LIVE_OPS = ('create', 'invite', 'accept', 'reject', 'send', 'leave',
-             'close', 'control', 'poll', 'stop', 'signal')
+             'close', 'control', 'poll', 'stop', 'signal', 'stack')
 
 
 def _op_live(app, args):
@@ -1185,7 +1323,14 @@ def _op_live(app, args):
                 args.get('appid'), args.get('instance_id'),
                 metadata=args.get('metadata'),
                 participant_metadata=args.get('participant_metadata'),
-                capacity=args.get('capacity') or 2)
+                capacity=args.get('capacity') or 2,
+                visibility=args.get('visibility') or 'private',
+                discovery_metadata=args.get('discovery_metadata'),
+                private_messages=bool(args.get('private_messages')))
+        if what == 'stack':
+            return eltenlink_module.live_stack(
+                args.get('session_id'), args.get('participant_id'),
+                args.get('operation'), args.get('params') or {})
         if what == 'invite':
             return eltenlink_module.live_invite(
                 args.get('session_id'), args.get('participant_id'),
@@ -1338,6 +1483,12 @@ OPERATIONS = {
     'control_focus': _op_control_focus,
     'popup_menu': _op_popup_menu,
     'stream_open': _op_stream_open,
+    'sound_open': _op_sound_open,
+    'sound_details': _op_sound_details,
+    'record_start': _op_record_start,
+    'record_pause': _op_record_pause,
+    'record_stop': _op_record_stop,
+    'record_status': _op_record_status,
     'stream_do': _op_stream_do,
     'elten_whoami': _op_elten_whoami,
     'elten_app': _op_elten_app,
@@ -1400,6 +1551,43 @@ def _note_ended(app, args):
     app.ended.set()
 
 
+def _note_buffer(app, args):
+    """An announcement into the Titan Buffer System: the `Elten API`
+    category, buffer `notifications` or `messages`, with the application
+    as the author - so what an Elten application said can be reviewed
+    after it was said, like everything else on this desktop."""
+    buffer_id = str(args.get('buffer') or 'messages')
+    if buffer_id not in ('notifications', 'messages'):
+        buffer_id = 'messages'
+    text = host_module._text(args.get('text'))
+    if not text.strip():
+        return
+    try:
+        from src.buffers import buffer_bus
+        from src.buffers import defaults as buffer_defaults
+        buffer_bus.push(buffer_defaults.ELTEN_API_CATEGORY, buffer_id, text,
+                        author=app.entry.name or app.entry.stem,
+                        kind='notification' if buffer_id == 'notifications' else 'message',
+                        category_name='Elten API',
+                        buffer_name='Notifications' if buffer_id == 'notifications' else 'Messages')
+    except Exception as error:
+        app._note('bridge', 'buffer: %s' % error)
+
+
+def _note_widgets(app, args):
+    """The application's main-tab widgets, as its extensions built them.
+    Kept on the application and handed to whoever asked to be told - the
+    bridge's view in Titan's main window."""
+    tabs = args.get('tabs')
+    app.widgets = [tab for tab in tabs if isinstance(tab, dict)] if isinstance(tabs, list) else []
+    callback = app.on_widgets
+    if callback is not None:
+        try:
+            callback(app)
+        except Exception as error:
+            app._note('bridge', 'widgets callback failed: %s' % error)
+
+
 def _note_runner_begin(app, args):
     keys = args.get('keys')
     app._watched = set(str(name) for name in keys) if isinstance(keys, list) \
@@ -1429,6 +1617,8 @@ NOTIFICATIONS = {
     'ended': _note_ended,
     'runner_begin': _note_runner_begin,
     'runner_end': _note_runner_end,
+    'widgets': _note_widgets,
+    'buffer': _note_buffer,
     'control_set': _op_control_set,
     'form_close': _op_form_close,
     # Told, not asked: a game moves, re-gains and re-pitches a sound it is
@@ -1439,3 +1629,149 @@ NOTIFICATIONS = {
     'sound_volume': _op_sound_volume,
     'sound_pitch': _op_sound_pitch,
 }
+
+
+# ---------------------------------------------------------- the platform
+# What Elten's own platform layer answers and an application reaches
+# without thinking of it as the API: the clipboard, whether its window is
+# in front, the braille display.
+
+def _op_clipboard(app, args):
+    """`Clipboard.set_data` / `Clipboard.text` - Titan's clipboard, on the
+    GUI thread, because that is whose clipboard it is. Four of the
+    installed applications copy a link or a title with it."""
+    what = str(args.get('do') or 'get')
+    text = host_module._text(args.get('text'), limit=1 << 20)
+
+    def run():
+        import wx
+        clipboard = wx.TheClipboard
+        if not clipboard.Open():
+            return None if what == 'get' else False
+        try:
+            if what == 'set':
+                clipboard.SetData(wx.TextDataObject(text))
+                clipboard.Flush()
+                return True
+            data = wx.TextDataObject()
+            if clipboard.GetData(data):
+                return data.GetText()
+            return ''
+        finally:
+            clipboard.Close()
+
+    answer = app._on_gui(run, None if what == 'get' else False)
+    return '' if what == 'get' and answer is None else answer
+
+
+def _op_window_state(app, args):
+    """`EltenWindow.active_or_child?` / `minimized?` about the window this
+    application has - which for the Game Room decides whether its widget on
+    the main screen is the thing being looked at."""
+    ui = app.ui
+    if ui is None:
+        return {'active': True, 'minimized': False}
+
+    def run():
+        import wx
+        frame = getattr(ui, '_frame', None)
+        frames = [frame] + [getattr(form, 'frame', None) for form in getattr(ui, '_forms', {}).values()]
+        frames = [candidate for candidate in frames if candidate is not None]
+        alive = [candidate for candidate in frames if _alive_window(candidate)]
+        if not alive:
+            return {'active': True, 'minimized': False}
+        active = wx.GetActiveWindow()
+        top = active.GetTopLevelParent() if active is not None else None
+        return {'active': any(candidate is top or candidate.IsActive() for candidate in alive),
+                'minimized': all(candidate.IsIconized() for candidate in alive)}
+
+    answer = app._on_gui(run, None)
+    return answer if isinstance(answer, dict) else {'active': True, 'minimized': False}
+
+
+def _alive_window(window):
+    try:
+        return bool(window) and window.IsShown() is not None
+    except RuntimeError:
+        return False
+
+
+def _note_braille(app, args):
+    """`NVDA.braille(text)` - the Game Room shows a square on the display.
+    Titan Access brailles what it is given; without it the words are kept
+    for the log, which is what a display that is not there can take."""
+    text = host_module._text(args.get('text'))
+    try:
+        import importlib
+        braille = importlib.import_module('titan_access.braille')
+        show = getattr(braille, 'show_text', None)
+        if callable(show):
+            app._on_gui(lambda: show(text), None)
+    except Exception:
+        pass
+
+
+OPERATIONS['clipboard'] = _op_clipboard
+OPERATIONS['window_state'] = _op_window_state
+NOTIFICATIONS['braille'] = _note_braille
+
+
+# --------------------------------------------------------------- raw PCM
+# `Sound.open_pcm` - an application that decodes its own audio and pushes
+# the samples. One handle in the same table as the streams, so `stream_do`
+# plays, pauses, pans and closes it exactly as it does a station.
+
+def _op_pcm_open(app, args):
+    stream = host_module.PcmStream(app.sounds.mixer, args.get('frequency') or 44100,
+                                   args.get('channels') or 2, args.get('type') or 'float',
+                                   args.get('label') or 'pcm')
+    if stream.error:
+        app._note('bridge', 'pcm: %s' % stream.error)
+        stream.close()
+        return None
+    stream.pause()
+    with app._stream_lock:
+        app._stream_next += 1
+        handle = app._stream_next
+        app._streams[handle] = stream
+    answer = stream.status()
+    answer['handle'] = handle
+    return answer
+
+
+def _op_pcm_write(app, args):
+    """Sample frames, base64 over the wire. A NOTIFICATION as well as a
+    call: a producer writes forty milliseconds at a time and must not
+    wait for an answer to each."""
+    stream = app._streams.get(host_module._handle(args.get('handle')))
+    if stream is None or not isinstance(stream, host_module.PcmStream):
+        return 0
+    import base64
+    try:
+        data = base64.b64decode(str(args.get('data') or ''))
+    except Exception:
+        return 0
+    return stream.write(data)
+
+
+def _op_pcm_end(app, args):
+    stream = app._streams.get(host_module._handle(args.get('handle')))
+    if stream is None or not isinstance(stream, host_module.PcmStream):
+        return False
+    return stream.end()
+
+
+OPERATIONS['pcm_open'] = _op_pcm_open
+OPERATIONS['pcm_write'] = _op_pcm_write
+OPERATIONS['pcm_end'] = _op_pcm_end
+NOTIFICATIONS['pcm_write'] = _op_pcm_write
+NOTIFICATIONS['pcm_end'] = _op_pcm_end
+
+
+def _op_language(app, args):
+    """Which language the application is being shown in - the one the
+    bridge chose its catalogue by."""
+    return str(getattr(app, 'language', '') or 'en')
+
+
+OPERATIONS['language'] = _op_language

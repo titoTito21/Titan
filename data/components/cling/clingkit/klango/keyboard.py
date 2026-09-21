@@ -206,6 +206,28 @@ class Keyboard(object):
             self._pending.append((found, False, None))
         return True
 
+    def character(self, text):
+        """A character the WINDOW typed, apart from the key that made it.
+
+        What a key types is the keyboard layout's business, not the key
+        name's: Shift+A is "A", AltGr+A on a Polish layout is "ą", and a
+        dead key followed by a letter is one accented character - none of
+        which the name "a" can say. Windows answers all of it in WM_CHAR,
+        which wx hands over as EVT_CHAR; a window that keys the character
+        off the NAME typed lowercase ASCII and nothing else, so no Polish
+        letter and no capital could be typed into any field of any
+        application. This is the WM_CHAR half: it goes into `chars` and
+        `messages` as its own message, with no scan code, and the key that
+        produced it is reported by `down` with `character=''` so it does
+        not type a second, wrong character of its own.
+        """
+        text = str(text or '')
+        if not text:
+            return False
+        with self._lock:
+            self._pending.append(('', True, text))
+        return True
+
     def clear(self):
         """Let go of everything. Used when the window loses the keyboard."""
         with self._lock:
@@ -246,6 +268,15 @@ class Keyboard(object):
         return out
 
     def _apply(self, name, is_down, character):
+        if not name:
+            # A character on its own (`character()`): WM_CHAR with no key.
+            if self._alt_held():
+                self.syschars.append(character)
+                self.messages.append((WM_SYSCHAR, 0, 0, character, 0))
+            else:
+                self.chars.append(character)
+                self.messages.append((WM_CHAR, 0, 0, character, 0))
+            return
         scan, virtual = KEYS[name]
         self.touched.add(scan)
         if is_down:
@@ -259,9 +290,13 @@ class Keyboard(object):
         # the only difference between typing a letter and reaching a menu.
         with_alt = self._alt_held() or name in ('lalt', 'ralt')
         control = 1 if self._ctrl_held() else 0
-        text = character if character is not None else CHARACTERS.get(name, '')
-        if not text and len(name) == 1:
-            text = name
+        # `character` is what the WINDOW says this key typed: None means
+        # "work it out from the name", '' means "nothing - the window types
+        # it itself through `character()`".
+        if character is None:
+            text = CHARACTERS.get(name, '') or (name if len(name) == 1 else '')
+        else:
+            text = character
         if is_down:
             kind = WM_SYSKEYDOWN if with_alt else WM_KEYDOWN
             (self.wmsysdown if with_alt else self.wmdown).append(virtual)

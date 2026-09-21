@@ -50,7 +50,12 @@ class Engine(object):
         """A key by name: 'up', 'space', 'escape', 'a'. True when consumed."""
         return False
 
-    def key_down(self, name, modifiers=()):
+    def character(self, text):
+        """A character the window typed, as the keyboard layout made it -
+        "A", "ą", "é". Only an emulated application reads typed text."""
+        return False
+
+    def key_down(self, name, modifiers=(), character=None):
         """A key that is being HELD, until `key_up` says otherwise.
 
         Most engines do not care - Cling's own are turn-taking, and a press is

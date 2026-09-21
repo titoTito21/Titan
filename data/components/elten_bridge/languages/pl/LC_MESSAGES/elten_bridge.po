@@ -64,3 +64,20 @@ msgstr "Nie można odtworzyć tego pliku."
 msgid "This file cannot be previewed."
 msgstr "Nie można wyświetlić podglądu tego pliku."
 
+msgid "Elten widgets"
+msgstr "Widgety Elten"
+
+msgid "No Elten widgets. An application shows one here while it is running; Settings names the ones to start in the background."
+msgstr "Brak widgetów Elten. Aplikacja pokazuje tu swój widget, gdy jest uruchomiona; w ustawieniach wskazuje się te, które mają startować w tle."
+
+msgid "Applications started in the background for their widgets (the Weather forecast, for one):"
+msgstr "Aplikacje uruchamiane w tle ze względu na ich widgety (na przykład prognoza pogody):"
+
+msgid "Widget applications"
+msgstr "Aplikacje z widgetami"
+
+msgid "Elten API"
+msgstr "Elten API"
+
+msgid "Nothing yet."
+msgstr "Jeszcze nic."

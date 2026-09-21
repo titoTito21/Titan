@@ -38,6 +38,21 @@ NO_FEEDBACK_SAID = ('Feedback goes to Titan-Net, and nobody is signed in. '
                     'Open Titan-Net once and sign in, then try again.')
 
 
+def _tr(text):
+    """Cling's own catalogue, in Titan's language - these sentences are
+    said to the user by a menu item, and they were the only English an
+    emulated application spoke on a Polish desktop."""
+    try:
+        import gettext
+        import os
+        from src.titan_core.translation import language_code
+        here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return gettext.translation('cling', os.path.join(here, 'languages'),
+                                   languages=[language_code], fallback=True).gettext(text)
+    except Exception:
+        return text
+
+
 def install(runtime, host):
     """Point Klango's platform screens at Titan's, on the running app object.
 
@@ -50,6 +65,10 @@ def install(runtime, host):
     give('_cling_open_settings', lambda *_a: _say(host, open_settings()))
     give('_cling_open_help', lambda *_a: _say(host, open_help()))
     give('_cling_open_feedback', lambda *_a: _say(host, open_feedback()))
+    # The application's own readme / changelog, in the user's language when
+    # it has one - `k_KnowledgeBaseDialog2` shows it in Klango's own reader.
+    give('_cling_app_text', lambda name=None, *_a: _app_text(host, name))
+    give('_cling_titan_help_name', lambda *_a: _tr("Titan's help"))
     try:
         runtime.run(BRIDGE, 'cling: titan bridge')
     except Exception as error:
@@ -68,89 +87,177 @@ HELP_ITEM = '__!cling_help!__'
 #: `suiapp` methods, reached from the default menu and from the function keys
 #: the application shell owns.
 BRIDGE = """
-    local _new = k_NewApp
-    if type(_new) == "function" then
-        k_NewApp = function( ... )
-            local app = _new( ... )
-            if type(app) == "table" then
-                local settings = { "_dialogSelectLang", "_dialogSelectSkin",
-                                   "_dialogSelectSynth", "_dialogTypingSettings",
-                                   "_dialogNameSuiElems", "_dialogSelectWaitingSound",
-                                   "_dialogSimpleSoundOpenClose", "_dialogKeyBindings",
-                                   "_dialogFormatsSettings", "_dialogAutoLogin" }
-                for _, name in ipairs( settings ) do
-                    app[name] = function() return _cling_open_settings() end
-                end
-                local help = { "_dialogTermsOfService", "_dialogPrivacyPolicy" }
-                for _, name in ipairs( help ) do
-                    app[name] = function() return _cling_open_help() end
-                end
-                local feedback = { "sendFeedback", "sendOpinions",
-                                   "sendErrorReport" }
-                for _, name in ipairs( feedback ) do
-                    app[name] = function() return _cling_open_feedback() end
-                end
+    --- Every screen of Klango's that is Titan's here is patched on the
+    --- CLASS, `suiapp`, and not on the object `k_NewApp` hands back.
+    --- Klango copies the class table into each instance, so an instance
+    --- made after this carries the patch - and an application that reaches
+    --- the class's own methods directly (`suiapp.defaultMenus(self)`, which
+    --- the Wikipedia browser does) sees it too, where a patch on the
+    --- instance was simply walked past: its Settings entry still opened
+    --- Klango's own sound-theme dialog. `k_NewApp` is kept as the fallback
+    --- for an application object that is not a `suiapp` at all.
+    local function patch( app )
+        if app.__cling_patched then return app end
+        app.__cling_patched = true
+        local settings = { "_dialogSelectLang", "_dialogSelectSkin",
+                           "_dialogSelectSynth", "_dialogTypingSettings",
+                           "_dialogNameSuiElems", "_dialogSelectWaitingSound",
+                           "_dialogSimpleSoundOpenClose", "_dialogKeyBindings",
+                           "_dialogFormatsSettings", "_dialogAutoLogin" }
+        for _, name in ipairs( settings ) do
+            app[name] = function() return _cling_open_settings() end
+        end
+        local help = { "_dialogTermsOfService", "_dialogPrivacyPolicy" }
+        for _, name in ipairs( help ) do
+            app[name] = function() return _cling_open_help() end
+        end
+        local feedback = { "sendFeedback", "sendOpinions",
+                           "sendErrorReport" }
+        for _, name in ipairs( feedback ) do
+            app[name] = function() return _cling_open_feedback() end
+        end
 
-                --- Settings and Help are ONE entry each, and they are
-                --- Titan's.
-                ---
-                --- Redirecting the screens behind Klango's submenus was not
-                --- enough: the user still walked into "Settings" and found
-                --- four items - theme, language, synthesiser, interface -
-                --- every one of which now did the same thing. What they
-                --- asked for is Titan's settings, so that is what the entry
-                --- is. The submenu is recognised by what is INSIDE it
-                --- (`__!setskin!__`, `__!helpkeys!__`) rather than by its
-                --- name, because the name is in the user's language.
-                local function holds( item, wanted )
-                    if type(item) ~= "table" or type(item.submenu) ~= "table" then
-                        return false
-                    end
-                    for _, child in ipairs( item.submenu ) do
-                        if type(child) == "table" and type(child.user) == "table"
-                                and child.user[1] == wanted then
-                            return true
-                        end
-                    end
-                    return false
-                end
-                local _menus = app.defaultMenus
-                app.defaultMenus = function( self, ... )
-                    local menu = _menus( self, ... )
-                    if type(menu) ~= "table" then return menu end
-                    for _, item in ipairs( menu ) do
-                        if holds( item, "__!setskin!__" ) then
-                            item.submenu = nil
-                            item.user = { "%(settings)s" }
-                        elseif holds( item, "__!helpkeys!__" ) then
-                            item.submenu = nil
-                            item.user = { "%(help)s" }
-                        end
-                    end
-                    return menu
-                end
-                local _process = app.processDefaultMenuItems
-                app.processDefaultMenuItems = function( self, mi, ... )
-                    if type(mi) == "table" and type(mi.user) == "table" then
-                        if mi.user[1] == "%(settings)s" then
-                            _cling_open_settings()
-                            return true
-                        elseif mi.user[1] == "%(help)s" then
-                            _cling_open_help()
-                            return true
-                        end
-                    end
-                    return _process( self, mi, ... )
+        --- Settings and Help are ONE entry each, and they are
+        --- Titan's.
+        ---
+        --- Redirecting the screens behind Klango's submenus was not
+        --- enough: the user still walked into "Settings" and found
+        --- four items - theme, language, synthesiser, interface -
+        --- every one of which now did the same thing. What they
+        --- asked for is Titan's settings, so that is what the entry
+        --- is. The submenu is recognised by what is INSIDE it
+        --- (`__!setskin!__`, `__!helpkeys!__`) rather than by its
+        --- name, because the name is in the user's language.
+        local function holds( item, wanted )
+            if type(item) ~= "table" or type(item.submenu) ~= "table" then
+                return false
+            end
+            for _, child in ipairs( item.submenu ) do
+                if type(child) == "table" and type(child.user) == "table"
+                        and child.user[1] == wanted then
+                    return true
                 end
             end
+            return false
+        end
+        --- Help stays a submenu, made of what is really there: the
+        --- application's own key help, its readme and changelog when
+        --- it ships them, its version, and Titan's help. What goes is
+        --- what pointed at klango.net - the knowledge base, the terms
+        --- of service, the privacy policy, the feedback forms.
+        local keep = { ["__!helpkeys!__"] = true, ["__!helpprogver!__"] = true }
+        local function help_menu( submenu )
+            local out = {}
+            for _, child in ipairs( submenu ) do
+                local marker = type(child) == "table" and type(child.user) == "table"
+                               and child.user[1] or nil
+                if keep[marker] then
+                    table.insert( out, child )
+                elseif marker == "__!helpreadme!__" and _cling_app_text( "readme" ) ~= "" then
+                    table.insert( out, child )
+                elseif marker == "__!helpchangelog!__" and _cling_app_text( "changelog" ) ~= "" then
+                    table.insert( out, child )
+                end
+            end
+            --- A menu item's name is a SPEECH SAMPLE spec, not a string:
+            --- `"*text"` is Klango's "say this text" (Amazon writes its
+            --- cart entries that way). A bare string is a sample the
+            --- mediaset cannot prepare, and that is a FATAL error in
+            --- `llib_suimenu.lua` - "Corrupted installation of Klango",
+            --- and the engine killed, at the first menu of every
+            --- application.
+            table.insert( out, { name = "*" .. _cling_titan_help_name(), user = { "%(help)s" } } )
+            return out
+        end
+        local _menus = app.defaultMenus
+        app.defaultMenus = function( self, ... )
+            local menu = _menus( self, ... )
+            if type(menu) ~= "table" then return menu end
+            for _, item in ipairs( menu ) do
+                if holds( item, "__!setskin!__" ) then
+                    item.submenu = nil
+                    item.user = { "%(settings)s" }
+                elseif holds( item, "__!helpkeys!__" ) then
+                    item.submenu = help_menu( item.submenu )
+                    item.user = nil
+                end
+            end
+            return menu
+        end
+        local _process = app.processDefaultMenuItems
+        app.processDefaultMenuItems = function( self, mi, ... )
+            if type(mi) == "table" and type(mi.user) == "table" then
+                if mi.user[1] == "%(settings)s" then
+                    _cling_open_settings()
+                    return true
+                elseif mi.user[1] == "%(help)s" then
+                    _cling_open_help()
+                    return true
+                end
+            end
+            return _process( self, mi, ... )
+        end
+        return app
+    end
+    --- `suiapp` is a file-local of `llib_suiapp.lua` and `k_SUINewApp` is
+    --- `k_TableDuplicate( suiapp )`, so the class cannot be patched and the
+    --- INSTANCE is. Every constructor an application calls is wrapped:
+    --- `k_NewApp` (most of them) is the same function as `k_SUINewApp`
+    --- (the Wikipedia browser calls that one directly), so both names get
+    --- the wrapper - and `k_CreateNewApp` is a scaffolding tool that makes
+    --- an application FOLDER, not an object, and is left alone.
+    local _sui = k_SUINewApp
+    local _new = k_NewApp
+    local function wrap( make )
+        return function( ... )
+            local app = make( ... )
+            if type(app) == "table" then patch( app ) end
             return app
         end
     end
+    if type(_sui) == "function" then
+        k_SUINewApp = wrap( _sui )
+        if _new == _sui then k_NewApp = k_SUINewApp end
+    end
+    if type(_new) == "function" and _new ~= _sui then
+        k_NewApp = wrap( _new )
+    end
     -- The knowledge base is a global rather than a method, and it was a page
-    -- on klango.net. Titan's own help is what a user of Titan wants here.
+    -- on klango.net. Titan's own help is what a user of Titan wants here -
+    -- EXCEPT for the application's own readme and changelog, which the
+    -- library fetches through the same call (`suiapp:showReadme` is
+    -- `k_KnowledgeBaseDialog2(self, id, lang, 'readme', nil, force)`), and
+    -- calls at the application's FIRST start. Redirected wholesale, every
+    -- Klango application opened Titan's help window the first time it was
+    -- run. What Klango showed there was the application's own text in its
+    -- own reader (`_dialogTextViever`), so that is what this shows; an
+    -- application with no such text shows nothing, which is silence at
+    -- start rather than a window nobody asked for.
     k_KnowledgeBaseDialog = function() return _cling_open_help() end
-    k_KnowledgeBaseDialog2 = function() return _cling_open_help() end
+    k_KnowledgeBaseDialog2 = function( app, appid, lang, doc, summary, force )
+        if doc == "readme" or doc == "changelog" then
+            local text = _cling_app_text( doc )
+            if type(text) == "string" and text ~= "" and type(app) == "table"
+                    and type(app._dialogTextViever) == "function" then
+                local title = doc
+                if type(_mmenuspeech) == "table" and _mmenuspeech["help_" .. doc] ~= nil then
+                    title = _mmenuspeech["help_" .. doc]
+                end
+                app:_dialogTextViever( text, title )
+                return true
+            end
+            return false
+        end
+        return _cling_open_help()
+    end
 """ % {'settings': SETTINGS_ITEM, 'help': HELP_ITEM}
+
+
+def _app_text(host, name):
+    try:
+        return host.text(str(name or '')) or ''
+    except Exception:
+        return ''
 
 
 # ------------------------------------------------------------- the windows
@@ -159,8 +266,8 @@ def open_settings():
     def show():
         from src.settings.interfaces import open_settings as open_them
         return open_them()
-    return _on_the_gui_thread(show, SETTINGS_SAID,
-                              "Titan's settings could not be opened")
+    return _on_the_gui_thread(show, _tr(SETTINGS_SAID),
+                              _tr("Titan's settings could not be opened"))
 
 
 def open_help():
@@ -174,8 +281,8 @@ def open_help():
             return None
         window.show_help()
         return window
-    return _on_the_gui_thread(show, HELP_SAID,
-                              "Titan's help could not be opened")
+    return _on_the_gui_thread(show, _tr(HELP_SAID),
+                              _tr("Titan's help could not be opened"))
 
 
 def open_feedback():
@@ -188,15 +295,15 @@ def open_feedback():
         if signed_in.online:
             client = account_module._live_client()
     if client is None:
-        return NO_FEEDBACK_SAID
+        return _tr(NO_FEEDBACK_SAID)
 
     def show():
         import wx
         from src.network.feedback_hub import open_feedback_hub
         return open_feedback_hub(wx.GetApp().GetTopWindow() if wx.GetApp()
                                  else None, client)
-    return _on_the_gui_thread(show, FEEDBACK_SAID,
-                              'The Feedback Hub could not be opened')
+    return _on_the_gui_thread(show, _tr(FEEDBACK_SAID),
+                              _tr('The Feedback Hub could not be opened'))
 
 
 # ------------------------------------------------------------------ pieces

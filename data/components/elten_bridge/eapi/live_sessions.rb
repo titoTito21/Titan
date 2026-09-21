@@ -43,8 +43,35 @@ module EltenAPI
     class TimeoutError < Error; end
     class SessionClosed < Error; end
     class NotOwner < Error; end
+    class StackUnsupported < Error; end
+    class StackDisabled < Error; end
+    class PoolUnsupported < Error; end
+    class PoolLimit < Error; end
+    # The rest of Elten's own (`eapi/live_sessions.rb`): an application
+    # rescues these by name, and a rescue clause naming a constant that is
+    # not there is a `NameError` at the moment the error it was written for
+    # arrives.
+    class QueueOverflow < Error; end
+    class StackPacketTooLarge < Error; end
+    class StackFull < Error; end
+    class PoolsDisabled < Error; end
+    class DiscoveryUnsupported < Error; end
 
     Message = Struct.new(:id, :sequence, :sender, :packet, keyword_init: true)
+
+    # What a message says about itself, handed beside it to a block that
+    # asked `with_metadata: true`. Nothing here is private on this wire
+    # (Titan relays a session's messages to the whole table), and it says so.
+    MessageInfo = Struct.new(:id, :sequence, :sender, :recipient_user, :created_at,
+                             :metadata, keyword_init: true) do
+      def private?
+        !recipient_user.to_s.empty?
+      end
+
+      def sender_user
+        sender.respond_to?(:user) ? sender.user : sender.to_s
+      end
+    end
 
     # Elten's own, and the reason it is here rather than a Queue: `pop`
     # takes a TIMEOUT, which is what `Session#receive(timeout:)` is.
@@ -193,6 +220,108 @@ module EltenAPI
         @endpoint.send_packet(self, packet)
       end
 
+      # ---- the stack: Elten 3.0.3's shared, ordered record of a session.
+      # The ELTEN Game Room writes every move to it (`stack_push`) and
+      # reads it back on joining (`stack_read`), so a session without one
+      # ended on `undefined method 'stack_push'` at the first table. The
+      # entries live on EltenLink; what is here is the request and the
+      # last state read. Pools (server-side random draws) are not relayed
+      # yet and say so, as Elten's own does for a server without them.
+      MISSING_PACKET = Object.new.freeze
+
+      def stack_state
+        @stack_state ||= { 'through' => 0, 'entries' => 0 }
+        @stack_state.dup
+      end
+
+      def stack_enabled?
+        true
+      end
+
+      def pools_enabled?
+        false
+      end
+
+      def stack_push(packet = MISSING_PACKET, message_id: nil, retries: 2, timeout: 45,
+                     cancellation_token: nil, **packet_fields)
+        if packet.equal?(MISSING_PACKET) && !packet_fields.empty?
+          packet = packet_fields
+        elsif packet.equal?(MISSING_PACKET) || !packet_fields.empty?
+          raise ArgumentError, 'exactly one packet is required'
+        end
+        ensure_open!
+        validate_json!(packet)
+        identity = message_id || SecureRandom.uuid
+        answer = @endpoint.stack_request(self, :push, { 'packet' => packet, 'message_id' => identity },
+                                         retries: retries, timeout: timeout,
+                                         cancellation_token: cancellation_token)
+        remember_stack(answer)
+        answer
+      end
+
+      def stack_read(after: 0, limit: nil, through: nil, timeout: 120, cancellation_token: nil)
+        ensure_open!
+        params = { 'after' => after.to_i }
+        params['limit'] = limit.to_i unless limit.nil?
+        params['through'] = through.to_i unless through.nil?
+        answer = @endpoint.stack_request(self, :read, params, timeout: timeout,
+                                         cancellation_token: cancellation_token)
+        remember_stack(answer)
+        answer
+      end
+
+      def stack_trim(through:, timeout: 45, cancellation_token: nil)
+        ensure_open!
+        raise NotOwner, 'Only the live session owner can trim it' unless owner?
+
+        answer = @endpoint.stack_request(self, :trim, { 'through' => through.to_i },
+                                         timeout: timeout, cancellation_token: cancellation_token)
+        remember_stack(answer)
+        answer
+      end
+
+      def stack_clear(timeout: 120, cancellation_token: nil)
+        state = stack_read(limit: 1, timeout: timeout, cancellation_token: cancellation_token)
+        stack_trim(through: (state.is_a?(Hash) ? state['through'] : 0).to_i,
+                   timeout: timeout, cancellation_token: cancellation_token)
+      end
+
+      def stack_push_random(*_arguments, **_options)
+        raise StackUnsupported, 'Titan does not relay server-side random draws yet'
+      end
+
+      def create_pool(*_arguments, **_options)
+        raise PoolUnsupported, 'Titan does not relay live session pools yet'
+      end
+
+      def pools(*_arguments, **_options)
+        []
+      end
+
+      def pool(_id)
+        raise PoolUnsupported, 'Titan does not relay live session pools yet'
+      end
+
+      def on_stack_changed(&block); register_callback(:stack_changed, &block); end
+      def on_stack_gap(&block); register_callback(:stack_gap, &block); end
+
+      def on_stack_message(with_metadata: false, &block)
+        raise ArgumentError, 'callback is required' if block.nil?
+
+        register_callback(:stack_message) do |sender, packet, info|
+          with_metadata ? block.call(sender, packet, info) : block.call(sender, packet)
+        end
+      end
+
+      def remember_stack(answer)
+        return unless answer.is_a?(Hash)
+
+        @stack_state ||= { 'through' => 0, 'entries' => 0 }
+        @stack_state['through'] = answer['through'].to_i if answer.key?('through')
+        @stack_state['entries'] = answer['entries'].size if answer['entries'].is_a?(Array)
+        @stack_state['entries'] = answer['count'].to_i if answer.key?('count')
+      end
+
       def receive(timeout: nil)
         @messages.pop(timeout: timeout)
       end
@@ -214,7 +343,17 @@ module EltenAPI
         true
       end
 
-      def on_message(&block); register_callback(:message, &block); end
+      # `on_message(with_metadata: true) { |sender, packet, info| }` -
+      # Elten 3.0.3's shape. The Game Room reads the message's `info`
+      # (whether it was private, and to whom); a port that took no
+      # keyword ended it on the first table.
+      def on_message(with_metadata: false, &block)
+        raise ArgumentError, 'callback is required' if block.nil?
+
+        register_callback(:message) do |sender, packet, info|
+          with_metadata ? block.call(sender, packet, info) : block.call(sender, packet)
+        end
+      end
       def on_participant_joined(&block); register_callback(:participant_joined, &block); end
       def on_participant_left(&block); register_callback(:participant_left, &block); end
       def on_gap(&block); register_callback(:gap, &block); end
@@ -315,7 +454,11 @@ module EltenAPI
                                 sequence: event['seq'].to_i,
                                 sender: sender, packet: event['packet'])
           @messages << message
-          emit(:message, sender, message.packet)
+          info = MessageInfo.new(id: message.id, sequence: message.sequence, sender: sender,
+                                 recipient_user: event['recipient_user'].to_s,
+                                 created_at: event['created_at'],
+                                 metadata: event['metadata'].is_a?(Hash) ? event['metadata'] : {})
+          emit(:message, sender, message.packet, info)
         when 'participant_joined'
           row = event['participant']
           if row.is_a?(Hash)
@@ -332,6 +475,17 @@ module EltenAPI
             removed || Participant.new(row)
           end
           emit(:participant_left, item, event['reason'].to_s.to_sym)
+        when 'stack', 'stack_changed'
+          emit(:stack_changed, event['stack'] || event)
+        when 'stack_message'
+          sender_data = event['sender'].is_a?(Hash) ? event['sender'] : {}
+          sender = participant(event['sender_id']) || Participant.new(sender_data)
+          emit(:stack_message, sender, event['packet'],
+               MessageInfo.new(id: event['message_id'].to_s, sequence: event['seq'].to_i,
+                               sender: sender, recipient_user: '', created_at: event['created_at'],
+                               metadata: {}))
+        when 'stack_gap'
+          emit(:stack_gap, event)
         when 'gap'
           emit(:gap, event['from'].to_i, event['to'].to_i)
         when 'closed'
@@ -396,13 +550,26 @@ module EltenAPI
         LiveSessions.register(self)
       end
 
-      def create(metadata: {}, participant_metadata: {}, capacity: 2)
+      # Elten 3.0.3's own keywords, every one accepted: the ELTEN Game Room
+      # creates a table with `visibility:`, `discovery_metadata:`, the
+      # stack and pool sizes and `private_messages:`, and a signature two
+      # versions behind ended it on `unknown keywords` before a table
+      # existed. The visibility and the discovery metadata go to the
+      # server; the sizes are the server's own defaults here.
+      def create(metadata: {}, participant_metadata: {}, capacity: 2,
+                 visibility: :private, join_code: nil, discovery_metadata: {},
+                 timeout: 45, cancellation_token: nil, stack_entry_bytes: nil,
+                 stack_entries: nil, pool_count: nil, private_messages: false,
+                 **_ignored)
         ensure_open!
         store_session(LiveSessions.api('create', 'appid' => @app_id,
                                        'instance_id' => @instance_id,
                                        'metadata' => metadata,
                                        'participant_metadata' => participant_metadata,
-                                       'capacity' => capacity))
+                                       'capacity' => capacity,
+                                       'visibility' => visibility.to_s,
+                                       'discovery_metadata' => discovery_metadata,
+                                       'private_messages' => private_messages == true))
       end
 
       def connect(user, metadata: {}, participant_metadata: {}, capacity: 2,
@@ -490,6 +657,15 @@ module EltenAPI
                                  'participant_id' => session.participant_id,
                                  'packet' => packet,
                                  'message_id' => SecureRandom.uuid)
+      end
+
+      def stack_request(session, operation, params, retries: 2, timeout: 120,
+                        cancellation_token: nil, check_capacity: false)
+        ensure_session!(session)
+        LiveSessions.api('stack', 'session_id' => session.id,
+                                  'participant_id' => session.participant_id,
+                                  'operation' => operation.to_s,
+                                  'params' => params)
       end
 
       def leave_session(session)

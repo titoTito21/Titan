@@ -105,14 +105,19 @@ class KlangoEngine(Engine):
         frame, which is what `k_KeyJustPressed` is asking about."""
         return self._reach(lambda: self.session.press(name))
 
-    def key_down(self, name, modifiers=()):
+    def key_down(self, name, modifiers=(), character=None):
         """The key is HELD until `key_up`.
 
         A Klango application polls the keyboard every frame, so holding an
         arrow to walk and holding Alt to reach a menu are real: the press and
         the release are two different events and the platform can tell.
+        `character` is what the key TYPES when the window knows better than
+        the name does ('' when the window will type it itself).
         """
-        return self._reach(lambda: self.session.key_down(name))
+        return self._reach(lambda: self.session.key_down(name, character))
+
+    def character(self, text):
+        return self._reach(lambda: self.session.character(text))
 
     def key_up(self, name, modifiers=()):
         return self._reach(lambda: self.session.key_up(name))
@@ -135,14 +140,17 @@ class KlangoEngine(Engine):
 
     # ------------------------------------------------------------- reading
     def status(self):
+        """Where the user is, in the words Klango used: the application's
+        name and the platform it is running on - "Mole No More - Cling v 1.0".
+        It used to say how many files of the application's own code were
+        loaded, which is a fact about the emulator and not an answer to
+        "where am I"."""
         if self.error:
             return self.error
         if self.session is None:
             return ''
-        if self.thread is not None and self.thread.is_alive():
-            return '%s (%d file(s) of its own code)' % (
-                self.host.app.name(self.host.language), len(self.session.loaded))
-        return self.host.app.name(self.host.language)
+        from .. import VERSION
+        return '%s - Cling v %s' % (self.host.app.name(self.host.language), VERSION)
 
     def help_text(self):
         own = self.host.text('help')

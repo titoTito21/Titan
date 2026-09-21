@@ -64,6 +64,9 @@ _wx_module = None
 _gui_app = None
 _listbox = None
 _running = []
+# Applications started for their widgets and background ticks rather than
+# opened - see `_start_widget_apps`.
+_background = []
 
 
 def _wx():
@@ -181,7 +184,9 @@ def run_application(entry, parent=None):
                       entry.name or TITLE, wx.OK | wx.ICON_ERROR)
         return application
     _running.append((entry, application, gui))
+    application.on_widgets = _on_widgets_changed
     _watch(application, gui)
+    _on_widgets_changed(application)
     return application
 
 
@@ -244,6 +249,195 @@ def stop_all():
     """Close every running application - Titan is going."""
     for _entry, application, gui in list(_running):
         _finish(application, gui)
+    for _entry, application, gui in list(_background):
+        try:
+            application.stop()
+        except Exception:
+            pass
+        try:
+            gui.close()
+        except Exception:
+            pass
+    del _background[:]
+    try:
+        from src.buffers import defaults as buffer_defaults
+        buffer_defaults.remove_elten_api()
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------------ widgets
+# An Elten extension's `main_tab` is a section of Elten's main screen -
+# the Weather application's forecast is one. Here each is a WIDGET in
+# Titan's main window, in a view of its own placed just before the status
+# bar: one header row per widget (its label and the application's name),
+# then the widget's own rows, and Enter on a row is `select` on the very
+# control the application built, so its own handler runs. The rows arrive
+# from the application (`widgets` on the wire) whenever they change.
+
+def _widget_sources():
+    """Every running application, foreground or background."""
+    return [held for held in list(_running) + list(_background)]
+
+
+def _on_widgets_changed(_application=None):
+    wx = _wx()
+    try:
+        wx.CallAfter(_fill_widgets)
+    except Exception:
+        pass
+
+
+# One PANEL per widget - a list of its own in the main window's column,
+# between the current view and the status bar, reached with Tab exactly as
+# the status bar is: Elten's main screen is a column of sections, the
+# Weather forecast one of them, and so is this. Not a card of the tab bar
+# (that was the first shape, and the user said no): a section is always
+# there, whatever view is showing. Added the moment an application's rows
+# arrive, taken away when the widget goes (the application ended, or it
+# withdrew the tab). `_widget_panels` is what is up: `(application key,
+# tab key)` -> the panel's id and its list.
+_widget_panels = {}
+
+
+def _widget_panel_id(entry, tab):
+    return 'elten_widget:%s:%s' % (entry.key, tab.get('key') or '')
+
+
+def _fill_widgets():
+    if _gui_app is None or not hasattr(_gui_app, 'add_side_panel'):
+        return
+    wx = _wx()
+    wanted = {}
+    for entry, application, _gui in _widget_sources():
+        for tab in list(getattr(application, 'widgets', []) or []):
+            wanted[(entry.key, str(tab.get('key') or ''))] = (entry, application, tab)
+    # Widgets that have gone.
+    for key in [key for key in _widget_panels if key not in wanted]:
+        held = _widget_panels.pop(key)
+        try:
+            _gui_app.remove_side_panel(held['panel_id'])
+        except Exception as error:
+            print('[elten] widget panel: %s' % error)
+    # Widgets that are here: a new panel for a new one, the rows for all.
+    for key, (entry, application, tab) in wanted.items():
+        label = str(tab.get('label') or tab.get('key') or entry.name or entry.stem)
+        held = _widget_panels.get(key)
+        if held is None:
+            panel_id = _widget_panel_id(entry, tab)
+            listbox = wx.ListBox(_gui_app.main_panel)
+            held = {'panel_id': panel_id, 'listbox': listbox, 'label': label}
+            try:
+                _gui_app.add_side_panel(
+                    panel_id, label, listbox,
+                    on_activate=lambda _event=None, box=listbox: _on_widget_activate(box))
+            except Exception as error:
+                print('[elten] widget panel %s: %s' % (label, error))
+                try:
+                    listbox.Destroy()
+                except Exception:
+                    pass
+                continue
+            _widget_panels[key] = held
+        elif held['label'] != label:
+            held['label'] = label
+            _gui_app.add_side_panel(held['panel_id'], label, held['listbox'],
+                                    on_activate=lambda _event=None, box=held['listbox']: _on_widget_activate(box))
+        _fill_widget_list(held, application, tab)
+
+
+def _fill_widget_list(held, application, tab):
+    """The widget's rows into its list, the cursor kept where it was."""
+    listbox = held['listbox']
+    try:
+        selected = listbox.GetSelection()
+        listbox.Clear()
+        rows = list(tab.get('rows') or [])
+        for index, text in enumerate(rows):
+            listbox.Append(str(text))
+            listbox.SetClientData(index, (application, str(tab.get('key') or ''), index))
+        if not rows:
+            listbox.Append(_('Nothing yet.'))
+            listbox.SetClientData(0, None)
+        count = listbox.GetCount()
+        listbox.SetSelection(selected if 0 <= selected < count else 0)
+    except RuntimeError:
+        return
+
+
+def _on_widget_activate(listbox):
+    """Enter on a widget's row: `select` on the very control the
+    application built, so its own handler runs."""
+    wx = _wx()
+    try:
+        selection = listbox.GetSelection()
+        if selection == wx.NOT_FOUND:
+            return
+        target = listbox.GetClientData(selection)
+    except (RuntimeError, TypeError):
+        return
+    if not target:
+        return
+    application, key, index = target
+    try:
+        application.send_event('widget', key=key, index=int(index), name='select')
+    except Exception as error:
+        print('[elten] widget: %s' % error)
+
+
+def _start_widget_apps():
+    """Start the applications the user named for their widgets, in the
+    background: `activate` runs and their extensions tick, but nothing
+    opens. Each gets a window of its own anyway, because a widget row
+    pressed may open one of the application's screens."""
+    from eltenkit import settings as bridge_settings
+    from eltenkit import ui as ui_module
+    wanted = set(bridge_settings.widget_apps())
+    if not wanted:
+        return
+    already = {held[0].key for held in _widget_sources()}
+    for entry in applications():
+        if entry.key not in wanted or entry.key in already or entry.problem:
+            continue
+        try:
+            gui = ui_module.WxUI(_parent_window(), entry.name or entry.stem)
+        except Exception as error:
+            print('[elten] widget window for %s: %s' % (entry.name, error))
+            continue
+        application = launcher.run(entry, ui=gui, language=language(), background=True)
+        if application.status == 'failed':
+            print('[elten] %s would not start in the background: %s'
+                  % (entry.name, application.detail))
+            try:
+                gui.close()
+            except Exception:
+                pass
+            continue
+        application.on_widgets = _on_widgets_changed
+        _background.append((entry, application, gui))
+        _watch_background(application)
+
+
+def _watch_background(application):
+    import threading
+    wx = _wx()
+
+    def wait():
+        application.ended.wait()
+        for held in list(_background):
+            if held[1] is application:
+                _background.remove(held)
+                try:
+                    held[2].close()
+                except Exception:
+                    pass
+        _remember_log(application)
+        try:
+            wx.CallAfter(_fill_widgets)
+        except Exception:
+            pass
+
+    threading.Thread(target=wait, name='elten-widget-watch', daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -275,14 +469,47 @@ def _register_settings(component_manager):
             "did not ship. Turn this off to hear each application exactly as "
             "its author shipped it."))
         sizer.Add(panel.tce_sounds, 0, wx.ALL, 8)
+        # Which applications run in the background for their widgets - a
+        # tick list a screen reader reads as tick boxes (`src/ui/check_list`).
+        label = wx.StaticText(panel, label=_(
+            "Applications started in the background for their widgets "
+            "(the Weather forecast, for one):"))
+        sizer.Add(label, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
+        try:
+            from src.ui.check_list import CheckList
+            panel.widget_apps = CheckList(panel, name=_("Widget applications"))
+        except Exception:
+            panel.widget_apps = wx.CheckListBox(panel)
+        panel.widget_entries = []
+        sizer.Add(panel.widget_apps, 1, wx.ALL | wx.EXPAND, 8)
         panel.SetSizer(sizer)
         return panel
 
     def load_panel(panel):
         panel.tce_sounds.SetValue(bridge_settings.use_titan_sounds())
+        panel.widget_entries = [entry for entry in applications() if not entry.problem]
+        chosen = set(bridge_settings.widget_apps())
+        try:
+            panel.widget_apps.Set([entry.name or entry.stem for entry in panel.widget_entries])
+            for index, entry in enumerate(panel.widget_entries):
+                panel.widget_apps.Check(index, entry.key in chosen)
+        except Exception as error:
+            print(f"[elten bridge] widget list: {error}")
 
     def save_panel(panel):
         bridge_settings.set_use_titan_sounds(panel.tce_sounds.GetValue())
+        keys = []
+        for index, entry in enumerate(panel.widget_entries):
+            try:
+                if panel.widget_apps.IsChecked(index):
+                    keys.append(entry.key)
+            except Exception:
+                pass
+        bridge_settings.set_widget_apps(keys)
+        try:
+            wx.CallAfter(_start_widget_apps)
+        except Exception:
+            pass
 
     try:
         component_manager.register_settings_category(
@@ -300,7 +527,8 @@ def get_gui_hooks():
 
 
 def _on_gui_init(gui_app):
-    """An Elten view in the main window, beside applications and games."""
+    """An Elten view in the main window, beside applications and games -
+    and the widgets view, just before the status bar."""
     global _gui_app, _listbox
     wx = _wx()
     _gui_app = gui_app
@@ -310,6 +538,18 @@ def _on_gui_init(gui_app):
         view_id='elten_apps', label=_(TITLE) + ':', control=_listbox,
         on_show=_fill_listbox, on_activate=_on_view_activate,
         position='after_network')
+    try:
+        from src.buffers import defaults as buffer_defaults
+        buffer_defaults.register_elten_api()
+    except Exception as error:
+        print('[elten] buffer category: %s' % error)
+    _fill_widgets()
+    # The background applications start once Titan's window is up: each
+    # is a Ruby process, and none of them is what the user is waiting for.
+    try:
+        wx.CallLater(4000, _start_widget_apps)
+    except Exception:
+        pass
 
 
 def _fill_listbox():

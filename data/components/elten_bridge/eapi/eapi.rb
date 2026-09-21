@@ -61,6 +61,38 @@ module EltenGettext
     def clear
       @cache = {}
     end
+
+    # `p_(context, text)`: a `.mo` keys a context translation as
+    # `context U+0004 text`, and U+0004 is a control character the wire
+    # strips out of a TEXT - so a context sent inside the text arrived
+    # as "WeatherMain menu", matched nothing, and every one of the 236
+    # strings Weather translates that way was English on a Polish
+    # desktop. The context is its own field now, and Titan asks its
+    # catalogue with `pgettext`.
+    def translate_context(context, text)
+      return text if text.nil? || text.empty?
+
+      (@context_cache ||= {})[[context, text]] ||= begin
+        answer = EltenBridge.call('translate', { 'text' => text, 'context' => context })
+        answer.is_a?(String) && !answer.empty? ? answer : text
+      rescue EltenBridge::Closed
+        text
+      end
+    end
+
+    # The language the application is being shown in - Titan's, which the
+    # bridge chose the catalogue by. `Configuration.language` is built on
+    # it and the Neighbourhood Radar and the Game Room read that to pick
+    # their own words; a `NoMethodError` here was those two answering in
+    # the wrong language, or not at all.
+    def language
+      @language ||= begin
+        answer = EltenBridge.call('language', {})
+        answer.is_a?(String) && !answer.empty? ? answer : 'en'
+      rescue EltenBridge::Closed, EltenBridge::RemoteError
+        'en'
+      end
+    end
   end
 end
 
@@ -412,29 +444,8 @@ class EltenSound
   end
 
   # ---------------------------------------------------------- state
-  def pause
-    return false if @closed
-
-    !!EltenBridge.call('sound_pause', { 'handle' => @handle,
-                                        'paused' => true })
-  rescue EltenBridge::Closed
-    false
-  end
-
-  def resume
-    play
-  end
-
   def closed?
     @closed
-  end
-
-  def opened?
-    !@closed
-  end
-
-  def stopped?
-    !playing?
   end
 
   def finished?
@@ -561,10 +572,12 @@ class EltenSound
   end
 
   def status
-    return :closed if @closed
-    return :paused if paused?
-
-    playing? ? :playing : :stopped
+    name = if @closed then :closed
+           elsif paused? then :paused
+           elsif playing? then :playing
+           else :stopped
+           end
+    SoundStatus.new(name)
   end
 
   # What a player shows about the file. Titan reads no tags, so these
@@ -581,8 +594,40 @@ class EltenSound
   # a sting and then goes on.
   def wait(timeout = nil)
     deadline = timeout.nil? ? nil : EltenBridge.now + timeout.to_f
-    loop_update(0.02) while playing? && (deadline.nil? || EltenBridge.now < deadline)
+    loop_update(0.02) while playing? && !@closed && (deadline.nil? || EltenBridge.now < deadline)
     self
+  end
+
+  # What a player shows about a file: Elten's `AudioInfo`, read from the
+  # file's own tags by Titan.
+  def info
+    @info ||= PlayerInfo.new(_details['info'] || {})
+  end
+
+  def chapters
+    Array(_details['chapters']).map { |c| PlayerChapter.new(c['name'] || c[:name], c['time'] || c[:time]) }
+  end
+
+  def bitrate
+    (_details['bitrate'] || 0).to_i
+  end
+
+  def type
+    (_details['type'] || 'unknown').to_sym
+  end
+
+  def download_status
+    nil
+  end
+
+  def data(_seconds = nil)
+    raise NotImplementedError, 'Titan does not hand an application the decoded audio of a sound'
+  end
+
+  def _details
+    @details ||= (EltenBridge.call('sound_details', { 'handle' => @handle }) || {})
+  rescue EltenBridge::Closed
+    {}
   end
 
   def fade_in(_duration, to: 1.0, logarithmic: false, play: true)
@@ -597,12 +642,14 @@ class EltenSound
     self
   end
 
-  def length
-    0.0
-  end
+  # `on(:slide_end)` is Elten's only sound event, fired when a volume or
+  # position slide finishes. A fade here is instant, so the block is
+  # called at once rather than never.
+  def on(event, &block)
+    raise ArgumentError, 'Sound#on requires a block' if block.nil?
 
-  def on(_event, &_block)
-    self
+    block.call if event.to_sym == :slide_end
+    block
   end
 
   def _coordinates(position)
@@ -613,14 +660,6 @@ class EltenSound
     [values[0].to_f, values[1].to_f, values[2].to_f]
   rescue StandardError
     [0.0, 0.0, 0.0]
-  end
-
-  # Wait for it to finish. Used by an application that plays a fanfare and
-  # then leaves; without it the window closes over the sound.
-  def wait(timeout = 30.0)
-    deadline = EltenBridge.now + timeout
-    sleep(0.05) while playing? && EltenBridge.now < deadline
-    self
   end
 
   def close
@@ -637,6 +676,400 @@ class EltenSound
 
   def compact(hash)
     hash.reject { |_key, value| value.nil? }
+  end
+end
+
+# What an application announced, into Titan's Buffer System - the `Elten
+# API` category, `notifications` and `messages` - so it can be reviewed
+# after it was said. Told, never asked: an announcement must not wait.
+module EltenBuffers
+  def self.push(buffer, text)
+    text = text.to_s.strip
+    return if text.empty?
+
+    EltenBridge.notify('buffer', { 'buffer' => buffer.to_s, 'text' => text })
+  rescue EltenBridge::Closed
+    nil
+  end
+end
+
+# Elten's `SoundStatus` - what `Sound#status` answers. It is compared as a
+# symbol too (`status == :playing`), because the port used to answer one.
+class SoundStatus
+  attr_reader :name
+
+  def initialize(name)
+    @name = name.to_sym
+  end
+
+  def stopped?; @name == :stopped || @name == :closed; end
+  def playing?; @name == :playing; end
+  def stalled?; false; end
+  def paused?; @name == :paused; end
+  def to_sym; @name; end
+  def to_s; @name.to_s; end
+  def ==(other); other.is_a?(SoundStatus) ? other.name == @name : other.to_s == @name.to_s; end
+
+  # Elten's own named statuses (`eapi/audio/sound.rb`), which an
+  # application compares against: `sound.status == SoundStatus::Playing`.
+  Stopped = new(:stopped)
+  Playing = new(:playing)
+  Paused = new(:paused)
+  Stalled = new(:stalled)
+  Closed = new(:closed)
+
+  def self.from_bass(code)
+    case code.to_i
+    when 1 then Playing
+    when 2 then Stalled
+    when 3 then Paused
+    else Stopped
+    end
+  end
+end
+
+# `Sound` - Elten's own, from `src/eapi/audio/sound.rb`: a sound made from a
+# FILE, a URL or bytes in memory, rather than from one of the package's
+# assets. The file manager previews with it (`Sound.new(path).length`), its
+# playlist plays through it, Freesound plays a preview URL with it, and
+# the ELTEN Game Room's own tests build one. It was simply absent - a
+# `NameError` at the first of those, inside the application's own rescue,
+# so what the user saw was "the file could not be played".
+#
+# A local file is a held sound of Titan's mixer (`sound_open` - any file the
+# application can name, since a Ruby process reads the disk anyway); a URL
+# is Titan's stream (the same PyAV decoder the Player uses); bytes are
+# spooled to a temporary file first; raw PCM an application pushes
+# (`open_pcm`) is a `PcmSound`, Titan's stream fed from the application.
+class Sound < EltenSound
+  class UnsupportedOperation < StandardError; end
+
+  attr_reader :file
+
+  def self.new(file = nil, **options)
+    if self == Sound && file.to_s =~ %r{\Ahttps?://}i
+      return RemoteSound.new(file, **options)
+    end
+
+    super
+  end
+
+  def self.output_devices
+    []
+  end
+
+  # Elten's `Sound.open_pcm` (`eapi/audio/sound.rb`): a BASS push stream
+  # the application writes sample frames into. Spotify is made of one -
+  # librespot decodes, the application reads forty milliseconds at a time
+  # and writes them here - so a port that refused raw PCM was a Spotify
+  # that could browse and search and never make a sound.
+  def self.open_pcm(frequency:, channels:, type:, buffer:, output_device: nil)
+    PcmSound.new(frequency: frequency, channels: channels, type: type,
+                 buffer: buffer, output_device: output_device)
+  end
+
+  def initialize(file = nil, sample: false, loop: false, stream: nil,
+                 effect_buffer: nil, effect_buffer_seconds: nil,
+                 output_device: nil, **_ignored)
+    @file = file.to_s
+    @file = _spool(stream) if @file.empty? && !stream.nil?
+    raise ArgumentError, 'a sound needs a file, a URL or a stream' if @file.empty?
+
+    handle = EltenBridge.call('sound_open', { 'path' => @file, 'loop' => !!loop })
+    raise IOError, "#{@file} could not be opened as a sound" if handle.nil?
+
+    super(handle, File.basename(@file), loop: !!loop)
+  end
+
+  private
+
+  # Bytes in memory become a file, because that is what the mixer plays.
+  def _spool(bytes)
+    require 'tempfile'
+    spool = Tempfile.new(['elten-sound', '.bin'], binmode: true)
+    spool.write(bytes.to_s.b)
+    spool.flush
+    (@spools ||= []) << spool              # kept alive for the sound's life
+    spool.path
+  end
+end
+
+# A `Sound` on a URL: Titan's stream (PyAV, decoded a second at a time into
+# the mixer) wearing the sound's own surface, so an application cannot tell
+# a station from a file. Opened PAUSED - Elten's `Sound.new` does not play.
+class RemoteSound < Sound
+  def initialize(file = nil, loop: false, **_ignored)
+    @file = file.to_s
+    @loop = !!loop
+    @closed = false
+    @volume = 1.0
+    @spatial = false
+    @position = nil
+    @interpolation = :bilinear
+    @slide = nil
+    @started = nil
+    @paused = true
+    answer = EltenBridge.call('stream_open', { 'url' => @file, 'label' => File.basename(@file),
+                                               'autoplay' => false })
+    raise IOError, "#{@file} could not be opened as a sound" if answer.nil?
+
+    @handle = answer['handle']
+    @name = File.basename(@file)
+    @state = answer
+  end
+
+  def play(volume: nil, position: nil, loop: nil)
+    return false if @closed
+
+    self.volume = volume unless volume.nil?
+    self.position = position unless position.nil?
+    @paused = false
+    @started = EltenBridge.now
+    _do('play')
+    true
+  end
+
+  def stop
+    return false if @closed
+
+    _do('pause')
+    _do('seek', 'position' => 0.0)
+    @paused = true
+    true
+  end
+
+  def pause
+    return false if @closed
+
+    @paused = true
+    _do('pause')
+    true
+  end
+
+  def resume
+    play
+  end
+
+  def playing?
+    return false if @closed
+
+    state = _do('status')
+    state.is_a?(Hash) && state['playing'] == true
+  end
+
+  def length
+    state = _do('status')
+    (state.is_a?(Hash) ? state['duration'] : nil).to_f
+  end
+
+  def position
+    state = _do('status')
+    (state.is_a?(Hash) ? state['position'] : nil).to_f
+  end
+
+  def position=(value)
+    _do('seek', 'position' => value.to_f)
+    value
+  end
+
+  def volume=(value)
+    @volume = value.to_f
+    _do('volume', 'volume' => @volume)
+    value
+  end
+
+  def pan=(value)
+    @position = value
+    _do('pan', 'pan' => value.to_f)
+    value
+  end
+
+  def frequency=(value)
+    @frequency = value.to_f
+    _do('pitch', 'pitch' => basefrequency.to_f.zero? ? 1.0 : @frequency / basefrequency.to_f)
+    @frequency
+  end
+
+  def basefrequency
+    44_100
+  end
+
+  def tempo=(value)
+    @tempo = value.to_f
+    _do('tempo', 'tempo' => 1.0 + @tempo / 100.0)
+    @tempo
+  end
+
+  def info
+    state = _do('status')
+    PlayerInfo.new(state.is_a?(Hash) ? (state['info'] || {}) : {})
+  end
+
+  def chapters
+    state = _do('status')
+    Array(state.is_a?(Hash) ? state['chapters'] : []).map { |c| PlayerChapter.new(c['name'], c['time']) }
+  end
+
+  def close
+    return if @closed
+
+    @closed = true
+    cancel_spatial_position_slide
+    _do('close')
+  end
+
+  private
+
+  def _do(what, extra = {})
+    EltenBridge.call('stream_do', { 'handle' => @handle, 'do' => what }.merge(extra))
+  rescue EltenBridge::Closed
+    nil
+  end
+end
+
+# A sound the application FEEDS: `Sound.open_pcm`'s answer. It is a
+# `RemoteSound` underneath - Titan's stream on a channel of the mixer - fed
+# from what `write_pcm` hands over instead of from a decoder, so volume,
+# pan, pitch, tempo and position all answer as for any other sound.
+#
+# Three things Elten's own has that the application reaches for, and none
+# of them is decoration: `channel` / `source_channel` are the handle (a
+# zero is "the playback channel is unavailable"), `buffer_attribute` and
+# `tempo_attribute` are the BASS_FX knobs Spotify turns down and up, and
+# `status` is a `SoundStatus` that says `stopped?` only once everything
+# written has been played - which is how the player knows a track ended.
+class PcmSound < RemoteSound
+  class Attribute
+    attr_reader :value
+
+    def initialize(sound, name, available: true)
+      @sound = sound
+      @name = name
+      @available = available
+      @value = 0.0
+    end
+
+    def available?; @available; end
+
+    def value=(number)
+      @value = number.to_f
+      @sound.tempo = @value if @name == :tempo
+      true
+    end
+  end
+
+  attr_reader :frequency_hz, :channels_count
+
+  # `Sound.new` routes a URL to `RemoteSound` and hands everything else its
+  # positional file; a PCM sound has no file, so it is built directly.
+  def self.new(**options)
+    sound = allocate
+    sound.send(:initialize, **options)
+    sound
+  end
+
+  def initialize(frequency:, channels:, type:, buffer: nil, output_device: nil, **_ignored)
+    @file = ''
+    @loop = false
+    @closed = false
+    @volume = 1.0
+    @spatial = false
+    @position = nil
+    @interpolation = :bilinear
+    @slide = nil
+    @started = nil
+    @paused = true
+    @frequency_hz = frequency.to_i
+    @channels_count = channels.to_i
+    @sample_type = type.to_s
+    @frame_bytes = _sample_bytes(@sample_type) * [@channels_count, 1].max
+    answer = EltenBridge.call('pcm_open', { 'frequency' => @frequency_hz, 'channels' => @channels_count,
+                                            'type' => @sample_type, 'label' => 'pcm' })
+    raise IOError, 'the PCM output could not be opened' unless answer.is_a?(Hash)
+
+    @handle = answer['handle']
+    @name = 'pcm'
+    @state = answer
+    @written = 0
+    @ended = false
+    write_pcm(buffer) if buffer.is_a?(String) && !buffer.empty?
+  end
+
+  def channel; @closed ? 0 : @handle.to_i; end
+  def source_channel; channel; end
+  def playback_channel; channel; end
+  def opened?; !@closed; end
+  def kind; :pcm; end
+  def pcm?; true; end
+
+  def buffer_attribute
+    @buffer_attribute ||= Attribute.new(self, :buffer, available: false)
+  end
+
+  def tempo_attribute
+    @tempo_attribute ||= Attribute.new(self, :tempo)
+  end
+
+  def write_pcm(buffer)
+    raise RuntimeError, 'Cannot write PCM data to a closed sound' if @closed
+
+    data = buffer.to_s.b
+    return 0 if data.empty?
+    if data.bytesize % @frame_bytes != 0
+      raise ArgumentError, "PCM data must contain complete sample frames (#{@frame_bytes} bytes per frame)"
+    end
+
+    require 'base64'
+    EltenBridge.notify('pcm_write', { 'handle' => @handle, 'data' => Base64.strict_encode64(data) })
+    @written += data.bytesize / @frame_bytes
+    data.bytesize
+  rescue EltenBridge::Closed
+    0
+  end
+
+  def end_of_data
+    return true if @ended
+
+    @ended = true
+    EltenBridge.notify('pcm_end', { 'handle' => @handle })
+    true
+  rescue EltenBridge::Closed
+    true
+  end
+
+  def written_frames; @written; end
+
+  def basefrequency
+    @frequency_hz.to_f
+  end
+
+  def length
+    @written.to_f / [@frequency_hz, 1].max
+  end
+
+  def status
+    return SoundStatus::Stopped if @closed
+
+    state = _do('status')
+    return SoundStatus::Stopped unless state.is_a?(Hash)
+    return SoundStatus::Playing if state['playing'] == true
+    return SoundStatus::Stopped if state['finished'] == true
+    return SoundStatus::Paused if state['paused'] == true
+
+    @ended ? SoundStatus::Stopped : SoundStatus::Playing
+  end
+
+  def stopped?; status.stopped?; end
+  def paused?; status.paused?; end
+
+  private
+
+  def _sample_bytes(type)
+    case type.to_s.downcase.delete(':')
+    when 'float', 'float32', 'f32' then 4
+    when 'byte', 'int8', 's8', '8' then 1
+    else 2
+    end
   end
 end
 
@@ -657,12 +1090,36 @@ module Kernel
   # everything else this desktop says.
   def alert(text, wait = true)
     Speech.speak(text.to_s, wait: wait)
+    EltenBuffers.push('messages', text)
     nil
   end
 
   # `confirm(text="")` - yes/no, answering a boolean. Unlike `alert`, Elten's
   # own IS a real interaction (a two-item list, "No"/"Yes") and is asked
   # rarely enough that a real wx dialog is the right shape for it here too.
+  # `get_file(header, path:, save:, extensions:)` - Elten's file chooser
+  # (`src/ui/dialogs.rb`), answered with the platform's own picker. A
+  # `nil` is the user cancelling; the record button and the file manager
+  # both test for it.
+  def get_file(header = '', path: '', save: false, extensions: nil, **_ignored)
+    answer = EltenBridge.call('choose_path',
+                              { 'header' => header.to_s, 'path' => path.to_s,
+                                'directory' => false, 'save' => save == true,
+                                'extensions' => Array(extensions).map(&:to_s) })
+    answer.nil? || answer.to_s.empty? ? nil : answer.to_s
+  rescue EltenBridge::Closed
+    nil
+  end
+
+  def get_directory(header = '', path: '', **_ignored)
+    answer = EltenBridge.call('choose_path',
+                              { 'header' => header.to_s, 'path' => path.to_s,
+                                'directory' => true })
+    answer.nil? || answer.to_s.empty? ? nil : answer.to_s
+  rescue EltenBridge::Closed
+    nil
+  end
+
   def confirm(text = '')
     !!EltenBridge.call('confirm', { 'text' => text.to_s })
   rescue EltenBridge::Closed
@@ -1181,16 +1638,31 @@ module Kernel
   # keys one as the context, U+0004 and the text; a catalogue with no
   # contexts in it therefore answers nothing, and the text itself is the
   # right fallback - which is exactly what Elten's own does.
+  # A catalogue with no entry for the key answers the KEY - and the wire
+  # strips the U+0004 out of it on the way back, so the answer was
+  # "WeatherMainly clear." - context and text run together - and it was
+  # taken for a translation. The Weather widget read that way on every
+  # row. An answer that is the key with or without its separator is no
+  # translation, and the text alone is what Elten answers then.
   def p_(context, src)
-    joined = context.to_s + "\u0004" + src.to_s
-    translated = _(joined)
-    translated == joined ? src.to_s : translated
+    EltenGettext.translate_context(context.to_s, src.to_s)
   end
 
   def np_(context, src, *params)
-    joined = context.to_s + "\u0004" + src.to_s
-    translated = n_(joined, *params)
-    translated == joined ? n_(src, *params) : translated
+    plural, count = params[0].to_s, (params[1] || 1)
+    answer = EltenBridge.call('translate_plural',
+                              { 'one' => src.to_s, 'other' => plural, 'count' => count,
+                                'context' => context.to_s })
+    return answer if answer.is_a?(String) && !answer.empty?
+
+    n_(src, *params)
+  rescue EltenBridge::Closed
+    n_(src, *params)
+  end
+
+  def _untranslated?(answer, key)
+    answer.nil? || answer.to_s.empty? || answer == key ||
+      answer == key.delete("\u0004") || answer == key.tr("\u0004", ' ')
   end
 
   # `platform_open_url(url)` - a link, in the browser the user has open.
@@ -1249,6 +1721,7 @@ module Kernel
     play_sound(notif['sound']) unless notif['sound'].nil?
     unless notif['alert'].nil?
       speak(notif['alert'], stop: false, break_sequence: false)
+      EltenBuffers.push('notifications', notif['alert'])
     end
     nil
   end

@@ -132,6 +132,22 @@ module EltenSystemHelpers
     ('A'..'Z').map { |letter| "#{letter}:" }.select { |drive| File.directory?("#{drive}/") }
   end
 
+  # `locale_sort_key(value)` - Elten's own asks Windows for the collation key
+  # of the user's locale (`LCMapStringW`); the media catalogue sorts its
+  # favourites by it. Case-folded Unicode is the same ORDER for every
+  # alphabet Ruby knows, which is what a sort key is for.
+  def locale_sort_key(value)
+    return value unless value.is_a?(String)
+
+    value.unicode_normalize(:nfkc).downcase(:fold)
+  rescue StandardError
+    value.to_s.downcase
+  end
+
+  def locale_compare(left, right)
+    locale_sort_key(left.to_s) <=> locale_sort_key(right.to_s)
+  end
+
   def appdata_dir; Dirs.appdata; end
   def user_dir; Dirs.user; end
   def documents_dir; Dirs.documents; end

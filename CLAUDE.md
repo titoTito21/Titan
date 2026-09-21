@@ -2471,6 +2471,50 @@ texts were the same. Both are written properly now. (The applications' own
 texts were never the problem - every `.txt` in every `.pag` is UTF-8 and
 always was.)
 
+#### Found by playing again, and by typing
+
+A fresh round (2026-09-19): the suite green (324), the static checkers
+quiet, and every one of the 17 emulated applications alive after a
+menu walk and a minute of keys. What was still wrong was found by
+starting an application with a FRESH store and by typing into one:
+
+- **Titan's help opened at every application's first start.**
+  `suiapp:showReadme` is `k_KnowledgeBaseDialog2(self, id, lang,
+  'readme', nil, force)`, Dice Poker and Amazon call it the first time
+  they run, and the bridge redirected every `k_KnowledgeBaseDialog2` to
+  Titan's help - so the first run of every Klango application put Titan's
+  help window up instead of the application's own readme. Klango showed
+  that text in its own reader (`_dialogTextViever`, which the library
+  has), and so does the bridge now (`_cling_app_text`); an application
+  with no readme shows nothing, and only the plain knowledge base is
+  Titan's help. Measured: Wikipedia and Dice Poker read their own readme
+  at first start, Mole No More just says hello.
+- **No capital letter and no Polish letter could be typed into any
+  field.** The window keyed what a key TYPES off the key's NAME - so
+  Shift+A typed "a" and AltGr+A (ą on a Polish layout) typed nothing at
+  all, in the chat, the Wikipedia search box and the typing course.
+  What a key types is the keyboard layout's business and Windows says
+  it in WM_CHAR, which is wx's `EVT_CHAR`: a printable key is now
+  reported with `character=''` (the window will type it) and skipped, and
+  `_on_char` hands the real character over (`Keyboard.character`, a
+  WM_CHAR with no scan code, into `chars` where `_Inp_KeySys_GetChars`
+  reads it). `press('a')` with no window still types "a".
+- **The bridge's sentences were English on a Polish desktop** ("Titan's
+  settings could not be opened", and the five beside it): the one module
+  in Cling with no catalogue. `_tr` reads Cling's own, and the `details`
+  action's labels (`Engine`, `Folder`, `Problem`...) go through `_()` too.
+  The list showed a bare "klango" after 17 of 21 names, because
+  `_engine_label` had no word for the emulator.
+- **F2 in a running application says where the user is** in Klango's
+  own words - "Mole No More - Cling v 1.0" (`KlangoEngine.status`,
+  `clingkit.VERSION`) - not how many files of its code the emulator
+  loaded, which was a fact about the emulator in English.
+- Tests: `TypedCharactersReachTheApplication` (the keyboard, and the real
+  window with real wx events), `AnApplicationsReadmeIsItsOwn` (on the real
+  library), `WhereAmIIsTheApplicationAndCling`. The play-through harness is `sweep_cling.py` beside the Elten
+  checkers in the temp folder: boot, settle, Alt, walk the menu, play,
+  read `session.report()`; and its `spoken` list is not chronological.
+
 #### Klango's Settings and Help are Titan's
 
 `klango/titan_bridge.py`. An emulated application's menu offered a language
@@ -3978,6 +4022,118 @@ Ruby side presses the button, or it would be pressed twice.
 a control that is not in the API and one more thing to tab past on the way
 out of a page of rules.
 
+#### Read against the whole of Elten's source, and the events that nobody fired
+
+Reported as "the Elten API bridge still has bugs - read the whole of
+Elten on GitHub; every window and every function of every application
+has to work". The suite was green (256) and the headless sweep ran every
+application without an error, so the faults were of the silent kind, and
+what found them was a **three-way comparison built on Ruby's own parser**
+(Prism ships with the CRuby the component carries): every call an
+installed `.eltenapp` makes - bare, on a typed receiver, on a constant,
+with which keywords, which event it binds with `on(:x)` - against what
+Elten's `src/` defines and what `eapi/` defines. A regex over Ruby
+answers hundreds of English words out of comments; an AST answers calls.
+
+- **Events an application bound and nothing here ever fired.** Elten's
+  tick box and field fire `:change`, not the wire's `changed` (Weather's
+  and Spotify's settings could be ticked and never took); Right on a list
+  is `:expand` and Left `:collapse` (`ui/controls/list_box.rb`), which is
+  how Weather's widget and KlangoArchive open a branch; and the keyboard
+  arriving on a control is `:blur`, `:before_focus`, `:focus` and the
+  form's `:move` - four applications fill a control in from
+  `:before_focus`, and no window here had ever said which control the
+  keyboard was on. Titan reports the arrival from `EVT_CHILD_FOCUS`, once
+  (`_Form.focused`), and `Form#move_focus_to` turns it into Elten's four.
+  `_NAV_KEYS` now carries every key Elten's `keyevents` reports - digits,
+  backspace, insert, comma, minus, period - so `on(:key_delete)` fires.
+- **A platform layer Elten's applications reach without thinking of it
+  as the API** (`eapi/platform.rb`): `Clipboard` (Titan's, through the
+  bridge), `EltenWindow`, `NVDA` (honest: no pipe; braille to Titan),
+  `Scene_Main` / `Scene_Loading` (going back to the main screen is
+  leaving), `EltenAPI::TLS`, `AudioInfo::Chapter`, `NotificationGroups`
+  (Elten's struct field for field, labels included), `KeyboardState`,
+  `NotificationService`, `QuickActions` (the Game Room prepends onto its
+  singleton class and calls `super`), `Bass` (a stand-in that ends a PCM
+  stream and says the encoders are not loaded), and the bare helpers
+  `executeprocess`, `keyboard_action_pressed?` (Elten's Windows keyboard
+  profile is in `KeyboardScheme::ACTIONS`), `createdebuginfo`,
+  `licensetext`, `restart_to_developer_mode`.
+- **`Sound.open_pcm` is taken, not refused.** Spotify is made of it -
+  librespot decodes in a native library and the application pushes forty
+  milliseconds of float samples per pump - so a port that raised
+  `UnsupportedOperation` was a Spotify that could browse and never make a
+  sound. `host.PcmStream` is the stream fed from a queue instead of a
+  decoder (samples converted to the LIVE mixer's format), `pcm_open` /
+  `pcm_write` (a notification, never a call - one per 40 ms) / `pcm_end`
+  are the ops, and `PcmSound` carries what Spotify touches: `channel`,
+  `source_channel`, `buffer_attribute`, `tempo_attribute`, `write_pcm`,
+  and a `status` that is `SoundStatus::Stopped` only once everything
+  written has played. `SoundStatus::Playing/Paused/Stopped` exist now;
+  applications compare against them.
+- **Signatures read out of Elten, again**: `key_pressed?(key, repeat:)`
+  (Freesound seeks while Shift+Right is held), `ListBox#focus(index,
+  count, header, spk)` passed on with `super` by the Game Room's card
+  list, `Form#bind_context` (KlangoArchive's whole post navigation lives
+  on the form - its menu is poured into the focused control's, which is
+  Elten's `$activecontrols` order), `ChildProc#exitstatus`,
+  `EltenLink::Client.session_object`, `EltenSystemHelpers.locale_sort_key`,
+  `Programs::Extensions.refresh_ui`, `EltenGettext.language` (so
+  `Configuration.language` stopped raising - the Neighbourhood Radar
+  picks its words by it), the rest of `LiveSessions`' error classes,
+  `Audio3DEffect::DEFAULT_FRAMESIZE = 20` (milliseconds, not samples),
+  `$activecontrols` and `$focus`.
+- **A folder has no "Up one level" row.** Elten's tree lists the folder
+  (`Dir.each_child`) and nothing else - Left or Backspace goes up - so
+  the row the port put at the top of every folder was a second way up
+  Elten has not got, read out first each time.
+- **A player's chapters are the SOUND's**: Tyflopodcast marks a podcast
+  by redefining `sound.chapters`, and a player that asked Titan's stream
+  for the next chapter walked the file's own and never the bookmarks.
+- **Then the real window, driven.** A sweep that opens every application in
+  the genuine `WxUI`, fires real key events at the focused control and
+  answers every modal from a timer (`sweep_real.py`, beside the AST
+  checker) found three faults nothing headless could:
+  - **`wait_for_item` answered nil for everything.** Elten's
+    (`form_field.rb`) returns `wait_item_at(index)` on a select or an
+    expand and nil on a collapse or Escape; the port resumed the form and
+    never set the answer, so `while list.wait_for_item` - Tyflopodcast's
+    whole main screen - ended the application on the first Enter, with
+    nothing said. With nothing pressed it sat there looking fine.
+  - **A choice list's rows were cleaned as a table's.** `_clean_control_
+    spec` turned `{label, options, index}` into a one-cell list the widget
+    then asked `.get` of: `form_open raised: 'list' object has no
+    attribute 'get'`, and MileByMile's setup screen could not open at
+    all. `_clean_row` tells the two shapes apart.
+  - **A focus into a destroyed control ended the application.** The
+    screen had been replaced, the form was still listed, and
+    `widget.focus()` raised `RuntimeError` - which crossed the wire as a
+    `RemoteError` and killed Freesound. `focus_control` and
+    `set_control` ask `_alive` first, and the Ruby `Form#focus_control`
+    rescues a `RemoteError`: a focus that cannot land answers False.
+- **Polish is Polish: a translation is asked the way Elten asks it.** Two
+  faults kept four applications English on a Polish Titan, each with a
+  perfectly good `pl.mo` in it. `p_("Weather", "Main menu")` keys a
+  catalogue as `Weather U+0004 Main menu`, and U+0004 is a control
+  character `_text` strips off a text - so the key crossed the wire as
+  "WeatherMain menu" and matched nothing (all 236 of Weather's strings).
+  The context is its own field now (`EltenGettext.translate_context`,
+  `pgettext` / `npgettext` on Titan's side). And Elten's plain `_()`
+  tries the program's MANIFEST NAME as a context before the plain key
+  (`dictionary.rb`'s `program_translation_context`) - Youtube, Spotify,
+  Freesound and Weather key every string that way while calling plain
+  `_("Search Youtube")`, so `_op_translate` asks under the name first
+  (`_program_context`, the manifest's own name, never the localised
+  one). Measured with `language='pl'`: "Przeszukaj Youtube", "Witaj w
+  Spotify", "Otwórz", "Menu główne".
+- Tests: `ThePlatformEltensApplicationsReach`, `TheEventsAreEltensEvents`,
+  `TheWindowReportsEltensEvents`, `RawPcmReachesTheMixer`,
+  `ThePcmSoundIsEltensPcmSound`, `TheRestOfEltensPlatform`,
+  `FocusTakesEltensOwnArguments`, `WaitForItemAnswersTheRow`,
+  `AFolderHasNoUpOneLevelRow`, `AContextTranslationIsAskedWithItsContext`,
+  `TheRubySideSendsTheContextApart` in `tests/test_elten_bridge.py`. The
+  notification-coverage test reads every `eapi/*.rb`, not three of them.
+
 #### The Ruby is carried
 
 `ruby/` is CRuby 4.0.6 (RubyInstaller, 46 MB pruned of docs and headers,
@@ -4005,6 +4161,143 @@ in there is code running inside somebody else's program.
   choice row asked where it starts - because every one of those was an
   application that stopped, and a signature guessed from call sites is an
   `ArgumentError` inside somebody else's program.
+
+#### Found by opening every installed application without a window
+
+Reported as "programs needing widgets or sound do not work properly", with
+the running Elten's own sources (its MCP server, `elten_source_read`) as the
+oracle. A headless sweep - every installed `.eltenapp` opened in the port
+with a scripted UI double and a recording mixer, its menus answered and its
+keys pressed - is what found them, and none of them by reading the code:
+
+- **`length` was defined TWICE in the port's sound class, and Ruby keeps
+  the last one - which answered 0.0 for every sound.** So was `wait`, whose
+  survivor SLEPT instead of pumping the frame, freezing every timer and
+  form for the length of the clip. The Ruby-side duplicate-definition check
+  (a class defined per file, methods counted per class) is what a reader
+  cannot do by eye; `TheSoundIsEltensSound` pins it.
+- **`Sound` did not exist.** Elten's own `Sound.new(file | url, sample:,
+  loop:, stream:)` is what Freesound previews with, what the file manager's
+  preview and playlist play through, and what a Game Room test builds.
+  It is a held sound of Titan's mixer for a file (`sound_open`, any path
+  the application names - a Ruby process reads the disk anyway), Titan's
+  PyAV stream for a URL (`RemoteSound`, opened PAUSED because Elten's does
+  not play until told), a spooled file for bytes; `open_pcm` raises
+  `UnsupportedOperation`, as Elten's own attribute layer does for what a
+  sound cannot take. `status` answers Elten's `SoundStatus` and still
+  compares to the symbols it used to answer.
+- **Names an application calls that Elten has**: `CheckBox#checked` (the
+  Game Room's options screen), `EditBox#settext` / `audiostream` /
+  `clear_audio_player` / `max_length` (YouTube's details pane on every
+  focus, KlangoArchive's posts), `ListBox#sayoption`, `TableBox#sel`,
+  `Program.app_runtime` (Spotify), `Program#finalize(v = nil, reason:)`
+  (Weather overrides it and calls `super` with both), `get_file` /
+  `get_directory`, `Programs::NotificationPresentation` /
+  `AppNotification`, `Recorder` and `OpusRecordButton` (the file manager
+  records in all three formats; Tyflopodcast's voice message) - Titan's
+  own input through sounddevice and PyAV's encoders, refusing in a sentence
+  when there is no microphone or the privacy switch is off.
+- **The extension service is Elten's `Registration`, whole**:
+  `registered?` (Neighborhood Radar asked it and stopped), `unregister`,
+  `refresh_ui!`, `command(...).place(:main_menu)` (Spotify), `every(key,
+  seconds:, persistent:, first:)` handing its block Elten's `RunContext`
+  with a cancellation `token` (Weather reads it on every refresh), and
+  `main_tab` - see below. The live session's `create` takes Elten 3.0.3's
+  keywords (`visibility:`, `discovery_metadata:`, the stack and pool
+  sizes, `private_messages:`) and `on_message(with_metadata: true)` hands a
+  `MessageInfo` beside the packet, both of which the Game Room needs before
+  a table exists.
+- **A radio station "could not be played" because of its NAME.** PyAV
+  decodes ICY metadata as UTF-8 strictly by default, so a station whose
+  name was in Windows-1250 made `av.open` raise "'utf-8' codec can't
+  decode byte 0xe0" and the media catalogue reported a stream that plays as
+  one that does not. `metadata_errors='replace'` on every `av.open`.
+- **A download is streamed to the disk.** `download_file` read the whole
+  body into memory through `read_url`, which is capped at 32 MB; the
+  YouTube client fetches a 40 MB Deno and refused its own dependency with
+  "the response is too large". `read_url` keeps its cap - a page read into
+  a string should not be a gigabyte - and a FILE goes through `read_body`.
+- **Context translations fell back to the KEY with its separator
+  stripped**: the wire loses U+0004, so a catalogue with no entry for
+  `Weather\u0004Mainly clear.` answered "WeatherMainly clear." and it was
+  taken for a translation - which is what every row of the Weather widget
+  read like. `p_` treats the key with or without its separator as
+  untranslated.
+- **A child process is "running" until its OUTPUT has been read to the
+  end.** `ChildProc#running?` answered for the process, and the YouTube
+  client's loop stops reading the moment it answers false; yt-dlp's answer
+  is tens of kilobytes drained four at a time, so what was parsed could be
+  the head of a document. The reader threads count now, and the buffers
+  are binary (a title with a non-ASCII letter raised
+  `Encoding::CompatibilityError` on append). What the sweep then found on
+  YouTube is the APPLICATION's: an empty query makes yt-dlp print `null`,
+  which it indexes - the same in Elten.
+- **The live session's stack** (`stack_push` / `stack_read` /
+  `stack_trim` / `stack_clear` / `stack_state`, `on_stack_changed`,
+  `on_stack_message`) is Elten 3.0.3's and the Game Room writes every move
+  to it; relayed as one `live` call (`stack`, POST / GET / DELETE on
+  `.../stack` exactly as `live_session_stack_request` routes them). Pools -
+  server-side random draws - are not relayed and say so
+  (`PoolUnsupported`), as Elten's own does for a server without them.
+  Measured after: the Game Room creates a table and reaches EltenLink,
+  which answers "Live session membership is not active" to the first
+  stack read - a server-side state question left for the next round.
+- **Every string on the wire is UTF-8**: `EltenBridge.write` scrubs before
+  `JSON.generate`, which warned "UTF-8 string passed as BINARY, this will
+  raise an encoding error in json 3.0" once per Game Room packet - a
+  promise to stop working at the next json upgrade. And the constants
+  block in `eltenapi.rb` no longer re-assigns what `controls.rb` already
+  set, which was "already initialized constant" thirteen times in every
+  application's log.
+
+#### Elten's home-screen widgets, in Titan's main window
+
+`extension.main_tab(key, label:, visible:) { |context| control }` is a
+section of Elten's main screen - the Weather application's forecast is one.
+In Titan it is a **side panel of the main window**: a list of its own,
+named as the widget names itself and holding the widget's rows, in the
+window's column between the current view and the status bar, reached with
+Tab exactly as the status bar is (the ring is view, panels, status bar,
+round again; `src/ui/side_panels.py`, which `gui.py` delegates to and any
+component reaches through `component_manager.add_side_panel`). Not a card
+of the tab bar - that was the second shape, and the user said no: Elten's
+main screen is a COLUMN of sections, always there whatever is showing.
+Enter on a row is `select` on the very `ListBox` the application built, so
+its own `on(:select)` runs. A panel is added the moment the widget's rows
+first arrive and taken away when the widget goes - the application ended,
+or it withdrew the tab - with the keyboard moved to the view first if the
+user was on it. `EachWidgetIsAPanelOfItsOwn` drives it against the real
+`SidePanels` on a bare frame.
+
+- **The block runs where Elten runs it**: on the application's own frame
+  (`EltenWidgets.tick`, once a second and at `refresh_ui!`), handed Elten's
+  `MainTabContext` - the control it returned last time and a `state` hash
+  of its own - and never from another thread. The rows cross as one
+  `widgets` notification when they change; a row pressed in Titan comes
+  back as a `widget` event.
+- **An application is started for its widgets without being opened.**
+  Elten runs every installed application's extensions whether or not it is
+  open; here **Settings -> Aplikacje Elten API -> "Applications started in
+  the background for their widgets"** (a tick list, `elten_bridge_widget_apps`)
+  names the ones to start at Titan's startup in background mode
+  (`ELTEN_BRIDGE_BACKGROUND=1`: `activate` runs, the frame is pumped, no
+  instance is made and `program_main` never runs). Each still gets a window
+  of its own, because a widget row pressed may open one of the
+  application's screens. Measured live on Weather: ten rows - the
+  conditions, the temperature, the sun and the moon - in the main window
+  eight seconds after Titan's.
+- **What an application announces goes into the Buffer System** as its own
+  category, **Elten API**, with `notifications` (a `process_notification`,
+  a `NotificationPresentation` presented) and `messages` (every `alert` -
+  Elten's own "say one thing"), the application as the author
+  (`src/buffers/defaults.register_elten_api`, pushed over the wire as
+  `buffer`, registered while the bridge is loaded).
+- Tests: `TheSoundIsEltensSound`, `TheControlsAnswerEltensOwnNames`,
+  `AnExtensionServiceIsEltens`, `TheHostSideOfSoundAndRecording` and
+  `AWidgetReachesTitanFromABackgroundApplication` (the whole chain on the
+  real interpreter: a background application's rows arrive, a row pressed
+  runs its handler, `program_main` never ran) in `tests/test_elten_bridge.py`
+  (252 tests).
 
 ### TCE applications, described rather than drawn
 

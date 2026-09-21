@@ -43,8 +43,63 @@ module EltenAPI
         modifier.to_s.upcase
       end
 
-      def binding(_action)
-        nil
+      # Elten's own Windows profile (`eapi/keyboard.rb`, `PROFILES[:windows]
+      # [:actions]`): an ACTION an application asks about -
+      # `keyboard_action_pressed?(:player_start, :player_end)` in Spotify's
+      # player - and the key with its modifiers that means it here.
+      ACTIONS = {
+        list_position: [:up, :control],
+        list_count: [:down, :control],
+        list_start: [:home],
+        list_end: [:end],
+        list_select_start: [:home, :shift],
+        list_select_end: [:end, :shift],
+        list_select_previous: [:up, :shift],
+        list_select_next: [:down, :shift],
+        list_select_page_up: [:page_up, :shift],
+        list_select_page_down: [:page_down, :shift],
+        text_start: [:home, :control, :shift_optional],
+        text_end: [:end, :control, :shift_optional],
+        text_line_start: [:home, :shift_optional],
+        text_line_end: [:end, :shift_optional],
+        text_previous_word: [:left, :control, :shift_optional],
+        text_next_word: [:right, :control, :shift_optional],
+        text_previous_paragraph: [:up, :control, :shift_optional],
+        text_next_paragraph: [:down, :control, :shift_optional],
+        delete_previous_word: [:backspace, :control],
+        delete_next_word: [:delete, :control],
+        select_all: [:a, :control],
+        deselect_all: [:a, :control, :shift],
+        undo: [:z, :control],
+        redo: [:y, :control],
+        submit: [:enter, :control],
+        player_start: [:home],
+        player_end: [:end],
+        calendar_today: [:home]
+      }.freeze
+
+      def binding(action)
+        ACTIONS[action.to_s.to_sym]
+      end
+
+      def actions
+        ACTIONS.keys
+      end
+
+      def action(name)
+        name.to_sym
+      end
+
+      # Elten names a key `:home`; the loop knows it as `key_home`.
+      def key_name(key)
+        text = key.to_s
+        return text if text.start_with?('key_')
+
+        "key_#{text.sub(/\Apage_/, 'page')}"
+      end
+
+      def key_code(key)
+        EltenLoop::VIRTUAL_KEYS.key(key_name(key))
       end
     end
   end
@@ -195,17 +250,14 @@ module EltenAPI
   end
 
   module Controls
-    ListBox = ::ListBox
-    EditBox = ::EditBox
-    Button = ::Button
-    CheckBox = ::CheckBox
-    Form = ::Form
-    TableBox = ::TableBox
-    Menu = ::Menu
-    FilesTree = ::FilesTree
-    Tree = ::Tree
-    GridBox = ::GridBox
-    Player = ::Player
-    ChoiceListBox = ::ChoiceListBox
+    # `controls.rb` has already put every control here; naming them again
+    # was a "warning: already initialized constant" per control at every
+    # start, in the log of every application.
+    %w[ListBox EditBox Button CheckBox Form TableBox Menu FilesTree Tree
+       GridBox Player ChoiceListBox Static FormTimer OpusRecordButton].each do |name|
+      next if const_defined?(name, false) || !Object.const_defined?(name)
+
+      const_set(name, Object.const_get(name))
+    end
   end
 end

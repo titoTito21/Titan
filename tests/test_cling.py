@@ -4228,7 +4228,10 @@ class TheComponent(unittest.TestCase):
     def test_an_action_naming_an_application_nobody_has_says_so(self):
         """A refusal is a `Failure`, not prose - which is what a caller reads."""
         answer = self.init.action_details(name='no-such-application')
-        self.assertIn('no Cling application', str(answer))
+        # The sentence is in the user's language (Polish here, on a Polish
+        # Titan), so what is asserted is the shape and the name in it.
+        self.assertIn('Failure', str(answer))
+        self.assertIn('no-such-application', str(answer))
 
 
 
@@ -4750,6 +4753,154 @@ class RealApplications(unittest.TestCase):
             fallback=True)
         self.assertEqual(catalogue.gettext('Games'), 'Gry')
         self.assertEqual(catalogue.gettext('High scores'), 'Najlepsze wyniki')
+
+
+class TypedCharactersReachTheApplication(unittest.TestCase):
+    """What a key TYPES is the keyboard layout's business - Shift makes "A",
+    AltGr on a Polish layout makes "ą" - and the window keyed it off the
+    key's NAME, so no capital and no Polish letter could be typed into any
+    field of any application. The character travels apart from the key."""
+
+    def test_the_keyboard_types_what_the_window_says_it_typed(self):
+        from clingkit.klango.keyboard import Keyboard, WM_CHAR
+        keys = Keyboard()
+        keys.down('a', character='')          # the window will type it
+        keys.character('ą')              # ... and does: "ą"
+        keys.refresh()
+        self.assertEqual(keys.chars, ['ą'])
+        self.assertEqual([m for m in keys.messages if m[0] == WM_CHAR], [(WM_CHAR, 0, 0, 'ą', 0)])
+        self.assertTrue(keys.held, 'the key that made it is still held')
+        keys.up('a'); keys.refresh()
+        # the old way still types the key's own character
+        keys.press('a'); keys.refresh()
+        self.assertEqual(keys.chars, ['a'])
+        self.assertFalse(keys.character(''))
+
+    def test_the_window_hands_the_character_over_from_evt_char(self):
+        try:
+            import wx
+        except Exception as error:
+            self.skipTest('no wx: %s' % error)
+        from clingkit import ui as ui_module
+        app = wx.GetApp() or wx.App(False)
+
+        class Engine(object):
+            running = True
+            started = True
+            calls = []
+            def key_down(self, name, modifiers=(), character=None):
+                self.calls.append(('down', name, tuple(modifiers), character)); return True
+            def key_up(self, name, modifiers=()):
+                self.calls.append(('up', name)); return True
+            def key(self, name, modifiers=()):
+                self.calls.append(('press', name)); return True
+            def character(self, text):
+                self.calls.append(('char', text)); return True
+
+        class App(object):
+            id = 'x'
+            def name(self, _language=''): return 'X'
+
+        surface = ui_module.ClingSurface(None, App())
+        surface.Hide()
+        engine = Engine()
+        surface.session = engine
+        try:
+            def hook(code, unicode_key=None, shift=False):
+                event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+                event.SetKeyCode(code)
+                event.SetUnicodeKey(unicode_key if unicode_key is not None else code)
+                event.SetShiftDown(shift)
+                event.SetEventObject(surface.keys)
+                surface.GetEventHandler().ProcessEvent(event)
+            def char(text):
+                event = wx.KeyEvent(wx.wxEVT_CHAR)
+                event.SetUnicodeKey(ord(text))
+                event.SetKeyCode(ord(text))
+                event.SetEventObject(surface.keys)
+                surface.keys.GetEventHandler().ProcessEvent(event)
+            hook(ord('A'), ord('A'), shift=True)
+            char('A')
+            hook(wx.WXK_UP)
+            hook(ord('A'), ord('A'))
+            char('ą')
+            # the modifiers are held apart from the keys ('shift' down and up
+            # around the A), so they are left out of what is compared
+            calls = [c for c in engine.calls if c[1] not in ('shift', 'ctrl', 'alt')]
+            self.assertEqual(calls, [
+                ('down', 'a', ('shift',), ''), ('char', 'A'),
+                ('down', 'up', (), None),
+                ('char', 'ą')])
+        finally:
+            surface.Destroy()
+
+
+class AnApplicationsReadmeIsItsOwn(unittest.TestCase):
+    """`suiapp:showReadme` is `k_KnowledgeBaseDialog2(self, id, lang,
+    'readme', nil, force)`, and an application calls it at its FIRST start.
+    Redirected wholesale to Titan's help, every Klango application opened
+    Titan's help window the first time it was run. Klango showed the
+    application's own text in its own reader, so that is what this shows."""
+
+    def setUp(self):
+        from clingkit.klango.session import find_library
+        if not find_library():
+            self.skipTest("Klango's library is not installed")
+        self.app_id = next((name for name in ('wiki', 'dicepoker') if name in INSTALLED), None)
+        if self.app_id is None:
+            self.skipTest('no application with a readme is installed')
+
+    def test_the_readme_goes_to_the_applications_reader_and_the_rest_to_titans_help(self):
+        from clingkit import klango
+        from clingkit.klango import titan_bridge
+        host = host_module.ClingHost(
+            INSTALLED[self.app_id], 'pl', speaker=QuietSpeaker(), mixer=SilentMixer(),
+            store=store_module.Store(self.app_id, 'test-suite', scratch('cling-readme-')),
+            clock=runner.FakeClock())
+        readme = host.text('readme')
+        self.assertTrue(readme, '%s has no readme to show' % self.app_id)
+        opened = []
+        original = titan_bridge.open_help
+        titan_bridge.open_help = lambda: opened.append(1) or 'help'
+        try:
+            session = klango.KlangoSession(host)
+            session.runtime.interpreter.MAX_STEPS = 5000000
+            session.load_library()
+            session.start_platform()
+            titan_bridge.install(session.runtime, host)
+            session.runtime.run(
+                'shown_text = ""\n'
+                'app = { _dialogTextViever = function(self, text, title) shown_text = text end }\n'
+                'r1 = k_KnowledgeBaseDialog2(app, 1, "pl-pl", "readme")\n', 'probe')
+            run = session.runtime
+            self.assertTrue(run.get_global('r1'))
+            self.assertEqual(str(run.get_global('shown_text')).strip()[:20], readme.strip()[:20])
+            run.run('r3 = k_KnowledgeBaseDialog2(app, 1, "pl-pl")\n', 'probe')
+            self.assertEqual(opened, [1], "only the plain knowledge base is Titan's help")
+        finally:
+            titan_bridge.open_help = original
+
+
+class WhereAmIIsTheApplicationAndCling(unittest.TestCase):
+    """F2 in a running application says where the user is, in Klango's own
+    words: the application's name and the platform - "Mole No More - Cling
+    v 1.0" - not how many files of its code the emulator loaded."""
+
+    def test_the_status_line_is_the_name_and_the_version(self):
+        from clingkit import VERSION
+        from clingkit.engines.klango_app import KlangoEngine
+        app_id = next(iter(sorted(INSTALLED)), None)
+        if app_id is None:
+            self.skipTest('nothing installed')
+        host = host_module.ClingHost(
+            INSTALLED[app_id], 'pl', speaker=QuietSpeaker(), mixer=SilentMixer(),
+            store=store_module.Store(app_id, 'test-suite', scratch('cling-f2-')),
+            clock=runner.FakeClock())
+        engine = KlangoEngine(host)
+        self.assertEqual(engine.status(), '')
+        engine.session = object()
+        self.assertEqual(engine.status(), '%s - Cling v %s' % (INSTALLED[app_id].name('pl'), VERSION))
+        self.assertNotIn('file', engine.status())
 
 
 if __name__ == '__main__':

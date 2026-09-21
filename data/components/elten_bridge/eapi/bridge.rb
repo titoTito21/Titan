@@ -156,10 +156,33 @@ module EltenBridge
       Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
+    # Every string on the wire is UTF-8, whatever the application called it.
+    # A binary-tagged string (`.b`, a byte read off a file, a Game Room
+    # packet) made `JSON.generate` warn "UTF-8 string passed as BINARY,
+    # this will raise an encoding error in json 3.0" - a promise to stop
+    # working at the next json upgrade - and bytes that are not UTF-8 at
+    # all would have ended the wire. Scrubbed here, once, rather than at
+    # every call site.
+    def utf8(value)
+      case value
+      when String
+        text = value.dup.force_encoding(Encoding::UTF_8)
+        text.valid_encoding? ? text : text.scrub('?')
+      when Hash
+        value.each_with_object({}) { |(key, item), out| out[utf8(key.to_s)] = utf8(item) }
+      when Array
+        value.map { |item| utf8(item) }
+      when Symbol
+        value.to_s
+      else
+        value
+      end
+    end
+
     private
 
     def write(message)
-      line = JSON.generate(message)
+      line = JSON.generate(utf8(message))
       @lock.synchronize do
         begin
           CHANNEL.puts(line)

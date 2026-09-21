@@ -32,8 +32,11 @@ class ChildProc
     @command = file.to_s
     @directory = (path || l_path).to_s
     @exitcode = nil
-    @out = +''
-    @err = +''
+    # Binary buffers: a child writes bytes, and appending a chunk with
+    # high bytes to a UTF-8 string raises `Encoding::CompatibilityError`
+    # the moment a title has a non-ASCII letter in it.
+    @out = +''.b
+    @err = +''.b
     @lock = Mutex.new
     options = {}
     options[:chdir] = @directory if !@directory.empty? && Dir.exist?(@directory)
@@ -53,10 +56,20 @@ class ChildProc
     !@waiter.nil?
   end
 
+  # Running until the OUTPUT has been read to its end, not until the
+  # process has exited. The YouTube client's loop stops reading the moment
+  # `running?` answers false and parses what it has; yt-dlp's JSON is tens
+  # of kilobytes, the reader thread takes it four kilobytes at a time, and
+  # a process that had exited with the tail of its answer still in the pipe
+  # was parsed as half a document - "undefined method '[]' for nil" on
+  # every search. Elten's own reads the pipe synchronously and has no such
+  # gap; here the gap is closed by answering "still running" while a
+  # reader is still draining.
   def alive?
     return false if @waiter.nil?
+    return true if @waiter.alive?
 
-    @waiter.alive?
+    @readers.to_a.any? { |thread| thread&.alive? }
   end
 
   # **Elten's own spelling.** Its applications ask `process.running?`,
@@ -65,6 +78,17 @@ class ChildProc
   # that is merely absent is a `NoMethodError` inside the application, so
   # the search ended before yt-dlp had said a word.
   alias running? alive?
+
+  # Elten's `ChildProc#exitstatus` - what the YouTube client reads when
+  # yt-dlp answered nothing, to say in the log whether it failed.
+  def exitstatus
+    finish if started? && !alive?
+    @exitcode
+  end
+
+  def finished?
+    !started? || !alive?
+  end
 
   # How many bytes are waiting, so a loop knows whether there is anything
   # to read without a read that would block.

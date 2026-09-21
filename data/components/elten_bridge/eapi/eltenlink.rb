@@ -65,6 +65,25 @@ module EltenLink
     def to_s
       'EltenLink client (Titan)'
     end
+
+    # Elten's `EltenLink::Client.session_object` answers the `Session`
+    # constant - the signed-in account, which an application reads its
+    # own user name off (`EltenLink::Client.session_object&.name`, in
+    # Spotify's profiles and the Neighbourhood Radar). The one here never
+    # carries a token.
+    def self.session_object
+      return ::Session if Object.const_defined?(:Session)
+
+      nil
+    end
+
+    def self.session_auth_params
+      {}
+    end
+
+    def self.query_hash(params)
+      params
+    end
   end
 
   # A namespace is a name and the methods called on it; the check of whether
@@ -320,10 +339,4 @@ module EltenLink
     end
   end
 
-  # `EltenLink.client(program)` - what an application passes about. There
-  # is nothing for it to hold: every call goes through the table above and
-  # through `CALLS`, so this exists to be passed and not to be used.
-  def self.client(_program = nil)
-    @client ||= Object.new
-  end
 end

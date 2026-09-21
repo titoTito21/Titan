@@ -597,12 +597,22 @@ class TitanApp(wx.Frame):
             self._add_toolbar_tool(view)
         self.toolbar.Realize()
 
-        main_vbox.Add(wx.StaticText(panel, label=_("Status Bar:")), flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
+        self.statusbar_label = wx.StaticText(panel, label=_("Status Bar:"))
+        main_vbox.Add(self.statusbar_label, flag=wx.EXPAND|wx.LEFT|wx.RIGHT|wx.TOP, border=10)
 
         self.statusbar_listbox = wx.ListBox(panel)
         self.populate_statusbar()
 
         main_vbox.Add(self.statusbar_listbox, proportion=1, flag=wx.EXPAND|wx.ALL, border=10)
+
+        # Side panels: a list an add-on puts BETWEEN the current view and the
+        # status bar - Elten's main-screen sections, for the Elten API
+        # bridge's widgets. Tab walks view -> panels -> status bar -> view.
+        from src.ui.side_panels import SidePanels
+        self.main_vbox = main_vbox
+        self.side_panels = SidePanels(panel, main_vbox, self.statusbar_label,
+                                      self._current_view_control,
+                                      self.statusbar_listbox)
 
         # Bind statusbar double-click for applet activation
         self.statusbar_listbox.Bind(wx.EVT_LISTBOX_DCLICK, self.on_statusbar_click)
@@ -1733,6 +1743,8 @@ class TitanApp(wx.Frame):
                  pass  # Message sending moved to separate windows
             elif current_focus == self.statusbar_listbox:
                 self.on_status_selected(event)
+            elif getattr(self, 'side_panels', None) is not None and self.side_panels.activate(current_focus, event):
+                pass
             else:
                 # Check registered component views for on_activate
                 handled = False
@@ -1748,6 +1760,17 @@ class TitanApp(wx.Frame):
                     event.Skip()
             return
 
+        if keycode == wx.WXK_TAB and getattr(self, 'side_panels', None) is not None \
+                and self.side_panels.panels and modifiers in (wx.MOD_NONE, wx.MOD_SHIFT):
+            # With side panels up, the Tab ring is the general one: the
+            # current view, every panel, the status bar, round again.
+            target = self.side_panels.next_after(current_focus, backwards=(modifiers == wx.MOD_SHIFT))
+            if target is not None:
+                target.SetFocus()
+                if target is self.statusbar_listbox or self.side_panels.holds(target):
+                    play_statusbar_sound()
+                    vibrate_focus_change()
+                return
         if keycode == wx.WXK_TAB:
              if modifiers == wx.MOD_NONE:
                   if current_focus == self.app_listbox and self.app_listbox.IsShown():
@@ -3114,6 +3137,22 @@ class TitanApp(wx.Frame):
             self.tool_games = tool
         elif view['id'] == 'network':
             self.tool_network = tool
+
+    def _current_view_control(self):
+        """The control of the view that is showing, or None."""
+        for view in getattr(self, 'registered_views', []) or []:
+            if view['id'] == getattr(self, 'current_list', None):
+                return view.get('control')
+        return None
+
+    def add_side_panel(self, panel_id, label, control, on_activate=None):
+        """A list of an add-on's own between the current view and the
+        status bar - see `src/ui/side_panels.py`. `control` must be
+        parented to `main_panel`."""
+        return self.side_panels.add(panel_id, label, control, on_activate)
+
+    def remove_side_panel(self, panel_id):
+        return self.side_panels.remove(panel_id)
 
     def _show_view_by_id(self, view_id):
         """Activate a view (built-in or registered) by its id."""

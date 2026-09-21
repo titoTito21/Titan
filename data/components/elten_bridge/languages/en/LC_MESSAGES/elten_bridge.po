@@ -64,3 +64,20 @@ msgstr "This file cannot be played."
 msgid "This file cannot be previewed."
 msgstr "This file cannot be previewed."
 
+msgid "Elten widgets"
+msgstr ""
+
+msgid "No Elten widgets. An application shows one here while it is running; Settings names the ones to start in the background."
+msgstr ""
+
+msgid "Applications started in the background for their widgets (the Weather forecast, for one):"
+msgstr ""
+
+msgid "Widget applications"
+msgstr ""
+
+msgid "Elten API"
+msgstr ""
+
+msgid "Nothing yet."
+msgstr ""

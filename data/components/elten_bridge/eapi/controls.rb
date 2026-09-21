@@ -32,11 +32,13 @@ module EltenForms
   class << self
     def register(form_id, form)
       @open[form_id] = form
+      $activecontrols = @open.values
       EltenLoop.surface_changed if defined?(EltenLoop)
     end
 
     def forget(form_id)
       @open.delete(form_id)
+      $activecontrols = @open.values
       EltenLoop.surface_changed if defined?(EltenLoop)
     end
 
@@ -177,27 +179,10 @@ class EltenControl
   # control without `bind_context` is an application that stops on its
   # first screen.
   attr_accessor :header
-
-  def bind_context(header = '', &block)
-    @contexts ||= []
-    @contexts << [block, header]
-    self
-  end
-
-  def hascontext
-    !(@contexts || []).empty?
-  end
-
-  # Build the context menu and open it - what Shift+F10 would do. Titan
-  # shows it as the same list any other menu is.
-  def context(menu = nil, _submenu = true)
-    return if (@contexts || []).empty?
-
-    built = menu || Menu.new(@header.to_s)
-    @contexts.each { |block, _header| block.call(built) }
-    built.open if menu.nil?
-    built
-  end
+  # (`bind_context`, `hascontext` and `context` are defined once, below,
+  # beside `open_context_menu`. A second, earlier copy of the three used to
+  # sit here; Ruby keeps the LAST definition, so it was dead code that read
+  # as though it were the implementation.)
 
   def add_tip(tip)
     @customtips ||= []
@@ -254,18 +239,45 @@ class EltenControl
   # one-control form already is here.
   WAIT_ACTIONS = %i[select escape expand collapse].freeze
 
+  #
+  # **It answers the ROW.** Elten's returns `wait_item_at(index)` on a
+  # select or an expand and nil on a collapse or Escape; the version that
+  # shipped here resumed the form and answered nil for everything - so
+  # `while list.wait_for_item` (Tyflopodcast's whole main screen, and the
+  # media catalogue's) ended the application on the first Enter, with
+  # nothing said. Found only by opening the real window and pressing
+  # Enter: with nothing pressed the application sat there looking fine.
   def wait_for_item(actions: WAIT_ACTIONS)
-    actions = Array(actions)
+    actions = Array(actions).map(&:to_sym)
     raise ArgumentError, 'actions cannot be empty' if actions.empty?
 
     @wait_answer = nil
     @wait_actions = actions
     form = @form || Form.new([self])
     @wait_form = form
-    on(:select) { form.resume } unless @wait_bound
-    @wait_bound = true
+    unless @wait_bound
+      on(:select) { _wait_finish(:select) }
+      on(:expand) { _wait_finish(:expand) }
+      on(:collapse) { _wait_finish(:collapse) }
+      @wait_bound = true
+    end
     form.wait
     @wait_answer
+  end
+
+  def _wait_finish(action)
+    return if @wait_form.nil? || !Array(@wait_actions).include?(action)
+
+    if action == :collapse
+      @wait_answer = nil
+    else
+      # Elten: `next unless activated && wait_item_available?(index)` - a
+      # row that is not there is not an answer, and the wait goes on.
+      return unless wait_item_available?(index)
+
+      @wait_answer = wait_item_at(index)
+    end
+    @wait_form.resume
   end
 
   # What `wait_for_item` answers - the row that was activated. A control
@@ -429,7 +441,12 @@ class EltenControl
   def reload(*_arguments); update; self; end
   def refresh(*_arguments); update; self; end
 
-  def focus(_index = nil, _count = nil, _spk = true, **_options)
+  # Elten's controls take between two and four positional arguments here -
+  # `ListBox#focus(index, count, header, spk)`, `CheckBox#focus(index,
+  # count, spk, snd)` - and a subclass passes them all on with `super`:
+  # the Game Room's card list does exactly that, and a `focus` that took
+  # three was `ArgumentError` on the first card dealt.
+  def focus(_index = nil, _count = nil, *_rest, **_options)
     ensure_shown
     return self if @form.nil? || control_id.nil?
 
@@ -559,10 +576,23 @@ class CheckBox < EltenControl
     self
   end
 
+  # **Elten's tick box fires `:change`** (`ui/controls/check_box.rb`:
+  # `trigger(:change)` when Space toggles it) - not `:changed`, which is
+  # the wire's word for what the widget did. Weather's and Spotify's
+  # settings screens bind `on(:change)`, and a box that fired the wire's
+  # word instead was a setting that could be ticked and never took.
+  def event_name(wire_name)
+    wire_name.to_s == 'changed' ? :change : wire_name.to_sym
+  end
+
   def checked?
     @checked
   end
   alias value checked?
+  # Elten's own reader is the bare word (`attr_reader :checked`), and the
+  # ELTEN Game Room reads it on its options screen - which ended the
+  # application on `undefined method 'checked'` before the screen was up.
+  alias checked checked?
 
   def checked=(value)
     @checked = !!value
@@ -609,6 +639,12 @@ class EditBox < EltenControl
     self
   end
 
+  # Elten's field fires `:change` on every insertion and deletion
+  # (`ui/controls/edit_box.rb`), never `:changed`.
+  def event_name(wire_name)
+    wire_name.to_s == 'changed' ? :change : wire_name.to_sym
+  end
+
   def text
     @text
   end
@@ -626,6 +662,32 @@ class EditBox < EltenControl
   # reset_speak_callbacks:)`. The second argument is positional, not a
   # keyword, and reading it as one is `wrong number of arguments (given 2,
   # expected 1)` - which for the media catalogue was the search box.
+  # Elten's own spelling of the same thing (`alias settext set_text` in
+  # `edit_box.rb`); the YouTube client refreshes its details pane with it
+  # on every focus and KlangoArchive shows every post through it.
+  def settext(value, reset = true, **options)
+    set_text(value, reset, **options)
+  end
+
+  # An audio stream attached to the text (KlangoArchive puts a post's
+  # recording on the field). Remembered and answered; playing it is the
+  # application's own business through `player`.
+  attr_accessor :audiostream
+
+  def clear_audio_player
+    @audiostream = nil
+    self
+  end
+
+  def max_length
+    (@spec[:max_length] || -1).to_i
+  end
+
+  def max_length=(value)
+    @spec[:max_length] = value.to_i
+    push(max_length: value.to_i)
+  end
+
   def set_text(value, _reset = true, **_options)
     self.text = value
     self
@@ -855,6 +917,27 @@ class ListBox < EltenControl
     self
   end
 
+  # **Right on a list is `:expand`, Left is `:collapse`** - Elten's own
+  # (`ui/controls/list_box.rb`: `expanded?` is Right without Shift,
+  # `collapsed?` Left without Shift, and `update` fires `:expand` plus
+  # `:selectexpand`, or `:collapse`, with the index). A list is how an
+  # Elten application does a tree: Weather's widget opens a day's
+  # forecast with Right and closes it with Left, and KlangoArchive walks
+  # its groups the same way. Only `:key_right` reached the application
+  # here, so nothing that was written against Elten's own names opened.
+  def after_key_event(name, message = nil)
+    return self if message.is_a?(Hash) && message['shift'] == true
+
+    case name.to_s
+    when 'key_right'
+      trigger(:expand, index)
+      trigger(:selectexpand, index)
+    when 'key_left'
+      trigger(:collapse, index)
+    end
+    self
+  end
+
   # What is highlighted right now - the answer to "which one did they mean"
   # after a `:select`.
   def value
@@ -889,6 +972,15 @@ class ListBox < EltenControl
   def request_select(index)
     self.index = index
     trigger(:changed, @index)
+    self
+  end
+
+  # Say the current row - Elten's `sayoption`, which an application calls
+  # when it has changed the rows under the cursor and wants the new one
+  # read (the file manager's main tab, after a refresh).
+  def sayoption(index = @index)
+    text = option_plain_text(index)
+    Speech.speak(text.to_s) if defined?(Speech) && !text.to_s.empty?
     self
   end
 
@@ -975,6 +1067,11 @@ class TableBox < EltenControl
   # not draw any of that yet, so they are recorded and ignored rather than
   # missing: an application that decorates its rows still runs, and still
   # shows them.
+  # Elten's TableBox wraps a ListBox it calls `sel`, and an application
+  # binds events on whichever it finds (`control.respond_to?(:sel) ?
+  # control.sel : control`). Here the table IS the list.
+  def sel; self; end
+
   def set_row_state(*_args); self; end
   def set_row_status(*_args); self; end
   def set_row_states(*_args); self; end
@@ -1275,12 +1372,8 @@ class FilesTree < EltenControl
   # `go` - open what the cursor is on. Elten's own defers to the next
   # frame and then updates, which is what the file manager's Enter does.
   def go
-    if @file == UP
-      up
-    else
-      @go = true
-      update
-    end
+    @go = true
+    update
     self
   end
 
@@ -1632,9 +1725,11 @@ class FilesTree < EltenControl
       Log.warning("#{@path} could not be read: #{error.message}")
     end
     order = ->(names) { names.sort_by { |name| name.downcase } }
-    @entries = []
-    @entries << UP
-    @entries += order.call(folders) + order.call(files)
+    # No "Up one level" row: Elten's tree (`Dir.each_child`) lists the
+    # folder and nothing else, and going up is Left (or Backspace) - the
+    # row was a second way up that Elten has not got, read out at the top
+    # of every folder.
+    @entries = order.call(folders) + order.call(files)
     @targets = nil
     @index = 0 if @index >= @entries.size
     @file = @entries[@index]
@@ -1673,9 +1768,7 @@ class FilesTree < EltenControl
 
     @entries.map do |name|
       begin
-        if name == UP
-          _('Up one level')
-        elsif File.directory?(File.join(@path, name))
+        if File.directory?(File.join(@path, name))
           format('%s, %s', name, _('folder'))
         else
           name
@@ -2280,12 +2373,31 @@ class Player < EltenControl
     _chapter(1)
   end
 
+  # Stepped from the SOUND's chapters, not the stream's: Tyflopodcast adds
+  # its own markers by redefining `sound.chapters` on the player's sound
+  # (`define_singleton_method(:chapters)`), so a player that asked Titan's
+  # stream for the next chapter walked the file's own chapters and never
+  # the bookmarks the user made.
   def _chapter(direction)
-    answer = EltenBridge.call('stream_do', { 'handle' => @handle,
-                                             'do' => 'chapter',
-                                             'direction' => direction })
-    @state = answer if answer.is_a?(Hash)
-    speak(_('There are no chapters in this track.')) if answer.is_a?(Hash) && answer['no_chapter']
+    sound = get_sound
+    list = sound.respond_to?(:chapters) ? Array(sound.chapters) : []
+    list = list.select { |chapter| chapter.respond_to?(:time) }.sort_by { |chapter| chapter.time.to_f }
+    if list.empty?
+      speak(_('There are no chapters in this track.'))
+      return self
+    end
+    now = position
+    target = if direction.to_i > 0
+               list.find { |chapter| chapter.time.to_f > now + 1.0 }
+             else
+               list.reverse.find { |chapter| chapter.time.to_f < now - 1.0 }
+             end
+    if target.nil?
+      speak(direction.to_i > 0 ? _('Last chapter.') : _('First chapter.'))
+      return self
+    end
+    jump_to_position(target.time.to_f)
+    speak(target.name.to_s) if target.respond_to?(:name) && !target.name.to_s.empty?
     _show
     self
   rescue EltenBridge::Closed
@@ -2346,10 +2458,6 @@ class PlayerSound
 
   def closed?
     @player.instance_variable_get(:@handle).nil?
-  end
-
-  def playing?
-    @player.instance_variable_get(:@state)['playing'] == true
   end
 
   def position
@@ -3195,6 +3303,53 @@ class Form
   def add_tip(tip); tips.push(tip.to_s); self; end
   def get_tips; tips; end
   def tips; @tips ||= []; end
+
+  # **A form has a context menu of its own**, exactly as a control has.
+  # Elten's `FormBase` carries `bind_context` and the form itself sits in
+  # `$activecontrols`, so its bindings are poured into the same menu as
+  # the focused control's (`eapi/mainmenu.rb`). KlangoArchive binds the
+  # whole of its post navigation - find this author's posts, open the
+  # thread - on the FORM, and a form without it was `NoMethodError` the
+  # moment a thread was opened.
+  def bind_context(header = '', &block)
+    return self if block.nil?
+
+    (@contexts ||= []) << [block, header.to_s]
+    self
+  end
+  def bind_menu(header = '', &block); bind_context(header, &block); end
+
+  def hascontext
+    !(@contexts.nil? || @contexts.empty?)
+  end
+
+  def context(menu, submenu = true)
+    Array(@contexts).each do |block, header|
+      if submenu
+        name = header.empty? ? _('Context menu') : header
+        menu.submenu(name) { |inner| block.call(inner) }
+      else
+        block.call(menu)
+      end
+    end
+    menu
+  end
+
+  # The menu for a control on this form: what the control bound, then
+  # what the form bound, in one flat menu - Elten's `$activecontrols`
+  # order.
+  def open_context_menu_for(field)
+    field_has = field.respond_to?(:hascontext) && field.hascontext
+    return false unless field_has || hascontext
+
+    field.ensure_shown if field.respond_to?(:ensure_shown)
+    menu = Menu.new('', :context)
+    field.context(menu, false) if field_has
+    context(menu, false)
+    menu.popup(field)
+    true
+  end
+
   def disable_menu; @menu_enabled = false; self; end
   def menu_enabled?; @menu_enabled != false; end
   def disable_contextinglobal; @contextinglobal = false; self; end
@@ -3241,6 +3396,13 @@ class Form
       # would sit there with keys queued and nothing acting on them.
       @fields.each { |field| field.update if field.frame_driven? }
       Array(@timers).each(&:update)
+      # Elten's `$focus = true` is an application asking for the keyboard
+      # to be put back on the current field (Weather does it when its
+      # widget has taken it); `FormField#update` answers it and clears it.
+      if $focus == true
+        $focus = false
+        focus_control(index)
+      end
       break if EltenLoop.closed?
     end
     self
@@ -3303,7 +3465,8 @@ class Form
 
     !!EltenBridge.call('control_focus',
                        { 'form' => @form_id, 'control' => control_id })
-  rescue EltenBridge::Closed
+  rescue EltenBridge::Closed, EltenBridge::RemoteError
+    # A focus that cannot land is not a reason to end the application.
     false
   end
 
@@ -3410,7 +3573,7 @@ class Form
       field.trigger(event, *arguments)
       press_accept(field) if name == 'select'
     when 'context', 'menu'
-      field.open_context_menu(name == 'menu') if field.respond_to?(:open_context_menu)
+      open_context_menu_for(field)
     when 'player'
       # A dragged seek carries where to. Set it before the action reads it.
       field.seek_target = message['value'] if message.key?('value') && field.respond_to?(:seek_target=)
@@ -3418,6 +3581,8 @@ class Form
       field.trigger(:player, message['do'])
     when 'press'
       field.trigger(:press)
+    when 'focus'
+      move_focus_to(index.to_i)
     else
       # A control acts on the key itself first - the file tree's Left,
       # Right and Space are its own, exactly as in Elten - and the
@@ -3431,7 +3596,34 @@ class Form
                                 alt: message['alt'] == true)
       end
       field.trigger(name.to_sym, *field.event_args(name.to_sym, message))
+      field.after_key_event(name, message) if field.respond_to?(:after_key_event)
     end
+  end
+
+  # **The keyboard arriving on a control is four events in Elten**, and
+  # they are how an application fills a control in before the reader
+  # reads it: `Form#update` fires `:blur` on the field being left, then
+  # `:before_focus` and `:focus` on the one reached, and `:move` on the
+  # form with the new index. Weather, Spotify, KlangoArchive and the
+  # YouTube client all bind `:before_focus`, and no window here had ever
+  # said which control the keyboard was on - `@index` stood at whatever
+  # the form opened with.
+  def move_focus_to(which)
+    return self unless which.is_a?(Integer) && which >= 0 && which < @fields.size
+    return self if @focused_index == which
+
+    old = @focused_index.nil? ? nil : @fields[@focused_index]
+    @focused_index = which
+    @index = which
+    if old && !old.equal?(@fields[which])
+      old.trigger(:blur)
+      old.blur if old.respond_to?(:blur)
+    end
+    field = @fields[which]
+    field.trigger(:before_focus)
+    field.trigger(:focus)
+    trigger(:move, which)
+    self
   end
 
   # What the user did to the widget, written back into the control.
@@ -3459,6 +3651,168 @@ end
 # `EltenAPI::Controls::EditBox.new(...)` rather than `EditBox.new(...)`.
 # Both are the same class here, so the fully-qualified names are aliases of
 # the top-level ones: an application written either way runs unchanged.
+# `OpusRecordButton` - Elten's own (`ui/controls/opus_record_button.rb`),
+# with its own recorder underneath. A button on a form; pressed, it opens
+# Elten's little recording screen - record, pause, stop, play, use an
+# existing file, delete, ready - and afterwards the form reads
+# `get_recording_file` off it. Tyflopodcast's voice message is one.
+class OpusRecordButton < Button
+  attr_accessor :label, :timelimit
+  attr_reader :file
+
+  def initialize(label, filename, max_bitrate: 320, bitrate: 64, time_limit: 0, **_ignored)
+    super(label)
+    @filename = filename.to_s
+    @file = nil
+    @bitrate = [bitrate.to_i, max_bitrate.to_i].min
+    @timelimit = time_limit.to_i
+    @recorder = nil
+    @status = 0
+    @current_filename = @filename
+    on(:press) { show }
+  end
+
+  def show
+    form = Form.new([
+      record = Button.new(p_('EAPI_Form', 'record')),
+      pause = Button.new(p_('EAPI_Form', 'Pause recording')),
+      stop = Button.new(p_('EAPI_Form', 'Stop recording')),
+      usefile = Button.new(p_('EAPI_Form', 'Use existing file')),
+      play = Button.new(p_('EAPI_Form', 'Play')),
+      delete = Button.new(p_('EAPI_Form', 'Delete recording')),
+      ready = Button.new(p_('EAPI_Form', 'Ready'))
+    ], index: 0, silent: false, quiet: true)
+    refresh = lambda do
+      recording = !@recorder.nil?
+      form.hide(record) if recording
+      form.show(record) unless recording
+      recording ? form.show(pause) : form.hide(pause)
+      recording ? form.show(stop) : form.hide(stop)
+      recording ? form.hide(usefile) : form.show(usefile)
+      @status == 2 && !recording ? form.show(play) : form.hide(play)
+      @status == 2 && !recording ? form.show(delete) : form.hide(delete)
+    end
+    record.on(:press) do
+      if @status.zero? || confirm(p_('EAPI_Form', 'Are you sure you want to delete the previous recording and create a new one?'))
+        @current_filename = @filename
+        play_sound('recording_start')
+        @recorder = Recorder.opus_recording(@filename, @bitrate, 60, 2048, 1, @timelimit)
+        if @recorder.error
+          alert(@recorder.error.to_s)
+          @recorder = nil
+        else
+          @status = 1
+          record.label = p_('EAPI_Form', 'Record again')
+        end
+        refresh.call
+        form.index = @recorder.nil? ? 0 : 1
+        form.focus
+      end
+    end
+    stop.on(:press) do
+      @recorder&.stop
+      play_sound('recording_stop')
+      @recorder = nil
+      @status = 2
+      pause.label = p_('EAPI_Form', 'Pause recording')
+      refresh.call
+      form.index = 0
+      form.focus
+    end
+    pause.on(:press) do
+      if @recorder&.paused
+        pause.label = p_('EAPI_Form', 'Pause recording')
+        @recorder.resume
+        play_sound('recording_start')
+      elsif @recorder
+        pause.label = p_('EAPI_Form', 'Resume recording')
+        @recorder.pause
+        play_sound('recording_stop')
+      end
+    end
+    usefile.on(:press) do
+      if @status.zero? || confirm(p_('EAPI_Form', 'Are you sure you want to delete the previous recording and create a new one?'))
+        file = get_file(p_('EAPI_Form', 'Select audio file'), save: false,
+                        extensions: ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.opus', '.aac'])
+        if file
+          set_source(file)
+          alert(p_('EAPI_Form', 'File selected'))
+          refresh.call
+        end
+      end
+    end
+    play.on(:press) do
+      player(@current_filename, label: p_('EAPI_Form', 'Recording preview'))
+      form.focus
+    end
+    delete.on(:press) do
+      delete_audio
+      refresh.call
+      form.index = 0
+      form.focus
+    end
+    ready.on(:press) do
+      @recorder&.stop
+      if @recorder
+        @recorder = nil
+        @status = 2
+      end
+      form.resume
+    end
+    form.cancel_button = ready
+    refresh.call
+    form.wait
+    self
+  end
+
+  def start_recording
+    show
+  end
+
+  def empty?
+    @status.zero?
+  end
+
+  def source_duration
+    return nil if @status != 2
+
+    sound = Sound.new(@current_filename)
+    sound.length.to_f
+  rescue StandardError
+    nil
+  ensure
+    sound.close if sound
+  end
+
+  def set_source(file)
+    @recorder&.stop
+    @recorder = nil
+    @status = 2
+    @current_filename = file.to_s
+    self
+  end
+
+  def get_recording_file(_force = false)
+    return nil if @status != 2
+
+    @file = @current_filename
+  end
+
+  def delete_audio(_force = false)
+    return true if @status.zero?
+
+    @recorder&.stop
+    @recorder = nil
+    File.delete(@filename) if File.exist?(@filename) && @current_filename == @filename
+    @status = 0
+    @file = nil
+    @current_filename = @filename
+    true
+  rescue StandardError
+    false
+  end
+end
+
 module EltenAPI
   module Controls
     Button = ::Button

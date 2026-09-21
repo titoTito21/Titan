@@ -497,6 +497,26 @@ class WxUI(object):
         panel.SetSizer(sizer)
         panel.Layout()
         form = _Form(frame, panel, widgets)
+
+        # **The keyboard arriving on a control is reported.** Elten's
+        # `Form#update` fires `:blur`, `:before_focus`, `:focus` and the
+        # form's `:move` as the keyboard moves between the fields, and
+        # an application fills a control in from `:before_focus` - the
+        # YouTube client's details pane, Weather's day list. wx says the
+        # same thing once, as the child gaining the focus, so that is the
+        # one place it is reported from; the Ruby side turns it into
+        # Elten's four.
+        def on_child_focus(event):
+            try:
+                index = _widget_index_of(widgets, event.GetWindow())
+                if index is not None and index != form.focused:
+                    form.focused = index
+                    application.send_event('control', form=form_id,
+                                           control=index, name='focus')
+            except Exception as error:
+                application._note('bridge', 'reporting the focus failed: %s' % error)
+            event.Skip()
+        panel.Bind(wx.EVT_CHILD_FOCUS, on_child_focus)
         # Which control Enter and Escape belong to when the keyboard is
         # not on a button. Escape already travels as its own event; this
         # is the other half.
@@ -735,6 +755,8 @@ class WxUI(object):
         form = self._forms.get(form_id)
         if form is None or not (0 <= index < len(form.widgets)):
             return False
+        if not _alive(form.panel):
+            return False
         widget = form.widgets[index]
         # How loud a control is of its own accord is answered in ONE
         # place, because every kind of control has the question and none
@@ -904,7 +926,18 @@ class WxUI(object):
         form = self._forms.get(form_id)
         if form is None or not (0 <= index < len(form.widgets)):
             return False
-        return bool(form.widgets[index].focus())
+        # A screen replaced under the application's feet: the form is still
+        # listed and its widgets are wx objects whose C++ half has gone, so
+        # any call on them raises `RuntimeError` - which travelled back to
+        # Ruby as a `RemoteError` and ENDED the application (Freesound,
+        # focusing a list it had just navigated away from). A focus that
+        # cannot land answers False, which is all it ever promised.
+        try:
+            if not _alive(form.panel):
+                return False
+            return bool(form.widgets[index].focus())
+        except RuntimeError:
+            return False
 
     def _focused_index(self, form_id):
         form = self._forms.get(form_id)
@@ -1059,7 +1092,7 @@ class WxUI(object):
 
 
 class _Form(object):
-    __slots__ = ('frame', 'panel', 'widgets', 'accept')
+    __slots__ = ('frame', 'panel', 'widgets', 'accept', 'focused')
 
     def __init__(self, frame, panel, widgets):
         self.frame = frame
@@ -1068,6 +1101,27 @@ class _Form(object):
         #: Which control Enter presses when the keyboard is on something
         #: that is not a button. Elten's `Form#update` does exactly this.
         self.accept = None
+        #: The control the keyboard was last reported to be on, so the
+        #: application hears each arrival once.
+        self.focused = None
+
+
+def _widget_index_of(widgets, window):
+    """Which of the form's widgets a window belongs to - the window itself
+    or any child of it, since a wrapped control (a grid inside a panel, a
+    field with its label) puts the keyboard on something inside."""
+    candidate = window
+    for _step in range(12):
+        if candidate is None:
+            return None
+        for index, widget in enumerate(widgets):
+            if widget.owns(candidate) or candidate is widget.window:
+                return index
+        try:
+            candidate = candidate.GetParent()
+        except Exception:
+            return None
+    return None
 
 
 def _clear(frame):
@@ -1085,12 +1139,21 @@ def _clear(frame):
 #: wx virtual key code -> Elten's own event name, for the keys applications
 #: actually bind (`.on(:key_left)`, `:key_delete`, ...). Letters are handled
 #: separately since there are twenty-six of them and they are ordinary.
+#: The keys Elten turns into a `:key_<name>` event on the focused control
+#: (`ui/form.rb`'s `keyevents`): the letters, the digits, space,
+#: backspace, insert, delete, the arrows, home, end, the page keys, comma,
+#: minus and period. Tab is left out on purpose - here it is what moves
+#: the keyboard between the controls, and a key reported to the
+#: application is not passed on. Enter and Escape travel as their own
+#: events.
 _NAV_KEYS = {
     wx.WXK_LEFT: 'key_left', wx.WXK_RIGHT: 'key_right',
     wx.WXK_UP: 'key_up', wx.WXK_DOWN: 'key_down',
     wx.WXK_DELETE: 'key_delete', wx.WXK_SPACE: 'key_space',
     wx.WXK_HOME: 'key_home', wx.WXK_END: 'key_end',
     wx.WXK_PAGEUP: 'key_pageup', wx.WXK_PAGEDOWN: 'key_pagedown',
+    wx.WXK_INSERT: 'key_insert', wx.WXK_BACK: 'key_backspace',
+    ord(','): 'key_comma', ord('-'): 'key_minus', ord('.'): 'key_period',
 }
 
 
@@ -1099,6 +1162,8 @@ def _navigation_key(code):
         return _NAV_KEYS[code]
     if 65 <= code <= 90:                              # A-Z
         return 'key_%s' % chr(code).lower()
+    if 48 <= code <= 57:                              # 0-9
+        return 'key_%s' % chr(code)
     return ''
 
 

@@ -60,6 +60,42 @@ class Program
     def native_box?
       false
     end
+
+    # Elten's `Program.app_runtime`: what an application knows about its
+    # own installation - the Spotify client hands it to its service on
+    # `activate`, before anything is on the screen, so a class with no such
+    # method never started at all.
+    def app_runtime
+      @app_runtime ||= AppRuntime.new(self)
+    end
+  end
+
+  # The little a runtime is here. Elten's carries the installer's whole
+  # record; an application asks it who it is and where its folders are.
+  class AppRuntime
+    attr_reader :program_class
+
+    def initialize(program_class)
+      @program_class = program_class
+    end
+
+    def manifest; @program_class.manifest; end
+    def app_uuid; manifest['uuid'].to_s; end
+    def app_name; (manifest['name'] || manifest['id']).to_s; end
+    def app_version; manifest['version'].to_s; end
+    def app_id; manifest['id'].to_s; end
+    def running?; true; end
+    def to_s; "runtime of #{app_name}"; end
+
+    # The files - the same class-level helpers a Program has, because the
+    # Spotify client's settings read `runtime.read_json(...)` before any
+    # instance exists.
+    %i[read_json write_json read_file write_file read_binary write_binary
+       data_path asset_path cache_path].each do |name|
+      define_method(name) do |*arguments, **options, &block|
+        @program_class.public_send(name, *arguments, **options, &block)
+      end
+    end
   end
 
   class << self
@@ -121,7 +157,11 @@ class Program
     finalize
   end
 
-  def finalize
+  # `finalize(v = nil, reason: :normal)` - Elten's own arguments, because an
+  # application overrides it and calls `super(v, reason: reason)`: Weather
+  # does, and the port's bare `finalize` refused two arguments on the way
+  # out of every run.
+  def finalize(_value = nil, reason: :normal, **_ignored)
     return if @finished == true
 
     @finished = true

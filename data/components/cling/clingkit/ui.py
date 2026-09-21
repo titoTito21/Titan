@@ -135,6 +135,7 @@ class ClingSurface(wx.Frame):
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
         self.Bind(wx.EVT_KEY_UP, self._on_key_up)
         self.keys.Bind(wx.EVT_KEY_UP, self._on_key_up)
+        self.keys.Bind(wx.EVT_CHAR, self._on_char)
         self.Bind(wx.EVT_ACTIVATE, self._on_activate)
         self.Bind(wx.EVT_CLOSE, self._on_close)
         self.timer = wx.Timer(self)
@@ -238,14 +239,40 @@ class ClingSurface(wx.Frame):
             self._held[name] = time.time()
             return
         self._held[name] = time.time()
-        if self.session.key_down(name, modifier_names(event)):
+        # **A key that types something is typed by EVT_CHAR, not by its
+        # name.** What "a" types is the layout's business - Shift makes it
+        # "A", AltGr on a Polish layout makes it "ą", a dead key before it
+        # makes it "á" - and Windows says which in WM_CHAR, which arrives
+        # here as EVT_CHAR on the panel once this hook has let the key
+        # through. Keyed off the name, every field in every application
+        # took lowercase ASCII and nothing else: no capital letter and no
+        # Polish letter could be typed into a chat, a search box or the
+        # typing course. So a printable key is reported with `character=''`
+        # (the window will type it) and skipped, and `_on_char` types it.
+        printable = len(name) == 1
+        taken = self.session.key_down(name, modifier_names(event),
+                                      character='' if printable else None)
+        if taken:
             if not self.session.running and not self.session.started:
                 self.Close()
+            if printable:
+                event.Skip()
             return
         if name == 'escape':
             self.Close()
             return
         event.Skip()
+
+    def _on_char(self, event):
+        """The character a key typed, as the keyboard layout made it."""
+        code = event.GetUnicodeKey()
+        if self.session is None or not code or code < 32 or code == 127:
+            event.Skip()
+            return
+        if event.ControlDown() and not event.AltDown():
+            event.Skip()                       # Ctrl+A is a command, not an A
+            return
+        self.session.character(chr(code))
 
     def _on_key_up(self, event):
         """A key really coming up - the ordinary way one is let go."""
@@ -487,7 +514,11 @@ class _QuietSpeaker(object):
 
 
 def _engine_label(translate, engine):
+    # Every engine the catalogue can choose has a word here, or the list
+    # shows the engine's own id - which for the 17 emulated applications
+    # was a bare "klango" after every name.
     return {
+        catalog.ENGINE_KLANGO: translate('Klango application'),
         catalog.ENGINE_GRID_HUNT: translate('board game'),
         catalog.ENGINE_SOUNDSCAPE: translate('soundscape'),
         catalog.ENGINE_INSTRUMENT: translate('instrument'),

@@ -20,6 +20,67 @@
 # that checks, as they are written to, behaves correctly.
 
 module Programs
+  # What an application says about a notification it was handed - Elten's
+  # own two classes from `src/eapi/program.rb`. MileByMile and the ELTEN
+  # Game Room build one in `map_notification`; without the classes that
+  # method was a `NameError` the moment a notification arrived.
+  class NotificationPresentation
+    attr_accessor :title, :body, :sound, :action
+    attr_reader :metadata
+
+    def initialize(title: '', body: '', sound: 'notification', action: nil, metadata: {})
+      raise ArgumentError, 'Notification presentation metadata must be a hash' unless metadata.is_a?(Hash)
+
+      @title = title.to_s
+      @body = body.to_s
+      @sound = sound.nil? ? nil : sound.to_s
+      @action = action
+      @metadata = metadata.dup.freeze
+      @default_suppressed = false
+    end
+
+    def suppress_default!
+      @default_suppressed = true
+      self
+    end
+
+    def default_suppressed?
+      @default_suppressed == true
+    end
+
+    def alert
+      [@title, @body].map(&:to_s).reject(&:empty?).join(': ')
+    end
+
+    # Say it - and keep it: Elten's own would speak this and play its
+    # sound; here it also lands in the `Elten API` notifications buffer.
+    def present
+      return self if default_suppressed?
+
+      text = alert
+      Speech.speak(text, stop: false) if defined?(Speech) && !text.empty?
+      EltenBuffers.push('notifications', text) if defined?(EltenBuffers)
+      self
+    end
+  end
+
+  class AppNotification
+    attr_reader :id, :app_uuid, :type, :sender, :created_at, :metadata, :fallback_text
+
+    def initialize(id: 0, app_uuid: '', type: '', sender: '', created_at: 0, metadata: {}, fallback_text: '')
+      @id = id.to_i
+      @app_uuid = app_uuid.to_s
+      @type = type.to_s
+      @sender = sender.to_s
+      @created_at = created_at.to_i
+      @metadata = metadata.is_a?(Hash) ? metadata.dup.freeze : {}.freeze
+      @fallback_text = fallback_text.to_s
+    end
+
+    def presentation(title: '', body: '', sound: 'notification', action: nil, metadata: {})
+      NotificationPresentation.new(title: title, body: body, sound: sound, action: action, metadata: metadata)
+    end
+  end
   class ProgramError < StandardError; end
 
   # What `server_app(...)` records at class level.
@@ -652,21 +713,103 @@ class Program
     end
   end
 
-  # What `extension(...) { |ext| ... }` is handed.
+  # What `extension(...) { |ext| ... }` is handed: Elten's own `Definition`
+  # and `Registration` in one (`src/eapi/extensions.rb`), because an
+  # application keeps what it is handed and asks it things - Neighborhood
+  # Radar asks `registered?`, Weather declares a `main_tab`, Spotify
+  # `command(...).place(:main_menu)` - and a name that is not there ends
+  # the application on `activate`, before its first screen.
   class ExtensionRecorder
-    attr_reader :name
+    attr_reader :name, :commands, :main_tab_definitions, :schedules
 
     def initialize(name)
       @name = name.to_s
       @blocks = {}
+      @commands = []
+      @main_tab_definitions = []
+      @schedules = []
+      @registered = true
     end
 
-    %w[start stop tick settings every trigger].each do |hook|
+    %w[start stop tick settings trigger].each do |hook|
       define_method(hook) do |*args, &block|
         (@blocks[hook] ||= []) << [args, block]
         self
       end
     end
+
+    # `every(key, seconds:, minutes:, ...)` - a scheduled task. It runs on
+    # the same frame hook as `tick`, at its own interval, while the
+    # application is open.
+    def every(key, seconds: 0, minutes: 0, hours: 0, days: 0, autorun: true,
+              persistent: true, first: :after_interval, **_ignored, &block)
+      interval = seconds.to_f + minutes.to_f * 60 + hours.to_f * 3600 + days.to_f * 86_400
+      task = ScheduledTask.new(key, interval, autorun, block)
+      @schedules << task
+      if block && interval.positive?
+        # `first: :immediately` runs once now; `:after_interval` (Elten's
+        # default) waits one interval first. Neither is remembered across
+        # runs - `persistent` is Elten's own scheduler store.
+        (@blocks['tick'] ||= []) << [[{ interval: interval }], task.method(:trigger).to_proc]
+        task.trigger if first.to_s == 'immediately' && autorun
+      end
+      task
+    end
+
+    def command(key, label:, visible: nil, &block)
+      definition = CommandDefinition.new(key, label, visible, block)
+      @commands << definition
+      definition
+    end
+
+    # `main_tab(key, label:, visible:) { |context| control }` - a section
+    # of Elten's main screen. Here it is a WIDGET in Titan's main window:
+    # the block is asked for its control on the frame, the rows go across
+    # to Titan, and a row pressed there comes back as a `select` on that
+    # very control. See `EltenWidgets`.
+    def main_tab(key, label:, visible: nil, &block)
+      definition = MainTabDefinition.new(self, key, label, visible, block)
+      @main_tab_definitions << definition
+      EltenWidgets.add(definition) if defined?(EltenWidgets)
+      definition
+    end
+
+    def main_tabs
+      @main_tab_definitions
+    end
+
+    def menu_items
+      @commands.select { |command| command.placements.any? { |p| p.first == :main_menu } }
+    end
+
+    def main_actions
+      @commands.select { |command| command.placements.any? { |p| p.first == :main_action } }
+    end
+
+    def registered?
+      @registered == true
+    end
+
+    def unregister(reason = :unload)
+      return false unless @registered
+
+      @registered = false
+      blocks_for('stop').each do |_args, block|
+        begin
+          block&.call(reason)
+        rescue Exception => error
+          Log.warning("extension #{@name} stop: #{error.class}: #{error.message}")
+        end
+      end
+      EltenWidgets.remove_all(self) if defined?(EltenWidgets)
+      true
+    end
+
+    def refresh_ui!
+      EltenWidgets.refresh(self) if defined?(EltenWidgets)
+      self
+    end
+    alias invalidate_ui! refresh_ui!
 
     def blocks_for(hook)
       @blocks[hook.to_s] || []
@@ -701,6 +844,115 @@ class Program
     end
   end
 
+  # `extension.command(...)` answers this, and `.place(:main_menu)` is
+  # what an application does with it.
+  class CommandDefinition
+    attr_reader :key, :label, :visible, :callback, :placements
+
+    def initialize(key, label, visible, callback)
+      @key = key.to_s
+      @label = label
+      @visible = visible
+      @callback = callback
+      @placements = []
+    end
+
+    def place(surface, visible: nil)
+      @placements << [surface.to_sym, visible]
+      self
+    end
+
+    def visible?
+      condition = @visible
+      condition = condition.call if condition.respond_to?(:call)
+      condition.nil? ? true : condition == true
+    end
+
+    def label_text
+      @label.respond_to?(:call) ? @label.call.to_s : @label.to_s
+    end
+
+    def run
+      @callback&.call
+    end
+  end
+
+  # What a scheduled block is handed - Elten's `Scheduler::RunContext`
+  # (`src/eapi/scheduler.rb`): when it was due, when it started, and a
+  # cancellation token. Weather's refresh reads `context.token` on every
+  # run, and a block called with nothing stopped on `token` for nil.
+  class RunContext
+    attr_reader :scheduled_at, :started_at, :last_success_at, :token
+
+    def initialize(scheduled_at, started_at, last_success_at, token)
+      @scheduled_at = scheduled_at
+      @started_at = started_at
+      @last_success_at = last_success_at
+      @token = token
+    end
+
+    def late_by
+      return 0.0 if @scheduled_at.nil? || @started_at.nil?
+
+      [@started_at.to_f - @scheduled_at.to_f, 0.0].max
+    end
+
+    def catch_up?
+      late_by > 0.001
+    end
+  end
+
+  ScheduledTask = Struct.new(:key, :interval, :autorun, :callback, :last_success_at) do
+    def trigger
+      return if callback.nil?
+
+      now = Time.now
+      token = defined?(Tasks::CancellationToken) ? Tasks::CancellationToken.new : nil
+      callback.call(RunContext.new(now, now, last_success_at, token))
+      self.last_success_at = Time.now
+    end
+  end
+
+  class MainTabDefinition
+    attr_reader :recorder, :key, :label, :visible, :callback
+    attr_accessor :control, :state
+
+    def initialize(recorder, key, label, visible, callback)
+      @recorder = recorder
+      @key = key.to_s
+      @label = label
+      @visible = visible
+      @callback = callback
+      @control = nil
+      @state = {}
+    end
+
+    def label_text
+      @label.respond_to?(:call) ? @label.call.to_s : @label.to_s
+    end
+
+    def visible?
+      condition = @visible
+      condition = condition.call if condition.respond_to?(:call)
+      condition.nil? ? true : condition == true
+    end
+
+    def finalize!; self; end
+  end
+
+  # What a `main_tab` block is handed: Elten's `MainTabContext` - the
+  # scene (none here), the control it returned last time, and a hash that
+  # is its own for as long as the extension is registered.
+  class MainTabContext
+    attr_reader :scene, :current_control, :state
+
+    def initialize(scene, current_control, state)
+      @scene = scene
+      @current_control = current_control
+      @state = state
+    end
+  end
+
   # ----------------------------------------------------------- instance side
   def server_app_definition
     self.class.server_app_definition
@@ -731,35 +983,15 @@ class Program
     self.class.server_table(name, uuid)
   end
 
-  def server_resources(_uuid = nil)
-    []
-  end
-
+  # `server_resources`, `send_notification`, `notification_action`,
+  # `live_sessions` and `communication` are defined in `program_api.rb`,
+  # which loads after this file; the copies that used to sit here were
+  # overridden by it and therefore dead.
   def leaderboard(name, order: nil,
                   retry_delays: Programs::Leaderboard::DEFAULT_RETRY_DELAYS,
                   log_label: 'Leaderboard')
     Programs::Leaderboard.new(server_table(name), order: order,
                               retry_delays: retry_delays, log_label: log_label)
-  end
-
-  # Nowhere to send it: there is no EltenLink session here. Said out loud in
-  # the log rather than silently dropped, so an application whose whole point
-  # is notifying somebody does not look like it worked.
-  def send_notification(_user, type: nil, metadata: {}, expires_in: 0)
-    Log.info("notification #{type} not sent: this is Titan, not EltenLink")
-    false
-  end
-
-  def notification_action(_action, _notification)
-    nil
-  end
-
-  def live_sessions
-    @live_sessions ||= LiveSessionsUnavailable.new
-  end
-
-  def communication
-    nil
   end
 
   # Every method answers, and every answer says the same thing: there is no
@@ -788,6 +1020,168 @@ class Program
 
     def respond_to_missing?(_name, _include_private = false)
       true
+    end
+  end
+end
+
+# ------------------------------------------------------------------ widgets
+# Elten's main screen has SECTIONS an extension contributes - the Weather
+# application's forecast is one - and Titan's main window has views. So a
+# `main_tab` is a widget here: its block is asked for its control on the
+# application's own frame (never from another thread - the block reads the
+# application's own state), the rows of that control cross to Titan as one
+# `widgets` notification whenever they change, and a row pressed in Titan
+# comes back as a `widget` event that becomes a `select` on the very
+# control the block returned, so the application's own `on(:select)` runs.
+module EltenWidgets
+  REFRESH_EVERY = 1.0
+
+  class << self
+    def definitions
+      @definitions ||= []
+    end
+
+    def add(definition)
+      definitions << definition unless definitions.include?(definition)
+      @dirty = true
+      start_frames
+      definition
+    end
+
+    def remove_all(recorder)
+      definitions.reject! { |definition| definition.recorder.equal?(recorder) }
+      @dirty = true
+      publish(force: true)
+    end
+
+    def refresh(_recorder = nil)
+      @dirty = true
+    end
+
+    # A row pressed (or moved to) in Titan.
+    def deliver(event)
+      definition = definitions.find { |candidate| candidate.key == event['key'].to_s }
+      control = definition&.control
+      return if control.nil?
+
+      index = event['index'].to_i
+      control.index = index if control.respond_to?(:index=)
+      case event['name'].to_s
+      when 'select'
+        if control.respond_to?(:trigger)
+          control.trigger(:select, index) if control.is_a?(ListBox) || control.is_a?(TableBox)
+          control.trigger(:press) if control.is_a?(Button)
+        end
+      when 'move'
+        control.trigger(:move, index) if control.respond_to?(:trigger)
+      end
+      @dirty = true
+    rescue Exception => error
+      Log.warning("widget #{event['key']}: #{error.class}: #{error.message}")
+    end
+
+    # Called on the frame: rebuild what is due, and tell Titan what changed.
+    def tick(now)
+      return if definitions.empty?
+
+      due = @dirty || @last.nil? || now - @last >= REFRESH_EVERY
+      return unless due
+
+      @last = now
+      @dirty = false
+      publish
+    end
+
+    def snapshot
+      definitions.map do |definition|
+        next nil unless definition.visible?
+
+        context = Program::MainTabContext.new(nil, definition.control, definition.state)
+        control = definition.callback&.call(context)
+        definition.control = control if control
+        { 'key' => definition.key, 'label' => definition.label_text,
+          'extension' => definition.recorder.name, 'rows' => rows_of(definition.control),
+          'index' => (definition.control.respond_to?(:index) ? definition.control.index.to_i : 0) }
+      rescue Exception => error
+        Log.warning("widget #{definition.key}: #{error.class}: #{error.message}")
+        { 'key' => definition.key, 'label' => definition.label_text,
+          'extension' => definition.recorder.name, 'rows' => [error.message.to_s], 'index' => 0 }
+      end.compact
+    end
+
+    def publish(force: false)
+      tabs = snapshot
+      return if !force && tabs == @published
+
+      @published = tabs
+      EltenBridge.notify('widgets', { 'tabs' => tabs })
+    rescue EltenBridge::Closed
+      nil
+    end
+
+    def rows_of(control)
+      return [] if control.nil?
+      return Array(control.options).map { |row| row.is_a?(Array) ? row.join(', ') : row.to_s } if control.respond_to?(:options)
+      return [control.label.to_s] if control.respond_to?(:label)
+
+      [control.to_s]
+    end
+
+    def start_frames
+      return if @frames || !defined?(EltenLoop)
+
+      @frames = EltenLoop.every_frame { |now| tick(now) }
+    end
+  end
+end
+
+# `Programs::Extensions` - Elten's registry of every application's
+# extensions (`eapi/extensions.rb`). An application reaches it directly for
+# one thing: `Programs::Extensions.refresh_ui` after it has changed a
+# setting its widget shows (the Game Room, after saving its settings), and
+# a module that is not there is a `NameError` in the middle of "Settings
+# saved". Here the registry is the widgets' own, so a refresh is theirs.
+module Programs
+  module Extensions
+    class << self
+      def refresh_ui(registration = nil)
+        return false if registration && !registered?(registration)
+
+        mark_ui_changed
+        true
+      end
+
+      def refresh_ui!(registration = nil)
+        refresh_ui(registration)
+      end
+
+      def registered?(registration)
+        registration.respond_to?(:registered?) ? registration.registered? : !registration.nil?
+      end
+
+      def mark_ui_changed
+        @ui_revision = ui_revision + 1
+        EltenWidgets.refresh if defined?(EltenWidgets)
+        @ui_revision
+      end
+
+      def ui_revision
+        @ui_revision ||= 0
+      end
+
+      def registrations
+        []
+      end
+
+      def each_registration(&block)
+        registrations.each(&block)
+      end
+
+      def report_error(stage, registration, error)
+        name = registration.respond_to?(:name) ? registration.name : registration
+        Log.warning("extension #{name} #{stage}: #{error.class}: #{error.message}") if defined?(Log)
+        nil
+      end
     end
   end
 end

@@ -540,6 +540,21 @@ class ComponentManager:
         else:
             print(f"[ComponentManager] Cannot register view '{view_id}': GUI app not available")
 
+    def add_side_panel(self, panel_id, label, control, on_activate=None):
+        """Put a control of the component's own into the main window's
+        column between the current view and the status bar, reached with
+        Tab like the status bar is. `control` must be parented to
+        `gui_app.main_panel`. See `src/ui/side_panels.py`."""
+        if self.gui_app and hasattr(self.gui_app, 'add_side_panel'):
+            return self.gui_app.add_side_panel(panel_id, label, control, on_activate)
+        print(f"[ComponentManager] Cannot add side panel '{panel_id}': GUI app not available")
+        return None
+
+    def remove_side_panel(self, panel_id):
+        if self.gui_app and hasattr(self.gui_app, 'remove_side_panel'):
+            return self.gui_app.remove_side_panel(panel_id)
+        return False
+
     def sync_view_tab_bar(self, view_id_or_control):
         """Re-inject the virtual tab bar row into a registered view's list/tree.
 

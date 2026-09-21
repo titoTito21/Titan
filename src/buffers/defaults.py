@@ -110,3 +110,24 @@ def register_elten():
 
 def remove_elten():
     buffer_bus.remove_category('elten')
+
+
+# --- Elten API bridge ------------------------------------------------------ #
+# The applications the Elten API bridge runs (`data/components/elten_bridge`)
+# announce things - a notification an application raised, an `alert` it
+# spoke - and those go here, so they can be reviewed after they were said.
+# Registered by the bridge while it is loaded, and pushed from the
+# application's own process through the bridge's wire.
+ELTEN_API_CATEGORY = 'elten_api'
+
+
+def register_elten_api():
+    _ = _t()
+    _register(ELTEN_API_CATEGORY, _("Elten API"), [
+        ('notifications', _("Notifications"), 'notification'),
+        ('messages', _("Messages"), 'message'),
+    ])
+
+
+def remove_elten_api():
+    buffer_bus.remove_category(ELTEN_API_CATEGORY)

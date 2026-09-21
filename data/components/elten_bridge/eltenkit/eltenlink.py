@@ -586,7 +586,8 @@ def _live_path(session_id):
 
 
 def live_create(appid, instance_id, metadata=None, participant_metadata=None,
-                capacity=2):
+                capacity=2, visibility='private', discovery_metadata=None,
+                private_messages=False):
     answered, value = via_elten('live_create', appid=appid,
                                 instance_id=instance_id,
                                 metadata=metadata or {},
@@ -598,7 +599,30 @@ def live_create(appid, instance_id, metadata=None, participant_metadata=None,
         'appid': appid, 'instance_id': instance_id,
         'metadata': metadata or {},
         'participant_metadata': participant_metadata or {},
-        'capacity': int(capacity or 2)})
+        'capacity': int(capacity or 2),
+        'visibility': str(visibility or 'private'),
+        'discovery_metadata': discovery_metadata or {},
+        'private_messages': bool(private_messages)})
+
+
+def live_stack(session_id, participant_id, operation, params=None):
+    """The session's stack - Elten 3.0.3's `live_session_stack_request`:
+    `push` is a POST, `read` a GET and `trim` a DELETE on `.../stack`,
+    every one carrying the participant."""
+    method = {'push': 'POST', 'read': 'GET', 'trim': 'DELETE'}.get(str(operation))
+    if method is None:
+        raise EltenUnavailable('unknown stack operation %r' % (operation,))
+    answered, value = via_elten('live_stack', session_id=session_id,
+                                participant_id=participant_id,
+                                operation=str(operation), params=params or {})
+    if answered:
+        return value
+    payload = dict(params or {})
+    payload['participant_id'] = participant_id
+    path = '%s/stack' % _live_path(session_id)
+    if method == 'GET':
+        return _api('GET', path, params=payload)
+    return _api(method, path, body=payload)
 
 
 def live_invite(session_id, participant_id, user, metadata=None):

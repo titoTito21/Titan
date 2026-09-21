@@ -366,12 +366,18 @@ class KlangoSession(object):
         if self.runtime.interpreter is not None:
             self.runtime.interpreter.max_depth = LUA_DEPTH
         try:
-            if self.load_library():
-                # Klango's own Settings and Help are Titan's here - see
-                # `titan_bridge.py`. It is installed once the library has
-                # defined `k_NewApp` and before any application has called it.
-                titan_bridge.install(self.runtime, self.host)
+            loaded = self.load_library()
             self.start_platform()
+            if loaded:
+                # Klango's own Settings and Help are Titan's here - see
+                # `titan_bridge.py`. It is installed once the platform is UP
+                # and before any application has called `k_NewApp`: the sui
+                # files are loaded by `_k_suiinit`, inside `start_platform`,
+                # and `llib_suiapp.lua` ends with `k_NewApp = k_SUINewApp` -
+                # so a wrapper installed straight after `load_library` was
+                # overwritten a moment later, and every application's
+                # Settings and Help stayed Klango's own.
+                titan_bridge.install(self.runtime, self.host)
             if not self.load_application():
                 return False
             if not self.runtime.has_global('main'):
@@ -398,8 +404,12 @@ class KlangoSession(object):
         """Give the running application a key: down now, up next frame."""
         return self.keys.press(name)
 
-    def key_down(self, name):
-        return self.keys.down(name)
+    def key_down(self, name, character=None):
+        return self.keys.down(name, character)
+
+    def character(self, text):
+        """A character the window typed - see `Keyboard.character`."""
+        return self.keys.character(text)
 
     def key_up(self, name):
         return self.keys.up(name)

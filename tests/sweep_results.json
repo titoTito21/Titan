@@ -1,0 +1,2529 @@
+[
+ {
+  "name": "AudioMemory",
+  "status": "running",
+  "detail": "",
+  "ran_for": 31.5,
+  "still_running": true,
+  "spoken": [
+   "Finish the previous sound set to unlock this one.",
+   "Finish the previous sound set to unlock this one.",
+   "Round 1. Time: 30 seconds.",
+   "20 seconds.",
+   "10 seconds."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "gridbox",
+      "Board"
+     ]
+    ]
+   ]
+  ],
+  "selects": [
+   [
+    "AudioMemory",
+    [
+     "Start game",
+     "Scores",
+     "Help",
+     "Exit"
+    ]
+   ],
+   [
+    "Sound set",
+    [
+     "Birds",
+     "Piano (locked)",
+     "Instruments (locked)"
+    ]
+   ],
+   [
+    "Sound set",
+    [
+     "Birds",
+     "Piano (locked)",
+     "Instruments (locked)"
+    ]
+   ],
+   [
+    "Sound set",
+    [
+     "Birds",
+     "Piano (locked)",
+     "Instruments (locked)"
+    ]
+   ]
+  ],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "Finish the previous sound set to unlock this one."
+   ],
+   [
+    "say",
+    "Finish the previous sound set to unlock this one."
+   ],
+   [
+    "say",
+    "Round 1. Time: 30 seconds."
+   ],
+   [
+    "say",
+    "20 seconds."
+   ],
+   [
+    "say",
+    "10 seconds."
+   ]
+  ],
+  "sounds": [
+   [
+    "start",
+    "border.mp3",
+    0.0,
+    0.5,
+    false
+   ],
+   [
+    "start",
+    "border.mp3",
+    0.0,
+    0.5,
+    false
+   ],
+   [
+    "start",
+    "card_place.mp3",
+    0.0,
+    0.9,
+    false
+   ],
+   [
+    "start",
+    "move.mp3",
+    -0.95,
+    0.47,
+    false
+   ],
+   [
+    "stop",
+    "border.mp3"
+   ],
+   [
+    "stop",
+    "border.mp3"
+   ],
+   [
+    "stop",
+    "card_place.mp3"
+   ],
+   [
+    "stop",
+    "move.mp3"
+   ]
+  ],
+  "sound_count": 8,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "BopIt",
+  "status": "running",
+  "detail": "",
+  "ran_for": 33.0,
+  "still_running": true,
+  "spoken": [],
+  "forms": [],
+  "selects": [],
+  "keyboards": 1,
+  "menus": [],
+  "texts": [],
+  "sounds": [
+   [
+    "start",
+    "bopittostart.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "high.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "high.ogg"
+   ],
+   [
+    "start",
+    "score.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "score.ogg"
+   ],
+   [
+    "start",
+    "1.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "1.ogg"
+   ],
+   [
+    "start",
+    "hundred.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "hundred.ogg"
+   ],
+   [
+    "start",
+    "beets13.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beetw.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beets21.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beets10.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beets12.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beetw.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beets20.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beetw.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "beets13.ogg"
+   ],
+   [
+    "start",
+    "bopit0.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beets21.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "beetw.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "start",
+    "yaw3.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "yaw3.ogg"
+   ],
+   [
+    "start",
+    "lose3.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "lose3.ogg"
+   ],
+   [
+    "start",
+    "bopittostart.ogg",
+    0.0,
+    1.0,
+    false
+   ],
+   [
+    "stop",
+    "bopittostart.ogg"
+   ]
+  ],
+  "sound_count": 27,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "ELTEN Game Room",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 16.2,
+  "still_running": false,
+  "spoken": [
+   "The operation could not be completed. Please try again.",
+   "The operation could not be completed. Please try again.",
+   "The operation could not be completed. Please try again.",
+   "The operation could not be completed. Please try again."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "ELTEN Game Room"
+     ],
+     [
+      "listbox",
+      "Game Room history"
+     ],
+     [
+      "button",
+      "Open"
+     ],
+     [
+      "button",
+      "Exit"
+     ]
+    ]
+   ],
+   [
+    2,
+    "",
+    [
+     [
+      "listbox",
+      "Create a new table"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    3,
+    "",
+    [
+     [
+      "static",
+      "Choose game options using Tab "
+     ],
+     [
+      "checkbox",
+      "Private table"
+     ],
+     [
+      "editbox",
+      "Starting tokens"
+     ],
+     [
+      "checkbox",
+      "Omniscient bots (they can see "
+     ],
+     [
+      "editbox",
+      "Thinking time in seconds; zero"
+     ],
+     [
+      "editbox",
+      "Bot move delay in seconds (0 t"
+     ],
+     [
+      "button",
+      "Create table"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    4,
+    "",
+    [
+     [
+      "listbox",
+      "ELTEN Game Room"
+     ],
+     [
+      "listbox",
+      "Game Room history"
+     ],
+     [
+      "button",
+      "Open"
+     ],
+     [
+      "button",
+      "Exit"
+     ]
+    ]
+   ],
+   [
+    5,
+    "",
+    [
+     [
+      "listbox",
+      "Create a new table"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    6,
+    "",
+    [
+     [
+      "static",
+      "Choose game options using Tab "
+     ],
+     [
+      "checkbox",
+      "Private table"
+     ],
+     [
+      "editbox",
+      "Starting tokens"
+     ],
+     [
+      "checkbox",
+      "Omniscient bots (they can see "
+     ],
+     [
+      "editbox",
+      "Thinking time in seconds; zero"
+     ],
+     [
+      "editbox",
+      "Bot move delay in seconds (0 t"
+     ],
+     [
+      "button",
+      "Create table"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    7,
+    "",
+    [
+     [
+      "listbox",
+      "ELTEN Game Room"
+     ],
+     [
+      "listbox",
+      "Game Room history"
+     ],
+     [
+      "button",
+      "Open"
+     ],
+     [
+      "button",
+      "Exit"
+     ]
+    ]
+   ],
+   [
+    8,
+    "",
+    [
+     [
+      "listbox",
+      "Create a new table"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    9,
+    "",
+    [
+     [
+      "static",
+      "Choose game options using Tab "
+     ],
+     [
+      "checkbox",
+      "Private table"
+     ],
+     [
+      "editbox",
+      "Starting tokens"
+     ],
+     [
+      "checkbox",
+      "Omniscient bots (they can see "
+     ],
+     [
+      "editbox",
+      "Thinking time in seconds; zero"
+     ],
+     [
+      "editbox",
+      "Bot move delay in seconds (0 t"
+     ],
+     [
+      "button",
+      "Create table"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    10,
+    "",
+    [
+     [
+      "listbox",
+      "ELTEN Game Room"
+     ],
+     [
+      "listbox",
+      "Game Room history"
+     ],
+     [
+      "button",
+      "Open"
+     ],
+     [
+      "button",
+      "Exit"
+     ]
+    ]
+   ],
+   [
+    11,
+    "",
+    [
+     [
+      "listbox",
+      "Create a new table"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    12,
+    "",
+    [
+     [
+      "static",
+      "Choose game options using Tab "
+     ],
+     [
+      "checkbox",
+      "Private table"
+     ],
+     [
+      "editbox",
+      "Starting tokens"
+     ],
+     [
+      "checkbox",
+      "Omniscient bots (they can see "
+     ],
+     [
+      "editbox",
+      "Thinking time in seconds; zero"
+     ],
+     [
+      "editbox",
+      "Bot move delay in seconds (0 t"
+     ],
+     [
+      "button",
+      "Create table"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "The operation could not be completed. Please try again."
+   ],
+   [
+    "say",
+    "The operation could not be completed. Please try again."
+   ],
+   [
+    "say",
+    "The operation could not be completed. Please try again."
+   ],
+   [
+    "say",
+    "The operation could not be completed. Please try again."
+   ],
+   [
+    "confirm",
+    "Do you want to exit ELTEN Game Room?"
+   ]
+  ],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": [
+   "ELTEN Game Room LiveSessions stack read failed for table 454293405: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room network operation failed: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room LiveSessions stack read failed for table 918189832: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room network operation failed: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room LiveSessions stack read failed for table 1993994050: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room network operation failed: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room LiveSessions stack read failed for table 630518778: EltenLink::Error: Live session membership is not active",
+   "ELTEN Game Room network operation failed: EltenLink::Error: Live session membership is not active"
+  ]
+ },
+ {
+  "name": "FileManager",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 7.2,
+  "still_running": false,
+  "spoken": [
+   ".."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "FileManager"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 1,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    ".."
+   ]
+  ],
+  "sounds": [
+   [
+    "cue",
+    "ui/focus_expanded.ogg",
+    -1.0
+   ],
+   [
+    "cue",
+    "ui/focus_expanded.ogg",
+    -1.0
+   ],
+   [
+    "cue",
+    "ui/focus_expanded.ogg",
+    -1.0
+   ],
+   [
+    "cue",
+    "ui/focus_expanded.ogg",
+    -1.0
+   ]
+  ],
+  "sound_count": 4,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Freesound",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 3.9,
+  "still_running": false,
+  "spoken": [
+   "Freesound denied access. Downloading originals requires login and account permissions."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "Freesound"
+     ],
+     [
+      "button",
+      "Open"
+     ],
+     [
+      "button",
+      "Close"
+     ]
+    ]
+   ],
+   [
+    2,
+    "",
+    [
+     [
+      "editbox",
+      "Search sounds (leave empty for"
+     ],
+     [
+      "listbox",
+      "Licence"
+     ],
+     [
+      "listbox",
+      "Sort order"
+     ],
+     [
+      "listbox",
+      "Original format"
+     ],
+     [
+      "editbox",
+      "Minimum duration in seconds (o"
+     ],
+     [
+      "editbox",
+      "Maximum duration in seconds (o"
+     ],
+     [
+      "editbox",
+      "Author username (optional)"
+     ],
+     [
+      "editbox",
+      "Additional Freesound filter (o"
+     ],
+     [
+      "button",
+      "Search"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "Freesound denied access. Downloading originals requires login and account permissions."
+   ]
+  ],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "KlangoArchive",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 3.0,
+  "still_running": false,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "tablebox",
+      "Groups"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Media catalog",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 27.1,
+  "still_running": false,
+  "spoken": [
+   "Drawing a station, please wait.",
+   "Added.",
+   "Enter a station name or genre.",
+   "Enter a valid HTTP or HTTPS stream URL.",
+   "Loading...",
+   "Drawing a station, please wait.",
+   "This station is already in favorites.",
+   "Enter a station name or genre.",
+   "Enter a valid HTTP or HTTPS stream URL.",
+   "Loading...",
+   "Drawing a station, please wait.",
+   "This station is already in favorites.",
+   "Enter a station name or genre.",
+   "Enter a valid HTTP or HTTPS stream URL.",
+   "Loading...",
+   "Drawing a station, please wait.",
+   "This station is already in favorites."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "player",
+      "RÁDIO VIRG0 NET"
+     ],
+     [
+      "button",
+      "Add to favourites"
+     ],
+     [
+      "button",
+      "Minimize"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    2,
+    "Search",
+    [
+     [
+      "editbox",
+      "Station name"
+     ],
+     [
+      "editbox",
+      "Genre"
+     ],
+     [
+      "button",
+      "Search"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    3,
+    "",
+    [
+     [
+      "listbox",
+      "Countries"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    4,
+    "",
+    [
+     [
+      "player",
+      "RÁDIO VIRG0 NET"
+     ],
+     [
+      "button",
+      "Add to favourites"
+     ],
+     [
+      "button",
+      "Minimize"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    5,
+    "Search",
+    [
+     [
+      "editbox",
+      "Station name"
+     ],
+     [
+      "editbox",
+      "Genre"
+     ],
+     [
+      "button",
+      "Search"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    6,
+    "",
+    [
+     [
+      "listbox",
+      "Countries"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    7,
+    "",
+    [
+     [
+      "player",
+      "RÁDIO VIRG0 NET"
+     ],
+     [
+      "button",
+      "Add to favourites"
+     ],
+     [
+      "button",
+      "Minimize"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    8,
+    "Search",
+    [
+     [
+      "editbox",
+      "Station name"
+     ],
+     [
+      "editbox",
+      "Genre"
+     ],
+     [
+      "button",
+      "Search"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ],
+   [
+    9,
+    "",
+    [
+     [
+      "listbox",
+      "Countries"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    10,
+    "",
+    [
+     [
+      "player",
+      "RÁDIO VIRG0 NET"
+     ],
+     [
+      "button",
+      "Add to favourites"
+     ],
+     [
+      "button",
+      "Minimize"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ]
+  ],
+  "selects": [
+   [
+    "Media catalog",
+    [
+     "Internet radio",
+     "Podcasts",
+     "Favorites",
+     "Liked by friends",
+     "Options",
+     "About",
+     "Exit"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ],
+   [
+    "Internet radio",
+    [
+     "Station list",
+     "Random station, new every 3 minutes",
+     "Search",
+     "Enter URL"
+    ]
+   ]
+  ],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "Drawing a station, please wait."
+   ],
+   [
+    "say",
+    "Added."
+   ],
+   [
+    "say",
+    "Enter a station name or genre."
+   ],
+   [
+    "say",
+    "Enter a valid HTTP or HTTPS stream URL."
+   ],
+   [
+    "say",
+    "Loading..."
+   ],
+   [
+    "say",
+    "Drawing a station, please wait."
+   ],
+   [
+    "say",
+    "This station is already in favorites."
+   ],
+   [
+    "say",
+    "Enter a station name or genre."
+   ],
+   [
+    "say",
+    "Enter a valid HTTP or HTTPS stream URL."
+   ],
+   [
+    "say",
+    "Loading..."
+   ]
+  ],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "MileByMile",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 1.0,
+  "still_running": false,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "choicelist",
+      "Card set"
+     ],
+     [
+      "choicelist",
+      "Distance"
+     ],
+     [
+      "choicelist",
+      "Number of decks"
+     ],
+     [
+      "button",
+      "OK"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ]
+  ],
+  "selects": [
+   [
+    "Mile by Mile",
+    [
+     "Create a game",
+     "Join a game",
+     "Invite a friend",
+     "Play against the bot",
+     "Rules",
+     "Exit"
+    ]
+   ],
+   [
+    "Cannot connect to the multiplayer server.",
+    [
+     "OK"
+    ]
+   ],
+   [
+    "Mile by Mile",
+    [
+     "Create a game",
+     "Join a game",
+     "Invite a friend",
+     "Play against the bot",
+     "Rules",
+     "Exit"
+    ]
+   ],
+   [
+    "Cannot verify the user. Check the connection.",
+    [
+     "OK"
+    ]
+   ],
+   [
+    "Mile by Mile",
+    [
+     "Create a game",
+     "Join a game",
+     "Invite a friend",
+     "Play against the bot",
+     "Rules",
+     "Exit"
+    ]
+   ],
+   [
+    "Mile by Mile",
+    [
+     "Create a game",
+     "Join a game",
+     "Invite a friend",
+     "Play against the bot",
+     "Rules",
+     "Exit"
+    ]
+   ]
+  ],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "display",
+    "The goal is to be the first to cover the target distance exactly, without oversh"
+   ]
+  ],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Neighborhood Radar",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 9.7,
+  "still_running": false,
+  "spoken": [
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information.",
+   "There were no changes during this period. Select Refresh data to check for the latest information."
+  ],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "Neighborhood Radar. Move throu"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    2,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    3,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    4,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    5,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    6,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    7,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    8,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    9,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    10,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    11,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ],
+   [
+    12,
+    "",
+    [
+     [
+      "listbox",
+      "What's new nearby. Select a pe"
+     ],
+     [
+      "button",
+      "Select"
+     ],
+     [
+      "button",
+      "Back"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ],
+   [
+    "say",
+    "There were no changes during this period. Select Refresh data to check for the latest information."
+   ]
+  ],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Purrposterous",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 7.7,
+  "still_running": false,
+  "spoken": [
+   "Welcome to Purrposterous. Press Enter to start, or read the instructions before the cats unionize.",
+   "The bowl is full. Your dignity is not. Go!",
+   "There are no scores yet."
+  ],
+  "forms": [],
+  "selects": [
+   [
+    "Purrposterous",
+    [
+     "Start game",
+     "Best scores",
+     "How to purr-play",
+     "Exit"
+    ]
+   ],
+   [
+    "Purrposterous",
+    [
+     "Start game",
+     "Best scores",
+     "How to purr-play",
+     "Exit"
+    ]
+   ],
+   [
+    "Purrposterous",
+    [
+     "Start game",
+     "Best scores",
+     "How to purr-play",
+     "Exit"
+    ]
+   ],
+   [
+    "Purrposterous",
+    [
+     "Start game",
+     "Best scores",
+     "How to purr-play",
+     "Exit"
+    ]
+   ]
+  ],
+  "keyboards": 1,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "Welcome to Purrposterous. Press Enter to start, or read the instructions before the cats unionize."
+   ],
+   [
+    "say",
+    "The bowl is full. Your dignity is not. Go!"
+   ],
+   [
+    "say",
+    "There are no scores yet."
+   ],
+   [
+    "display",
+    "You are in a long room with an unreasonable number of cats and a suspicious shor"
+   ]
+  ],
+  "sounds": [
+   [
+    "start",
+    "nyancat.mp3",
+    0.0,
+    0.48,
+    true
+   ],
+   [
+    "start",
+    "step2.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "step3.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "step4.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "step1.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "step2.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "step3.mp3",
+    0.0,
+    0.33,
+    false
+   ],
+   [
+    "start",
+    "cat.mp3",
+    -0.37,
+    0.7,
+    true
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "start",
+    "jump.mp3",
+    0.0,
+    0.4,
+    false
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ],
+   [
+    "gain",
+    "cat.mp3",
+    -0.37,
+    0.7
+   ]
+  ],
+  "sound_count": 107,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Skeet",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 8.2,
+  "still_running": false,
+  "spoken": [
+   "Round 1. Score: 0. Chances: 3. Press Space to release a target.",
+   "Round 2. Score: 0. Chances: 2. Press Space to release a target."
+  ],
+  "forms": [
+   [
+    1,
+    "Best scores",
+    [
+     [
+      "tablebox",
+      "Best scores"
+     ],
+     [
+      "button",
+      "Close"
+     ]
+    ]
+   ]
+  ],
+  "selects": [
+   [
+    "Skeet",
+    [
+     "Start",
+     "Scores",
+     "Instructions",
+     "Exit"
+    ]
+   ],
+   [
+    "Skeet",
+    [
+     "Start",
+     "Scores",
+     "Instructions",
+     "Exit"
+    ]
+   ],
+   [
+    "Scores",
+    [
+     "Best scores",
+     "Best players"
+    ]
+   ],
+   [
+    "Skeet",
+    [
+     "Start",
+     "Scores",
+     "Instructions",
+     "Exit"
+    ]
+   ]
+  ],
+  "keyboards": 1,
+  "menus": [],
+  "texts": [
+   [
+    "say",
+    "Round 1. Score: 0. Chances: 3. Press Space to release a target."
+   ],
+   [
+    "say",
+    "Round 2. Score: 0. Chances: 2. Press Space to release a target."
+   ],
+   [
+    "confirm",
+    "Abandon this game and return to the menu?"
+   ]
+  ],
+  "sounds": [
+   [
+    "start",
+    "throw.ogg",
+    -1.0,
+    0.71,
+    false
+   ],
+   [
+    "start",
+    "flight2.ogg",
+    -1.0,
+    0.71,
+    true
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.71
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.71
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.72
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.72
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.73
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.73
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.73
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.74
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.74
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.75
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.75
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.76
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.76
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.77
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.77
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.78
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.78
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.79
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.79
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.8
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.8
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.81
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.81
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.82
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.82
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.83
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.83
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.84
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.84
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.85
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.85
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.86
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.86
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.87
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.87
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.88
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.88
+   ],
+   [
+    "gain",
+    "flight2.ogg",
+    -1.0,
+    0.89
+   ]
+  ],
+  "sound_count": 160,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Solitaire",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 8.0,
+  "still_running": false,
+  "spoken": [
+   "Arrows move. Shift carries a card. Control inspects a tableau; Control+Shift carries a sequence. Enter or Space draws. Press H for controls.",
+   "Face down, draw pile. 24 cards.",
+   "5 of diamonds, draw pile. 23 cards left.",
+   "6 of spades, draw pile. 22 cards left.",
+   "6 of spades, draw pile. 22 cards left. Empty, foundation hearts Empty, foundation diamonds Empty, foundation clubs Empty, foundation spades ace of diamonds, tableau 1. Hidden: 0. Face up: 1. 6 of diamonds, tableau 2. Hidden: 1. Face up: 1. queen of spades, tableau 3. Hidden: 2. Face up: 1. 5 of clubs, tableau 4. Hidden: 3. Face up: 1. 3 of clubs, tableau 5. Hidden: 4. Face up: 1. 10 of clubs, tableau 6. Hidden: 5. Face up: 1. ace of spades, tableau 7. Hidden: 6. Face up: 1.",
+   "Empty, foundation hearts",
+   "6 of spades, draw pile. 22 cards left.",
+   "Arrows move. Shift carries a card. Control inspects a tableau; Control+Shift carries a sequence. Enter or Space draws. Press H for controls.",
+   "6 of spades, draw pile. 22 cards left."
+  ],
+  "forms": [],
+  "selects": [
+   [
+    "Solitaire",
+    [
+     "New game",
+     "Continue saved game",
+     "Rules and controls",
+     "Exit"
+    ]
+   ],
+   [
+    "Solitaire",
+    [
+     "New game",
+     "Continue saved game",
+     "Rules and controls",
+     "Exit"
+    ]
+   ],
+   [
+    "Solitaire",
+    [
+     "New game",
+     "Continue saved game",
+     "Rules and controls",
+     "Exit"
+    ]
+   ],
+   [
+    "Solitaire",
+    [
+     "New game",
+     "Continue saved game",
+     "Rules and controls",
+     "Exit"
+    ]
+   ]
+  ],
+  "keyboards": 2,
+  "menus": [],
+  "texts": [
+   [
+    "confirm",
+    "Starting a new game will replace the saved deal. Continue?"
+   ],
+   [
+    "say",
+    "Arrows move. Shift carries a card. Control inspects a tableau; Control+Shift carries a sequence. Enter or Space draws. Press H for controls."
+   ],
+   [
+    "say",
+    "Face down, draw pile. 24 cards."
+   ],
+   [
+    "say",
+    "5 of diamonds, draw pile. 23 cards left."
+   ],
+   [
+    "say",
+    "6 of spades, draw pile. 22 cards left."
+   ],
+   [
+    "say",
+    "6 of spades, draw pile. 22 cards left. Empty, foundation hearts Empty, foundation diamonds Empty, foundation clubs Empty, foundation spades ace of diamonds, tableau 1. Hidden: 0. Face up: 1. 6 of diamonds, tableau 2. Hidden: 1. Face up: 1. queen of spades, tableau 3. Hidden: 2. Face up: 1. 5 of clubs, tableau 4. Hidden: 3. Face up: 1. 3 of clubs, tableau 5. Hidden: 4. Face up: 1. 10 of clubs, tableau 6. Hidden: 5. Face up: 1. ace of spades, tableau 7. Hidden: 6. Face up: 1."
+   ],
+   [
+    "say",
+    "Empty, foundation hearts"
+   ],
+   [
+    "say",
+    "6 of spades, draw pile. 22 cards left."
+   ],
+   [
+    "say",
+    "Arrows move. Shift carries a card. Control inspects a tableau; Control+Shift carries a sequence. Enter or Space draws. Press H for controls."
+   ],
+   [
+    "say",
+    "6 of spades, draw pile. 22 cards left."
+   ]
+  ],
+  "sounds": [
+   [
+    "cue",
+    "ui/endoflist.ogg",
+    0.0
+   ],
+   [
+    "cue",
+    "ui/endoflist.ogg",
+    0.0
+   ],
+   [
+    "cue",
+    "core/FOCUS.ogg",
+    0.0
+   ],
+   [
+    "cue",
+    "ui/endoflist.ogg",
+    0.0
+   ],
+   [
+    "cue",
+    "core/FOCUS.ogg",
+    0.0
+   ],
+   [
+    "cue",
+    "core/FOCUS.ogg",
+    -1.0
+   ],
+   [
+    "cue",
+    "core/FOCUS.ogg",
+    0.0
+   ]
+  ],
+  "sound_count": 7,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Spotify",
+  "status": "running",
+  "detail": "",
+  "ran_for": 33.1,
+  "still_running": true,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "editbox",
+      "Welcome to Spotify"
+     ],
+     [
+      "button",
+      "Sign in with Spotify"
+     ],
+     [
+      "button",
+      "Close"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Tyflopodcast",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 3.4,
+  "still_running": false,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "Tyflopodcast"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Weather",
+  "status": "finished",
+  "detail": "",
+  "ran_for": 3.1,
+  "still_running": false,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "listbox",
+      "Main menu"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": []
+ },
+ {
+  "name": "Youtube",
+  "status": "failed",
+  "detail": "NoMethodError: undefined method '[]' for nil",
+  "ran_for": 6.6,
+  "still_running": false,
+  "spoken": [],
+  "forms": [
+   [
+    1,
+    "",
+    [
+     [
+      "editbox",
+      "Search Youtube"
+     ],
+     [
+      "listbox",
+      "What to search"
+     ],
+     [
+      "button",
+      "Search"
+     ],
+     [
+      "button",
+      "Cancel"
+     ]
+    ]
+   ]
+  ],
+  "selects": [],
+  "keyboards": 0,
+  "menus": [],
+  "texts": [],
+  "sounds": [],
+  "sound_count": 0,
+  "errors": [],
+  "log_tail": [
+   "Registering media finder YoutubeMediaFinder",
+   "NoMethodError: undefined method '[]' for nil",
+   "C:/Users/Tito/AppData/Roaming/titosoft/Titan/pkg_cache/eltenapps/youtube_344b1a8bffab2ab7/__app.rb:257:in 'Youtube.entries'\nC:/Users/Tito/AppData/Roaming/titosoft/Titan/pkg_cache/eltenapps/youtube_344b1a8bffab2ab7/__app.rb:77:in 'Youtube.search'\nC:/Users/Tito/AppData/Roaming/titosoft/Titan/pkg_cache/eltenapps/youtube_344b1a8bffab2ab7/__app.rb:769:in 'ProgramYoutube#ysearch'\nC:/Users/Tito/AppData/Roaming/titosoft/Titan/pkg_cache/eltenapps/youtube_344b1a8bffab2ab7/__app.rb:754:in 'ProgramYoutube#start_search'\nC:/Users/Tito/AppData/Roaming/titosoft/Titan/pkg_cache/eltenapps/youtube_344b1a8bffab2ab7/__app.rb:738:in 'block in ProgramYoutube#show_search_dialog'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:93:in 'block in EltenControl#trigger'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:92:in 'Array#each'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:92:in 'EltenControl#trigger'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:3464:in 'Form#dispatch'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:3264:in 'Form#dispatch_event'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/controls.rb:56:in 'EltenForms.dispatch'\nC:/Users/Tito/OneDrive/projects/gitHub projects/Titan/data/components/elten_bridge/eapi/loop.rb:250:in 'EltenLoop.deliver'"
+  ]
+ }
+]
