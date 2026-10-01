@@ -5,6 +5,8 @@ Integrates with TCE Launcher's multi-service messaging system
 Provides Telegram-like interface for Facebook Messenger
 """
 import asyncio
+from src.titan_core.asyncio_compat import ensure_event_loop
+ensure_event_loop()  # before anything that asks this thread for its loop
 import json
 import os
 import pickle

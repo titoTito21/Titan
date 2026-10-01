@@ -64,8 +64,10 @@ class TitanShell:
     def start(self):
         if self._running:
             return True
-        if not IS_WINDOWS:
-            print("[TitanShell] the shell is a Windows feature")
+        if not IS_WINDOWS and not win_shell.available():
+            # Linux and macOS answer through win_shell's posix layer; only
+            # a machine with no display at all has no shell to put up.
+            print("[TitanShell] no display to put the shell on")
             return False
 
         try:

@@ -2,9 +2,12 @@ import threading
 import queue
 import time
 import sys
+# Found, not imported: importing accessible_output3.outputs imports every
+# backend, and the Window-Eyes one brings speech_recognition - 8.7 MB and
+# a tenth of a second at startup. The speaker is built on first use below.
 try:
-    import accessible_output3.outputs.auto
-    _ao3_available = True
+    import importlib.util as _ilu
+    _ao3_available = _ilu.find_spec('accessible_output3') is not None
 except Exception:
     _ao3_available = False
 
@@ -23,12 +26,16 @@ except ImportError:
 # pynput - macOS/Linux alternative for global keyboard hooks
 # Does not hang: gracefully fails if Accessibility permissions are missing
 PYNPUT_AVAILABLE = False
-try:
-    from pynput import keyboard as _pynput_kb
-    PYNPUT_AVAILABLE = True
-except ImportError:
-    if sys.platform == 'darwin':
-        print("macOS IUI: pynput not found. Install with: pip install pynput")
+_pynput_kb = None
+if sys.platform != 'win32':
+    # On Windows the keyboard module above is the hook; pynput is the
+    # macOS/Linux alternative and was being imported (16 ms) for nothing.
+    try:
+        from pynput import keyboard as _pynput_kb
+        PYNPUT_AVAILABLE = True
+    except ImportError:
+        if sys.platform == 'darwin':
+            print("macOS IUI: pynput not found. Install with: pip install pynput")
 from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound, play_statusbar_sound, play_applist_sound, play_voice_message, toggle_voice_message, is_voice_message_playing, is_voice_message_paused, resource_path, get_sfx_directory, is_3d_enabled
 from src.settings.settings import load_settings, get_setting
 from src.titan_core.translation import set_language
@@ -80,6 +87,7 @@ def get_safe_speaker():
             with speaker_lock:
                 if speaker is None:  # Double-check pattern
                     try:
+                        import accessible_output3.outputs.auto
                         speaker = accessible_output3.outputs.auto.Auto()
                     except Exception as e:
                         print(f"Error initializing speaker: {e}")

@@ -872,7 +872,8 @@ def _open_in_tedit(file_path):
             open_application(app_info, file_path)
         else:
             if sys.platform == 'win32':
-                os.startfile(file_path)
+                from src.platform_utils import open_file_manager
+                open_file_manager(file_path)
             elif sys.platform == 'darwin':
                 subprocess.Popen(['open', file_path])
             else:

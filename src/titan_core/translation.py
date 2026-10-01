@@ -75,8 +75,22 @@ TRANSLATION_DOMAINS = [
     'shell',         # System shell: desktop, taskbar, tray, Start menu (src/shell/*.py)
 ]
 
-# Store translation objects for each domain
+# Store translation objects for each domain.
+#
+# **This table is read from every thread and replaced in ONE assignment.**
+# Some thirty modules call ``set_language()`` at import time, and a good
+# many of them are imported lazily, from worker threads - the Titan-Net
+# window's ``refresh_remote_screens`` imports ``remote_ui`` on a thread of
+# its own while the GUI thread is still building the window. The old
+# ``set_language`` emptied this dict and refilled it one .mo file at a time,
+# and every ``_`` ever handed out reads the dict at CALL time, so during
+# that refill any ``_()`` on any other thread raised ``KeyError`` for a
+# domain that was not back yet. Measured: the first opening of Titan-Net
+# ended in ``KeyError: 'menu'`` inside ``show_menu`` and the second worked,
+# because by then the lazy imports were done. The table is built in a local
+# and swapped in whole, and the same language is never loaded twice.
 _translations = {}
+_loaded_language = None
 
 # Language code to display name mapping
 LANGUAGE_NAMES = {
@@ -158,33 +172,57 @@ def set_language(lang_code='pl'):
     each domain's .mo across both the bundled `languages/` directory and the
     per-user overlay under `%APPDATA%/titosoft/Titan/languages/`. User .mo
     files win over bundled ones for the same domain/language."""
-    global language_code, _translations
+    global language_code, _translations, _loaded_language
+    # The language already loaded is not loaded again: every module that
+    # says ``_ = set_language(get_setting('language', 'pl'))`` at import
+    # used to re-read all the .mo files - and, worse, empty the shared
+    # table while it did (see ``_translations`` above). Asked BEFORE the
+    # availability check, because that check is a listdir of every
+    # languages folder - measured at startup: fourteen calls, 84 ms.
+    if lang_code == _loaded_language and _translations:
+        return multi_domain_gettext
+
     # Ensure 'pl' is the default if the configured language is invalid
     if lang_code not in get_available_languages():
         lang_code = 'pl'
+        if lang_code == _loaded_language and _translations:
+            return multi_domain_gettext
 
-    language_code = lang_code  # Update the global variable
-
-    # Load all translation domains using the overlay-aware loader
-    _translations = {}
+    # Load all translation domains using the overlay-aware loader, into a
+    # table of our own; nothing sees it until it is complete.
+    table = {}
     for domain in TRANSLATION_DOMAINS:
         try:
             trans = _load_translation_for_domain(domain, lang_code)
-            _translations[domain] = trans.gettext
+            table[domain] = trans.gettext
         except Exception:
             # If a domain doesn't exist, use NullTranslations (returns original string)
-            _translations[domain] = lambda x: x
+            table[domain] = lambda x: x
 
-    # Return a wrapper function that tries all domains
-    def multi_domain_gettext(message):
-        """Try to translate from all domains, return first non-identity translation."""
-        for domain in TRANSLATION_DOMAINS:
-            translated = _translations[domain](message)
-            if translated != message:
-                return translated
-        return message
+    language_code = lang_code  # Update the global variable
+    _translations = table      # one assignment - never a half-filled table
+    _loaded_language = lang_code
 
     return multi_domain_gettext
+
+
+def multi_domain_gettext(message):
+    """Try to translate from all domains, return first non-identity translation.
+
+    One function for every caller, so a language change reaches every
+    module's ``_`` at once. It reads the table through a local so a change
+    made on another thread mid-lookup cannot pull it out from under the
+    loop, and a domain that is somehow missing is skipped rather than raised.
+    """
+    table = _translations
+    for domain in TRANSLATION_DOMAINS:
+        gettext_fn = table.get(domain)
+        if gettext_fn is None:
+            continue
+        translated = gettext_fn(message)
+        if translated != message:
+            return translated
+    return message
 
 # Initialize translations. Priority: LANG env var, then settings, then system language detection.
 # The '_' function will be available globally in the modules that import it.

@@ -751,7 +751,8 @@ class GameDetailDialog(wx.Dialog):
             return
         try:
             if sys.platform == 'win32':
-                os.startfile(tmp_path)  # type: ignore[attr-defined]
+                from src.platform_utils import open_file_manager
+                open_file_manager(tmp_path)
             elif sys.platform == 'darwin':
                 import subprocess
                 subprocess.Popen(['open', tmp_path])

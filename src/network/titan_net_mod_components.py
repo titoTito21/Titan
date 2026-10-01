@@ -2450,7 +2450,8 @@ class ModeratorComponentsWindow(wx.Frame):
             import subprocess
             import sys
             if sys.platform == 'win32':
-                os.startfile(self.components_dir)
+                from src.platform_utils import open_file_manager
+                open_file_manager(self.components_dir)
             elif sys.platform == 'darwin':
                 subprocess.Popen(['open', self.components_dir])
             else:

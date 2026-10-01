@@ -273,6 +273,251 @@ the startup sound's two seconds SPENT loading rather than slept through.
   `requests` with it, for one call that happens once.
 - Tests: `tests/test_startup.py` (run it directly; 17 tests).
 
+### Idle processor and startup memory, measured
+
+What Titan does while nobody is touching it, measured on this machine
+(2026-09-30) and cut. The rule that found all of it: **ask the machine, per
+call** - `time.perf_counter()` round a hundred calls of the thing a loop
+does - and never the loop's sleep, which says how often and not how much.
+
+- **The network monitor ran `netsh wlan show interfaces` every SECOND**
+  (`system_monitor.NetworkMonitor`), a console process measured at
+  **159 ms**, beside two psutil walks of every interface (33 ms) - about a
+  fifth of a processor core, for the life of the program, and the status
+  bar ran the same `netsh` every five seconds. It also parsed the words
+  `State`, `SSID` and `Signal`, which are only there on an English
+  Windows. `src/system/wlan.py` asks `wlanapi.dll` instead (16 ms, no
+  process, no language: `current_connection()`, `wireless_state()`,
+  `interfaces()`), and the monitor is **woken, not polled**:
+  `wlan.watch()` registers `WlanRegisterNotification` for the connection
+  events, `src/system/net_events.AddressChange` waits on iphlpapi's
+  `NotifyAddrChange` for a cable or a joined network, and the check itself
+  (`_check_once`) runs on either wake and every `WATCHED_POLL` (10 s) as
+  the safety net. Both native events are verified to register on this
+  machine; `netsh` stays as the floor where wlanapi cannot be asked.
+  The ctypes callback is held for as long as it is registered - Windows
+  keeps its address (`_watch_callback`).
+- **The volume monitor read the volume on a NEW THREAD, five times a
+  second, enumerating the devices each time** (`AudioMonitor`): measured
+  **13 ms of COM per read** against **0.02 ms** on a cached
+  `IAudioEndpointVolume`. It keeps one endpoint now, re-acquired every
+  `REACQUIRE_EVERY` polls (~10 s, so a changed default device is still
+  followed) or on a failed read, registers pycaw's
+  `AudioEndpointVolumeCallback` so a change wakes the loop the moment it
+  happens (measured: announced **2 ms** after the change, where it was
+  up to 200), and polls every 0.5 s as the safety net. The thread takes
+  the multi-threaded apartment first, for the same reason
+  `audio_devices.py` does: a callback registered from an STA is only
+  delivered through a message pump, and the thread has none.
+- **The process-sound monitor built a `psutil.Process` per pid ten times
+  a second** (`tsounds.py`): `process_iter(['pid'])` is 0.78 ms and
+  `psutil.pids()` - the same set - 0.03 ms. And it walked every window
+  ten times a second whether or not a new process was still expected to
+  put one up; now only while one is (`_waiting_for_a_window`), and a
+  process that has shown no window for `WINDOW_WAIT` (30 s) is a
+  background one and is given up on.
+- **`import main` loaded 488 modules and 58 MB; now 354 and 44 MB.**
+  `import asyncio` at line 1 of `main.py` (10 MB, a third of a second,
+  ssl and concurrent.futures with it) was Python 3.14's loop-on-demand
+  fix; `src/titan_core/asyncio_compat.ensure_event_loop()` does the same
+  at the top of the four network clients that need it, and nowhere else.
+  `accessible_output3` was imported at module level by EIGHT modules
+  (`gui`, `invisibleui`, `messages`, `stereo_speech`, `controller_ui`,
+  `componentmanagergui`, `system_monitor`, `lockscreen_monitor_improved`)
+  - and importing its `outputs` package imports every backend, the
+  Window-Eyes one bringing `speech_recognition` (8.7 MB, 120 ms); every
+  one now imports it where the speaker is built, and `_ao3_available` is
+  answered by `find_spec`. `_load_heavy_imports` preloaded
+  `speech_recognition` again on a thread for components that read
+  `main.sr` - none exists - so it is no longer fired. `wmi` (notification
+  centre, for a watcher nothing starts), `pywinctl` (main), `webbrowser`
+  (platform_utils, game_manager) and `pynput` on Windows (invisibleui)
+  are local imports. `platform_utils` uses `sys.platform`: on Python
+  3.12+ the first `platform.system()` is a **WMI query** (128 ms, 5 MB)
+  - the `keyboard` library still makes one, so `_wmi` stays.
+- **`set_language` re-read all 25 catalogues on every call** - thirteen
+  times at startup, one per module saying `_ = set_language(...)` - and
+  `get_available_languages()` walked the languages folders before the
+  cache was asked (fourteen listdirs, 84 ms). Now once per language.
+- Tests: `tests/test_background_monitors.py` (12, the endpoint faked),
+  `tests/test_network_readers.py` (12, against the real adapter, checked
+  against `netsh`), `tests/test_startup_imports.py` (2, in a subprocess,
+  naming what `import main` must never load), and
+  `tests/test_translation_threads.py` (5).
+- **The tools**: `python -X importtime` and `cProfile` round `import
+  main`; a wrapper on `SourceFileLoader.exec_module` that reads RSS
+  before and after each module (children subtracted) is what attributes
+  MEMORY to a module - importtime's parent column is unreliable the
+  moment a second thread imports at the same time. The Windows Python
+  reads `/mnt/c/tmp/x` as `C:\mnt\c\tmp\x`; write `C:/tmp/x`.
+
+
+### Linux and macOS: measured under WSLg, not assumed
+
+Titan is written on Windows. On 2026-09-30 it was made to START and to be
+READ on Linux, and the same code paths were written for macOS without a
+Mac to run them on. Everything below was found by running it, in WSL2
+with WSLg (Debian 11, Python 3.9, wxPython 4.2.1 on GTK 3, speech-dispatcher,
+espeak-ng, Orca and AT-SPI installed), not by reading it.
+
+- **What runs.** Starting `main.py` with the system Python under WSLg puts
+  Titan's window up; its own speech goes through the bundled eSpeak NG
+  loader on `libespeak-ng.so` (mixer busy while speaking - measured) and,
+  for the reader fallback, through speech-dispatcher (`spd-say` and the
+  `speechd` module both answered); pygame opens the WSLg PulseAudio
+  server (`SDL_AUDIODRIVER=pulseaudio`); all seven bundled components
+  load; the Action Bus, macros, the translation table, the monitors and
+  the network readers pass their suites on Linux (the Windows-only
+  cases skip). `src/scripts/run_linux_wslg.sh` is the whole recipe -
+  session bus, `at-spi-bus-launcher`, `GTK_MODULES=gail:atk-bridge` -
+  and `--check` reads the window back afterwards.
+- **What a screen reader gets.** `src/scripts/check_atspi_window.py`
+  reads the focused window through AT-SPI 2 with Titan's own posix
+  desktop tools, which is what Orca reads: the menu bar with every item
+  in the user's language, the tab-bar buttons, the application list with
+  "Aplikacje, 1 z 6" as a table cell. **wxPython on Linux IS GTK 3** - a
+  wx.ListBox is a GtkTreeView, a wx.Button a GtkButton - so Orca gets
+  native widgets without a second interface being written. Two things
+  were not native and are now: `wx.Window.SetName` is wx's own
+  bookkeeping on GTK and never reaches ATK, so `a11y.install_gtk_names()`
+  (hooked in `main.py`) makes every `SetName` in Titan also call
+  `atk_object_set_name` on the GtkWidget from `GetGtkWidget()`
+  (`GetHandle()` is the X window id, 0 under XWayland) - and on a wx list
+  the widget is the GtkScrolledWindow, so the GtkTreeView inside it is
+  named too, because that is the 'table' a reader lands on. And
+  `check_list.SetName` -> `a11y.name_control` -> `window.SetName` was an
+  infinite recursion that Windows swallowed at the recursion limit (a
+  thousand frames per rename, silently) and GTK ended in a fatal stack
+  overflow: `name_control` calls the BASE `wx.Window.SetName` now.
+- **Desktop and system tools have a posix half.** `src/ai/desktop_tools_posix.py`
+  (windows through `wmctrl`/`xdotool`, and through AT-SPI where the
+  compositor has no EWMH - WSLg's Weston has none; the focused window's
+  controls through AT-SPI; `osascript` System Events on macOS; a
+  screenshot through `gnome-screenshot`/`grim`/`scrot`/`screencapture`)
+  and `src/ai/tools/system_tools_posix.py` (`pactl`/`amixer`/`osascript`
+  volume and devices, `brightnessctl`/sysfs, `powerprofilesctl`/`pmset`,
+  `gsettings`/dark mode, `nmcli`/`networksetup`, `~/.config/autostart` /
+  LaunchAgents, `gnome-control-center` / `x-apple.systempreferences:`).
+  Same function names, same sentences, and a tool that is not installed
+  is NAMED in the answer rather than raised - `get_system_tools()` used to
+  return an empty list off Windows, which was the `system` provider not
+  existing at all.
+- **The loader and the engines.** The component loader loaded the
+  `init.pyc` beside a component's `init.py`, which carries the magic
+  number of the Python that wrote it: one left by Windows' 3.14 was "bad
+  magic number" to a Linux 3.12 and every component failed to load. It
+  checks `importlib.util.MAGIC_NUMBER` and loads from source. A TTS engine
+  manifest may say `platforms = windows` (or linux, macos); the seven
+  built on Windows binaries do, and are not imported elsewhere -
+  Supertonic's vendored Windows numpy raised at import on Linux.
+- **Import-time guards, checked.** `.claude/skills/bug-fixer/scripts/check_platform.py`
+  finds a Windows-only import or a `ctypes.windll` read at module level
+  that is not behind a platform test, a `hasattr`, or a `try`;
+  `tests/test_platform_imports.py` runs it over the whole tree.
+  `src/scripts/check_posix_imports.py` imports every module under src on
+  the machine it runs on (with a wx stand-in when wxPython is not
+  installed): 223 of 224 on Linux, the last being telethon not installed.
+  The one syntax that an older Python refused was an f-string with the
+  same quote nested inside it (3.12+ only) in `elten_gui.py`.
+- **asyncio, the event loop and the messengers.** Python 3.14 no longer
+  makes a loop on demand; `src/titan_core/asyncio_compat.ensure_event_loop()`
+  is called at the top of the four network clients that need one, which
+  is where `main.py`'s line-1 loop used to be needed.
+- **Deliberately not done.** Titan Access is a Windows screen reader
+  (UIA, MSAA, the NVDA bridge) and the Titan shell is Windows' desktop; on
+  Linux the reader is Orca and the desktop is GNOME's, and Titan is an
+  accessible GTK application under them. The `keyboard` library's global
+  hooks are Windows; the Invisible UI uses pynput off Windows, as it did.
+  macOS is written from the same posix half (`say`, `osascript`,
+  `networksetup`, `screencapture`) and has not been run.
+- Tests: `tests/test_posix_platform.py` (8, on Windows and on both Linux
+  Pythons), `tests/test_platform_imports.py` (2). WSL notes: the Debian 11
+  package lists had to be pointed at archive.debian.org; `wmctrl` and
+  `xdotool` cannot see Weston's windows, AT-SPI can; the wxPython wheel is
+  `extras.wxpython.org/wxPython4/extras/linux/gtk3/debian-11/`; never
+  `pkill -f` a pattern that a heredoc in another shell may contain.
+
+
+### Titan Access, the shell and the Windows engines on Linux
+
+Asked for in as many words - "if multi-platform then multi-platform" -
+after the round above, and measured in the same WSLg.
+
+- **Titan Access reads Linux through AT-SPI 2.** `titan_access/atspi_focus.py`
+  is a provider filling the same `AccessibleObject` the UIA one fills
+  (role, name, states, value, bounds, position in set), registered for
+  `object:state-changed:focused`, `focus:` and the checked / expanded /
+  selected state changes. The engine's worker thread runs `Atspi.event_main()`
+  on Linux where it pumps Win32 messages on Windows (`_run_posix`), `stop`
+  is `Atspi.event_quit()`, `post_to_worker` is a `GLib.idle_add`. Measured
+  with the reader in one process and a wx window in another: every focus
+  move announced in three tones, "Zapisz / Przycisk", "Zaznacz mnie /
+  Pole wyboru / niezaznaczono", "zaznaczone / Pole wyboru" when the box
+  was ticked, "Pole tekstowe, tekst / Pole edycji", "Lista prob / Tabela".
+  Scan mode builds its document from the AT-SPI tree (`build_atspi`, the
+  `atspi` tier of `virtual_buffer`, with `foreground_hwnd()` answering a
+  token for the window in front and `window_text` its title); Enter is
+  `Atspi.Action.do_action`.
+  - **The keyboard is asked of the accessibility bus** (`atspi_keys.py`):
+    `Atspi.register_keystroke_listener` with CANCONSUME, one registration
+    per modifier mask as Orca does, keysyms turned into the hook's own
+    virtual keys and extended flag so `keyboard_hook._process` - the
+    reader modifier, the chords, the echo - is untouched. The binding
+    insists on the `KeyListenerSyncType` ENUM, not an int. **WSLg's
+    XWayland refuses every registration** (no XKB grab), and so would a
+    Wayland session; a plain pynput listener is the fallback there, which
+    hears the keys and cannot swallow them - and under WSLg pynput's
+    XRecord sees nothing either, so the keys were not verified live. A
+    real X11 session is where both work.
+  - **Sound: twenty of Titan's bundled Vorbis files decode to NOTHING in
+    Linux's pygame-ce (stb_vorbis), and playing an empty Sound is a
+    segmentation fault** - `window.ogg` took the reader down the moment
+    scan mode played its cue. `sound.py` and the reader's `sound_manager`
+    refuse a Sound whose `get_length()` is 0, and `src/titan_core/sound_decode.py`
+    decodes such a file once through `oggdec` / `opusdec` (vorbis-tools,
+    opus-tools) into the user's cache and plays that. Titan's mixer is
+    22050 Hz everywhere (`_MIXER_FREQUENCY`); that is not the cause.
+- **The shell runs on Linux** through `src/shell/posix_shell.py`, which
+  `win_shell.py` installs over its own names at import off Windows -
+  every call the taskbar, desktop, Start menu, file browser and
+  `start_menu_content` make, mapped by `tests/test_linux_reader_and_shell.py`
+  so a new call cannot go unanswered. The window list is `wmctrl` or, where
+  the compositor has no EWMH (WSLg), AT-SPI; activate / minimise / close
+  through `wmctrl` and `xdotool`; the appbar is a strip with
+  `_NET_WM_STRUT_PARTIAL` asked for through `xprop`; the shell hook is a
+  1.5 s poll firing the same HSHELL codes; the desktop is `xdg-user-dir
+  DESKTOP`; files through shutil, `gio trash`, `xdg-open`; installed
+  applications from the `.desktop` files; lock / suspend / exit through
+  `loginctl` and `systemctl`. `TitanShell.start()` refuses only where
+  there is no display. Measured: `start_shell(force=True)` put up
+  TCEShell and Pulpit, the Start menu opened with its search box and
+  Lock / Log off / Turn off, and AT-SPI listed the bar as "Start (push
+  button) | Dock (panel) | Otwarte okna (panel) | Zasobnik systemowy
+  (panel) | <clock> (label) | Pokaż pulpit (push button)" - the painted
+  controls get their ATK name through `SetName` and their ATK ROLE
+  through `a11y.gtk_set_accessible_role` from `AccessibleMixin`, and a
+  frame titled at construction is named for ATK when it is shown.
+- **The engines built on Windows DLLs run under Wine, which is the
+  emulation that exists.** Their bridges were always separate `.exe`
+  processes driven over pipes, so `src/tts/native_bridge.py` starts the
+  same executable with `wine` (on PATH, `TITAN_WINE`, or a portable build
+  under `~/wine`), gives it a prefix under the user's data, and turns a
+  Unix path into `Z:\...` for a program that needs one. DECtalk, Eloquence,
+  SMP and Festival answer READY and return PCM: measured 1623 / 1724 /
+  2507 / 2040 ms of audio for one sentence each, Eloquence after its
+  `mbcs` codec (Windows-only) became cp1252 off Windows. Milena's
+  `milena4w.exe` runs under Wine but never writes its output, so it stays
+  `platforms = windows`; Supertonic ships a Windows numpy and stays too;
+  BeSTspeech compiles a C# bridge with .NET's `csc.exe`. Debian 11's own
+  wine packages could not be installed (broken i386 dependencies in the
+  archive); the portable build is Kron4ek's `wine-11.18-amd64-wow64`.
+- Tests: `tests/test_linux_reader_and_shell.py` (10, on Windows and both
+  Linux Pythons). Live: `tests`-free probes under WSLg - a target window
+  cycling its focus in one process and the engine in another; the shell
+  started under a keeper frame and read through
+  `src/scripts/check_atspi_window.py`.
+
+
 ### Plugin System
 - **Applications**: Located in `data/applications/`, each has `__app.TCE` config file defining name, description, main file
 - **Components**: Located in `data/components/`, each has `__component__.TCE` config file, loaded by `ComponentManager`
@@ -558,6 +803,27 @@ experience: it is a program that has disappeared.
   console reaches nobody here.
   - Tests: `tests/test_titannet_window.py` (8; no window, no sound, no
     network).
+- **The FIRST opening of Titan-Net failed, and the second worked** -
+  reproduced by logging in headlessly and calling `show_titan_net_window`
+  twice: `KeyError: 'menu'` out of `_()` inside `show_menu`, then a clean
+  window. The fault was `src/titan_core/translation.py`, not Titan-Net.
+  Some thirty modules say `_ = set_language(get_setting('language', 'pl'))`
+  at import, several of them imported lazily on WORKER threads (the
+  window's `refresh_remote_screens` imports `remote_ui` on a thread of its
+  own while the GUI thread is still building the window) - and
+  `set_language` emptied the shared `_translations` dict and refilled it
+  one .mo file at a time, while every `_` ever handed out reads that dict
+  at call time. So during a lazy import every `_()` on every other thread
+  raised for a domain that was not back yet; the second opening found the
+  imports done. The table is now built in a local and swapped in whole,
+  the same language is never loaded twice (thirty modules used to re-read
+  25 catalogues each at startup), `multi_domain_gettext` is one module
+  function that skips a missing domain, and the except branch of
+  `show_titan_net_window` no longer calls `_()` unguarded to report an
+  error - that is how the error escaped as the "Cannot open Titan-Net
+  window" message box. Tests: `tests/test_translation_threads.py` (5; the
+  race tests slow the catalogue loads, since gettext caches a loaded
+  catalogue and the window closes before it can be seen).
 
 ### Cerberus and Blackwall: the ban has to be true in the kernel
 

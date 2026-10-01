@@ -40,7 +40,7 @@ from .localization import translate as _
 
 _LOCK = threading.RLock()
 _state = {
-    'dll': None, 'why': '', 'data_path': '', 'char_size': 4,
+    'dll': None, 'why': '', 'char_size': 4,
     'shown': 0, 'sent': 0, 'translated': 0, 'failed': 0,
 }
 

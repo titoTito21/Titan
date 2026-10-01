@@ -10,12 +10,14 @@ import sys
 import platform
 import shutil
 import subprocess
-import webbrowser
 
 # Platform constants
-IS_WINDOWS = platform.system() == 'Windows'
-IS_LINUX = platform.system() == 'Linux'
-IS_MACOS = platform.system() == 'Darwin'
+# sys.platform, not platform.system(): on Python 3.12+ the first
+# platform.system() call runs a WMI query for the Windows version -
+# measured 128 ms and 5 MB, at import, on every start.
+IS_WINDOWS = sys.platform == 'win32'
+IS_LINUX = sys.platform.startswith('linux')
+IS_MACOS = sys.platform == 'darwin'
 
 
 def is_frozen():
@@ -428,6 +430,7 @@ def open_url(url):
         url: URL to open.
     """
     try:
+        import webbrowser  # 1.5 MB; only when a page is opened
         webbrowser.open(url)
     except Exception as e:
         print(f"[platform_utils] Error opening URL: {e}")

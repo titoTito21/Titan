@@ -10049,8 +10049,15 @@ def show_titan_net_window(parent, titan_client: TitanNetClient):
         _titan_net_window = None
         # The class and the message, not just "an error": a traceback goes
         # to a console the people who use this cannot read.
-        _titan_net_problem = _("Titan-Net could not open: {error}").format(
-            error='%s: %s' % (type(e).__name__, e))
+        detail = '%s: %s' % (type(e).__name__, e)
+        try:
+            _titan_net_problem = _("Titan-Net could not open: {error}").format(
+                error=detail)
+        except Exception:
+            # The sentence about the failure must not be a second failure -
+            # the first time this happened, `_()` itself was what had raised,
+            # and the error escaped this function as a message box.
+            _titan_net_problem = 'Titan-Net could not open: ' + detail
         return None
 
     try:

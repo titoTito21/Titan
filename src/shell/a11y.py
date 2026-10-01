@@ -22,6 +22,8 @@ announces its virtual tab bar - through
 reader and nothing else, so with no reader running nothing is said at all.
 """
 
+import sys
+
 import wx
 
 from src.settings.settings import get_setting
@@ -277,6 +279,176 @@ class NamedAccessible(wx.Accessible):
         return (wx.ACC_NOT_IMPLEMENTED, '')
 
 
+# --------------------------------------------------------------------------- #
+# GTK: the name goes to ATK, which is what Orca reads
+# --------------------------------------------------------------------------- #
+_gtk_libs = None
+
+
+def _gtk():
+    """(libgtk-3, libatk) as ctypes libraries, or None off GTK."""
+    global _gtk_libs
+    if _gtk_libs is not None:
+        return _gtk_libs or None
+    _gtk_libs = False
+    # PlatformInfo is a tuple of words ('__WXGTK__', 'gtk3', ...): look
+    # INSIDE them, 'gtk' is not one of them.
+    if sys.platform != 'linux' or not any('gtk' in str(p).lower() for p in wx.PlatformInfo):
+        return None
+    try:
+        import ctypes
+        gtk = ctypes.CDLL('libgtk-3.so.0')
+        atk = ctypes.CDLL('libatk-1.0.so.0')
+        gobject = ctypes.CDLL('libgobject-2.0.so.0')
+        gtk.gtk_widget_get_accessible.argtypes = [ctypes.c_void_p]
+        gtk.gtk_widget_get_accessible.restype = ctypes.c_void_p
+        gtk.gtk_bin_get_child.argtypes = [ctypes.c_void_p]
+        gtk.gtk_bin_get_child.restype = ctypes.c_void_p
+        gtk.gtk_scrolled_window_get_type.restype = ctypes.c_size_t
+        gobject.g_type_check_instance_is_a.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+        gobject.g_type_check_instance_is_a.restype = ctypes.c_int
+        atk.atk_object_set_name.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+        atk.atk_object_set_name.restype = None
+        _gtk_libs = (gtk, atk, gobject)
+    except Exception:
+        return None
+    return _gtk_libs
+
+
+def gtk_set_accessible_name(window, name):
+    """Give a wx control's GTK widget the ATK name Orca announces.
+
+    ``wx.Window.SetName`` on GTK is wx's own bookkeeping and never reaches
+    the accessibility tree - measured under WSLg through AT-SPI: Titan's
+    application list was a table with no name beside a label saying
+    "Lista aplikacji:". ATK is asked directly, through the widget handle.
+    """
+    libs = _gtk()
+    if libs is None:
+        return False
+    gtk, atk, gobject = libs
+    try:
+        # GetHandle() is the X window id, which under XWayland is 0 for
+        # anything but a native window; GetGtkWidget() is the GtkWidget.
+        handle = int(window.GetGtkWidget())
+        if not handle:
+            return False
+        encoded = str(name or '').encode('utf-8')
+        accessible = gtk.gtk_widget_get_accessible(handle)
+        if not accessible:
+            return False
+        atk.atk_object_set_name(accessible, encoded)
+        # A wx list is a GtkScrolledWindow round the GtkTreeView, and the
+        # tree view is what a reader lands on (measured: the focused
+        # control was a 'table' with no name while its scrolled window had
+        # one). The child gets the name too - only for a scrolled window,
+        # since a button's child is its label and must keep its own text.
+        if gobject.g_type_check_instance_is_a(handle, gtk.gtk_scrolled_window_get_type()):
+            child = gtk.gtk_bin_get_child(handle)
+            if child:
+                child_accessible = gtk.gtk_widget_get_accessible(child)
+                if child_accessible:
+                    atk.atk_object_set_name(child_accessible, encoded)
+        return True
+    except Exception:
+        return False
+
+
+_gtk_names_installed = False
+
+
+def install_gtk_names():
+    """Make every ``SetName`` in Titan reach ATK on GTK.
+
+    Titan names its controls for screen readers with ``SetName`` in hundreds
+    of places, written for MSAA. One hook here, rather than a second call
+    at each of them, and off GTK it does nothing at all.
+    """
+    global _gtk_names_installed
+    if _gtk_names_installed or _gtk() is None:
+        return False
+    original = wx.Window.SetName
+
+    def set_name(self, name):
+        original(self, name)
+        gtk_set_accessible_name(self, name)
+
+    wx.Window.SetName = set_name
+    # A top-level window's title is its name to a reader; a frame without a
+    # caption (the Start menu, the bar) has one in wx and none in ATK.
+    original_title = wx.TopLevelWindow.SetTitle
+
+    def set_title(self, title):
+        original_title(self, title)
+        gtk_set_accessible_name(self, title)
+
+    wx.TopLevelWindow.SetTitle = set_title
+    # A title given at construction never goes through SetTitle: name the
+    # window as it is shown.
+    original_show = wx.TopLevelWindow.Show
+
+    def show(self, show=True):
+        result = original_show(self, show)
+        if show:
+            try:
+                title = self.GetTitle()
+                if title:
+                    gtk_set_accessible_name(self, title)
+            except Exception:
+                pass
+        return result
+
+    wx.TopLevelWindow.Show = show
+    _gtk_names_installed = True
+    return True
+
+
+_ATK_ROLES = {
+    'button': 42, 'list item': 33, 'list': 32, 'text': 60, 'label': 28,
+    'panel': 38, 'check box': 8, 'menu item': 30, 'tab': 36, 'slider': 50,
+    'progress bar': 43, 'link': 56, 'tool bar': 62, 'status bar': 53,
+    'combo box': 9, 'radio button': 44, 'tree': 62 + 1, 'separator': 46,
+}
+
+
+def atk_role_name(msaa_role):
+    """The ATK role word for one of the MSAA roles the shell's controls use."""
+    return {ROLE_BUTTON: 'button', ROLE_LIST: 'list', ROLE_LISTITEM: 'list item',
+            ROLE_TOOLBAR: 'tool bar', ROLE_MENUITEM: 'menu item',
+            ROLE_STATICTEXT: 'label', ROLE_CLIENT: 'panel', ROLE_CLOCK: 'label',
+            }.get(msaa_role, '')
+
+
+def gtk_set_accessible_role(window, role_name):
+    """Give a painted control the ATK role its MSAA role says it is.
+
+    The shell's controls are drawn by Titan and answer MSAA with a role of
+    their own; GTK sees a plain widget. `atk_object_set_role` makes Orca
+    say "button" or "list item" for it, as MSAA readers do.
+    """
+    libs = _gtk()
+    if libs is None:
+        return False
+    gtk, atk, _gobject = libs
+    role = _ATK_ROLES.get(str(role_name or '').lower())
+    if role is None:
+        return False
+    try:
+        import ctypes
+        if not hasattr(atk, '_role_typed'):
+            atk.atk_object_set_role.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            atk.atk_object_set_role.restype = None
+            atk._role_typed = True
+        handle = int(window.GetGtkWidget())
+        accessible = gtk.gtk_widget_get_accessible(handle) if handle else 0
+        if not accessible:
+            return False
+        atk.atk_object_set_role(accessible, role)
+        return True
+    except Exception:
+        return False
+
+
 def name_control(window, name):
     """Name a native control for wx **and** for every screen reader.
 
@@ -284,8 +456,13 @@ def name_control(window, name):
     search results and their count) can be renamed without building a new
     one.
     """
+    gtk_set_accessible_name(window, name)
     try:
-        window.SetName(name or '')
+        # The BASE SetName, not the window's own: CheckList.SetName calls
+        # this function, so calling its override back is a recursion that
+        # Windows swallowed at the recursion limit (a thousand frames, per
+        # rename, silently) and GTK ended in a fatal stack overflow.
+        wx.Window.SetName(window, name or '')
     except Exception:
         pass
     accessible = getattr(window, '_shell_accessible', None)
@@ -328,6 +505,12 @@ class AccessibleMixin:
             self.SetAccessible(ShellAccessible(self))
         except Exception:
             # A wx build without MSAA support still gives the control a name.
+            pass
+        # On GTK the painted control is a plain widget to ATK; the name
+        # went through SetName (install_gtk_names), the role goes here.
+        try:
+            gtk_set_accessible_role(self, atk_role_name(self.shell_role()))
+        except Exception:
             pass
         try:
             self.Bind(wx.EVT_SET_FOCUS, self._on_shell_focus)

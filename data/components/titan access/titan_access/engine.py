@@ -33,6 +33,8 @@ Keyboard callbacks the hook invokes (return True to swallow the key):
 
 import ctypes
 import os
+import sys as _sys
+_IS_WINDOWS = _sys.platform == 'win32'
 import queue
 import threading
 import time
@@ -206,7 +208,15 @@ class TitanAccessEngine:
         except Exception:
             pass
         # Post WM_QUIT to the worker thread's message loop.
-        if self._thread_id:
+        if not _IS_WINDOWS:
+            try:
+                from . import atspi_focus
+                Atspi = atspi_focus.atspi()
+                if Atspi is not None:
+                    Atspi.event_quit()
+            except Exception:
+                pass
+        elif self._thread_id:
             try:
                 ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
             except Exception:
@@ -217,6 +227,8 @@ class TitanAccessEngine:
 
     def _run(self):
         """Worker thread: build subsystems then pump Win32 messages."""
+        if not _IS_WINDOWS:
+            return self._run_posix()
         self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
         # COM must be initialised on this thread for UIA.
         try:
@@ -279,11 +291,53 @@ class TitanAccessEngine:
             except Exception:
                 pass
 
+    def _run_posix(self):
+        """Worker thread on Linux: build the subsystems, then run the GLib
+        main loop that AT-SPI delivers its events on - the focus, the state
+        changes and the keystrokes all arrive here, on this thread, as the
+        Win32 message pump delivers them on Windows."""
+        self._build_subsystems()
+        self._ready.set()
+        self._announce_started()
+        try:
+            from . import atspi_focus
+            Atspi = atspi_focus.atspi()
+            if Atspi is not None:
+                Atspi.event_main()
+            else:
+                # No accessibility bus: nothing will ever arrive, but the
+                # speech and the gestures of a walked list still work.
+                while self.running:
+                    time.sleep(0.2)
+        except Exception as e:
+            print(f"[TitanAccess] AT-SPI main loop error: {e}")
+        finally:
+            self._teardown_subsystems()
+
+    def _announce_started(self):
+        try:
+            if AnnouncementMode.plays(self.settings.startup_announcement):
+                self.play(SND_SR_ON)
+            if AnnouncementMode.speaks(self.settings.startup_announcement):
+                msg = self.settings.welcome_message or L("app.welcome")
+                self.speak(msg)
+        except Exception as e:
+            print(f"[TitanAccess] startup announcement error: {e}")
+        try:
+            if self.provider is not None:
+                obj = self.provider.get_focused_object()
+                if obj is not None:
+                    self.announce_object(obj, play_cursor=False)
+        except Exception:
+            pass
+
     @staticmethod
     def _set_screen_reader_flag(on):
         """Set/clear the system SPI_SETSCREENREADER flag so applications that gate
         their accessibility tree on AT presence (Chromium, Firefox, Office) build
         and expose it. Best-effort; never fatal."""
+        if not _IS_WINDOWS:
+            return
         try:
             SPI_SETSCREENREADER = 0x0047
             SPIF_SENDCHANGE = 0x0002
@@ -329,6 +383,14 @@ class TitanAccessEngine:
         # UIA primary + MSAA fallback, auto-switching per focus (NVDA-style).
         # Falls back to the bare UIA provider if the manager cannot be built.
         def _mk_provider():
+            if not _IS_WINDOWS:
+                # Linux: the AT-SPI tree, which is what Orca reads.
+                from titan_access.atspi_focus import AtspiProvider
+                p = AtspiProvider()
+                p.add_focus_listener(self.on_focus)
+                p.add_state_listener(self.on_state_change)
+                p.start()
+                return p
             from titan_access.provider_manager import ProviderManager
             p = ProviderManager()
             p.add_focus_listener(self.on_focus)
@@ -907,6 +969,14 @@ class TitanAccessEngine:
         navigation in edit fields lag by hundreds of milliseconds."""
         with self._invoke_lock:
             self._invoke_queue.append(fn)
+        if not _IS_WINDOWS:
+            # The GLib loop the AT-SPI events run on is the worker here.
+            try:
+                from gi.repository import GLib
+                GLib.idle_add(lambda: (self._drain_invokes(), False)[1])
+            except Exception:
+                self._drain_invokes()
+            return
         if self._thread_id:
             try:
                 ctypes.windll.user32.PostThreadMessageW(

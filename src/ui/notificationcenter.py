@@ -5,13 +5,9 @@ import time
 from src.titan_core.sound import play_sound
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_user_data_dir
 
-if IS_WINDOWS:
-    try:
-        import wmi
-    except ImportError:
-        wmi = None
-else:
-    wmi = None
+# ``wmi`` (1.2 MB, and win32com behind it) is imported by the one function
+# that uses it, _monitor_network_events - which nothing starts at startup.
+wmi = None
 
 # Inicjalizacja mówienia
 # The one speaker Titan shares, built the first time something speaks -
@@ -55,7 +51,14 @@ def show_notification(title, message):
 
 def _monitor_network_events():
     """Network monitoring using WMI (Windows only)."""
+    global wmi
     if not IS_WINDOWS:
+        return
+    try:
+        import wmi as _wmi_module
+        wmi = _wmi_module
+    except ImportError:
+        print("Network monitoring: the wmi package is not installed")
         return
     import pythoncom
     pythoncom.CoInitialize()

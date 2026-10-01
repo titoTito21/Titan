@@ -1,12 +1,17 @@
-# Python 3.14+ fix: Create asyncio event loop before any imports that use it
-import asyncio
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
+# The event loop Python 3.14 no longer makes on demand is made by the
+# modules that need one (src/titan_core/asyncio_compat.py), not here:
+# importing asyncio at line 1 was 10 MB and a third of a second of every
+# startup, for messengers most sessions never open.
 import wx
+
+# On GTK the name Titan gives a control for a screen reader has to reach
+# ATK, which is what Orca reads; wx.Window.SetName alone never does. One
+# hook, installed before any window exists; a no-op everywhere else.
+try:
+    from src.shell.a11y import install_gtk_names as _install_gtk_names
+    _install_gtk_names()
+except Exception as _gtk_names_error:
+    print(f"[STARTUP] GTK accessible names not installed: {_gtk_names_error}")
 import threading
 import time
 import os
@@ -145,8 +150,6 @@ except Exception as _e:
     print(f"[STARTUP] Could not create wx.App: {_e}")
 
 
-import accessible_output3.outputs.auto
-
 # Import libraries used by components for compilation compatibility
 try:
     import subprocess
@@ -184,10 +187,6 @@ try:
     import glob
     if IS_WINDOWS:
         import win32con
-    try:
-        import pywinctl as pwc
-    except ImportError:
-        pass
     import typing
     from typing import List, Dict, Optional
 
@@ -223,11 +222,19 @@ def _load_heavy_imports():
             globals()['bg5reader'] = bg5reader
         except ImportError:
             pass
+        # Used by widgets (applets); named here so the compiled build
+        # carries it, loaded off the main thread (34 ms at startup).
+        try:
+            import pywinctl as pwc  # noqa: F401
+            globals()['pwc'] = pwc
+        except ImportError:
+            pass
         _heavy_imports_done = True
 
-# Fire the deferred import in the background so it's ready by the time
-# any component actually needs it.
-threading.Thread(target=_load_heavy_imports, daemon=True).start()
+# Not fired at startup any more. Nothing shipped reads ``sr`` or
+# ``bg5reader`` off this module (measured: no component and no module in
+# src does), and speech_recognition alone is 8.7 MB kept for the whole
+# session. A component that wants them calls _load_heavy_imports() itself.
 
 # Fix COM errors early (Windows only)
 if IS_WINDOWS:

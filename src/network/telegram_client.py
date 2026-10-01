@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import asyncio
+from src.titan_core.asyncio_compat import ensure_event_loop
+ensure_event_loop()  # before anything that asks this thread for its loop
 import threading
 import time
 import os

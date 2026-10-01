@@ -567,7 +567,8 @@ def _open_uri(uri):
     import subprocess
     try:
         if sys.platform == 'win32':
-            os.startfile(uri)  # noqa: intended - default handler
+            from src.platform_utils import open_url
+            open_url(uri)
         elif sys.platform == 'darwin':
             subprocess.Popen(['open', uri])
         else:

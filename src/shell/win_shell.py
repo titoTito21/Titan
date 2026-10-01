@@ -1825,3 +1825,14 @@ def make_directory(parent, name):
     except Exception as error:
         print(f"[TitanShell] could not create a folder: {error}")
         return ''
+
+
+# --------------------------------------------------------------------------- #
+# Off Windows, the same names are answered by posix_shell (Linux, macOS)
+# --------------------------------------------------------------------------- #
+if not IS_WINDOWS:
+    try:
+        from . import posix_shell as _posix_shell
+        _posix_shell.install_into(globals())
+    except Exception as _posix_error:                 # noqa: BLE001
+        print(f"[TitanShell] posix shell layer not installed: {_posix_error}")

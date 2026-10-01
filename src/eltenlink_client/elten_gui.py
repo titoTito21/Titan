@@ -3006,7 +3006,8 @@ class EltenMainWindow(wx.Frame):
             speak_notification(_("No members"), 'info')
             return
         play_sound('ui/dialog.ogg')
-        info = f"{group_name} - {_("{count} members").format(count=len(members))}:\n" + "\n".join(members)
+        count_text = _("{count} members").format(count=len(members))
+        info = f"{group_name} - {count_text}:\n" + "\n".join(members)
         speak_elten(_("{count} members").format(count=len(members)))
         _show_skinned_message(info, group_name, wx.OK | wx.ICON_INFORMATION)
 

@@ -169,6 +169,9 @@ def _win32():
 
 def get_foreground_window(**_):
     """Title of the currently focused (foreground) window."""
+    if sys.platform != 'win32':
+        from src.ai import desktop_tools_posix
+        return desktop_tools_posix.get_foreground_window()
     try:
         w = _win32()
         hwnd = w.GetForegroundWindow()
@@ -180,6 +183,9 @@ def get_foreground_window(**_):
 
 def list_windows(**_):
     """List titles of visible top-level windows."""
+    if sys.platform != 'win32':
+        from src.ai import desktop_tools_posix
+        return desktop_tools_posix.list_windows()
     try:
         w = _win32()
         out = []
@@ -204,6 +210,9 @@ def read_focused_window(**_):
     """Read the foreground window: its title, the focused control, and the text
     of its child controls (buttons, labels, list items) so the agent can 'see'
     the screen through the accessibility/Win32 layer."""
+    if sys.platform != 'win32':
+        from src.ai import desktop_tools_posix
+        return desktop_tools_posix.read_focused_window()
     try:
         import win32gui
         import win32process
@@ -360,6 +369,8 @@ def screenshot(**_):
 
     IMPORTANT: give click/move coordinates in ACTUAL screen pixels (the full
     screen size reported below), not image pixels."""
+    if sys.platform != 'win32':
+        return _screenshot_posix()
     try:
         import math
         rgb, sw, sh = _capture_primary_screen()
@@ -400,6 +411,26 @@ def screenshot(**_):
         return {'text': note, 'image_png': png}
     except Exception as e:
         return f"Error taking screenshot: {e}"
+
+
+def _screenshot_posix():
+    """The screen through the desktop's own screenshot tool (Linux, macOS)."""
+    import struct
+    from src.ai import desktop_tools_posix
+    path, reason = desktop_tools_posix.screenshot_png_path()
+    if path is None:
+        return f"Error taking screenshot: {reason}"
+    try:
+        with open(path, 'rb') as f:
+            png = f.read()
+        # Width and height are in the IHDR chunk, right after the signature.
+        width, height = struct.unpack('>II', png[16:24])
+    except Exception as e:
+        return f"Error taking screenshot: {e}"
+    note = (f"Screenshot captured. The image is {width}x{height} pixels, which "
+            f"is the ACTUAL screen size. Give click/move coordinates in these "
+            f"pixels (0..{width} wide, 0..{height} tall).")
+    return {'text': note, 'image_png': png}
 
 
 def list_files(path=".", **_):
@@ -523,6 +554,9 @@ def move_mouse(x, y, **_):
 
 def focus_window(title, **_):
     """Bring the first visible window whose title contains ``title`` to the front."""
+    if sys.platform != 'win32':
+        from src.ai import desktop_tools_posix
+        return desktop_tools_posix.focus_window(title)
     try:
         w = _win32()
         target = [None]
@@ -584,13 +618,15 @@ def launch_program(path, args="", **_):
             if args:
                 subprocess.Popen([expanded] + str(args).split())
             else:
-                os.startfile(expanded)  # noqa: intended - opens with default handler
+                from src.platform_utils import open_file_manager
+                open_file_manager(expanded)  # the platform's default handler
             return f"Launched: {expanded} {args}".strip()
 
         # 2. A URL / URI -> open with the OS default handler (browser, etc.).
         scheme = raw.split('://', 1)[0]
         if '://' in raw and scheme and all(c.isalnum() or c in '+.-' for c in scheme):
-            os.startfile(raw)  # noqa: intended - opens with default handler
+            from src.platform_utils import open_file_manager
+            open_file_manager(raw)  # the platform's default handler
             return f"Opened: {raw}"
 
         # 3. A program name (possibly friendly, e.g. "Microsoft Edge"). Resolve

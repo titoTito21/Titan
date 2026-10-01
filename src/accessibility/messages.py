@@ -7,7 +7,6 @@ using either stereo speech or accessible_output3 as fallback.
 
 import threading
 import time
-import accessible_output3.outputs.auto
 from src.titan_core.sound import play_sound
 from src.titan_core.stereo_speech import speak_stereo
 from src.settings.settings import get_setting
@@ -28,6 +27,9 @@ class AccessibilityMessenger:
     """
 
     def __init__(self):
+        # Imported here: the library is 15 MB and a quarter of a second,
+        # and this class is built long after startup, if at all.
+        import accessible_output3.outputs.auto
         self.speaker = accessible_output3.outputs.auto.Auto()
         self._active_threads = []
 

@@ -503,6 +503,21 @@ def _fire_haptics(sound_path):
         pass
 
 
+def _decoded_fallback(path):
+    """A Sound out of a decoded copy of *path* (see sound_decode), or None."""
+    try:
+        from src.titan_core.sound_decode import decoded_copy
+        wav = decoded_copy(path)
+        if wav:
+            sound = pygame.mixer.Sound(wav)
+            if sound.get_length() > 0:
+                return sound
+    except Exception as e:
+        print(f"Decoded copy of {path} failed: {e}")
+    print(f"Sound file {path} decoded to nothing; not played")
+    return None
+
+
 def play_sound(sound_file, pan=None, elevation=0.0):
     """Odtwarza dźwięk z bezpiecznym sprawdzaniem inicjalizacji i obsługą błędów."""
     try:
@@ -582,6 +597,12 @@ def _try_play_sound_from_path(sound_file, pan, stereo_enabled, use_default_theme
             except (pygame.error, UnicodeDecodeError, OSError) as e:
                 print(f"Failed to load sound file {sound_path}: {e}")
                 return False
+            if sound.get_length() <= 0:
+                # SDL_mixer could not decode it and answers an EMPTY Sound;
+                # playing that is a segmentation fault on Linux. oggdec can.
+                sound = _decoded_fallback(sound_path)
+                if sound is None:
+                    return False
             
             # Find a free channel, but never steal reserved channels (1-4)
             try:
@@ -688,6 +709,10 @@ def _start_sound_file(file_path, pan=None, elevation=0.0):
         except (pygame.error, UnicodeDecodeError, OSError) as e:
             print(f"Failed to load sound file {file_path}: {e}")
             return None
+        if sound.get_length() <= 0:
+            sound = _decoded_fallback(file_path)
+            if sound is None:
+                return None
 
         try:
             channel = pygame.mixer.find_channel()

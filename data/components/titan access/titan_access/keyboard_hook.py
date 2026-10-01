@@ -225,7 +225,16 @@ class KeyboardHook:
         messages. No-op on non-Windows platforms.
         """
         if not _IS_WINDOWS:
-            print("[TitanAccess] keyboard_hook: non-Windows, hook disabled")
+            # Linux: the accessibility bus delivers keystrokes to a listener
+            # that may consume them (atspi_keys), fed into _process like
+            # the hook's own events.
+            try:
+                from . import atspi_keys
+                self._installed = bool(atspi_keys.start(self))
+            except Exception as e:
+                print(f"[TitanAccess] keyboard_hook: AT-SPI keys unavailable: {e}")
+            if not self._installed:
+                print("[TitanAccess] keyboard_hook: no keyboard on this platform")
             return self
         if self._installed:
             return self
@@ -269,7 +278,16 @@ class KeyboardHook:
 
     def stop(self):
         """Remove the hook."""
-        if not _IS_WINDOWS or not self._installed:
+        if not _IS_WINDOWS:
+            if self._installed:
+                try:
+                    from . import atspi_keys
+                    atspi_keys.stop()
+                except Exception:
+                    pass
+                self._installed = False
+            return
+        if not self._installed:
             return
         native = getattr(self, '_native', None)
         if native is not None:

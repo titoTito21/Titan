@@ -6,9 +6,12 @@ import platform
 import random
 import subprocess
 import ctypes
+# Found, not imported: importing accessible_output3.outputs imports every
+# backend, and the Window-Eyes one brings speech_recognition (8.7 MB) with
+# it. The speaker below imports the library the first time it speaks.
 try:
-    import accessible_output3.outputs.auto as _ao3_mod
-    _ao3_mod_available = True
+    import importlib.util as _ilu
+    _ao3_mod_available = _ilu.find_spec('accessible_output3') is not None
 except Exception:
     _ao3_mod_available = False
 from src.titan_core.sound import play_sound, initialize_sound
@@ -16,7 +19,7 @@ from src.settings.settings import get_setting
 from src.titan_core.translation import set_language
 from src.system.com_fix import com_safe, init_com_safe
 from src.titan_core.stereo_speech import get_stereo_speech
-from src.platform_utils import get_subprocess_kwargs, IS_WINDOWS
+from src.platform_utils import get_subprocess_kwargs, IS_WINDOWS, IS_LINUX
 
 # Get the translation function
 _ = set_language(get_setting('language', 'pl'))
@@ -47,6 +50,7 @@ def _get_speaker():
     global _speaker
     if _speaker is None and _ao3_mod_available:
         try:
+            import accessible_output3.outputs.auto as _ao3_mod
             _speaker = _ao3_mod.Auto()
         except Exception as e:
             print(f"Error initializing system monitor speaker: {e}")
@@ -142,7 +146,7 @@ except ImportError:
 
 # Check for Linux volume tools (pactl for PulseAudio/PipeWire, amixer for ALSA)
 _LINUX_VOLUME_TOOL = None
-if platform.system() == 'Linux':
+if IS_LINUX:  # not platform.system(): its first call is a WMI query
     try:
         import alsaaudio
         _LINUX_VOLUME_TOOL = 'alsaaudio'
@@ -452,15 +456,43 @@ class AudioMonitor(threading.Thread):
             self.previous_volume = -1
             self.last_error_message = None
 
+    #: The safety poll (seconds). Windows tells this thread about a change
+    #: through the endpoint-volume callback the moment it happens; the poll
+    #: is for a callback that never arrives, and costs 0.02 ms on the cached
+    #: endpoint. It used to be 0.2 s of ``GetSpeakers()`` + ``EndpointVolume``
+    #: on a fresh thread per read - measured 13 ms of COM each, five times a
+    #: second, for the life of the program.
+    POLL_SECONDS = 0.5
+    #: Polls the cached endpoint is trusted for before the default device is
+    #: asked for again (~10 s), so a default that changed under us is still
+    #: followed - at 13 ms per re-acquire rather than per read.
+    REACQUIRE_EVERY = 20
+
     def run(self):
+        self._wake = threading.Event()
+        self._endpoint = None
+        self._endpoint_polls = 0
+        self._callback = None
         if platform.system() == 'Windows':
+            # The multi-threaded apartment, asked for before anything else
+            # COM happens on this thread: a callback registered from an STA
+            # is only delivered through a message pump, and this thread has
+            # none (the trap audio_devices.py documents). pycaw - and with
+            # it comtypes - was imported at module level on the main thread,
+            # so this is the first COM call this thread makes.
             try:
-                # Use safe COM initialization
-                init_com_safe()
+                import comtypes
+                comtypes.CoInitializeEx(comtypes.COINIT_MULTITHREADED)
                 self.com_initialized = True
             except Exception as e:
-                print(f"Failed to initialize COM library: {e}")
-                return  # Cannot run without COM
+                print(f"AudioMonitor: no multi-threaded apartment ({e}), "
+                      f"polling from the thread's own")
+                try:
+                    init_com_safe()
+                    self.com_initialized = True
+                except Exception as e2:
+                    print(f"Failed to initialize COM library: {e2}")
+                    return  # Cannot run without COM
 
         try:
             while self.running and self.consecutive_errors < self.max_consecutive_errors:
@@ -496,14 +528,69 @@ class AudioMonitor(threading.Thread):
                         elif not self.com_initialized:
                             print("AudioMonitor: COM not initialized, volume monitoring will not work")
 
-                time.sleep(0.2)  # Increased sleep time to reduce CPU usage
+                # Woken early by the callback, or by stop().
+                self._wake.wait(self.POLL_SECONDS)
+                self._wake.clear()
         except Exception as e:
             print(f"Error in AudioMonitor: {e}")
             import traceback
             traceback.print_exc()
         finally:
+            self._unregister_callback()
             # COM cleanup is handled automatically by com_fix module
-            pass
+
+    # ------------------------------------------------------------------ #
+    # The cached endpoint and Windows' own notification
+    # ------------------------------------------------------------------ #
+    def _endpoint_volume(self):
+        """The default device's IAudioEndpointVolume, re-acquired rarely."""
+        if (self._endpoint is not None
+                and self._endpoint_polls < self.REACQUIRE_EVERY):
+            self._endpoint_polls += 1
+            return self._endpoint
+        self._unregister_callback()
+        self._endpoint = None
+        devices = AudioUtilities.GetSpeakers()
+        if devices is None:
+            return None
+        volume = devices.EndpointVolume
+        if volume is None:
+            return None
+        self._endpoint = volume
+        self._endpoint_polls = 0
+        self._register_callback(volume)
+        return volume
+
+    def _register_callback(self, volume):
+        """Ask Windows to wake the loop when the volume or mute changes."""
+        try:
+            from pycaw.callbacks import AudioEndpointVolumeCallback
+        except Exception as e:
+            print(f"AudioMonitor: volume notifications unavailable: {e}")
+            return
+        wake = self._wake
+
+        class _Waker(AudioEndpointVolumeCallback):
+            def on_notify(self, new_volume, new_mute, event_context,
+                          channels, channel_volumes):
+                wake.set()
+
+        try:
+            callback = _Waker()
+            volume.RegisterControlChangeNotify(callback)
+            # Windows holds this object; so do we, until it is unregistered.
+            self._callback = callback
+        except Exception as e:
+            print(f"AudioMonitor: could not register for volume changes: {e}")
+
+    def _unregister_callback(self):
+        callback, endpoint = self._callback, self._endpoint
+        self._callback = None
+        if callback is not None and endpoint is not None:
+            try:
+                endpoint.UnregisterControlChangeNotify(callback)
+            except Exception:
+                pass
 
     def announce_volume_change(self, volume):
         """Announce volume change based on current settings"""
@@ -514,30 +601,18 @@ class AudioMonitor(threading.Thread):
             _speak_positional(_("Volume: {}%").format(volume), pitch_offset=10)
 
     def get_volume_percentage_safe(self):
-        """Safe version of get_volume_percentage with timeout protection"""
-        if platform.system() != 'Windows':
-            return self.get_volume_percentage()
-            
-        # Use threading for timeout on Windows
-        import queue
-        result_queue = queue.Queue()
-        
-        def get_volume_thread():
-            try:
-                result = self.get_volume_percentage()
-                result_queue.put(result)
-            except Exception as e:
-                result_queue.put(-1)
-        
-        thread = threading.Thread(target=get_volume_thread, daemon=True)
-        thread.start()
-        
+        """The volume, or -1. Never raises.
+
+        This used to start a THREAD per read, with a one-second timeout, to
+        survive a device enumeration that hung. The read is now one method
+        call on a cached interface; the enumeration happens every
+        ``REACQUIRE_EVERY`` polls on this thread, which is nobody's GUI.
+        """
         try:
-            # Wait for result with timeout
-            return result_queue.get(timeout=1.0)  # 1 second timeout
-        except queue.Empty:
-            # Timeout occurred
+            value = self.get_volume_percentage()
+        except Exception:
             return -1
+        return -1 if value is None else value
 
     def get_volume_percentage(self):
         try:
@@ -567,27 +642,24 @@ class AudioMonitor(threading.Thread):
                     self.last_error_message = "com"
                 return -1
 
-            # Use the correct pycaw API: AudioUtilities.GetSpeakers() returns an AudioDevice object
-            # In newer pycaw versions, we can directly access EndpointVolume property
-            devices = AudioUtilities.GetSpeakers()
-            if devices is None:
+            # The default device's endpoint, cached (see _endpoint_volume):
+            # AudioUtilities.GetSpeakers() is a device enumeration and
+            # EndpointVolume an interface activation - 13 ms together.
+            volume = self._endpoint_volume()
+            if volume is None:
                 if self.check_count == 1 and self.last_error_message != "devices":
                     print("AudioMonitor: No audio output devices found")
                     self.last_error_message = "devices"
                 return -1
 
-            # Get the volume controller directly from the AudioDevice
-            # This is the new pycaw API (version 20251023+)
-            # EndpointVolume is a property, not a method
-            volume = devices.EndpointVolume
-            if volume is None:
-                if self.check_count == 1 and self.last_error_message != "endpoint_volume":
-                    print("AudioMonitor: Cannot access EndpointVolume")
-                    self.last_error_message = "endpoint_volume"
-                return -1
-
-            # Read the volume level
-            level = volume.GetMasterVolumeLevelScalar()
+            # Read the volume level; a read that fails (the device went
+            # away) forgets the endpoint so the next poll asks for it again.
+            try:
+                level = volume.GetMasterVolumeLevelScalar()
+            except Exception:
+                self._unregister_callback()
+                self._endpoint = None
+                raise
             if level is None:
                 if self.check_count == 1 and self.last_error_message != "level":
                     print("AudioMonitor: Cannot read volume level")
@@ -653,7 +725,10 @@ class AudioMonitor(threading.Thread):
 
     def stop(self):
         self.running = False
-        
+        wake = getattr(self, '_wake', None)
+        if wake is not None:
+            wake.set()
+
     def __del__(self):
         """Ensure cleanup on object destruction"""
         self.stop()
@@ -670,7 +745,24 @@ class NetworkMonitor(threading.Thread):
         self.previous_interfaces = set()
 
     def _get_wifi_status(self):
-        """Return (state, ssid) for the WiFi interface via netsh, or (None, None) if unavailable"""
+        """Return (state, ssid) for the WiFi interface, or (None, None) if unavailable.
+
+        Windows' own WLAN API first (16 ms, no process, no language);
+        ``netsh`` - 159 ms and a console process a call - only where that
+        cannot be asked.
+        """
+        try:
+            from src.system import wlan
+            state, ssid = wlan.wireless_state()
+            if state is not None:
+                return state, ssid
+            if wlan.interfaces() == []:
+                return None, None
+        except Exception:
+            pass
+        return self._get_wifi_status_netsh()
+
+    def _get_wifi_status_netsh(self):
         try:
             result = subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
@@ -725,38 +817,82 @@ class NetworkMonitor(threading.Thread):
         self.previous_wifi_state, self.previous_ssid = self._get_wifi_status()
         self.previous_interfaces = self._get_active_ethernet()
 
-    WIFI_CONNECTING_STATES = {'connecting', 'associating', 'authenticating'}
+    WIFI_CONNECTING_STATES = {'connecting', 'associating', 'discovering', 'authenticating'}
+
+    #: Seconds between checks when Windows is telling us about changes (the
+    #: WLAN notification and the address-table event below): the check is
+    #: then only a safety net for an event that never came.
+    WATCHED_POLL = 10.0
+    #: Seconds between checks where neither event could be registered. It
+    #: was 1 s of ``netsh`` (159 ms) plus two psutil walks (33 ms) - about
+    #: a fifth of a processor core, for the life of the program.
+    FALLBACK_POLL = 2.0
+    #: A moment for the addresses to settle after an event, so one cable
+    #: is not announced as two changes.
+    SETTLE = 0.3
+
+    def _check_once(self):
+        """One comparison of the network with what it was; never raises."""
+        try:
+            # --- WiFi ---
+            current_wifi_state, current_ssid = self._get_wifi_status()
+            if current_wifi_state in self.WIFI_CONNECTING_STATES and self.previous_wifi_state not in self.WIFI_CONNECTING_STATES:
+                self.on_connecting()
+            self.previous_wifi_state = current_wifi_state
+            if current_ssid != self.previous_ssid:
+                if current_ssid:
+                    self.on_connected(current_ssid)
+                elif self.previous_ssid:
+                    self.on_disconnected(self.previous_ssid)
+            self.previous_ssid = current_ssid
+            # --- Ethernet / other interfaces ---
+            current_interfaces = self._get_active_ethernet()
+            for iface in current_interfaces - self.previous_interfaces:
+                self.on_connected(iface)
+            for iface in self.previous_interfaces - current_interfaces:
+                self.on_disconnected(iface)
+            self.previous_interfaces = current_interfaces
+        except Exception as e:
+            print(f"NetworkMonitor error: {e}")
 
     def run(self):
+        self._wake = threading.Event()
         # Wait for system to settle before monitoring
-        time.sleep(15)
+        if self._wake.wait(15):
+            return
         self._init_state()
-        while self.running:
+
+        # Told, rather than asking: a WLAN connection event from wlanapi and
+        # an IPv4 address-table change from iphlpapi both wake the loop.
+        watched = False
+        addresses = None
+        try:
+            from src.system import wlan, net_events
+            watched = wlan.watch(self._wake.set)
+            addresses = net_events.AddressChange(self._wake)
+            if addresses.available:
+                watched = True
+        except Exception as e:
+            print(f"NetworkMonitor: polling only ({e})")
+
+        try:
+            while self.running:
+                period = self.WATCHED_POLL if watched else self.FALLBACK_POLL
+                woken = self._wake.wait(period)
+                self._wake.clear()
+                if not self.running:
+                    break
+                if woken:
+                    time.sleep(self.SETTLE)
+                self._check_once()
+        finally:
             try:
-                # --- WiFi ---
-                current_wifi_state, current_ssid = self._get_wifi_status()
-                if current_wifi_state in self.WIFI_CONNECTING_STATES and self.previous_wifi_state not in self.WIFI_CONNECTING_STATES:
-                    self.on_connecting()
-                self.previous_wifi_state = current_wifi_state
-
-                if current_ssid != self.previous_ssid:
-                    if current_ssid:
-                        self.on_connected(current_ssid)
-                    elif self.previous_ssid:
-                        self.on_disconnected(self.previous_ssid)
-                self.previous_ssid = current_ssid
-
-                # --- Ethernet / other interfaces ---
-                current_interfaces = self._get_active_ethernet()
-                for iface in current_interfaces - self.previous_interfaces:
-                    self.on_connected(iface)
-                for iface in self.previous_interfaces - current_interfaces:
-                    self.on_disconnected(iface)
-                self.previous_interfaces = current_interfaces
-
-            except Exception as e:
-                print(f"NetworkMonitor error: {e}")
-            time.sleep(1)
+                from src.system import wlan
+                wlan.unwatch()
+            except Exception:
+                pass
+            if addresses is not None:
+                addresses.close()
 
     def on_connecting(self):
         play_sound('system/network_connecting.ogg')
@@ -771,6 +907,9 @@ class NetworkMonitor(threading.Thread):
 
     def stop(self):
         self.running = False
+        wake = getattr(self, '_wake', None)
+        if wake is not None:
+            wake.set()
 
 
 # Global system monitor instance

@@ -14,7 +14,10 @@ Registration is best-effort and silent: called once from normal startup
 
 import os
 import sys
-import winreg
+try:
+    import winreg
+except ImportError:  # not Windows: there is no registry and nothing to register
+    winreg = None
 
 
 _EXTENSIONS = ('.tca', '.tcd', '.tcs')

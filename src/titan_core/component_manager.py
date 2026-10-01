@@ -318,16 +318,29 @@ class ComponentManager:
                         return
             else:
                 # Development mode - use importlib
+                if init_path.endswith('.pyc') and os.path.exists(init_path[:-1]):
+                    # The source is what is loaded from here; the .pyc beside
+                    # it is only a cache, and one another Python wrote is
+                    # not even that (see below).
+                    init_path = init_path[:-1]
                 if init_path.endswith('.py'):
-                    # Compile .py to .pyc if it's newer or .pyc doesn't exist
+                    # Compile .py to .pyc if it's newer, missing, or was
+                    # written by ANOTHER Python: the .pyc beside a component
+                    # carries the magic number of the interpreter that made
+                    # it, and one left by Windows' 3.14 is "bad magic number"
+                    # to a Linux 3.12 - which was every component failing to
+                    # load, on a machine where every source file was fine.
                     try:
                         pyc_path = init_path + 'c'
-                        if not os.path.exists(pyc_path) or os.path.getmtime(init_path) > os.path.getmtime(pyc_path):
+                        stale = (not os.path.exists(pyc_path)
+                                 or os.path.getmtime(init_path) > os.path.getmtime(pyc_path)
+                                 or not self._pyc_is_ours(pyc_path))
+                        if stale:
                             pyc_path = self.compile_to_pyc(init_path)
-                            if not pyc_path:
-                                print(f"Failed to compile file: {init_path}")
-                                return
-                        init_path = pyc_path
+                        if pyc_path and self._pyc_is_ours(pyc_path):
+                            init_path = pyc_path
+                        else:
+                            print(f"Loading {component_name} from source (no usable .pyc)")
                     except Exception as e:
                         print(f"Error compiling component {component_name}: {e}")
                         # Try to load .py file directly
@@ -633,6 +646,15 @@ class ComponentManager:
                 print(f"Error applying launcher hooks from component {component_name}: {e}")
                 import traceback
                 traceback.print_exc()
+
+    @staticmethod
+    def _pyc_is_ours(pyc_path):
+        """Was this .pyc written by the Python that is running?"""
+        try:
+            with open(pyc_path, 'rb') as f:
+                return f.read(4) == importlib.util.MAGIC_NUMBER
+        except OSError:
+            return False
 
     def compile_to_pyc(self, py_path):
         """Compiles a Python file to .pyc and returns its path."""

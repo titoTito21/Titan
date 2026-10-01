@@ -268,9 +268,23 @@ _ENUM_PROC = (ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
               if _IS_WINDOWS else None)
 
 
+#: On Linux a window has no HWND; the buffer is keyed on the AT-SPI window
+#: in front, and this token stands in for "there is one" wherever the
+#: code asks whether a handle is truthy.
+ATSPI_WINDOW_TOKEN = 1
+
+
 def window_text(hwnd) -> str:
     """``GetWindowText`` (never raises, always a str)."""
-    if not _IS_WINDOWS or not hwnd:
+    if not _IS_WINDOWS:
+        if not hwnd:
+            return ""
+        try:
+            from titan_access import atspi_focus
+            return atspi_focus.window_title()
+        except Exception:
+            return ""
+    if not hwnd:
         return ""
     try:
         n = _user32.GetWindowTextLengthW(hwnd)
@@ -308,7 +322,11 @@ def window_rect(hwnd) -> tuple:
 
 def foreground_hwnd() -> int:
     if not _IS_WINDOWS:
-        return 0
+        try:
+            from titan_access import atspi_focus
+            return ATSPI_WINDOW_TOKEN if atspi_focus.active_window() is not None else 0
+        except Exception:
+            return 0
     try:
         return int(_user32.GetForegroundWindow())
     except Exception:
@@ -948,6 +966,8 @@ def build_for_window(hwnd=0, allow_ocr=True, on_status=None,
     document. ``allow_ocr`` gates the AI tier, which is the only one that sends
     anything anywhere.
     """
+    if not _IS_WINDOWS:
+        return _build_for_window_atspi(allow_ocr, on_status, prefer)
     hwnd = int(hwnd or foreground_hwnd())
     doc = VirtualDocument(hwnd=hwnd, title=window_text(hwnd))
     if not hwnd:
@@ -994,6 +1014,113 @@ def build_for_window(hwnd=0, allow_ocr=True, on_status=None,
     doc.signature = signature_for(hwnd, doc)
     doc.built_at = time.time()
     return doc
+
+
+def _build_for_window_atspi(allow_ocr, on_status, prefer):
+    """Linux: the window in front, out of the AT-SPI tree (what Orca reads)."""
+    from titan_access import atspi_focus
+    window = atspi_focus.active_window()
+    doc = VirtualDocument(hwnd=0, title=atspi_focus.window_title(window))
+    if window is None:
+        return doc
+    tiers = [prefer] if prefer else ["atspi"]
+    for tier in tiers:
+        try:
+            nodes = build_atspi(window) if tier == "atspi" else []
+        except Exception as e:
+            print(f"[TitanAccess] virtual_buffer: {tier} build failed: {e}")
+            nodes = []
+        if nodes:
+            doc.nodes = nodes
+            doc.source = tier
+            break
+    doc.signature = (doc.title, len(doc.nodes))
+    doc.built_at = time.time()
+    return doc
+
+
+#: What is left out of a flat document: the containers. A container with a
+#: NAME is kept as a line (a group box, a named pane), as the web tier keeps
+#: a landmark.
+_ATSPI_SKIP_UNNAMED = {C.ROLE_PANE, C.ROLE_GROUP, C.ROLE_WINDOW, C.ROLE_UNKNOWN,
+                       C.ROLE_SCROLLBAR, C.ROLE_SEPARATOR, C.ROLE_TABLE,
+                       C.ROLE_LISTBOX, C.ROLE_TREE, C.ROLE_TABCONTROL,
+                       C.ROLE_MENUBAR, C.ROLE_TOOLBAR}
+
+
+def build_atspi(window, limit=3000) -> List[VNode]:
+    """Flatten an AT-SPI window into VNodes, reading order, containers left out."""
+    from titan_access import atspi_focus
+    Atspi = atspi_focus.atspi()
+    if Atspi is None or window is None:
+        return []
+    out = []
+
+    def walk(node, depth):
+        if depth > 40 or len(out) >= limit:
+            return
+        try:
+            count = node.get_child_count()
+        except Exception:
+            return
+        for i in range(min(count, 2000)):
+            try:
+                child = node.get_child_at_index(i)
+            except Exception:
+                continue
+            if child is None:
+                continue
+            try:
+                states = child.get_state_set()
+                if not states.contains(Atspi.StateType.SHOWING) and \
+                        not states.contains(Atspi.StateType.VISIBLE):
+                    continue
+                obj = atspi_focus.to_object(child)
+            except Exception:
+                obj = None
+            if obj is not None:
+                keep = obj.name.strip() or obj.value.strip() or obj.role not in _ATSPI_SKIP_UNNAMED
+                if keep and not (obj.role in _ATSPI_SKIP_UNNAMED and not obj.name.strip()):
+                    out.append(VNode(name=obj.name, role=obj.role, value=obj.value,
+                                     level=obj.level, states=tuple(sorted(obj.states)),
+                                     rect=obj.bounds if obj.has_bounds else (),
+                                     source="atspi", element=child,
+                                     pos_in_set=obj.pos_in_set, size_of_set=obj.size_of_set))
+            walk(child, depth + 1)
+
+    walk(window, 0)
+    return out
+
+
+def _activate_atspi(node, _screen=None):
+    acc = node.element
+    if acc is None:
+        return False
+    try:
+        action = acc.get_action_iface() if hasattr(acc, 'get_action_iface') else acc
+        n = action.get_n_actions()
+        for i in range(n):
+            name = (action.get_action_name(i) or '').lower()
+            if name in ('click', 'press', 'activate', 'toggle', 'jump', 'select', 'expand or contract', 'expand', 'invoke'):
+                return bool(action.do_action(i))
+        if n:
+            return bool(action.do_action(0))
+    except Exception:
+        pass
+    try:
+        comp = acc.get_component_iface() if hasattr(acc, 'get_component_iface') else acc
+        return bool(comp.grab_focus())
+    except Exception:
+        return False
+
+
+def _focus_atspi(node):
+    acc = node.element
+    try:
+        comp = acc.get_component_iface() if hasattr(acc, 'get_component_iface') else acc
+        return bool(comp.grab_focus())
+    except Exception:
+        return False
 
 
 def _build_tier(tier, hwnd, deadline, on_status):
@@ -1167,6 +1294,8 @@ def focus_node(node: VNode) -> bool:
         if node.source == "win32" and node.hwnd:
             _user32.SetFocus(node.hwnd)
             return True
+        if node.source == "atspi":
+            return _focus_atspi(node)
     except Exception:
         return False
     return False
@@ -1181,6 +1310,7 @@ def activate(node: VNode, screen=None) -> bool:
         "msaa": _activate_msaa,
         "win32": _activate_win32,
         "ocr": _activate_ocr,
+        "atspi": _activate_atspi,
         "drawn": _activate_drawn,
     }.get(node.source)
     if handler is None:

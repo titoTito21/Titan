@@ -513,7 +513,8 @@ class ConversationFrame(TabbedListFrame):
 
     def _open_file(self, path: str) -> None:
         try:
-            os.startfile(path)  # noqa: S606 - user-initiated, Windows only
+            from src.platform_utils import open_file_manager
+            open_file_manager(path)  # user-initiated; the platform's opener
         except Exception as exc:
             speak_notification(_("Cannot open the file: {error}").format(error=exc),
                                'error')

@@ -26,7 +26,10 @@ from src.titan_core.game_manager import get_games, open_game
 from src.system.notifications import get_current_time, get_battery_status, get_volume_level, get_network_status
 from src.titan_core.statusbar_applet_manager import StatusbarAppletManager
 from src.titan_core.sound import initialize_sound, play_focus_sound, play_select_sound, play_statusbar_sound, play_applist_sound, play_endoflist_sound, play_sound, play_shutdown_sound
-import accessible_output3.outputs.auto
+# accessible_output3 is imported by the shared LazySpeaker on first use:
+# importing its `outputs` package imports EVERY backend, and the
+# Window-Eyes one brings speech_recognition - 8.7 MB and 120 ms at
+# startup, for a library that only speaks when nothing better can.
 from src.ui.menu import MenuBar
 from src.ui.invisibleui import InvisibleUI
 from src.titan_core.translation import set_language
@@ -669,8 +672,13 @@ class TitanApp(wx.Frame):
         self.SetTitle(_("Titan App Suite"))
         self.Centre()
 
-        # macOS: configure VoiceOver accessibility names for all controls
-        if IS_MACOS:
+        # Accessible names for the main controls. Written for VoiceOver and
+        # guarded to macOS; on Windows MSAA takes a list's name from the
+        # label in front of it, but GTK does not (ATK has no such rule), so
+        # Orca read Titan's application list as a table called nothing.
+        # SetName reaches ATK through a11y.install_gtk_names, and is harmless
+        # on Windows.
+        if not IS_WINDOWS:
             self._setup_macos_voiceover()
 
         # Release the startup sound guard shortly after initial paint so any

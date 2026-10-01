@@ -518,67 +518,77 @@ def get_system_tools():
     N = {'type': 'number'}
     B = {'type': 'boolean'}
     if sys.platform != 'win32':
-        return []
+        # The same surface out of what Linux and macOS offer on their
+        # command lines - see system_tools_posix.py.
+        from src.ai.tools import system_tools_posix as posix
+        table = _tool_table(posix, _tool, S, N, B)
+    else:
+        table = _tool_table(sys.modules[__name__], _tool, S, N, B)
+    return table
+
+
+def _tool_table(impl, _tool, S, N, B):
+    """The tool list, over whichever implementation this platform has."""
     return [
         _tool('system_get_volume', "Read the computer's volume and mute state.",
-              system_get_volume),
+              impl.system_get_volume),
         _tool('system_set_volume', "Set the computer's volume.",
-              system_set_volume, risk='confirm',
+              impl.system_set_volume, risk='confirm',
               properties={'percent': dict(N, description="0 to 100.")},
               required=['percent']),
         _tool('system_set_mute', "Mute or unmute the computer.",
-              system_set_mute, risk='confirm',
+              impl.system_set_mute, risk='confirm',
               properties={'muted': dict(B, description="True to mute.")}),
         _tool('system_list_audio_devices',
               "List the computer's playback devices and which is in use.",
-              system_list_audio_devices),
+              impl.system_list_audio_devices),
         _tool('system_set_audio_device',
               "Send the sound to a different playback device (headphones, "
-              "speakers, a monitor).", system_set_audio_device, risk='confirm',
+              "speakers, a monitor).", impl.system_set_audio_device, risk='confirm',
               properties={'name': dict(S, description="Part of the device name.")},
               required=['name']),
         _tool('system_set_brightness',
-              "Set the built-in screen's brightness.", system_set_brightness,
+              "Set the built-in screen's brightness.", impl.system_set_brightness,
               risk='confirm',
               properties={'percent': dict(N, description="0 to 100.")},
               required=['percent']),
-        _tool('system_get_power_plan', "Which Windows power plan is active.",
-              system_get_power_plan),
+        _tool('system_get_power_plan', "Which power plan (or profile) is active.",
+              impl.system_get_power_plan),
         _tool('system_set_power_plan',
-              "Switch the Windows power plan (balanced, power saver, high "
-              "performance).", system_set_power_plan, risk='confirm',
+              "Switch the power plan (balanced, power saver, high "
+              "performance).", impl.system_set_power_plan, risk='confirm',
               properties={'name': dict(S, description="Plan name.")},
               required=['name']),
         _tool('system_set_theme',
-              "Switch Windows between the light and the dark theme.",
-              system_set_theme, risk='confirm',
+              "Switch the desktop between the light and the dark theme.",
+              impl.system_set_theme, risk='confirm',
               properties={'mode': dict(S, description="'dark' or 'light'.")},
               required=['mode']),
         _tool('system_network_status',
-              "Which network the computer is on.", system_network_status),
+              "Which network the computer is on.", impl.system_network_status),
         _tool('system_list_wifi', "List the Wi-Fi networks in range.",
-              system_list_wifi),
+              impl.system_list_wifi),
         _tool('system_connect_wifi',
               "Connect to a Wi-Fi network the computer already knows.",
-              system_connect_wifi, risk='confirm',
+              impl.system_connect_wifi, risk='confirm',
               properties={'name': dict(S, description="Network name (SSID)."),
                           'password': dict(S, description="Only if it is a new network.")},
               required=['name']),
-        _tool('system_get_autostart', "Whether Titan starts with Windows.",
-              system_get_autostart),
+        _tool('system_get_autostart', "Whether Titan starts with the computer.",
+              impl.system_get_autostart),
         _tool('system_set_autostart',
-              "Make Titan start with Windows, or stop it doing so.",
-              system_set_autostart, risk='confirm',
-              properties={'enabled': dict(B, description="True to start with Windows.")}),
+              "Make Titan start with the computer, or stop it doing so.",
+              impl.system_set_autostart, risk='confirm',
+              properties={'enabled': dict(B, description="True to start with the computer.")}),
         _tool('system_get_brightness',
-              "How bright the screen is now.", system_get_brightness),
+              "How bright the screen is now.", impl.system_get_brightness),
         _tool('system_list_power_plans',
               "The power plans this computer has, with the active one "
-              "marked.", system_list_power_plans),
+              "marked.", impl.system_list_power_plans),
         _tool('system_open_settings_page',
-              "Open a page of Windows Settings and let the user finish there. "
+              "Open a page of the system settings and let the user finish there. "
               "Use this for anything Titan cannot change itself.",
-              system_open_settings_page, risk='confirm',
+              impl.system_open_settings_page, risk='confirm',
               properties={'page': dict(S, description="sound, display, network, "
                                        "wifi, bluetooth, power, battery, "
                                        "accessibility, apps, startup, update, "

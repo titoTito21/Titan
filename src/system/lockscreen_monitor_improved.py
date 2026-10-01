@@ -1,10 +1,6 @@
 import threading
 import time
 import platform
-try:
-    import accessible_output3.outputs.auto
-except Exception:
-    pass
 from src.titan_core.sound import play_sound
 from src.titan_core.translation import _
 from src.settings.settings import get_setting
@@ -37,6 +33,7 @@ class ThreadSafeEventMonitor:
         self.monitoring = False
         self.monitor_thread = None
         try:
+            import accessible_output3.outputs.auto  # 15 MB; only when it speaks
             self.speaker = accessible_output3.outputs.auto.Auto()
         except Exception:
             self.speaker = None

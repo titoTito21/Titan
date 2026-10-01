@@ -242,13 +242,22 @@ class Context:
         try:
             if not dll.getAccessibleContextInfo(self.vmid, self.handle,
                                                 ctypes.byref(found)):
+                self._one_failed()
                 return None
         except Exception:                            # noqa: BLE001
+            self._one_failed()
             return None
         self._info = found
         with _LOCK:
             _state['reads'] += 1
         return found
+
+    @staticmethod
+    def _one_failed():
+        # Counted, because ``report()`` answers ``failed`` and a count that
+        # nothing writes reads as "every read worked" for ever.
+        with _LOCK:
+            _state['failed'] += 1
 
     def child(self, index):
         dll = _state['dll']

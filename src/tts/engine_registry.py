@@ -122,6 +122,20 @@ def _iter_engine_folders():
                 yield name, os.path.join(engines_dir, name)
 
 
+_PLATFORM_NAMES = {'win32': ('windows', 'win', 'win32'),
+                   'darwin': ('macos', 'mac', 'darwin', 'osx'),
+                   'linux': ('linux', 'posix')}
+
+
+def _engine_runs_here(platforms):
+    """Does a manifest's ``platforms`` list (or nothing) include this one?"""
+    wanted = [p.strip().lower() for p in str(platforms or '').split(',') if p.strip()]
+    if not wanted:
+        return True
+    here = 'linux' if sys.platform.startswith('linux') else sys.platform
+    return any(name in wanted for name in _PLATFORM_NAMES.get(here, (here,)))
+
+
 class EngineRegistry:
     """
     Discovers, loads, and provides access to all TitanTTS engines.
@@ -184,6 +198,17 @@ class EngineRegistry:
             # status=0 means enabled, status=1 means disabled (same as components)
             if status == '1':
                 print(f"[EngineRegistry] Engine '{engine_name}' ({folder}) is disabled, skipping")
+                continue
+
+            # platforms = windows, linux, macos - an engine built on a
+            # Windows .exe or .dll says so and is not even imported elsewhere
+            # (Supertonic's vendored Windows numpy raised at import on Linux;
+            # the others answered is_available() False after loading whole).
+            # Absent means every platform, so a third-party engine that never
+            # heard of the key still loads.
+            if not _engine_runs_here(config.get('platforms', '')):
+                print(f"[EngineRegistry] Engine '{engine_name}' ({folder}) is for "
+                      f"{config.get('platforms')}, not this platform, skipping")
                 continue
 
             _log(f"[_load_engines] {folder}: loading engine '{engine_name}'...")

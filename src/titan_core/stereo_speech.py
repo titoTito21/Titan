@@ -9,7 +9,6 @@ import subprocess
 import platform
 import queue as _queue
 import importlib.util as _importlib_util
-import accessible_output3.outputs.auto
 from src.settings.settings import get_setting
 from src.platform_utils import get_base_path as _get_base_path, IS_WINDOWS, IS_LINUX, IS_MACOS
 
@@ -1711,6 +1710,7 @@ class StereoSpeech:
         self._native_process = None  # Running native TTS subprocess
 
         # Fallback speaker (accessible_output3)
+        import accessible_output3.outputs.auto  # 15 MB; only once speech is built
         self.fallback_speaker = accessible_output3.outputs.auto.Auto()
 
         # TitanTTS Engine Registry - provides ElevenLabs, Milena, and plugin engines

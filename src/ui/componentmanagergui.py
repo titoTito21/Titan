@@ -3,7 +3,7 @@ import wx
 import os
 import sys
 import configparser
-from accessible_output3.outputs.auto import Auto
+from src.accessibility.lazy_speaker import LazySpeaker
 from src.titan_core.sound import play_sound, play_focus_sound, play_endoflist_sound
 from src.titan_core.translation import set_language
 from src.settings.settings import get_setting, load_settings
@@ -39,7 +39,9 @@ class ComponentManagerDialog(wx.Dialog):
         super().__init__(parent, title=title, size=(400, 400))
 
         self.component_manager = component_manager
-        self.tts = Auto()
+        # Shared and built on first use: an Auto() here was imported by the
+        # menu bar at startup, with speech_recognition (8.7 MB) behind it.
+        self.tts = LazySpeaker()
 
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)

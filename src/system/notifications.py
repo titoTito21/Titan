@@ -137,8 +137,37 @@ def get_volume_level():
     else:
         return "Unknown"
 
+def _network_status_native():
+    """The status line out of wlanapi, or None when it cannot be asked.
+
+    ``netsh wlan show interfaces`` is a console process - measured 159 ms a
+    call, every five seconds for the status bar - and its words are in the
+    interface language of the Windows it runs on, so a Polish Windows
+    answered "Unknown" for ever. Windows' own API is 16 ms and has no
+    language.
+    """
+    try:
+        from src.system import wlan
+        info = wlan.current_connection()
+    except Exception as e:
+        print(f"Error asking wlanapi for the network status: {e}")
+        return None
+    if info is None:
+        if wlan.interfaces() == []:
+            return _("Not connected, no WiFi networks available")
+        return None
+    if info['state'] == 'connected' and info['ssid']:
+        signal = _("Unknown") if info['signal'] is None else f"{info['signal']}%"
+        return _("Connected to {ssid}, signal strength: {signal}").format(
+            ssid=info['ssid'], signal=signal)
+    return _("Not connected, WiFi networks available")
+
+
 def get_network_status():
     if IS_WINDOWS:
+        native = _network_status_native()
+        if native is not None:
+            return native
         try:
             output = subprocess.check_output("netsh wlan show interfaces", shell=True, **get_subprocess_kwargs()).decode()
             if "There is no wireless interface" in output:

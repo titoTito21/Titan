@@ -3,7 +3,6 @@ import subprocess
 import threading
 import sys
 import platform
-import webbrowser
 from src.platform_utils import (
     get_base_path,
     is_frozen,
@@ -423,6 +422,7 @@ def open_game(game_info):
         # Steam and Battle.net - use protocol
         if 'launch_url' in game_info:
             launch_url = game_info['launch_url']
+            import webbrowser  # only when a game is launched through a page
             webbrowser.open(launch_url)
             return
 

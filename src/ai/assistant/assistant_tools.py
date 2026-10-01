@@ -183,7 +183,8 @@ def _open_url(url):
     import subprocess
     if sys.platform == 'win32':
         import os
-        os.startfile(url)  # noqa: intended - default handler
+        from src.platform_utils import open_url
+        open_url(url)
     elif sys.platform == 'darwin':
         subprocess.Popen(['open', url])
     else:

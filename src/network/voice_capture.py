@@ -3,7 +3,13 @@ Voice Capture Manager with Voice Activity Detection
 Handles microphone capture, VAD, and audio streaming for Titan-Net voice chat
 """
 
-import sounddevice as sd
+try:
+    import sounddevice as sd
+except (ImportError, OSError) as _sd_error:  # no PortAudio on this machine
+    sd = None
+    SOUNDDEVICE_ERROR = str(_sd_error)
+else:
+    SOUNDDEVICE_ERROR = ''
 import numpy as np
 import queue
 import threading
@@ -78,6 +84,9 @@ class VoiceCaptureManager:
     def start_capture(self):
         """Start capturing from microphone"""
         if self.is_recording:
+            return
+        if sd is None:
+            print(f"[VoiceCapture] No audio input library: {SOUNDDEVICE_ERROR}")
             return
 
         try:

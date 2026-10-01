@@ -11,7 +11,7 @@ from typing import Dict, Callable, Optional, Any
 from src.controller.controller_vibrations import vibration_controller
 from src.titan_core.translation import _
 from src.titan_core.sound import play_sound
-from accessible_output3 import outputs
+from src.accessibility.lazy_speaker import get_shared_speaker
 from src.titan_core.stereo_speech import get_stereo_speech
 from src.settings.settings import get_setting
 from src.controller.controller_modes import get_mode_manager, ControllerMode
@@ -72,7 +72,9 @@ class ControllerUI:
 
         # Controller detection
         self.connected_controllers = set()
-        self.output = outputs.auto.Auto()
+        # The shared speaker, built the first time something speaks - an
+        # Auto() here walked the whole call stack at startup.
+        self.output = get_shared_speaker
         self.stereo_speech = get_stereo_speech()
         self.initial_check_done = False  # Track if initial check completed
 
@@ -335,10 +337,10 @@ class ControllerUI:
                 except Exception as stereo_e:
                     print(f"Stereo speech failed: {stereo_e}")
                     # Fallback to regular accessible_output3
-                    self.output.speak(message)
+                    self.output().speak(message)
             else:
                 # Use regular accessible_output3 if stereo is disabled
-                self.output.speak(message)
+                self.output().speak(message)
 
         except Exception as e:
             print(f"Error announcing joystick status: {e}")

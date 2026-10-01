@@ -110,6 +110,20 @@ class SoundManager(object):
         path = name if os.path.isabs(name) else os.path.join(self.sfx_dir, name)
         return path if os.path.exists(path) else None
 
+    @staticmethod
+    def _decoded_fallback(path):
+        try:
+            from src.titan_core.sound_decode import decoded_copy
+            wav = decoded_copy(path)
+            if wav:
+                snd = pygame.mixer.Sound(wav)
+                if snd.get_length() > 0:
+                    return snd
+        except Exception as e:
+            print(f"[TitanAccess] decoded copy of {path} failed: {e}")
+        print(f"[TitanAccess] sound {path} decoded to nothing; not played")
+        return None
+
     def _load(self, name):
         """Load and cache the pygame Sound for ``name`` (None on failure)."""
         with self._lock:
@@ -122,6 +136,14 @@ class SoundManager(object):
                 return None
             try:
                 snd = pygame.mixer.Sound(path)
+                # A file SDL_mixer could not decode comes back as a Sound of
+                # NO samples, and playing one is a segmentation fault (Linux,
+                # pygame-ce 2.5.6, window.ogg). A cue that cannot be decoded
+                # is a cue that is missing.
+                if snd.get_length() <= 0:
+                    snd = self._decoded_fallback(path)
+                    if snd is None:
+                        return None
                 self._cache[name] = snd
                 return snd
             except Exception as e:  # pragma: no cover
