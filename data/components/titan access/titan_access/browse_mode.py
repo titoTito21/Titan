@@ -339,8 +339,7 @@ class BrowseModeHandler:
         document cursor on whatever the app just focused.
         """
         if self._scan:
-            self._scan_follow_focus(obj)
-            return
+            return self._scan_follow_focus(obj)
         active = self.is_web
         if _DBG:
             print(f"[TitanAccess][browse] update_for_focus role="
@@ -373,21 +372,28 @@ class BrowseModeHandler:
             self.engine.speak(L("browse.browseMode"))
 
     def _scan_follow_focus(self, obj):
-        """Keep scan mode honest when the user tabs or changes window."""
+        """Keep scan mode honest when the user tabs or changes window.
+
+        Answers True when this focus is the one scan mode itself just
+        caused by moving onto a node - already announced, not to be said
+        again - and False for a focus the user moved."""
         hwnd = vbuf.foreground_hwnd()
         if hwnd and self._scan_hwnd and hwnd != self._scan_hwnd:
             # A different window: the document no longer describes what is in
             # front of the user, so scan mode ends rather than navigating a
             # window they left.
             self._end_scan()
-            return
+            return False
         if obj is None:
-            return
+            return False
         # Move the document cursor to whatever now has the focus, so switching
         # between Tab and the document cursor does not lose the place.
         name = (getattr(obj, "name", "") or "").strip()
         if not name:
-            return
+            return False
+        moved = getattr(self, "_scan_moved", None)
+        own = bool(moved and moved[0] == name and moved[1] == getattr(obj, "role", "")
+                   and time.time() - moved[2] < 1.5)
         with self._lock:
             nodes = self._doc.nodes if self._doc else []
             for i, node in enumerate(nodes):
@@ -395,6 +401,9 @@ class BrowseModeHandler:
                     self._index = i
                     self._char_pos = 0
                     break
+        if own:
+            self._scan_moved = None
+        return own
 
     def _announce_web_entry(self, obj):
         """Announce that focus has entered a browsable web document."""
@@ -1042,6 +1051,11 @@ class BrowseModeHandler:
         """
         if self._scan:
             if move_focus:
+                # The focus event this move fires comes BACK through the
+                # provider a moment later; `_scan_follow_focus` recognises
+                # the node and the engine does not announce it a second
+                # time (measured on Linux: every row read twice).
+                self._scan_moved = (node.name, node.role, time.time())
                 try:
                     vbuf.focus_node(node)
                 except Exception:

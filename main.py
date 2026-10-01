@@ -2,6 +2,21 @@
 # modules that need one (src/titan_core/asyncio_compat.py), not here:
 # importing asyncio at line 1 was 10 MB and a third of a second of every
 # startup, for messengers most sessions never open.
+import sys as _sys
+if _sys.platform.startswith('linux'):
+    # **Xlib must be told about threads before the first Display is opened.**
+    # wxGTK does not call XInitThreads and neither does GDK 3; pygame does -
+    # inside pygame.init(), which the settings window runs to count game
+    # controllers - but by then GTK's Display is open, and libX11 answers a
+    # late XInitThreads with "[xcb] Unknown sequence number while processing
+    # queue ... Aborting" the next time GTK polls for an event (measured: a
+    # SIGABRT while Settings was being read). Called here, before wx, it
+    # covers every Display the process will ever open.
+    try:
+        import ctypes as _ctypes
+        _ctypes.CDLL('libX11.so.6').XInitThreads()
+    except Exception:
+        pass
 import wx
 
 # On GTK the name Titan gives a control for a screen reader has to reach

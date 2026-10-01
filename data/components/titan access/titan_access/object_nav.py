@@ -37,7 +37,7 @@ _BOUNDARY_TYPES = {"WindowControl", "PaneControl"}
 
 
 class ObjectNavigator:
-    """Object navigation over the UIA tree."""
+    """Object navigation over the UIA tree (AT-SPI on Linux)."""
 
     def __init__(self, engine):
         self.engine = engine
@@ -95,6 +95,29 @@ class ObjectNavigator:
             return True
 
     def _step(self, native, direction):
+        # Linux: the same walk over the AT-SPI tree (`atspi_focus.simple_step`
+        # is NVDA's simple review - layout containers stepped over - and
+        # `raw_step` the tree as it is).
+        try:
+            from titan_access import atspi_focus
+            if atspi_focus.is_accessible(native):
+                if self._simple_review():
+                    found = atspi_focus.simple_step(native, direction)
+                else:
+                    found = atspi_focus.raw_step(native, direction)
+                if direction == "parent" and found is not None and atspi_focus.is_top(found):
+                    # A titled window is a place ("Settings, window"); a
+                    # nameless one is the top of what there is to walk.
+                    try:
+                        titled = bool((found.get_name() or "").strip())
+                    except Exception:
+                        titled = False
+                    if not titled:
+                        return None
+                return found
+        except Exception as e:
+            print(f"[TitanAccess] object_nav: atspi step '{direction}' error: {e}")
+            return None
         # NVDA-style "simple review": flatten the tree, skipping layout-only
         # containers, so the user lands only on meaningful (content) elements.
         # Disable via Navigation/SimpleReviewMode to walk the raw UIA tree.
@@ -146,6 +169,20 @@ class ObjectNavigator:
             self.engine.speak(L("engine.noCurrentElement"))
             return True
         ok = False
+        try:
+            from titan_access import atspi_focus
+            if atspi_focus.is_accessible(native):
+                ok = atspi_focus.do_default_action(native)
+                if ok:
+                    try:
+                        self.engine.refresh_current_scope(delay_ms=450)
+                    except Exception:
+                        pass
+                else:
+                    self.engine.speak(L("engine.cannotActivate"))
+                return True
+        except Exception as e:
+            print(f"[TitanAccess] object_nav: atspi activate error: {e}")
         # Try the action patterns in turn, like NVDA's doDefaultAction
         # (Invoke -> Toggle -> Select -> Expand).
         for getter, call in (("GetInvokePattern", "Invoke"),
@@ -228,7 +265,7 @@ class ObjectNavigator:
                 print(f"[TitanAccess] object_nav: element_to_object error: {e}")
         # Minimal snapshot fallback.
         try:
-            name = element.Name or ""
+            name = element.get_name() if hasattr(element, "get_name") else (element.Name or "")
         except Exception:
             name = ""
         return AccessibleObject(name=name, role=ROLE_UNKNOWN, native=element)

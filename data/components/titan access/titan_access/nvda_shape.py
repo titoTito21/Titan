@@ -20,6 +20,9 @@ this reader and handed back already adapted.
 """
 
 import ctypes
+import sys
+
+_IS_WINDOWS = sys.platform.startswith("win")
 import os
 
 #: Titan Access's role names in NVDA's spelling. `icons.ROLE_ALIASES` does
@@ -139,6 +142,26 @@ def executable_of(pid):
             name = ''
     _names_by_pid[pid] = name
     return name
+
+
+def _is_atspi(native):
+    return native is not None and hasattr(native, 'get_role') and not hasattr(native, 'ControlTypeName')
+
+
+class _AtspiAction:
+    """What `_pattern` answers for an AT-SPI control: one object whose
+    method named by the action presses it."""
+
+    def __init__(self, native):
+        self._native = native
+
+    def __getattr__(self, name):
+        from titan_access import atspi_focus
+
+        def press():
+            if not atspi_focus.do_default_action(self._native):
+                raise RuntimeError('no action')
+        return press
 
 
 class Adapted:
@@ -292,6 +315,14 @@ class Adapted:
             return self._children
         found = []
         native = getattr(self.original, 'native', None)
+        if _is_atspi(native):
+            from titan_access import atspi_focus
+            for child in atspi_focus.children_of(native):
+                wrapped = self._wrap(child)
+                if wrapped is not None:
+                    found.append(wrapped)
+            self._children = found
+            return found
         get = getattr(native, 'GetChildren', None)
         if callable(get):
             try:
@@ -309,6 +340,10 @@ class Adapted:
         if self._parent is not None:
             return self._parent
         native = getattr(self.original, 'native', None)
+        if _is_atspi(native):
+            from titan_access import atspi_focus
+            self._parent = self._wrap(atspi_focus.parent_of(native))
+            return self._parent
         get = getattr(native, 'GetParentControl', None)
         if callable(get):
             try:
@@ -330,6 +365,12 @@ class Adapted:
         native = getattr(self.original, 'native', None)
         if native is None:
             return None
+        if _is_atspi(native):
+            from titan_access import atspi_focus
+            name = atspi_focus.default_action(native)
+            if not name:
+                return None
+            return name, _AtspiAction(native)
         for getter, method in (('GetInvokePattern', 'Invoke'),
                                ('GetTogglePattern', 'Toggle'),
                                ('GetSelectionItemPattern', 'Select'),
@@ -356,6 +397,11 @@ class Adapted:
 
     def setFocus(self):
         native = getattr(self.original, 'native', None)
+        if _is_atspi(native):
+            from titan_access import atspi_focus
+            if not atspi_focus.grab_focus(native):
+                raise RuntimeError('focus refused')
+            return
         put = getattr(native, 'SetFocus', None)
         if not callable(put):
             raise NotImplementedError('cannot focus')
@@ -391,8 +437,12 @@ class Hooks:
         if provider is None:
             return None
         try:
-            hwnd = ctypes.windll.user32.GetForegroundWindow()
-            obj = provider.object_from_handle(hwnd) if hwnd else None
+            if _IS_WINDOWS:
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+                obj = provider.object_from_handle(hwnd) if hwnd else None
+            else:
+                # Linux: the active AT-SPI window; the handle is a token.
+                obj = provider.object_from_handle(1)
         except Exception:                            # noqa: BLE001
             obj = None
         return adapt(obj, provider)

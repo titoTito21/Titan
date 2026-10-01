@@ -21,6 +21,8 @@ of a hardware-composited window).
 from __future__ import annotations
 
 import math
+import os
+import sys
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Tuple
 
@@ -189,6 +191,93 @@ def _fingerprint(rgb) -> str:
     return hashlib.sha1(bytes(value & 0xFF for value in cells)).hexdigest()
 
 
+def _posix_grab(window_title='', hwnd=0):
+    """Linux: a picture as an RGB array plus its screen origin, or None.
+
+    X11 first - the window itself, through python-xlib's GetImage, which
+    needs no tool and works under XWayland where the ROOT window cannot be
+    read (BadMatch: a rootless XWayland has no root picture) - and then a
+    screenshot tool for a Wayland session (grim, gnome-screenshot, scrot,
+    ImageMagick's import), through `desktop_tools_posix.screenshot_png_path`.
+    """
+    try:
+        import numpy as np
+    except Exception:
+        return None
+    # 1. The window, by title, through X.
+    try:
+        from Xlib import display as _display, X as _X
+        dpy = _display.Display()
+        root = dpy.screen().root
+        wanted = (window_title or '').strip()
+
+        def _walk(node, depth=0):
+            if depth > 12:
+                return None
+            try:
+                kids = node.query_tree().children
+            except Exception:
+                return None
+            best = None
+            for child in kids:
+                try:
+                    attrs = child.get_attributes()
+                    geom = child.get_geometry()
+                except Exception:
+                    continue
+                if attrs.map_state == 2 and geom.width > 50 and geom.height > 50:
+                    try:
+                        name = child.get_wm_name() or ''
+                    except Exception:
+                        name = ''
+                    if wanted and name == wanted:
+                        return child
+                    if not wanted and best is None:
+                        best = child
+                found = _walk(child, depth + 1)
+                if found is not None:
+                    return found
+            return best
+
+        win = _walk(root)
+        if win is not None:
+            geom = win.get_geometry()
+            img = win.get_image(0, 0, geom.width, geom.height, _X.ZPixmap, 0xffffffff)
+            raw = np.frombuffer(img.data, dtype=np.uint8)
+            if img.depth in (24, 32) and raw.size >= geom.width * geom.height * 4:
+                bgrx = raw[:geom.width * geom.height * 4].reshape(geom.height, geom.width, 4)
+                rgb = np.ascontiguousarray(bgrx[:, :, 2::-1])
+                try:
+                    at = win.translate_coords(root, 0, 0)
+                    origin = (int(-at.x), int(-at.y))
+                except Exception:
+                    origin = (0, 0)
+                try:
+                    screen = (int(root.get_geometry().width), int(root.get_geometry().height))
+                except Exception:
+                    screen = (geom.width, geom.height)
+                return rgb, origin, screen, 'window'
+    except Exception:
+        pass
+    # 2. A screenshot tool (Wayland).
+    try:
+        from src.ai import desktop_tools_posix
+        path, _why = desktop_tools_posix.screenshot_png_path()
+        if path:
+            from PIL import Image
+            with Image.open(path) as picture:
+                rgb = np.asarray(picture.convert('RGB'))
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+            if rgb.size:
+                return rgb, (0, 0), (rgb.shape[1], rgb.shape[0]), 'screen'
+    except Exception:
+        pass
+    return None
+
+
 def capture_screen() -> Capture:
     """The whole primary monitor.
 
@@ -199,6 +288,14 @@ def capture_screen() -> Capture:
     the frame instead (:mod:`duplication`). That is the only route that
     can see such a program at all.
     """
+    if sys.platform != 'win32':
+        got = _posix_grab()
+        if got is not None:
+            rgb, origin, size, source = got
+            return _prepare(rgb, origin, 'screen', title='', screen_size=size)
+        import numpy as np
+        return _prepare(np.zeros((8, 8, 3), dtype=np.uint8), (0, 0), 'screen',
+                        title='', screen_size=(0, 0))
     from src.ai.agent_tools import _capture_primary_screen, _looks_blank
     rgb, screen_w, screen_h = _capture_primary_screen()
     if not _looks_blank(rgb):
@@ -245,6 +342,18 @@ def capture_window(hwnd: int = 0) -> Optional[Capture]:
 
     ``None`` means neither produced a picture.
     """
+    if sys.platform != 'win32':
+        title = ''
+        try:
+            _handle, title = foreground_window()
+        except Exception:
+            title = ''
+        got = _posix_grab(title, hwnd)
+        if got is None:
+            return None
+        rgb, origin, size, source = got
+        return _prepare(rgb, origin, source, title=title, hwnd=int(hwnd or 0),
+                        screen_size=size)
     try:
         import win32gui
         from src.ai.agent_tools import _capture_rect, _looks_blank
@@ -416,6 +525,13 @@ def foreground_window() -> Tuple[int, str]:
     and "whichever window happens to be in front when the timer fires" is not
     that program once Titan's own window is on screen.
     """
+    if sys.platform != 'win32':
+        try:
+            from src.ai import desktop_tools_posix
+            title = desktop_tools_posix._atspi_focused_window()
+            return (1, title) if title else (0, '')
+        except Exception:
+            return (0, '')
     try:
         import win32gui
         hwnd = win32gui.GetForegroundWindow()

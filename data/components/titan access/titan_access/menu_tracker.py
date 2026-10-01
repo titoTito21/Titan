@@ -40,10 +40,15 @@ class MenuTracker:
         role = obj.role
         settings = self.engine.settings
 
-        is_menu_item = role in ("menuitem",)
+        # On Linux a menu bar's own entries are MENUs (GTK): a top-level
+        # menu is an item OF THE BAR, and its dropdown is the menu that
+        # opens under it - the shape UIA gives on Windows, where the bar's
+        # entries are MenuItems and the dropdown a MenuControl of its own.
+        top_level_menu = role == "menu" and self._is_top_level_menu(ctrl)
+        is_menu_item = role in ("menuitem",) or top_level_menu
         in_menu_bar_now = is_menu_item and self._in_menu_bar(ctrl)
         menu_parent = self._menu_parent(ctrl)
-        in_menu_now = (menu_parent is not None) or role == "menu"
+        in_menu_now = (menu_parent is not None) or (role == "menu" and not top_level_menu)
 
         # --- entered the menu bar ----------------------------------------- #
         if in_menu_bar_now and not self.in_menu_bar:
@@ -132,17 +137,49 @@ class MenuTracker:
     # UIA tree helpers (operate on a vendored uiautomation.Control)
     # ------------------------------------------------------------------ #
     @staticmethod
+    def _is_atspi(node):
+        """An Atspi.Accessible (Linux) rather than a uiautomation Control."""
+        return node is not None and not hasattr(node, "ControlTypeName") and hasattr(node, "get_role")
+
+    @staticmethod
+    def _atspi_role_name(node):
+        try:
+            return node.get_role_name() or ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _is_top_level_menu(ctrl):
+        """An AT-SPI MENU whose parent is the MENU_BAR - an entry of the bar."""
+        if not MenuTracker._is_atspi(ctrl):
+            return False
+        try:
+            parent = ctrl.get_parent()
+            return parent is not None and MenuTracker._atspi_role_name(parent) == "menu bar"
+        except Exception:
+            return False
+
+    @staticmethod
     def _in_menu_bar(ctrl):
         node = ctrl
         depth = 0
+        atspi = MenuTracker._is_atspi(ctrl)
         while node is not None and depth < 8:
             try:
-                if node.ControlTypeName == "MenuBarControl":
+                if atspi:
+                    name = MenuTracker._atspi_role_name(node)
+                    if name == "menu bar":
+                        return True
+                    # Everything under a GTK menu bar has the bar as an
+                    # ancestor; an item inside a dropdown is in THAT menu.
+                    if name == "menu" and node is not ctrl:
+                        return False
+                elif node.ControlTypeName == "MenuBarControl":
                     return True
             except Exception:
                 return False
             try:
-                node = node.GetParentControl()
+                node = node.get_parent() if atspi else node.GetParentControl()
             except Exception:
                 return False
             depth += 1
@@ -150,17 +187,31 @@ class MenuTracker:
 
     @staticmethod
     def _menu_parent(ctrl):
-        """Nearest ancestor MenuControl (the open menu container), or None."""
+        """Nearest ancestor MenuControl (the open menu container), or None.
+
+        On Linux a GTK menu is a MENU whose items are MENU_ITEMs, and the
+        menu bar's own entries are MENUs too: the menu a focused item is
+        in is the nearest MENU above it, and a focused top-level MENU with
+        no MENU above it is on the bar, not in a menu."""
         node = ctrl
         depth = 0
+        atspi = MenuTracker._is_atspi(ctrl)
+        if atspi:
+            try:
+                node = ctrl.get_parent()
+            except Exception:
+                return None
         while node is not None and depth < 8:
             try:
-                if node.ControlTypeName == "MenuControl":
+                if atspi:
+                    if MenuTracker._atspi_role_name(node) == "menu":
+                        return node
+                elif node.ControlTypeName == "MenuControl":
                     return node
             except Exception:
                 return None
             try:
-                node = node.GetParentControl()
+                node = node.get_parent() if atspi else node.GetParentControl()
             except Exception:
                 return None
             depth += 1
@@ -168,6 +219,12 @@ class MenuTracker:
 
     @staticmethod
     def _menu_id(menu):
+        if MenuTracker._is_atspi(menu):
+            try:
+                from titan_access import atspi_focus
+                return ("atspi",) + atspi_focus.path_key(menu)
+            except Exception:
+                return id(menu)
         try:
             rid = menu.GetRuntimeId()
             if rid:
@@ -183,6 +240,8 @@ class MenuTracker:
     @staticmethod
     def _name(menu):
         try:
+            if MenuTracker._is_atspi(menu):
+                return (menu.get_name() or "").strip()
             return (menu.Name or "").strip()
         except Exception:
             return ""
@@ -190,6 +249,14 @@ class MenuTracker:
     @staticmethod
     def _count_items(menu):
         try:
+            if MenuTracker._is_atspi(menu):
+                count = 0
+                for i in range(min(int(menu.get_child_count()), 200)):
+                    child = menu.get_child_at_index(i)
+                    if child is not None and MenuTracker._atspi_role_name(child) in (
+                            "menu item", "check menu item", "radio menu item", "menu"):
+                        count += 1
+                return count
             return sum(1 for c in menu.GetChildren()
                        if c.ControlTypeName == "MenuItemControl")
         except Exception:

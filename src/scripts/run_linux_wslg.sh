@@ -14,6 +14,11 @@
 # not work there, AT-SPI does.
 cd "$(dirname "$0")/../.."
 export DISPLAY="${DISPLAY:-:0}" SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-pulseaudio}" PYTHONUTF8=1
+# GTK picks its Wayland backend whenever WAYLAND_DISPLAY is set, and under
+# WSLg that is a Titan with NO X window: nothing for xdotool/XTEST to drive,
+# GetHandle() answering 0, no X keyboard grab for the registry. As an X11
+# client under XWayland it has all three. A real desktop may override this.
+export GDK_BACKEND="${GDK_BACKEND:-x11}"
 export GTK_MODULES="${GTK_MODULES:-gail:atk-bridge}" NO_AT_BRIDGE=0
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] || [ ! -S "${DBUS_SESSION_BUS_ADDRESS#unix:path=}" ]; then
   eval "$(dbus-launch --sh-syntax)" 2>/dev/null

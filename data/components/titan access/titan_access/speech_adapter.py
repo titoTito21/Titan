@@ -26,6 +26,7 @@ This module emits no user-facing text, so it needs no localization keys.
 """
 
 import threading
+import os
 import time
 
 from titan_access.contracts import SpeechLike  # noqa: F401  (documents intent)
@@ -56,6 +57,16 @@ def _estimate_duration(text, cap=2.5):
     seconds = 0.28 + len(text or "") / 16.0
     return seconds if cap is None else min(cap, seconds)
 
+
+
+import collections as _collections
+_SPOKEN = _collections.deque(maxlen=20)
+_TRACE = bool(os.environ.get("TITAN_ACCESS_TRACE"))
+
+
+def spoken():
+    """The last twenty things the reader was asked to say, oldest first."""
+    return list(_SPOKEN)
 
 class _Utterance(object):
     """One queued unit of speech: plain text, or pitched parts to concatenate."""
@@ -364,6 +375,18 @@ class SpeechAdapter(object):
         """
         if not utterance.has_text:
             return
+        # **What was said is written down** (`spoken`, the last twenty),
+        # and printed when ``TITAN_ACCESS_TRACE`` is set: "the reader says
+        # nothing about the list" is a report with no evidence in it, and
+        # a log of synthesiser timings says nothing about the words.
+        try:
+            said = utterance.text if utterance.text else " / ".join(
+                str(seg[0]) for seg in (utterance.segments or []))
+            _SPOKEN.append(said)
+            if _TRACE:
+                print(f"[TitanAccess] said: {said}", flush=True)
+        except Exception:
+            pass
         with self._q_lock:
             if interrupt:
                 self._queue = []

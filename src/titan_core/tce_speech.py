@@ -39,6 +39,35 @@ import threading
 # Settings reader — same format as src/settings/settings.py (no configparser)
 # ---------------------------------------------------------------------------
 
+
+def default_voice_index(voices, language):
+    """The index of the voice that speaks *language* ("pl", "en-gb"), else
+    0. A voice is a dict with an ``id`` (eSpeak: the language code, "pl" or
+    "en-gb+f3") and a ``display_name``, or a plain name; the language is
+    matched on the id first, then on the display name ("Polish")."""
+    lang = str(language or '').strip().lower().replace('_', '-')
+    if not lang or not voices:
+        return 0
+    base = lang.split('-')[0]
+    names = {'pl': 'polish', 'en': 'english', 'de': 'german', 'fr': 'french',
+             'es': 'spanish', 'it': 'italian', 'ru': 'russian', 'cs': 'czech',
+             'uk': 'ukrainian', 'pt': 'portuguese', 'nl': 'dutch', 'sv': 'swedish'}
+    exact, prefix, by_name = None, None, None
+    for i, v in enumerate(voices):
+        vid = str(v.get('id', '') if isinstance(v, dict) else v).strip().lower()
+        shown = str(v.get('display_name', '') if isinstance(v, dict) else v).strip().lower()
+        vbase = vid.split('+')[0]
+        if vbase == lang and exact is None:
+            exact = i
+        elif (vbase == base or vbase.startswith(base + '-')) and prefix is None:
+            prefix = i
+        elif names.get(base) and names[base] in shown and by_name is None:
+            by_name = i
+    for found in (exact, prefix, by_name):
+        if found is not None:
+            return found
+    return 0
+
 def _get_settings_path():
     """Get path to Titan settings file."""
     p = platform.system()
@@ -212,9 +241,13 @@ def _apply_stereo_settings(stereo):
                     stereo.set_voice(0)
                     print(f"[tce_speech] Voice '{voice_id}' not found, using first available")
             elif voices:
-                # No voice saved — use first available as default
-                stereo.set_voice(0)
-                print(f"[tce_speech] No voice saved, using first available")
+                # No voice saved: the voice of Titan's own language, where
+                # the engine has one, else the first. eSpeak lists its 170
+                # voices alphabetically, so "the first" was Afrikaans - and a
+                # Polish reader read every Polish word in it.
+                index = default_voice_index(voices, _get_setting('language', 'pl'))
+                stereo.set_voice(index)
+                print(f"[tce_speech] No voice saved, using the language's voice (index {index})")
         except Exception as e:
             print(f"[tce_speech] Error setting voice: {e}")
 

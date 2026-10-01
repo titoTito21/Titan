@@ -386,6 +386,13 @@ class ContextPresenter:
             # common for native #32770 dialogs). We can still read a dialog's
             # content by resolving the foreground window through UIA.
             return self._foreground_dialog_segments(obj)
+        if getattr(obj, "provider", "") == "atspi" or not hasattr(native, "ControlTypeName"):
+            # Linux: the same walk up the AT-SPI tree. Everything below asks
+            # UIA questions of the node (ControlTypeName, GetParentControl),
+            # which an Atspi.Accessible answers with AttributeError - so
+            # nothing was ever announced about a dialog, a group or a list
+            # entered on Linux.
+            return self._compute_atspi(obj, native, is_tce)
 
         # Whether this focus is a collection item that could live in a status bar.
         item_in_tce = is_tce and obj.role in ("listitem", "treeitem")
@@ -448,6 +455,146 @@ class ContextPresenter:
                 segments.append(seg)
         self._seen = current_ids
         return segments
+
+    # ------------------------------------------------------------------ #
+    # The same walk over AT-SPI (Linux)
+    # ------------------------------------------------------------------ #
+    def _compute_atspi(self, obj, native, is_tce):
+        from titan_access import atspi_focus
+        Atspi = atspi_focus.atspi()
+        if Atspi is None:
+            return []
+        R = Atspi.Role
+        role_of = {
+            R.FRAME: "window", R.WINDOW: "window", R.DIALOG: "window",
+            R.ALERT: "window", R.FILE_CHOOSER: "window", R.COLOR_CHOOSER: "window",
+            R.FONT_CHOOSER: "window",
+            R.PANEL: "group", R.GROUPING: "group",
+            R.LIST: "list", R.LIST_BOX: "list", R.TABLE: "list",
+            R.TREE: "tree", R.TREE_TABLE: "tree",
+            R.TOOL_BAR: "toolbar", R.PAGE_TAB_LIST: "tabcontrol",
+            R.STATUS_BAR: "statusbar",
+        }
+        dialog_roles = (R.DIALOG, R.ALERT, R.FILE_CHOOSER, R.COLOR_CHOOSER, R.FONT_CHOOSER)
+        item_in_tce = is_tce and obj.role in ("listitem", "treeitem", "cell", "row")
+        nearest = {}
+        nodes = {}
+        for node in atspi_focus.ancestors(native, _MAX_DEPTH)[1:]:
+            try:
+                arole = node.get_role()
+                name = (node.get_name() or "").strip()
+            except Exception:
+                break
+            rid = ("atspi",) + atspi_focus.path_key(node)
+            if item_in_tce and self.last_status_item_label is None and (
+                    arole == R.STATUS_BAR
+                    or (arole in (R.LIST, R.TABLE, R.PANEL, R.TOOL_BAR)
+                        and self._name_is_status_bar(name))):
+                self.last_status_item_label = L("element.statusBarItem")
+            role = role_of.get(arole)
+            if role == "statusbar":
+                continue
+            # A nameless panel is layout, not a group a user can hear.
+            if role == "group" and not name:
+                continue
+            if role and role not in nearest:
+                nearest[role] = (name, rid)
+                nodes[role] = node
+        current_ids = {rid for (_n, rid) in nearest.values() if rid}
+        segments = []
+        for role in _ROLE_ORDER:
+            entry = nearest.get(role)
+            if not entry:
+                continue
+            name, rid = entry
+            if not rid or rid in self._seen:
+                continue
+            node = nodes.get(role)
+            if role == "window" and node is not None and self._atspi_is_dialog(node, dialog_roles):
+                segments.extend(self._atspi_dialog_segments(name, rid, node, native))
+                continue
+            seg = self._segment_for(role, name, is_tce)
+            if seg:
+                segments.append(seg)
+        self._seen = current_ids
+        return segments
+
+    @staticmethod
+    def _atspi_is_dialog(node, dialog_roles):
+        try:
+            if node.get_role() in dialog_roles:
+                return True
+            # A wx dialog on GTK is a GtkDialog, which ATK reports as a
+            # DIALOG; a frame shown modally is a FRAME with the MODAL state.
+            from titan_access import atspi_focus
+            Atspi = atspi_focus.atspi()
+            return Atspi is not None and bool(
+                node.get_state_set().contains(Atspi.StateType.MODAL))
+        except Exception:
+            return False
+
+    def _atspi_dialog_segments(self, name, rid, window_node, focused_native):
+        """Header and message of a dialog entered through AT-SPI, read once."""
+        kind = self._declared_or_detected_kind(0)
+        segs = self._build_dialog_header(name, kind)
+        if rid and rid not in self._seen_dialogs:
+            self._seen_dialogs.add(rid)
+            body = self._atspi_dialog_body_text(window_node, focused_native)
+            if body:
+                segs.append((body, _CONTEXT_PITCH))
+        return segs
+
+    def _atspi_dialog_body_text(self, window_node, focused_native):
+        from titan_access import atspi_focus
+        Atspi = atspi_focus.atspi()
+        if Atspi is None or window_node is None:
+            return ""
+        focus_key = atspi_focus.path_key(focused_native) if focused_native is not None else ()
+        parts = []
+        budget = [_DIALOG_SCAN_MAX_NODES]
+        text_roles = (Atspi.Role.LABEL, Atspi.Role.STATIC, Atspi.Role.TEXT)
+
+        def walk(node, depth):
+            if node is None or budget[0] <= 0 or depth > _DIALOG_SCAN_MAX_DEPTH:
+                return
+            budget[0] -= 1
+            try:
+                if atspi_focus.path_key(node) == focus_key:
+                    return                       # announced separately
+                role = node.get_role()
+                if role in text_roles:
+                    name = (node.get_name() or "").strip()
+                    if not name and role == Atspi.Role.TEXT:
+                        try:
+                            if not node.get_state_set().contains(Atspi.StateType.EDITABLE):
+                                t = node.get_text_iface() if hasattr(node, 'get_text_iface') else node
+                                n = int(t.get_character_count())
+                                name = (t.get_text(0, min(n, 2000)) or "").strip() if n else ""
+                        except Exception:
+                            name = ""
+                    if name:
+                        parts.append(name)
+                    return
+                if role in (Atspi.Role.PUSH_BUTTON, Atspi.Role.MENU_BAR, Atspi.Role.TOOL_BAR):
+                    return
+                count = min(int(node.get_child_count()), 80)
+            except Exception:
+                return
+            for i in range(count):
+                if budget[0] <= 0:
+                    break
+                try:
+                    walk(node.get_child_at_index(i), depth + 1)
+                except Exception:
+                    break
+        walk(window_node, 0)
+        seen = set()
+        out = []
+        for t in parts:
+            if t and t not in seen:
+                seen.add(t)
+                out.append(t)
+        return " ".join(out)[:1500]
 
     @staticmethod
     def _segment_for(role, name, is_tce=False):

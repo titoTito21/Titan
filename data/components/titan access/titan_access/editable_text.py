@@ -183,6 +183,10 @@ class EditableTextHandler:
         self._last_caret = None
         self._last_win32_pos = None
         try:
+            text = self._atspi_text()
+            if text is not None:
+                self._last_caret = text.caret()
+                return
             if self._is_win32_edit():
                 # Edit-class window: track the caret through Win32 (reliable),
                 # not the slow/blocking UIA TextPattern it may also expose.
@@ -225,6 +229,117 @@ class EditableTextHandler:
             return False
         return self._is_edit_class(getattr(obj, "class_name", "")) and bool(self._edit_hwnd())
 
+    # ------------------------------------------------------------------ #
+    # Linux: the AT-SPI Text interface (caret offset, string at offset)
+    # ------------------------------------------------------------------ #
+    def _atspi_text(self):
+        """``atspi_focus.TextOf`` for the current control, or None (UIA, or
+        a control with no Text interface)."""
+        obj = self.engine.current_object
+        native = getattr(obj, "native", None) if obj is not None else None
+        if native is None:
+            return None
+        try:
+            from titan_access import atspi_focus
+            if not atspi_focus.is_accessible(native):
+                return None
+            return atspi_focus.TextOf.of(native)
+        except Exception:
+            return None
+
+    def _atspi_review_offset(self, text):
+        owner = id(getattr(self.engine.current_object, "native", None))
+        if self._review is None or self._review_owner != owner or not isinstance(self._review, int):
+            self._review = max(0, text.caret())
+            self._review_owner = owner
+        return self._review
+
+    def _atspi_read_caret(self, text, kind):
+        """The unit at the LIVE caret, after the arrow key has moved it: the
+        application applies the key after the hook answers, so the read
+        waits (up to 0.3 s) for the caret to leave where it was."""
+        before = self._last_caret if isinstance(self._last_caret, int) else None
+        deadline = time.time() + 0.30
+        caret = text.caret()
+        while before is not None and caret == before and time.time() < deadline:
+            time.sleep(0.01)
+            caret = text.caret()
+        if caret < 0:
+            return False
+        self._last_caret = caret
+        self._review = caret
+        self._review_owner = id(getattr(self.engine.current_object, "native", None))
+        content, _s, _e = text.unit(caret, kind)
+        if kind == "char" and caret >= text.length():
+            content = ""
+        self._speak_caret_text(kind, content)
+        return True
+
+    def _atspi_read_review(self, text, kind):
+        offset = self._atspi_review_offset(text)
+        content, _s, _e = text.unit(offset, kind)
+        if kind == "char":
+            self._speak_char(content)
+        else:
+            stripped = content.strip()
+            empty = L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
+            self.engine.speak(stripped or empty, obj=self.engine.current_object)
+        return True
+
+    def _atspi_navigate(self, text, kind, nxt):
+        """Move the review cursor one char / word / line and say it. A word
+        is the next run of non-blank characters, whatever the toolkit says
+        the "word" at a space is."""
+        offset = self._atspi_review_offset(text)
+        length = text.length()
+        target = None
+        if kind == "char":
+            target = offset + 1 if nxt else offset - 1
+            if target < 0 or target >= length:
+                target = None
+        elif kind == "line":
+            _c, start, end = text.unit(offset, "line")
+            if nxt:
+                target = end if end > offset and end < length else None
+            else:
+                target = text.unit(start - 1, "line")[1] if start > 0 else None
+        else:
+            _c, start, end = text.unit(offset, "word")
+            if nxt:
+                probe = max(end, offset + 1)
+                target = self._atspi_skip_blank(text, probe, length, forward=True)
+            else:
+                probe = (start if start < offset else offset) - 1
+                found = self._atspi_skip_blank(text, probe, length, forward=False)
+                target = text.unit(found, "word")[1] if found is not None else None
+        if target is None:
+            self.engine.play("edge.ogg", self.engine.current_object)
+            self.engine.speak(L("edit.endOfText") if nxt else L("edit.start"))
+            return True
+        self._review = target
+        content, _s, _e = text.unit(target, kind)
+        if kind == "char":
+            self._speak_char(content)
+        else:
+            stripped = content.strip()
+            empty = L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
+            self.engine.speak(stripped or empty, obj=self.engine.current_object)
+        return True
+
+    @staticmethod
+    def _atspi_skip_blank(text, offset, length, forward, limit=400):
+        """The nearest non-blank offset from *offset* in the given direction
+        (inclusive), or None at the edge of the text."""
+        step = 1 if forward else -1
+        for _ in range(limit):
+            if offset < 0 or offset >= length:
+                return None
+            ch = text.unit(offset, "char")[0]
+            if ch and not ch.isspace():
+                return offset
+            offset += step
+        return None
+
     def _read_caret(self, kind):
         """Read the char / word / line at the live caret after an arrow move.
 
@@ -238,6 +353,9 @@ class EditableTextHandler:
         windows rather than UIA. Other controls use the UIA TextPattern, with the
         Win32 path as a last-resort fallback when there is no TextPattern at all.
         """
+        text = self._atspi_text()
+        if text is not None:
+            return self._atspi_read_caret(text, kind)
         if self._is_win32_edit():
             if self._read_caret_win32(kind):
                 return True
@@ -373,6 +491,9 @@ class EditableTextHandler:
     # Reading at the review cursor
     # ================================================================== #
     def read_current_char(self):
+        text = self._atspi_text()
+        if text is not None:
+            return self._atspi_read_review(text, "char")
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()
@@ -383,6 +504,9 @@ class EditableTextHandler:
         return True
 
     def read_current_word(self):
+        text = self._atspi_text()
+        if text is not None:
+            return self._atspi_read_review(text, "word")
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()
@@ -394,6 +518,9 @@ class EditableTextHandler:
         return True
 
     def read_current_line(self):
+        text = self._atspi_text()
+        if text is not None:
+            return self._atspi_read_review(text, "line")
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()
@@ -408,15 +535,20 @@ class EditableTextHandler:
     # Moving the review cursor
     # ================================================================== #
     def navigate_char(self, next):
-        return self._navigate(_UNIT_CHAR, next, read_char=True)
+        return self._navigate(_UNIT_CHAR, next, read_char=True, kind="char")
 
     def navigate_word(self, next):
-        return self._navigate(_UNIT_WORD, next, read_char=False)
+        return self._navigate(_UNIT_WORD, next, read_char=False, kind="word")
 
     def navigate_line(self, next):
-        return self._navigate(_UNIT_LINE, next, read_char=False)
+        return self._navigate(_UNIT_LINE, next, read_char=False, kind="line")
 
-    def _navigate(self, unit, next, read_char):
+    def _navigate(self, unit, next, read_char, kind="char"):
+        text = self._atspi_text()
+        if text is not None:
+            # The kind by NAME: without uiautomation every _UNIT_* is None,
+            # and "unit is _UNIT_WORD" would call a line a word.
+            return self._atspi_navigate(text, kind, next)
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()
@@ -448,6 +580,17 @@ class EditableTextHandler:
     # Position / selection
     # ================================================================== #
     def read_position(self):
+        text = self._atspi_text()
+        if text is not None:
+            caret = text.caret()
+            if caret < 0:
+                self.engine.speak(L("edit.noPositionInfo"))
+                return True
+            before = text.all()[:caret]
+            line = before.count("\n") + 1
+            col = len(before) - (before.rfind("\n") + 1) + 1
+            self.engine.speak(L("edit.position", line, col))
+            return True
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()
@@ -468,6 +611,14 @@ class EditableTextHandler:
         return True
 
     def read_selection(self):
+        text = self._atspi_text()
+        if text is not None:
+            chosen = text.selection()
+            if chosen.strip():
+                self.engine.speak(chosen, obj=self.engine.current_object)
+            else:
+                self.engine.speak(L("edit.noSelection"))
+            return True
         tp = self._text_pattern()
         if tp is None:
             return self._cannot()

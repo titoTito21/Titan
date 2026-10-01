@@ -518,6 +518,198 @@ after the round above, and measured in the same WSLg.
   `src/scripts/check_atspi_window.py`.
 
 
+#### Lists, menus, dialogs and the keyboard, read through AT-SPI for real
+
+Reported as "Titan Access has to work on Linux: it reads neither list
+items, nor menus, nor dialogs, and quick navigation does nothing". All
+four were true, and none of them was in the code that reads a control -
+each was a layer underneath answering nothing, measured in WSLg (Debian
+11, at-spi2-core 2.38) by probing the bus with
+`Atspi.EventListener` for every event kind and injecting keys.
+
+- **Titan was a Wayland window, not an X one.** GTK picks its Wayland
+  backend whenever `WAYLAND_DISPLAY` is set, and under WSLg it is. The X
+  window tree was EMPTY: nothing for XTEST (`xdotool`) to drive,
+  `GetHandle()` 0, no X keyboard grab for the registry to take.
+  `src/scripts/run_linux_wslg.sh` exports `GDK_BACKEND=x11` (overridable).
+- **The registry says no to every keystroke listener, and listens
+  anyway.** at-spi2-core 2.38's `spi_controller_register_device_listener`
+  prepends the listener, notifies every application, and then falls off
+  the end of its `switch` into `return FALSE`. Measured: 28 keys delivered
+  to a listener the bus had "refused". `atspi_keys.start` now registers a
+  NON-global listener (`SYNCHRONOUS | CANCONSUME`, no `ALL_WINDOWS`) for
+  all 256 modifier masks and treats the reply as advisory. Non-global is
+  the right one anyway: it is served by the application's own ATK bridge
+  (`NotifyListenersSync`, before the toolkit sees the key, consumable),
+  which a Wayland session has and a GTK/Qt/Chromium window always
+  provides; a global one is an X grab. Both at once would deliver a key
+  the reader did not take twice. `registration_report()` says what was
+  registered and what the registry answered.
+- **`Atspi.event_main()` runs the DEFAULT GLib context - the one wx's
+  GTK loop runs on the main thread.** GLib lets whichever thread acquires
+  a context dispatch it, so the moment the main thread let go (a modal
+  dialog closing) the reader's worker dispatched GTK: measured, the main
+  frame's close handler ran on the TitanAccessEngine thread with
+  `Atspi.event_main` in its stack - Titan "exited with code 0" by itself -
+  and earlier a segmentation fault while speaking. `engine._run_posix`
+  now makes a `GLib.MainContext` of its own, pushes it thread-default,
+  `Atspi.set_main_context(ctx)` (in 2.38 and in the GIR), and runs
+  `GLib.MainLoop.new(ctx)`; `post_to_worker` attaches an idle source to
+  that context; `stop()` quits that loop. libatspi 2.38 still attaches a
+  newly opened application connection to the default context whatever it
+  was told, so `atspi_focus.pin_main_context` sets a throwaway context
+  and then ours (the call returns early for the context it already has),
+  and a 3-second watch on the worker re-pins whenever the provider counts
+  an event that arrived on another thread.
+- **A list row never gets a focus event.** Down in a wx list on GTK is
+  `object:selection-changed` on the TABLE and nothing on the cell;
+  `object:active-descendant-changed` fires only when the table regains
+  the focus; F10 is `object:state-changed:selected` on the MENU plus
+  `focus:` on it, with the menu bar's own entries being MENUs whose
+  dropdown items sit beneath them; a `wx.MessageDialog` is an ALERT with
+  `window:activate`, `focus:` on its OK button and the message in LABEL
+  children. The provider turns the selection, selected-state and
+  active-descendant events into the same focus callback (`_deliver`,
+  de-duplicated by `path_key` within 0.3 s, and a selection in a
+  container nobody is on - the status bar re-selecting its clock - is
+  not news); a container taking the focus is read as its selected row; a
+  cell of a one-column table is a list item; a row's position is its ROW
+  among the rows (the first child of a GtkTreeView is the column header,
+  which made the first row "2 of 10").
+- **The dialog, the group and the menu were never found because every
+  tree walk was UIA's.** `context_presenter._walk_up` asks
+  `ControlTypeName` / `GetParentControl`, which an `Atspi.Accessible`
+  answers with `AttributeError` - caught, silently, every time.
+  `_compute_atspi` is the same walk over AT-SPI (dialog header + body,
+  named group, list, window, status-bar item); `menu_tracker` has
+  AT-SPI branches for its five tree questions and treats a top-level
+  MENU as an item of the bar, so a menu opening reads as "Program, menu,
+  6 items, Install data package..., menu item 1 of 6".
+- **An AT-SPI event may land on any thread that touched the bus, and
+  is handed back.** libatspi DEFERS every incoming message and processes
+  the queue from whichever thread next makes a libatspi call (or from its
+  idle source), so a selection event from Titan's own window arrived on
+  the main thread 150 times a minute whatever the context was pinned to.
+  The provider counts those (`wrong_thread_events`, the first four named
+  in the log) and `_on_wrong_thread` re-posts the event to the reader's
+  thread through `provider.marshal` (`engine.post_to_worker`), so every
+  handler runs where the engine's state lives.
+- **Titan aborted with `[xcb] Unknown sequence number while processing
+  queue` the moment Settings was read.** Neither wxGTK nor GDK 3 calls
+  `XInitThreads` (checked with `nm -D`: no reference), and the settings
+  window counts game controllers with `pygame.init()`, whose SDL video
+  driver calls it LATE - after GTK's Display is open - which libX11
+  answers with that assertion on its next event poll. `main.py` calls
+  `XInitThreads()` through ctypes before `import wx` on Linux, which
+  covers every Display the process will open. This is also the likeliest
+  cause of the segmentation fault seen on the first run.
+- **The reader spoke Polish in an Afrikaans voice.** With no voice
+  saved, `tce_speech` took "the first available", and eSpeak lists 170
+  voices alphabetically. `default_voice_index` picks the voice of
+  Titan's own language.
+- **What the reader said is written down.** `speech_adapter.spoken()`
+  keeps the last twenty utterances and `TITAN_ACCESS_TRACE=1` prints
+  each as `[TitanAccess] said: ...`; a log of synthesiser timings says
+  nothing about the words, and "it says nothing about the list" is a
+  report with no evidence in it.
+- Measured after, on the real Titan in WSLg: Down in the application
+  list says "File Manager / list item / selected / 2 of 9", arriving on
+  the window says "Pakiet aplikacji Titan, window / Lista aplikacji,
+  list / Aplikacje, 1 z 6 / list item / 1 of 9", opening the Program menu
+  through its AT-SPI action says the menu and then "Install data
+  package..., menu item, 1 of 6", and the Titan process no longer exits
+  by itself. Under WSLg a GTK menu opened by an injected F10 takes no
+  keys (no Weston keyboard focus, so GTK's grab fails) and the window
+  loses X focus whenever the Windows side moves it; a real desktop has
+  neither limit.
+- **Scan mode read every row twice.** It moves the real focus onto the
+  node it announces (by design: in an application the focus IS the
+  cursor), and the focus event that move fires came back through the
+  provider a moment later as a second announcement. `_scan_follow_focus`
+  recognises the focus scan mode itself caused (`_scan_moved`, 1.5 s)
+  and `on_focus` does not announce it again; a focus the user moved is
+  still said. Measured after: Insert+Space on the Settings window - "Tryb
+  skanowania włączony, elementów: 40", Down - "Dźwięk, element listy,
+  2 z 12", `b` - "Zapisz, przycisk", `h` - "Brak następnego: nagłówek",
+  Shift+B - "Brak poprzedniego: przycisk", Escape - "Tryb skanowania
+  wyłączony" - each once.
+- **Then everything else the keyboard reaches, asked for as "TPad,
+  wirtualne okno, OCR, etc".** Each of these walked the tree through UIA
+  only, and an `Atspi.Accessible` answers those names with
+  `AttributeError` - caught, every time, so the feature was present and
+  silent:
+  - **Object navigation** (Insert+NumPad): `atspi_focus.simple_step` /
+    `raw_step` are NVDA's simple review over AT-SPI (a nameless panel,
+    filler, scroll pane or scroll bar is stepped over; a named group and
+    a titled window are places), `do_default_action` presses an object
+    through its own Action interface or a Return key through the bus,
+    and `object_nav` asks them first. **GTK answers -1 from
+    `get_index_in_parent` for a text view inside a scrolled window**, and
+    "-1 plus one" is the object itself: `index_of` finds the child by
+    identity (libatspi keeps one wrapper per object) and then by role,
+    name and place. Two hidden scroll bars with identical zero bounds
+    then matched each other for ever - `_flat_step` never revisits a
+    path key.
+  - **The walked lists** (virtual window, palette, messages) read a
+    window through `nvda_shape.Adapted` - `children`, `parent`, the
+    action, `setFocus` - and `Hooks.foreground`, all of which were UIA
+    or `GetForegroundWindow`; each has its AT-SPI half now.
+  - **The text field** (`editable_text`): the AT-SPI Text interface
+    through `atspi_focus.TextOf` - the caret offset, the character, word
+    or line at an offset (`get_string_at_offset`, with the older
+    boundary call behind it), the selection. The caret read after an
+    arrow waits up to 0.3 s for the caret to LEAVE where it was, as the
+    UIA path does; moving by word skips blanks itself, because what a
+    toolkit calls "the word at a space" varies. The unit is passed by
+    NAME: without uiautomation every `_UNIT_*` is None and `unit is
+    _UNIT_WORD` would have called a line a word.
+  - **The dial (TPad)** is unchanged: NumPad Minus toggles it, and its
+    categories drive speech, the editable handler and quick navigation,
+    all of which now answer on Linux.
+  - **OCR's picture** (`src/ai/ocr/capture.py`): `_posix_grab` reads
+    the window itself through python-xlib's `GetImage` - no tool, and it
+    works under XWayland, whose ROOT window answers BadMatch - and falls
+    back to a screenshot tool (grim, gnome-screenshot, scrot, import)
+    for a Wayland session; `foreground_window` answers the AT-SPI
+    title. The AI tier and Titan's local model (`rapidocr`, when
+    installed) then read it. Windows' own recogniser (`localOcr`) stays
+    Windows, and says so.
+  - **Not ported**: `important_places` (desktop, taskbar, tray and
+    Explorer bands are Windows' own places).
+  - Measured in a probe process against a wx window in another: Next
+    walked "Jablko 1 z 3 / Gruszka / Tabela / Notatka: / Pole edycji /
+    Opcje, Panel / Zaznacz mnie, pole wyboru / Zapisz, przycisk", parent
+    "Okno probne, Okno"; the text field read its line, "ma" then "kota."
+    by word, "Drugi wiersz tekstu." by line, "Linia 1, znak 1"; the
+    virtual window listed 10 controls; `capture_window` returned a
+    520x420 picture with the window's title.
+  - **The ATK bridge sends its events down the DIRECT connection too**,
+    the one libatspi opens on first contact with a program - on the
+    default context, whatever was pinned - so the first event from a
+    newly met window arrived on the main thread, and a start-up walk of
+    Titan's own window from the reader's thread while the main thread
+    rebuilt a list ended in a segmentation fault inside libatspi (not
+    thread-safe). Now: the provider's `repin` (set by the engine) runs on
+    the reader's thread the moment an event arrives elsewhere, before
+    that event is handled, rate-limited to once a second; the start-up
+    focus search is bounded (`_find_focused`, 160 nodes, 12 levels) -
+    the focus event says where the focus is a moment later anyway.
+    Measured after: zero events off the reader's thread in a session.
+  - **A list that refreshes itself re-selects its row.** Titan's
+    application list does, every few seconds, and the reader read the
+    same row again each time; a `selection-changed` whose selected child
+    is the row said last is not the user moving (a different row is).
+  - **A probe's loop must RUN between lookups.** libatspi defers every
+    incoming message and drains the queue from its idle source or after
+    a call; a lookup that blocks the reader's thread in a loop sees the
+    desktop as it was when the loop started (one application, for ever).
+    Short calls on the worker, sleeps on the main thread. And GTK emits
+    no focus event for `grab_focus` in a window the compositor has not
+    activated, so a probe sets `engine.current_object` itself.
+- Tests: `tests/test_linux_reader_and_shell.py` (33; a fake Atspi, so
+  they run on Windows too). Its `if __name__ == '__main__'` block sat in
+  the MIDDLE of the file, so every class after it had never run.
+
 ### Plugin System
 - **Applications**: Located in `data/applications/`, each has `__app.TCE` config file defining name, description, main file
 - **Components**: Located in `data/components/`, each has `__component__.TCE` config file, loaded by `ComponentManager`

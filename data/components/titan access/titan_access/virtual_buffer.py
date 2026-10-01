@@ -1023,14 +1023,25 @@ def _build_for_window_atspi(allow_ocr, on_status, prefer):
     doc = VirtualDocument(hwnd=0, title=atspi_focus.window_title(window))
     if window is None:
         return doc
-    tiers = [prefer] if prefer else ["atspi"]
+    # The accessibility tree first; a window that answers nothing (a
+    # game, a program drawing its own interface) is read as a picture by
+    # Titan's local model, and by the AI when there is a key - only when
+    # the user asked for this document (`allow_ocr`), as on Windows.
+    tiers = [prefer] if prefer else (["atspi", "ocr"] if allow_ocr else ["atspi"])
     for tier in tiers:
         try:
-            nodes = build_atspi(window) if tier == "atspi" else []
+            if tier == "atspi":
+                nodes = build_atspi(window)
+            elif tier == "ocr":
+                if on_status:
+                    on_status("ocr")
+                nodes = build_ocr(ATSPI_WINDOW_TOKEN, on_status=on_status)
+            else:
+                nodes = []
         except Exception as e:
             print(f"[TitanAccess] virtual_buffer: {tier} build failed: {e}")
             nodes = []
-        if nodes:
+        if len(nodes) >= MIN_USEFUL_NODES or (nodes and tier == prefer):
             doc.nodes = nodes
             doc.source = tier
             break

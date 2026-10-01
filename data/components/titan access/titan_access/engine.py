@@ -209,13 +209,12 @@ class TitanAccessEngine:
             pass
         # Post WM_QUIT to the worker thread's message loop.
         if not _IS_WINDOWS:
-            try:
-                from . import atspi_focus
-                Atspi = atspi_focus.atspi()
-                if Atspi is not None:
-                    Atspi.event_quit()
-            except Exception:
-                pass
+            loop = getattr(self, '_glib_loop', None)
+            if loop is not None:
+                try:
+                    loop.quit()
+                except Exception:
+                    pass
         elif self._thread_id:
             try:
                 ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
@@ -295,14 +294,50 @@ class TitanAccessEngine:
         """Worker thread on Linux: build the subsystems, then run the GLib
         main loop that AT-SPI delivers its events on - the focus, the state
         changes and the keystrokes all arrive here, on this thread, as the
-        Win32 message pump delivers them on Windows."""
+        Win32 message pump delivers them on Windows.
+
+        **On a context of the reader's own.** ``Atspi.event_main()`` runs
+        the DEFAULT GLib context, which inside Titan is the context wx's
+        GTK main loop already runs on the main thread. GLib lets whichever
+        thread acquires a context dispatch it, so the moment the main
+        thread let go of it - a modal dialog closing - this thread
+        dispatched GTK: measured, the main frame's close handler ran on
+        the TitanAccessEngine thread (``shutdown_app`` with this loop in
+        its stack), and before that a segmentation fault with the reader
+        speaking. A context of its own is what makes this thread the
+        reader's and nothing else's; ``pin_main_context`` re-attaches a
+        connection libatspi 2.38 put on the default context anyway."""
+        self._glib_context = None
+        self._glib_loop = None
+        try:
+            from gi.repository import GLib
+            from . import atspi_focus
+            Atspi = atspi_focus.atspi()
+        except Exception:
+            GLib = None
+            Atspi = None
+        if GLib is not None and Atspi is not None:
+            try:
+                self._glib_context = GLib.MainContext()
+                self._glib_context.push_thread_default()
+                try:
+                    Atspi.init()
+                except Exception:
+                    pass
+                atspi_focus.pin_main_context(self._glib_context)
+                self._glib_loop = GLib.MainLoop.new(self._glib_context, False)
+            except Exception as e:
+                print(f"[TitanAccess] AT-SPI context error: {e}")
+                self._glib_context = None
+                self._glib_loop = None
         self._build_subsystems()
         self._ready.set()
         self._announce_started()
+        self._start_context_watch()
         try:
-            from . import atspi_focus
-            Atspi = atspi_focus.atspi()
-            if Atspi is not None:
+            if self._glib_loop is not None:
+                self._glib_loop.run()
+            elif Atspi is not None:
                 Atspi.event_main()
             else:
                 # No accessibility bus: nothing will ever arrive, but the
@@ -313,6 +348,55 @@ class TitanAccessEngine:
             print(f"[TitanAccess] AT-SPI main loop error: {e}")
         finally:
             self._teardown_subsystems()
+            try:
+                if self._glib_context is not None:
+                    self._glib_context.pop_thread_default()
+            except Exception:
+                pass
+            self._glib_loop = None
+
+    def _start_context_watch(self):
+        """Every few seconds: if an AT-SPI event arrived on a thread that is
+        not this one, an application's connection is on the default context
+        (libatspi 2.38 puts a newly opened one there) - pin everything to
+        ours again. Runs on this thread's own loop, costs nothing when all
+        is well."""
+        ctx = getattr(self, '_glib_context', None)
+        if ctx is None:
+            return
+        try:
+            from gi.repository import GLib
+            from . import atspi_focus
+        except Exception:
+            return
+        self._wrong_thread_seen = 0
+
+        self._repinned = 0
+
+        def _check(*_args):
+            if not self.running:
+                return False
+            provider = self.provider
+            seen = getattr(provider, 'wrong_thread_events', 0)
+            if seen > self._wrong_thread_seen:
+                self._wrong_thread_seen = seen
+                # A few times, then let it be: libatspi drains its deferred
+                # queue from whichever thread last made a call, so some
+                # events will always land elsewhere - and the provider
+                # hands those back to this thread (`marshal`). The re-pin
+                # is for a connection that really sits on the wrong context.
+                if self._repinned < 20:
+                    self._repinned += 1
+                    atspi_focus.pin_main_context(ctx)
+                    print(f"[TitanAccess] AT-SPI: re-pinned the connections to the "
+                          f"reader's thread ({seen} events had arrived elsewhere)")
+            return True
+        try:
+            src = GLib.timeout_source_new_seconds(3)
+            src.set_callback(_check)
+            src.attach(ctx)
+        except Exception as e:
+            print(f"[TitanAccess] AT-SPI context watch error: {e}")
 
     def _announce_started(self):
         try:
@@ -385,10 +469,14 @@ class TitanAccessEngine:
         def _mk_provider():
             if not _IS_WINDOWS:
                 # Linux: the AT-SPI tree, which is what Orca reads.
+                from titan_access import atspi_focus
                 from titan_access.atspi_focus import AtspiProvider
                 p = AtspiProvider()
                 p.add_focus_listener(self.on_focus)
                 p.add_state_listener(self.on_state_change)
+                p.marshal = self.post_to_worker
+                p.repin = lambda: atspi_focus.pin_main_context(
+                    getattr(self, '_glib_context', None))
                 p.start()
                 return p
             from titan_access.provider_manager import ProviderManager
@@ -970,10 +1058,14 @@ class TitanAccessEngine:
         with self._invoke_lock:
             self._invoke_queue.append(fn)
         if not _IS_WINDOWS:
-            # The GLib loop the AT-SPI events run on is the worker here.
+            # The GLib loop the AT-SPI events run on is the worker here -
+            # on ITS context, never the default one (that is wx's).
             try:
                 from gi.repository import GLib
-                GLib.idle_add(lambda: (self._drain_invokes(), False)[1])
+                ctx = getattr(self, '_glib_context', None)
+                src = GLib.idle_source_new()
+                src.set_callback(lambda *_a: (self._drain_invokes(), False)[1])
+                src.attach(ctx)
             except Exception:
                 self._drain_invokes()
             return
@@ -1343,9 +1435,10 @@ class TitanAccessEngine:
         # context reading the PREVIOUS focus's mode -- so after tabbing through a
         # form field and back to page content, arrows stayed in caret-tracking
         # mode and browse navigation appeared dead.
+        scan_said_it = False
         if self.browse is not None:
             try:
-                self.browse.update_for_focus(obj)
+                scan_said_it = bool(self.browse.update_for_focus(obj))
             except Exception as e:
                 print(f"[TitanAccess] browse update error: {e}")
         # A focused progress bar becomes the one the monitor reports.
@@ -1376,6 +1469,8 @@ class TitanAccessEngine:
         except Exception:
             pass
         self._window_arrived(obj)
+        if scan_said_it:
+            return                               # scan mode's own move, read already
         java = self._java_focus(obj)
         if java is not None:
             obj = java

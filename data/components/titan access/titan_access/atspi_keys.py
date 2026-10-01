@@ -127,6 +127,7 @@ def _keysym_char(keysym):
 
 _listener = None
 _registered = []
+_replies = {'yes': 0, 'no': 0}
 _hook = None
 
 
@@ -159,27 +160,54 @@ def start(hook):
         print(f"[TitanAccess] atspi_keys: no device listener: {e}")
         return False
     S = Atspi.KeyListenerSyncType
-    # The binding insists on the enum, not an int: S(7) is
-    # SYNCHRONOUS | CANCONSUME | ALL_WINDOWS.
-    sync = S(int(S.SYNCHRONOUS) | int(S.CANCONSUME) | int(S.ALL_WINDOWS))
+    # SYNCHRONOUS so the application waits for the answer, CANCONSUME so
+    # the answer may be "swallowed" - and deliberately NOT ALL_WINDOWS.
+    # A global listener is served from an X keyboard grab, which a Wayland
+    # session has not got and WSLg's XWayland refuses; a non-global one is
+    # served by the application's own ATK bridge, which forwards every key
+    # typed into a GTK, Qt or Chromium window to the registry BEFORE the
+    # toolkit sees it (NotifyListenersSync) and drops the key when the
+    # listener says so. Measured in WSLg: the grab is refused, the bridge
+    # delivers. Registering both would deliver a key the reader did not
+    # take twice - once from the grab, once from the bridge after the
+    # replay. The binding insists on the enum, not an int.
+    sync = S(int(S.SYNCHRONOUS) | int(S.CANCONSUME))
     types = 1 | 2                                    # pressed | released
     # One registration per modifier combination, as Orca does: a mask
     # covers only the keys pressed with exactly those modifiers.
     for mask in range(256):
         try:
-            if Atspi.register_keystroke_listener(_listener, None, mask, types, sync):
-                _registered.append(mask)
+            reply = Atspi.register_keystroke_listener(_listener, None, mask, types, sync)
         except Exception:                            # noqa: BLE001
             break
-    if _registered:
-        return True
-    # The registry could not take the keyboard (WSLg's XWayland has no
-    # XKB grab for it; a Wayland session without the portal neither). A
-    # plain listener still hears the keys, so the reader's chords work -
-    # what is lost is swallowing them, so Insert also reaches the program.
-    print("[TitanAccess] atspi_keys: the accessibility bus refused every "
-          "registration; listening without consuming")
-    return _start_pynput(hook)
+        _registered.append(mask)
+        _replies['yes' if reply else 'no'] += 1
+    if not _registered:
+        print("[TitanAccess] atspi_keys: the accessibility bus took no "
+              "registration; listening through pynput, without consuming")
+        return _start_pynput(hook)
+    if _replies['yes']:
+        print(f"[TitanAccess] atspi_keys: listening on the accessibility bus "
+              f"({len(_registered)} modifier masks)")
+    else:
+        # **The reply is advisory.** at-spi2-core up to 2.38 (Debian 11)
+        # answers FALSE to every keystroke registration: the registry's
+        # spi_controller_register_device_listener adds the listener, tells
+        # every application about it, and then falls off the end of its
+        # switch into ``return FALSE``. Measured here: 28 keys delivered
+        # to a listener the bus had "refused". A registration that did
+        # not raise is a registration; whether keys arrive is what the
+        # hook's own counters say.
+        print(f"[TitanAccess] atspi_keys: listening on the accessibility bus "
+              f"({len(_registered)} modifier masks; the registry answered no "
+              f"to each, which at-spi2-core 2.38 does for every one)")
+    return True
+
+
+def registration_report():
+    """How many masks are registered and what the registry answered."""
+    return {'masks': len(_registered), 'answered_yes': _replies['yes'],
+            'answered_no': _replies['no'], 'pynput': _pynput_listener is not None}
 
 
 _pynput_listener = None

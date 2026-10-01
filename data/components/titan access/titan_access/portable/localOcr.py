@@ -35,6 +35,9 @@ import threading
 import time
 
 from . import compat
+import sys as _sys
+
+_IS_WINDOWS = _sys.platform.startswith('win')
 
 _LOCK = threading.RLock()
 _state = {'reads': 0, 'failed': 0, 'why': '', 'ms': 0.0}
@@ -81,7 +84,14 @@ def _note(why):
 
 
 def available():
-    """Whether this NVDA can read the screen locally at all. ``(ok, why)``."""
+    """Whether this NVDA can read the screen locally at all. ``(ok, why)``.
+
+    Off Windows there is no Windows recogniser; what reads the screen
+    locally is Titan's own model (`model_available`), and this answers
+    for it so that every caller - the virtual window's picture fallback,
+    scan mode's OCR tier, the watcher - needs no second question."""
+    if not _IS_WINDOWS:
+        return model_available()
     try:
         from contentRecog import uwpOcr
     except Exception as error:                       # noqa: BLE001
@@ -455,6 +465,11 @@ def read(left, top, width, height, hwnd=0):
     """
     if width <= 0 or height <= 0:
         return _note('there is nothing there to read')
+    if not _IS_WINDOWS:
+        # The model reads a WINDOW; a rectangle of the screen is answered
+        # with the window in front, which is what every caller here asks
+        # a rectangle of anyway.
+        return read_window_model(hwnd)
     try:
         import ctypes                                # noqa: F401
         import screenBitmap
@@ -586,6 +601,11 @@ def read_window(hwnd):
     An empty answer from the hook is not a failure - it means this window
     does not draw its text that way - so the fall-through is silent.
     """
+    if not _IS_WINDOWS:
+        # Linux: Titan's model, on the window the capture layer finds
+        # (the one in front, through AT-SPI). The display model is NVDA's
+        # injected hook and does not exist here.
+        return read_window_model(hwnd)
     if _drawn_text_wanted():
         try:
             from . import drawnText
@@ -691,6 +711,16 @@ def model_available(timeout=8.0):
 
 
 def _window_rect(hwnd):
+    if not _IS_WINDOWS:
+        try:
+            from titan_access import atspi_focus
+            window = atspi_focus.active_window()
+            if window is None:
+                return None
+            left, top, right, bottom = atspi_focus._bounds_of(atspi_focus.atspi(), window)
+            return (left, top, right, bottom) if right > left and bottom > top else None
+        except Exception:                            # noqa: BLE001
+            return None
     try:
         import ctypes
         from ctypes import wintypes
