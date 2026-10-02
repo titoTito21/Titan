@@ -33,6 +33,17 @@ BUNDLED_7Z = os.path.join(ROOT, 'data', 'bin', '7z.exe')
 STRAY = ('component_debug.log', 'engine_registry_debug.log',
          'app_manager_debug.log', 'titan_update.7z', 'titan_interpreter.7z')
 
+#: What the published titan.main.7z leaves out, read off the archive of
+#: 2026-10-02: the TTS engines and the three big components are shipped as
+#: packages of their own, not inside the program update. Relative to the
+#: compiled folder; ``--include-all`` ships everything, ``--exclude`` adds.
+DEFAULT_EXCLUDES = (
+    'data/titantts engines',
+    'data/components/cling',
+    'data/components/elten_bridge',
+    'data/components/titan access',
+)
+
 
 def seven_zip():
     if os.path.exists(BUNDLED_7Z):
@@ -92,20 +103,32 @@ def check(archive):
     return 0
 
 
-def pack(source, output, level):
+def pack(source, output, level, excludes):
     source = os.path.abspath(source)
     if not os.path.isfile(os.path.join(source, 'Titan.exe')):
         sys.exit(f"{source} does not hold a compiled Titan (no Titan.exe).")
     for root_dir, _dirs, files in os.walk(source):
         for name in files:
-            if name in STRAY or name.endswith('.old'):
+            if name.endswith('.old') or name in STRAY[3:]:
                 print(f"Warning: {os.path.join(root_dir, name)} is in the tree "
                       "and would be shipped.")
     output = os.path.abspath(output)
     if os.path.exists(output):
         os.remove(output)
     command = [seven_zip(), 'a', '-t7z', f'-mx={level}', '-mf=BCJ',
-               '-sccUTF-8', output, '*']
+               '-sccUTF-8']
+    # Debug logs a dev run left under src/ go into every build (--add-data
+    # src); they are nobody's business in an update.
+    command += ['-xr!*_debug*.log', '-xr!*.old',
+                '-x!titan_update.7z', '-x!titan_interpreter.7z']
+    for rel in excludes:
+        rel = rel.replace('/', os.sep).rstrip(os.sep)
+        if os.path.exists(os.path.join(source, rel)):
+            command.append(f'-x!{rel}')
+            print(f"Leaving out: {rel}")
+        else:
+            print(f"(not in this build, nothing to leave out: {rel})")
+    command += [output, '*']
     print(' '.join(command))
     print(f"(in {source})")
     result = subprocess.run(command, cwd=source)
@@ -129,12 +152,23 @@ def main(argv=None):
     parser.add_argument('--check', metavar='ARCHIVE', default=None,
                         help="only check whether an existing archive can be "
                              "unpacked by the installed Titan")
+    parser.add_argument('--exclude', action='append', default=[],
+                        metavar='RELPATH',
+                        help="a folder or file (relative to the compiled "
+                             "folder) to leave out, besides the defaults: "
+                             + ', '.join(DEFAULT_EXCLUDES))
+    parser.add_argument('--include-all', action='store_true',
+                        help="ship the TTS engines and the big components "
+                             "too (no default exclusions)")
     args = parser.parse_args(argv)
     if args.check:
         return check(args.check)
     output = args.output or os.path.join(os.path.dirname(args.source.rstrip('\\/')),
                                          'titan.main.7z')
-    return pack(args.source, output, args.level)
+    excludes = list(args.exclude)
+    if not args.include_all:
+        excludes = list(DEFAULT_EXCLUDES) + excludes
+    return pack(args.source, output, args.level, excludes)
 
 
 if __name__ == '__main__':

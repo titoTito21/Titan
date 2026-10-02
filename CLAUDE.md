@@ -336,13 +336,43 @@ again later." for every failure there is.
   defaults is refused by it - the updater already installed on users'
   machines is the one that has to open the archive, and it cannot be
   fixed retroactively.
+- **Nothing may be imported for the first time after the archive has been
+  unpacked.** The frozen modules live in the PYZ inside Titan.exe, and once
+  the NEW Titan.exe is in place a first import reads it at the old offsets:
+  `zlib.error: incorrect header check`, measured, from an `import filecmp`
+  three lines after a successful extraction. Every import in `updater.py`
+  is at the top, and a successful update ends the process with
+  `exit_after_update` (`os._exit`) rather than `sys.exit` - interpreter
+  finalisation imports from the replaced files too (a clean update used to
+  exit 120).
+- The published archive leaves out `data/titantts engines` and the
+  components `cling`, `elten_bridge` and `titan access` (shipped as
+  packages of their own) - `pack_release.py`'s `DEFAULT_EXCLUDES`, with
+  `--include-all` and `--exclude` to change it, and the dev debug logs
+  under `_internal/src` left out always.
 - 7-Zip is run with `-sccUTF-8`, or its messages arrive in the OEM code
   page and the log fills with replacement characters.
+- **`updater.bat`** (repository root; ship it beside Titan.exe or in the
+  installer's folder) updates an installation from OUTSIDE Titan: closes
+  Titan, reads `version.ver` and `changes.txt`, downloads `titan.main.7z`
+  (and the interpreter when the version ends in `i`) with curl.exe or
+  PowerShell, verifies and unpacks with a COPY of the installation's own
+  `data\bin\7z.exe` made in %TEMP% - or, where there is no 7-Zip at all,
+  with Windows' own `tar.exe` (libarchive 3.8.8 here; it read both Titan
+  archives byte for byte, the ARM64 block included; 33 s for the whole
+  tree). `/y` for no prompts, `/tar` to force tar.exe; log in
+  `%TEMP%\titan_update\updater.log`. It is the way to update a build whose
+  own updater fails (every compiled build up to 0.6.1). Batch trap met on
+  the way: inside a parenthesised block an unquoted `echo` with a `)` in
+  its text ends the block, reported as ". was unexpected at this time.".
 - Tests: `tests/test_updater.py` (run it directly; 26 tests, with an
   ARM64-filtered archive built by `7z a -mf=ARM64`). Live: the frozen build
   applied the published ARM64 archive to itself with no 7-Zip on PATH in
-  82 s - py7zr refused the block, the private 7-Zip did the work,
-  base_library.zip was the one file in use.
+  30 s - py7zr refused the block, the private 7-Zip did the work,
+  base_library.zip was the one file in use - and applied a BCJ-only archive
+  of itself in-process through py7zr (3 min for 2.2 GB), leaving the
+  unchanged base_library.zip alone; the rollback of 8 834 staged files was
+  exercised for real by a fault found on the way.
 
 ### Idle processor and startup memory, measured
 
