@@ -294,6 +294,15 @@ def check_for_updates_on_startup(parent=None):
     from src.system.updater import check_for_updates_on_startup as check
     return check(parent)
 
+
+def _leave_after_update():
+    """An update was applied: the files under this process are the new
+    version, so the process ends without finalising the interpreter (see
+    updater.exit_after_update). Only reached when an update was applied -
+    a declined or failed update starts the current version instead."""
+    from src.system.updater import exit_after_update
+    exit_after_update(0)
+
 # Initialize translation system
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
@@ -749,7 +758,7 @@ def main(command_line_args=None):
                 try:
                     if check_for_updates_on_startup():
                         print("Update pending or applied; not starting Klango mode")
-                        sys.exit(0)
+                        _leave_after_update()
                 except SystemExit:
                     raise
                 except Exception as e:
@@ -958,7 +967,7 @@ def main(command_line_args=None):
                     try:
                         if check_for_updates_on_startup():
                             print("Update pending or applied; not starting Launcher mode")
-                            sys.exit(0)
+                            _leave_after_update()
                     except SystemExit:
                         raise
                     except Exception as e:
@@ -1231,6 +1240,16 @@ if __name__ == "__main__":
                             'Used by the Explorer file association for '
                             'double-clicked scripts. Needs the Macro Manager '
                             'component, which is what understands the language.')
+    parser.add_argument('--apply-update', default=None, metavar='ARCHIVE',
+                       help='Apply a titan.main.7z already on the disk to '
+                            'THIS installation, through the same steps the '
+                            'startup update takes, then exit. For an '
+                            'installation whose updater fails, and for '
+                            'watching what the compiled build really does; '
+                            'the log is in the user data logs folder.')
+    parser.add_argument('--apply-interpreter', default=None, metavar='ARCHIVE',
+                       help='With --apply-update: a titan.interpreter.7z to '
+                            'apply in the same step, sharing one rollback.')
     parser.add_argument('--capture-frame', default=None, metavar='PATH',
                        help='Grab one frame of the desktop through the '
                             'compositor and write it to PATH, then exit. '
@@ -1253,6 +1272,27 @@ if __name__ == "__main__":
             raise
         except Exception as _capture_error:          # noqa: BLE001
             print(f"[capture] {_capture_error}")
+            raise SystemExit(1)
+
+    # Titan run as its own updater: one archive, this installation, exit.
+    # Before the single-instance check, which would kill a Titan running out
+    # of the same folder - and a running Titan is exactly what an update
+    # applied from outside has to cope with (its files are in use).
+    if getattr(args, 'apply_update', None):
+        try:
+            _update_app = wx.App(False)
+            from src.system.updater import Updater as _Updater
+            _ok = _Updater(None).apply_local(args.apply_update,
+                                             getattr(args, 'apply_interpreter',
+                                                     None))
+            if _ok:
+                from src.system.updater import exit_after_update
+                exit_after_update(0)
+            raise SystemExit(1)
+        except SystemExit:
+            raise
+        except Exception as _update_error:          # noqa: BLE001
+            print(f"[update] {_update_error}")
             raise SystemExit(1)
 
     # `titan script.tcs` means the same as `titan --run-script script.tcs`:
@@ -1369,7 +1409,7 @@ if __name__ == "__main__":
     try:
         if check_for_updates_on_startup():
             print("Update pending or applied; not starting Titan suite")
-            sys.exit(0)
+            _leave_after_update()
     except SystemExit:
         raise
     except Exception as e:

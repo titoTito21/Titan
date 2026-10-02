@@ -1179,3 +1179,35 @@ msgstr "Zewnętrzny klient uruchomiony"
 
 msgid "External client closed"
 msgstr "Zewnętrzny klient zamknięty"
+
+#: src/system/updater.py
+msgid "The installation was left as it was."
+msgstr "Instalacja pozostała bez zmian."
+
+#: src/system/updater.py
+msgid "Some files could not be put back; see the log."
+msgstr "Niektórych plików nie udało się przywrócić; szczegóły w dzienniku."
+
+#: src/system/updater.py
+msgid "Reason: {}"
+msgstr "Powód: {}"
+
+#: src/system/updater.py
+msgid "and {} more"
+msgstr "i {} więcej"
+
+#: src/system/updater.py
+msgid "Files in use by a running program: {}"
+msgstr "Pliki używane przez uruchomiony program: {}"
+
+#: src/system/updater.py
+msgid "Details were written to {}"
+msgstr "Szczegóły zapisano w {}"
+
+#: src/system/updater.py
+msgid "Copying archive..."
+msgstr "Kopiowanie archiwum..."
+
+#: src/system/updater.py
+msgid "Replacing files that are in use..."
+msgstr "Zastępowanie używanych plików..."

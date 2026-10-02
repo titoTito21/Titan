@@ -8,10 +8,99 @@ import subprocess
 import shutil
 import re
 import tempfile
+import traceback
+# Everything this module will ever need is imported HERE, never inside a
+# function that runs after the archive has been unpacked. In the frozen
+# build the modules live in the PYZ inside Titan.exe, and once extraction
+# has put the NEW Titan.exe in place a first import reads the new file at
+# the old offsets: "zlib.error: incorrect header check", measured, from an
+# `import filecmp` three lines after a successful extraction.
+import filecmp
 from src.titan_core.sound import play_sound, play_focus_sound, play_select_sound
 from src.titan_core.translation import _
 from src.platform_utils import get_subprocess_kwargs, get_base_path, is_frozen, IS_WINDOWS
 from src.titan_core.skin_manager import apply_skin_to_window
+
+
+# ---------------------------------------------------------------------------
+# What the updater did is written down.
+#
+# A compiled Titan is built with --windowed, so sys.stdout is None and every
+# print() in this file reached nobody: an update that failed on every attempt
+# was reported as "Update failed. Please try again later." and not one word
+# more, and the only way to find out WHY was to reproduce it in a source
+# checkout - where the frozen process's own circumstances (the running exe,
+# the loaded DLLs, the bundled py7zr, the inherited PATH) are not there to be
+# reproduced.  Everything the updater says therefore also goes to
+# %APPDATA%/titosoft/Titan/logs/update.log, and the failure dialog names the
+# reason and the file.
+# ---------------------------------------------------------------------------
+
+LOG_NAME = 'update.log'
+#: The log is started again once it has grown past this many bytes.
+LOG_ROTATE_AT = 2 * 1024 * 1024
+_log_lock = threading.Lock()
+
+
+def log_dir():
+    """The folder the update log is written to."""
+    try:
+        from src.platform_utils import ensure_user_data_subdir
+        path = ensure_user_data_subdir('logs')
+        if os.path.isdir(path):
+            return path
+    except Exception:
+        pass
+    return tempfile.gettempdir()
+
+
+def log_path():
+    return os.path.join(log_dir(), LOG_NAME)
+
+
+def log(message):
+    """Print the line AND append it to the update log.
+
+    Neither may ever raise: this is called from inside except blocks on the
+    worker thread, where an exception would turn the one honest report of a
+    failure into a second, meaningless one.
+    """
+    line = f"{time.strftime('%Y-%m-%d %H:%M:%S')} {message}"
+    try:
+        print(line)
+    except Exception:
+        pass
+    try:
+        with _log_lock:
+            path = log_path()
+            try:
+                if os.path.getsize(path) > LOG_ROTATE_AT:
+                    os.replace(path, path + '.1')
+            except OSError:
+                pass
+            with open(path, 'a', encoding='utf-8') as handle:
+                handle.write(line + '\n')
+    except Exception:
+        pass
+
+
+#: 7z coder ids worth naming in a log line (the hex of the method id).
+_METHOD_NAMES = {
+    '00': 'Copy', '21': 'LZMA2', '030101': 'LZMA', '03': 'Delta',
+    '03030103': 'BCJ', '0303011b': 'BCJ2', '03030205': 'PPC',
+    '03030401': 'IA64', '03030501': 'ARM', '03030701': 'ARMT',
+    '03030805': 'SPARC', '0a': 'ARM64', '0b': 'RISCV', '04': 'PPMd',
+    '040108': 'Deflate', '040109': 'Deflate64', '040202': 'BZip2',
+    '04f71101': 'Zstandard', '04f71102': 'Brotli', '06f10701': 'AES',
+}
+
+
+def _method_name(coder):
+    method = coder.get('method') if isinstance(coder, dict) else None
+    if not method:
+        return '?'
+    key = bytes(method).hex()
+    return _METHOD_NAMES.get(key, key)
 
 
 def _apply_skin_to_tree(window):
@@ -225,7 +314,41 @@ class Updater:
         self._extractor_dir = None
 
         self.needs_interpreter = False  # Will be set if version ends with 'i'
-    
+
+        # Why the last step failed, in one sentence a person can act on. The
+        # failure dialog shows it; the log has the rest.
+        self.failure_reason = None
+        # Files the running Titan held open while they were being replaced
+        # (see _move_aside) and anything the rollback could not put back.
+        self.files_in_use = []
+        self.rollback_problems = []
+
+    # Defaults for an instance built without __init__ (the tests do that).
+    failure_reason = None
+    files_in_use = ()
+    rollback_problems = ()
+
+    def _fail(self, reason):
+        """Record why the update is failing and log it. Returns False so a
+        failing branch can ``return self._fail(...)``."""
+        self.failure_reason = reason
+        log(f"[UPDATER] FAILED: {reason}")
+        return False
+
+    def _log_environment(self):
+        """The facts a failure report needs, written before anything is done."""
+        try:
+            import py7zr  # noqa: F401
+            have_py7zr = getattr(py7zr, '__version__', 'yes')
+        except Exception as e:
+            have_py7zr = f"no ({e})"
+        log(f"[UPDATER] install_dir={self.install_dir} frozen={is_frozen()} "
+            f"executable={sys.executable} platform={sys.platform} "
+            f"python={sys.version.split()[0]}")
+        log(f"[UPDATER] bundled 7-Zip: {self.seven_zip_path} "
+            f"(exists={os.path.exists(self.seven_zip_path)}); "
+            f"7z on PATH: {shutil.which('7z')}; py7zr: {have_py7zr}")
+
     def get_current_version(self):
         """Get current program version from the running main module.
 
@@ -246,7 +369,7 @@ class Updater:
             import main
             return str(main.VERSION).strip()
         except Exception as e:
-            print(f"Error reading current version: {e}")
+            log(f"Error reading current version: {e}")
             return None
     
     def check_for_updates(self):
@@ -258,7 +381,7 @@ class Updater:
                 # We could not determine the installed version. Do NOT report
                 # an update - otherwise an unknown local version would compare
                 # unequal to the remote one and block startup forever.
-                print("[UPDATER] Could not determine current version; skipping update check")
+                log("[UPDATER] Could not determine current version; skipping update check")
                 return False, None, None
 
             # Get remote version.
@@ -278,7 +401,7 @@ class Updater:
             remote_version_raw = response.text.strip()
 
             if not remote_version_raw:
-                print("[UPDATER] Empty remote version; skipping update check")
+                log("[UPDATER] Empty remote version; skipping update check")
                 return False, current_version, current_version
 
             # Check if version ends with 'i' (interpreter flag)
@@ -286,8 +409,8 @@ class Updater:
                 self.needs_interpreter = True
                 # Strip 'i' from version for display and comparison
                 remote_version = remote_version_raw[:-1]
-                print(f"[UPDATER] Version ends with 'i' - will download interpreter package")
-                print(f"[UPDATER] Display version: {remote_version} (raw: {remote_version_raw})")
+                log(f"[UPDATER] Version ends with 'i' - will download interpreter package")
+                log(f"[UPDATER] Display version: {remote_version} (raw: {remote_version_raw})")
             else:
                 self.needs_interpreter = False
                 remote_version = remote_version_raw
@@ -299,7 +422,7 @@ class Updater:
                 return False, current_version, remote_version
 
         except Exception as e:
-            print(f"Error checking for updates: {e}")
+            log(f"Error checking for updates: {e}")
             return False, None, None
     
     def get_changes(self):
@@ -310,7 +433,7 @@ class Updater:
             response.raise_for_status()
             return response.text
         except Exception as e:
-            print(f"Error getting changelog: {e}")
+            log(f"Error getting changelog: {e}")
             return _("Unable to retrieve changelog.")
     
     def show_update_dialog(self, current_version, new_version, changes):
@@ -343,9 +466,9 @@ class Updater:
             return True
             
         except Exception as e:
-            print(f"Error downloading update: {e}")
             progress_dialog.update_progress(100, _("Download failed"))
-            return False
+            return self._fail(f"the update could not be downloaded from "
+                              f"{self.download_url}: {e}")
     
     def _inside_install(self, path):
         """True when ``path`` lives inside the directory being updated."""
@@ -406,11 +529,11 @@ class Updater:
                     shutil.copy2(os.path.join(src_dir, name),
                                  os.path.join(self._extractor_dir, name))
             self._extractor = copy
-            print(f"[UPDATER] Extracting with a private copy of 7-Zip: {copy}")
+            log(f"[UPDATER] Extracting with a private copy of 7-Zip: {copy}")
         except Exception as e:
             # Fall back to the in-tree one; _stage_locked_targets then leaves
             # it alone so it at least still exists when it is launched.
-            print(f"Could not copy 7-Zip out of the install directory: {e}")
+            log(f"Could not copy 7-Zip out of the install directory: {e}")
             self._extractor = source
         return self._extractor
 
@@ -439,7 +562,7 @@ class Updater:
                 return [(item.filename, item.is_directory)
                         for item in archive.list()]
         except Exception as e:
-            print(f"[UPDATER] py7zr could not read {archive_path}: {e}")
+            log(f"[UPDATER] py7zr could not read {archive_path}: {e}")
             return None
 
     def _list_archive_entries(self, archive_path):
@@ -457,13 +580,13 @@ class Updater:
         entries = []
         try:
             proc = subprocess.run(
-                [self._resolve_extractor(), 'l', '-slt', archive_path],
+                [self._resolve_extractor(), 'l', '-slt', '-sccUTF-8', archive_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=self.install_dir, **get_subprocess_kwargs()
             )
             text = proc.stdout.decode('utf-8', errors='replace')
         except Exception as e:
-            print(f"Could not list archive {archive_path}: {e}")
+            log(f"Could not list archive {archive_path}: {e}")
             return entries
 
         in_files = False
@@ -546,15 +669,60 @@ class Updater:
                 # Previous .old is somehow still held - use a unique name.
                 old_path = target + '.old{}'.format(int(time.time() * 1000) % 100000)
             try:
-                os.replace(target, old_path)
-                staged.append(('rename', old_path, target))
+                staged.append(self._move_aside(target, old_path))
             except Exception as e:
-                # Renaming failed (unexpected). Roll back what we staged so
-                # far and abort staging so extraction doesn't half-replace.
-                print(f"Could not stage locked file {target}: {e}")
+                # Neither renamed nor copied. Roll back what we staged so far
+                # and abort staging so extraction doesn't half-replace.
+                self._fail(f"{target} could not be moved aside: {e}")
                 self._rollback_staging(staged)
                 raise
+        renamed = sum(1 for kind, _a, _b in staged if kind == 'rename')
+        copied = sum(1 for kind, _a, _b in staged if kind == 'copied')
+        new = sum(1 for kind, _a, _b in staged if kind == 'new')
+        log(f"[UPDATER] staged {renamed} file(s) aside, {copied} copied aside "
+            f"because they are in use, {new} new")
         return staged
+
+    #: How many times a refused rename is tried again, and how long apart.
+    MOVE_RETRIES = 3
+    MOVE_RETRY_WAIT = 0.2
+
+    def _move_aside(self, target, old_path):
+        """Free ``target``'s name for the new copy; answer a rollback record.
+
+        Windows lets a RUNNING executable and a LOADED library be renamed,
+        which is what staging relies on. It does NOT let a file be renamed
+        while any handle on it was opened without FILE_SHARE_DELETE - and an
+        ordinary ``open()`` is exactly such a handle, so a file the running
+        Titan merely has open for reading answers ``os.replace`` with
+        ``[WinError 32]``. Measured. Staging used to raise on the first one
+        and the whole update was rolled back and reported as "Update failed",
+        with nothing to say which file.
+
+        So a rename that is refused is tried again briefly (a scanner may be
+        about to let go), and a file that stays in use is COPIED to its
+        ``.old`` instead: Windows allows the copy, and the extractor then
+        overwrites the original in place (a Python-style handle shares
+        writing). If even that is refused, extraction fails and the rollback
+        copies the ``.old`` back. The file is named in ``files_in_use`` and in
+        the log either way.
+        """
+        error = None
+        for attempt in range(1 + self.MOVE_RETRIES):
+            try:
+                os.replace(target, old_path)
+                return ('rename', old_path, target)
+            except OSError as e:
+                error = e
+                if attempt < self.MOVE_RETRIES:
+                    time.sleep(self.MOVE_RETRY_WAIT)
+        if not isinstance(self.files_in_use, list):
+            self.files_in_use = []
+        self.files_in_use.append(target)
+        log(f"[UPDATER] {target} is in use ({error}); keeping a copy as "
+            f"{os.path.basename(old_path)} and overwriting it in place")
+        shutil.copy2(target, old_path)
+        return ('copied', old_path, target)
 
     def _rollback_staging(self, staged):
         """Undo _stage_locked_targets: restore renamed files, drop new ones."""
@@ -568,12 +736,24 @@ class Updater:
                         # image, so it can be removed; then restore the old one.
                         os.remove(target)
                     os.replace(old_path, target)
+                elif kind == 'copied':
+                    # The original was in use and was overwritten in place (or
+                    # not reached); put its contents back from the copy.
+                    old_path, target = a, b
+                    shutil.copy2(old_path, target)
+                    os.remove(old_path)
                 elif kind == 'new':
                     target = a
                     if os.path.exists(target):
                         os.remove(target)  # created by the aborted extraction
             except Exception as e:
-                print(f"Rollback failed for {a}: {e}")
+                if not isinstance(self.rollback_problems, list):
+                    self.rollback_problems = []
+                self.rollback_problems.append(f"{a}: {e}")
+                log(f"[UPDATER] Rollback failed for {a}: {e}")
+        if staged:
+            log(f"[UPDATER] rolled back {len(staged)} staged file(s); "
+                f"{len(self.rollback_problems)} could not be restored")
 
     def _py7zr_available(self):
         """Whether this Titan can unpack a 7z archive by itself."""
@@ -583,7 +763,42 @@ class Updater:
         except Exception:
             return False
 
-    def _extract_with_py7zr(self, archive_path, progress_dialog, status_text):
+    def _py7zr_can_unpack(self, archive_path):
+        """``(True, None)`` when py7zr can decode every block of this archive,
+        ``(False, why)`` when it cannot.
+
+        py7zr being importable says nothing about a particular archive. 7-Zip
+        picks its filters per file: an ARM64 DLL in the tree (sounddevice
+        ships two) goes into a block with the ARM64 branch filter, and py7zr
+        has no decoder for it - ``UnsupportedCompressionMethodError`` from
+        the middle of ``extractall``, after most of the install had already
+        been written. Measured on the real titan.main.7z of 2026-10-02. The
+        question is asked of the header alone, before a single file is
+        touched: a decompressor is built for each block, which is where
+        py7zr decides whether it knows the coders, and nothing is decoded.
+        """
+        try:
+            import py7zr
+            from py7zr.compressor import SevenZipDecompressor
+        except Exception as e:
+            return False, f"py7zr is not available ({e})"
+        try:
+            with py7zr.SevenZipFile(archive_path, 'r') as archive:
+                folders = archive.header.main_streams.unpackinfo.folders
+                for index, folder in enumerate(folders):
+                    methods = ' '.join(_method_name(c) for c in folder.coders)
+                    try:
+                        SevenZipDecompressor(folder.coders, 1,
+                                             list(folder.unpacksizes), 0, None)
+                    except Exception as e:
+                        return False, (f"py7zr cannot decode block {index} of "
+                                       f"{len(folders)} ({methods}): {e}")
+        except Exception as e:
+            return False, f"py7zr could not read the archive: {e}"
+        return True, None
+
+    def _extract_with_py7zr(self, archive_path, progress_dialog, status_text,
+                            exclude=()):
         """Unpack the archive in this process, with no 7-Zip at all.
 
         Preferred over ``data/bin/7z.exe`` because it removes the whole class
@@ -635,7 +850,7 @@ class Updater:
                 pass
 
             def report_warning(self, message):
-                print(f"[UPDATER] py7zr: {message}")
+                log(f"[UPDATER] py7zr: {message}")
 
         def report(percent):
             progress_dialog.update_progress(
@@ -643,12 +858,22 @@ class Updater:
 
         try:
             with py7zr.SevenZipFile(archive_path, 'r') as archive:
-                total = len(archive.getnames())
+                names = archive.getnames()
+                total = len(names)
                 archive.reset()
-                archive.extractall(path=self.install_dir,
-                                   callback=Report(total, report))
+                if exclude:
+                    # Files in use are written over afterwards
+                    # (_replace_files_in_use), not here.
+                    skip = {self._relative(t) for t in exclude}
+                    wanted = [n for n in names if n.replace('\\', '/') not in skip]
+                    archive.extract(path=self.install_dir, targets=wanted,
+                                    callback=Report(total, report))
+                else:
+                    archive.extractall(path=self.install_dir,
+                                       callback=Report(total, report))
         except Exception as e:
-            print(f"[UPDATER] py7zr could not unpack {archive_path}: {e}")
+            self._fail(f"py7zr could not unpack {archive_path}: "
+                       f"{type(e).__name__}: {e}")
             return False
 
         progress_dialog.update_progress(100, _("Extraction complete"))
@@ -679,20 +904,34 @@ class Updater:
             progress_dialog.update_progress(0, status_text)
 
             if not os.path.exists(archive_path):
-                print(f"Archive to extract does not exist: {archive_path}")
-                return False
+                return self._fail(f"the archive to extract does not exist: "
+                                  f"{archive_path}")
 
-            # Who unpacks this is decided BEFORE anything is moved aside.
-            # An external 7-Zip has to be copied out of the install first -
-            # staging would otherwise rename it away and the launch would
-            # fail - and that copy must exist by the time staging runs.
-            in_process = self._py7zr_available()
-            seven_zip = None
+            # Who unpacks this is decided BEFORE anything is moved aside, and
+            # per ARCHIVE: py7zr being importable is not py7zr being able to
+            # decode this one (see _py7zr_can_unpack).
+            in_process, why_not = self._py7zr_can_unpack(archive_path)
+
+            # The external 7-Zip is secured FIRST, whichever extractor is
+            # going to be used - copied out of the install into a private
+            # directory. Resolving it only when py7zr had already failed is
+            # what made the fallback a lie: by then staging had renamed
+            # data/bin/7z.exe to 7z.exe.old, and the update went on only on
+            # a machine that happened to have a 7-Zip on PATH.
+            seven_zip = self._resolve_extractor()
+            have_seven_zip = bool(seven_zip) and os.path.exists(seven_zip)
             if not in_process:
-                seven_zip = self._resolve_extractor()
-                if not os.path.exists(seven_zip):
-                    print(f"7zip not found at {seven_zip}")
-                    return False
+                if not have_seven_zip:
+                    # Nothing can unpack this here. Said before a single file
+                    # has been touched, with both reasons.
+                    return self._fail(
+                        f"{why_not}; and there is no 7-Zip to fall back on "
+                        f"(looked at {self.seven_zip_path} and on PATH)")
+                log(f"[UPDATER] {why_not}; unpacking with 7-Zip instead")
+            else:
+                log(f"[UPDATER] unpacking in-process with py7zr"
+                    + (f"; 7-Zip ready as a fallback at {seven_zip}"
+                       if have_seven_zip else "; no 7-Zip to fall back on"))
 
             # Compiled build: move locked targets (running exe, loaded DLLs)
             # aside so the new copies can be written. Windows does allow a
@@ -705,27 +944,49 @@ class Updater:
             # Unpack in this process when we can: no external program means
             # nothing for the update to rename out from under itself, and an
             # install whose data/bin is damaged can still be repaired.
+            # Files the running program holds open: neither extractor
+            # replaces them directly (see _move_aside / _replace_files_in_use).
+            in_use = [target for kind, _old, target in staged
+                      if kind == 'copied']
+
             if in_process:
                 if self._extract_with_py7zr(archive_path, progress_dialog,
-                                            status_text):
+                                            status_text, exclude=in_use):
+                    if in_use and not self._replace_files_in_use(
+                            archive_path, in_use,
+                            seven_zip if have_seven_zip else None):
+                        if own_staging:
+                            self._rollback_staging(staged)
+                        return False
                     return True
                 # It could be read and still failed part way through. 7-Zip
                 # is the second opinion; -aoa overwrites whatever py7zr left.
-                seven_zip = self._resolve_extractor()
-                if not os.path.exists(seven_zip):
+                if not have_seven_zip:
+                    self._fail(f"{self.failure_reason}; and there is no 7-Zip "
+                               f"to fall back on")
                     if own_staging:
                         self._rollback_staging(staged)
                     return False
+                log(f"[UPDATER] falling back to 7-Zip at {seven_zip}")
 
             # -bsp1 outputs progress percentage to stdout
             # -aoa forces overwrite of ALL existing files (without it a stale
             #      file already on disk can be silently kept, leaving a
             #      half-updated install).
+            # -sccUTF-8 makes its messages readable in the log whatever the
+            #      console code page is.
             # Extract to the install dir explicitly so cwd cannot affect us.
             cmd = [
-                seven_zip, 'x', archive_path, '-y', '-aoa',
+                seven_zip, 'x', archive_path, '-y', '-aoa', '-sccUTF-8',
                 f'-o{self.install_dir}', '-bsp1'
             ]
+            # A file in use cannot be replaced by 7-Zip, which deletes the
+            # old file before writing the new one: it is left out here and
+            # written over afterwards (_replace_files_in_use).
+            exclude_list = None
+            if in_use:
+                exclude_list = self._write_list_file(in_use)
+                cmd.append(f'-x@{exclude_list}')
 
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -781,13 +1042,28 @@ class Updater:
 
             returncode = process.wait()
             stderr_thread.join(timeout=5)
+            if exclude_list:
+                try:
+                    os.remove(exclude_list)
+                except OSError:
+                    pass
+
+            if returncode == 0 and in_use:
+                progress_dialog.update_progress(
+                    99, _("Replacing files that are in use..."))
+                if not self._replace_files_in_use(archive_path, in_use,
+                                                  seven_zip):
+                    if own_staging:
+                        self._rollback_staging(staged)
+                    return False
 
             if returncode == 0:
                 progress_dialog.update_progress(100, _("Extraction complete"))
                 return True
             else:
                 stderr_text = b''.join(stderr_chunks).decode('utf-8', errors='replace') if stderr_chunks else ''
-                print(f"7zip extraction failed with code {returncode}: {stderr_text}")
+                self._fail(f"7-Zip exited with code {returncode} unpacking "
+                           f"{archive_path}: {stderr_text.strip()[:600]}")
                 # Extraction failed. If we own staging, restore the files we
                 # moved aside so the running (old) install stays intact.
                 # Otherwise the caller rolls back the whole multi-package set.
@@ -796,16 +1072,124 @@ class Updater:
                 return False
 
         except Exception as e:
-            print(f"Error extracting archive {archive_path}: {e}")
+            log(traceback.format_exc())
+            self._fail(f"extracting {archive_path} raised "
+                       f"{type(e).__name__}: {e}")
             if own_staging:
                 self._rollback_staging(staged)
             return False
         finally:
+            self._remove_archive(archive_path)
+
+    def _relative(self, target):
+        """``target`` as the archive names it (forward slashes, no root)."""
+        rel = os.path.relpath(target, self.install_dir)
+        return rel.replace(os.sep, '/')
+
+    def _write_list_file(self, targets):
+        """A 7-Zip list file (``-x@``/``-i@``) naming these install files."""
+        handle = tempfile.NamedTemporaryFile('w', suffix='.lst', delete=False,
+                                             encoding='utf-8-sig')
+        with handle:
+            for target in targets:
+                handle.write(self._relative(target) + '\n')
+        return handle.name
+
+    def _unpack_some(self, archive_path, targets, side, seven_zip):
+        """Unpack just ``targets`` into ``side``, with 7-Zip or py7zr."""
+        if seven_zip:
+            include_list = self._write_list_file(targets)
+            try:
+                proc = subprocess.run(
+                    [seven_zip, 'x', archive_path, '-y', '-aoa', '-sccUTF-8',
+                     f'-o{side}', f'-i@{include_list}'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    cwd=self.install_dir, **get_subprocess_kwargs())
+            finally:
+                try:
+                    os.remove(include_list)
+                except OSError:
+                    pass
+            if proc.returncode != 0:
+                err = proc.stderr.decode('utf-8', errors='replace').strip()
+                return self._fail(f"7-Zip could not unpack the files in use "
+                                  f"(code {proc.returncode}): {err[:600]}")
+            return True
+        try:
+            import py7zr
+            with py7zr.SevenZipFile(archive_path, 'r') as archive:
+                archive.extract(path=side,
+                                targets=[self._relative(t) for t in targets])
+            return True
+        except Exception as e:
+            return self._fail(f"py7zr could not unpack the files in use: "
+                              f"{type(e).__name__}: {e}")
+
+    def _replace_files_in_use(self, archive_path, targets, seven_zip=None):
+        """Write the new contents over files another handle holds open.
+
+        Measured in the frozen build: the running Titan itself holds
+        ``_internal/base_library.zip`` open (zipimport keeps the standard
+        library's archive open for the life of the process), so this is
+        reached on EVERY compiled update, not only when some other program
+        is in the way. That file is usually byte-identical between two
+        builds of the same Python, and a file that would not change is left
+        exactly alone: writing over an archive the process is still reading
+        from is what a stale central directory and a failed import at exit
+        look like.
+
+        7-Zip replaces a file by deleting it first, which Windows refuses for
+        a file that is open; a plain write does not delete and is allowed for
+        the sharing an ordinary open() grants. So these few files are
+        unpacked into a private directory and copied over their originals.
+        A holder that shares nothing makes the copy fail, and that failure
+        names the file.
+        """
+        side = tempfile.mkdtemp(prefix='titan_update_inuse_')
+        try:
+            if not self._unpack_some(archive_path, targets, side, seven_zip):
+                return False
+            for target in targets:
+                fresh = os.path.join(side, self._relative(target)
+                                     .replace('/', os.sep))
+                if not os.path.exists(fresh):
+                    return self._fail(f"{self._relative(target)} is not in "
+                                      f"the archive after all")
+                try:
+                    if filecmp.cmp(fresh, target, shallow=False):
+                        log(f"[UPDATER] {target} is in use and unchanged by "
+                            f"this update; left alone")
+                        continue
+                except OSError:
+                    pass
+                try:
+                    shutil.copyfile(fresh, target)
+                except OSError as e:
+                    return self._fail(
+                        f"{target} is in use by another program and could "
+                        f"not be written over: {e}")
+                log(f"[UPDATER] wrote over {target} while it is in use")
+            return True
+        finally:
+            shutil.rmtree(side, ignore_errors=True)
+
+    def _remove_archive(self, archive_path, attempts=5):
+        """Delete a downloaded archive, allowing a scanner a moment to let go.
+
+        A 300 MB file that has just been written is exactly what an antivirus
+        scanner opens, and os.remove answers that with [WinError 32]. A
+        leftover archive is not a failed update, so this never raises.
+        """
+        for attempt in range(attempts):
             try:
                 if os.path.exists(archive_path):
                     os.remove(archive_path)
+                return
             except Exception as e:
-                print(f"Error cleaning up {archive_path}: {e}")
+                if attempt == attempts - 1:
+                    log(f"[UPDATER] could not remove {archive_path}: {e}")
+                else:
+                    time.sleep(0.5)
 
     def extract_update(self, progress_dialog, staged=None):
         """Extract update using 7zip.
@@ -841,13 +1225,13 @@ class Updater:
                             progress = int((downloaded / total_size) * 100)
                             progress_dialog.update_progress(progress, _("Downloading Python interpreter..."))
 
-            print(f"[UPDATER] Interpreter downloaded successfully")
+            log(f"[UPDATER] Interpreter downloaded successfully")
             return True
 
         except Exception as e:
-            print(f"Error downloading interpreter: {e}")
             progress_dialog.update_progress(100, _("Interpreter download failed"))
-            return False
+            return self._fail(f"the interpreter could not be downloaded from "
+                              f"{self.interpreter_url}: {e}")
 
     def extract_interpreter(self, progress_dialog, staged=None):
         """Extract interpreter package using 7zip.
@@ -902,8 +1286,13 @@ class Updater:
             return False
         return True
 
-    def perform_update(self):
+    def perform_update(self, steps=None):
         """Perform the full update process, BLOCKING until it finishes.
+
+        ``steps`` is the work to do on the worker thread, given the progress
+        dialog and answering True on success; it defaults to the download
+        and extraction of the published update (_run_update_steps). apply_local
+        passes the steps for an archive already on the disk.
 
         The old implementation started a worker thread and returned True
         immediately, so the caller (startup code) went on to build and show
@@ -918,6 +1307,12 @@ class Updater:
         return the real success/failure. That guarantees the suite does not
         continue starting until the update is fully applied.
         """
+        if steps is None:
+            steps = self._run_update_steps
+        self.failure_reason = None
+        self.files_in_use = []
+        self.rollback_problems = []
+        self._log_environment()
         progress_dialog = None
         try:
             progress_dialog = ProgressDialog(self.parent)
@@ -928,9 +1323,11 @@ class Updater:
 
             def update_thread():
                 try:
-                    result['success'] = self._run_update_steps(progress_dialog)
+                    result['success'] = steps(progress_dialog)
                 except Exception as e:
-                    print(f"Update thread error: {e}")
+                    log(traceback.format_exc())
+                    self._fail(f"the update thread raised "
+                               f"{type(e).__name__}: {e}")
                     result['success'] = False
                 finally:
                     done_event.set()
@@ -948,10 +1345,16 @@ class Updater:
             # Flush any last progress updates queued via wx.CallAfter.
             wx.YieldIfNeeded()
 
+            if result['success']:
+                self.failure_reason = None
+                log("[UPDATER] update applied successfully")
+            else:
+                log(f"[UPDATER] update failed: {self.failure_reason}")
             return bool(result['success'])
 
         except Exception as e:
-            print(f"Error performing update: {e}")
+            log(traceback.format_exc())
+            self._fail(f"performing the update raised {type(e).__name__}: {e}")
             return False
         finally:
             self._release_extractor()
@@ -960,6 +1363,33 @@ class Updater:
                     progress_dialog.Destroy()
                 except Exception:
                     pass
+
+    def failure_message(self):
+        """The sentences the failure dialog shows.
+
+        "Update failed. Please try again later." was the whole of it, for
+        every failure there is, and it sent the user to try again something
+        that would fail the same way. Now: whether the installation was left
+        as it was, WHY it failed, and where the full log is.
+        """
+        lines = [_("Update failed. Please try again later.")]
+        if self.rollback_problems:
+            lines.append(_("Some files could not be put back; see the log."))
+        else:
+            lines.append(_("The installation was left as it was."))
+        if self.failure_reason:
+            lines.append(_("Reason: {}").format(self.failure_reason))
+        if self.files_in_use:
+            shown = self.files_in_use[:5]
+            more = len(self.files_in_use) - len(shown)
+            names = ', '.join(os.path.relpath(f, self.install_dir)
+                              for f in shown)
+            if more > 0:
+                names += ' ' + _("and {} more").format(more)
+            lines.append(_("Files in use by a running program: {}")
+                         .format(names))
+        lines.append(_("Details were written to {}").format(log_path()))
+        return '\n\n'.join(lines)
 
     def _show_result(self, success):
         """Show the final success/failure message to the user."""
@@ -976,13 +1406,83 @@ class Updater:
         else:
             dlg = wx.MessageDialog(
                 self.parent,
-                _("Update failed. Please try again later."),
+                self.failure_message(),
                 _("Update Error"),
                 wx.OK | wx.ICON_ERROR,
             )
             _apply_skin_to_tree(dlg)
             dlg.ShowModal()
             dlg.Destroy()
+
+    # ------------------------------------------------------------ local file
+
+    def _apply_local_steps(self, progress_dialog, archive_path,
+                           interpreter_path=None):
+        """The steps for an archive already on the disk (see apply_local)."""
+        archives = [(archive_path, self.temp_file, _("Extracting update..."))]
+        if interpreter_path:
+            archives.append((interpreter_path, self.temp_interpreter_file,
+                             _("Extracting Python interpreter...")))
+        for source, target, _status in archives:
+            if not os.path.exists(source):
+                return self._fail(f"there is no such archive: {source}")
+            progress_dialog.update_progress(0, _("Copying archive..."))
+            log(f"[UPDATER] applying local archive {source}")
+            # The extractor deletes the archive it was given; the user's
+            # file is theirs, so it is a copy that is unpacked.
+            if os.path.normcase(os.path.abspath(source)) != \
+                    os.path.normcase(os.path.abspath(target)):
+                shutil.copy2(source, target)
+
+        if interpreter_path:
+            staged = []
+            if not self.extract_update(progress_dialog, staged=staged):
+                self._rollback_staging(staged)
+                return False
+            if not self.extract_interpreter(progress_dialog, staged=staged):
+                self._rollback_staging(staged)
+                return False
+            return True
+        return self.extract_update(progress_dialog)
+
+    def apply_local(self, archive_path, interpreter_path=None, show=True):
+        """Apply a titan.main.7z (and optionally an interpreter archive)
+        from the disk, through exactly the path the startup update takes.
+
+        ``Titan.exe --apply-update <archive>`` is this. It exists for two
+        reasons: an installation whose updater fails can be updated from an
+        archive fetched by hand, and the compiled build can be made to update
+        ITSELF on demand - which is the only way to see what the frozen
+        process really does (the running exe, the loaded DLLs, the bundled
+        py7zr, the inherited PATH), since the version check offers nothing to
+        a build that is already current. Returns True on success.
+        """
+        log(f"[UPDATER] --apply-update {archive_path}"
+            + (f" + {interpreter_path}" if interpreter_path else ""))
+        success = self.perform_update(
+            lambda dialog: self._apply_local_steps(dialog, archive_path,
+                                                   interpreter_path))
+        if show:
+            self._show_result(success)
+        return success
+
+
+def exit_after_update(code=0):
+    """Leave the process the moment an update has been applied.
+
+    The files under the running process are the NEW version now - Titan.exe
+    with its PYZ, the libraries - and interpreter finalisation imports and
+    runs things (atexit handlers, threading's shutdown) out of them at the
+    old offsets. Measured: a successful --apply-update exited 120 that way.
+    Nothing needs tidying at this point - no window has been built - so the
+    process ends here, with the log flushed.
+    """
+    try:
+        sys.stdout and sys.stdout.flush()
+        sys.stderr and sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(code)
 
     def check_and_update(self):
         """Check for updates and, if one exists, offer it before startup.
@@ -1007,11 +1507,13 @@ class Updater:
         if not has_update:
             return False
 
+        log(f"[UPDATER] update offered: {current_version} -> {new_version}"
+            f"{' with interpreter' if self.needs_interpreter else ''}")
         changes = self.get_changes()
 
         if not self.show_update_dialog(current_version, new_version, changes):
             # User declined - launch the current version as-is.
-            print("[UPDATER] Update declined by user; starting current version")
+            log("[UPDATER] Update declined by user; starting current version")
             return False
 
         success = self.perform_update()
@@ -1022,7 +1524,7 @@ class Updater:
             return True
 
         # Update failed and was rolled back - keep running the old version.
-        print("[UPDATER] Update failed; starting current version")
+        log("[UPDATER] Update failed; starting current version")
         return False
 
 
@@ -1061,10 +1563,10 @@ def cleanup_old_update_files(base_dir=None):
                     # be retried on the next launch.
                     pass
     except Exception as e:
-        print(f"Error cleaning up .old update files: {e}")
+        log(f"Error cleaning up .old update files: {e}")
 
     if removed:
-        print(f"[UPDATER] Removed {removed} leftover .old file(s) from previous update")
+        log(f"[UPDATER] Removed {removed} leftover .old file(s) from previous update")
 
 
 def check_for_updates_on_startup(parent=None):

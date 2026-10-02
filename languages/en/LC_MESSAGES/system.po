@@ -1192,3 +1192,35 @@ msgstr "External client initialized"
 
 msgid "External client closed"
 msgstr "External client closed"
+
+#: src/system/updater.py
+msgid "The installation was left as it was."
+msgstr "The installation was left as it was."
+
+#: src/system/updater.py
+msgid "Some files could not be put back; see the log."
+msgstr "Some files could not be put back; see the log."
+
+#: src/system/updater.py
+msgid "Reason: {}"
+msgstr "Reason: {}"
+
+#: src/system/updater.py
+msgid "and {} more"
+msgstr "and {} more"
+
+#: src/system/updater.py
+msgid "Files in use by a running program: {}"
+msgstr "Files in use by a running program: {}"
+
+#: src/system/updater.py
+msgid "Details were written to {}"
+msgstr "Details were written to {}"
+
+#: src/system/updater.py
+msgid "Copying archive..."
+msgstr "Copying archive..."
+
+#: src/system/updater.py
+msgid "Replacing files that are in use..."
+msgstr "Replacing files that are in use..."

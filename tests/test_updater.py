@@ -98,12 +98,18 @@ def build_install(root, exe_body=b'old titan'):
 
 
 def build_archive(root, name='titan_update.7z', include_seven_zip=True,
-                  exe_body=b'new titan'):
-    """An archive shaped like titan.main.7z - it replaces 7-Zip as well."""
+                  exe_body=b'new titan', extra=None):
+    """An archive shaped like titan.main.7z - it replaces 7-Zip as well.
+    ``extra`` maps further relative paths to their contents."""
     staging = os.path.join(root, 'newver')
     os.makedirs(os.path.join(staging, 'data', 'bin'), exist_ok=True)
     with open(os.path.join(staging, 'Titan.exe'), 'wb') as handle:
         handle.write(exe_body)
+    for rel, body in (extra or {}).items():
+        path = os.path.join(staging, rel.replace('/', os.sep))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'wb') as handle:
+            handle.write(body)
     if include_seven_zip:
         shutil.copy(SEVEN_ZIP_SOURCE, os.path.join(staging, 'data', 'bin', '7z.exe'))
         shutil.copy(SEVEN_DLL_SOURCE, os.path.join(staging, 'data', 'bin', '7z.dll'))
@@ -277,8 +283,9 @@ class NoBinaryNeeded(unittest.TestCase):
             instance._extract_archive(archive, Recorder(), 'extracting'))
         with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
             self.assertEqual(handle.read(), b'new titan')
-        # And it never went looking for an external program to do it.
-        self.assertIsNone(instance._extractor)
+        # And no external program was there to do it.
+        self.assertFalse(instance._extractor
+                         and os.path.exists(instance._extractor))
 
     def test_the_listing_matches_7zip(self):
         """The staging decisions must not depend on who read the archive."""
@@ -300,12 +307,23 @@ class NoBinaryNeeded(unittest.TestCase):
         self.assertEqual(normalised(from_py7zr), normalised(from_binary))
 
     def test_a_missing_py7zr_still_updates_through_7zip(self):
-        """The fallback is the one that must never quietly disappear."""
+        """The fallback is the one that must never quietly disappear.
+
+        With NO 7-Zip on PATH: the one in the install is the only one, and
+        staging renames it away - so the copy made of it has to exist
+        BEFORE staging runs. It did not, and this test passed anyway on a
+        machine with a 7-Zip in Program Files while every compiled update
+        on a machine without one failed.
+        """
         install = build_install(self.root)
         archive = build_archive(self.root)
         instance = make_updater(install, archive)
         instance._extract_with_py7zr = lambda *a, **k: False
         instance._archive_entries_py7zr = lambda path: None
+        self.addCleanup(instance._release_extractor)
+        was_which = updater_module.shutil.which
+        updater_module.shutil.which = lambda name: None
+        self.addCleanup(setattr, updater_module.shutil, 'which', was_which)
 
         self.assertTrue(
             instance._extract_archive(archive, Recorder(), 'extracting'))
@@ -403,6 +421,258 @@ class StandaloneUpdater(unittest.TestCase):
         install = build_install(self.root)
         with self.assertRaises(standalone.UpdateError):
             standalone.find_archives(install, ['no_such_archive.7z'])
+
+
+def build_arm64_archive(root, name='arm64.7z', exe_body=b'new titan'):
+    """An archive py7zr cannot decode: 7-Zip's ARM64 branch filter.
+
+    The real titan.main.7z of 2026-10-02 carried two ARM64 DLLs
+    (sounddevice's portaudio binaries) in a block with exactly this filter,
+    and py7zr 1.1.3 answers it with UnsupportedCompressionMethodError. The
+    filter is forced here because this suite has no ARM64 PE to make 7-Zip
+    choose it by itself.
+    """
+    staging = os.path.join(root, 'newver_arm64')
+    os.makedirs(os.path.join(staging, 'data', 'bin'), exist_ok=True)
+    with open(os.path.join(staging, 'Titan.exe'), 'wb') as handle:
+        handle.write(exe_body)
+    with open(os.path.join(staging, 'data', 'notes.txt'), 'wb') as handle:
+        handle.write(b'new notes')
+    shutil.copy(SEVEN_ZIP_SOURCE, os.path.join(staging, 'data', 'bin', '7z.exe'))
+    shutil.copy(SEVEN_DLL_SOURCE, os.path.join(staging, 'data', 'bin', '7z.dll'))
+    archive = os.path.join(root, name)
+    subprocess.run([SEVEN_ZIP_SOURCE, 'a', '-t7z', '-mf=ARM64', archive, '*'],
+                   cwd=staging, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
+    return archive
+
+
+def _no_seven_zip_on_path(test):
+    was_which = updater_module.shutil.which
+    updater_module.shutil.which = lambda name: None
+    test.addCleanup(setattr, updater_module.shutil, 'which', was_which)
+
+
+def _log_into(test):
+    """Send the updater's log into a folder of the test's own; return its path."""
+    folder = scratch('titan_updater_log_')
+    was = updater_module.log_dir
+    updater_module.log_dir = lambda: folder
+    test.addCleanup(setattr, updater_module, 'log_dir', was)
+    return os.path.join(folder, updater_module.LOG_NAME)
+
+
+@unittest.skipUnless(HAVE_7Z and HAVE_PY7ZR, "needs 7z.exe and py7zr")
+class AnArchivePy7zrCannotRead(unittest.TestCase):
+    """The update of 2026-10-02: py7zr imported fine and could not decode
+    the archive, and the fallback had been renamed away by then."""
+
+    def setUp(self):
+        self.root = scratch('titan_updater_arm64_')
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self._was_frozen = updater_module.is_frozen
+        updater_module.is_frozen = lambda: True
+        self.addCleanup(lambda: setattr(updater_module, 'is_frozen',
+                                        self._was_frozen))
+        self.log = _log_into(self)
+
+    def test_the_question_is_asked_of_the_header(self):
+        install = build_install(self.root)
+        plain = build_archive(self.root)
+        arm64 = build_arm64_archive(self.root)
+        instance = make_updater(install, plain)
+
+        self.assertEqual(instance._py7zr_can_unpack(plain), (True, None))
+        can, why = instance._py7zr_can_unpack(arm64)
+        self.assertFalse(can)
+        self.assertIn('ARM64', why)
+        # Nothing was extracted or renamed by asking.
+        self.assertFalse(os.path.exists(os.path.join(install, 'Titan.exe.old')))
+
+    def test_it_is_unpacked_by_7zip_with_none_on_path(self):
+        """The install's own 7-Zip is the only one, the archive replaces it,
+        and py7zr cannot read the archive - the real combination."""
+        install = build_install(self.root)
+        archive = build_arm64_archive(self.root)
+        instance = make_updater(install, archive)
+        self.addCleanup(instance._release_extractor)
+        _no_seven_zip_on_path(self)
+
+        self.assertTrue(
+            instance._extract_archive(archive, Recorder(), 'extracting'))
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+        self.assertTrue(
+            os.path.exists(os.path.join(install, 'data', 'bin', '7z.exe')))
+        with open(self.log, encoding='utf-8') as handle:
+            text = handle.read()
+        self.assertIn('ARM64', text)
+        self.assertIn('unpacking with 7-Zip instead', text)
+
+    def test_with_no_7zip_anywhere_nothing_is_touched(self):
+        """Refused BEFORE staging, with both reasons, and the install is
+        exactly as it was - not rolled back, never changed."""
+        install = build_install(self.root)
+        archive = build_arm64_archive(self.root)
+        shutil.rmtree(os.path.join(install, 'data', 'bin'))
+        instance = make_updater(install, archive)
+        self.addCleanup(instance._release_extractor)
+        _no_seven_zip_on_path(self)
+        instance._stage_locked_targets = lambda path: self.fail(
+            "staging ran although nothing could unpack the archive")
+
+        self.assertFalse(
+            instance._extract_archive(archive, Recorder(), 'extracting'))
+        self.assertIn('ARM64', instance.failure_reason)
+        self.assertIn('7-Zip', instance.failure_reason)
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'old titan')
+        self.assertFalse(os.path.exists(os.path.join(install, 'Titan.exe.old')))
+        self.assertIn(instance.failure_reason, instance.failure_message())
+        self.assertIn(self.log, instance.failure_message())
+
+
+@unittest.skipUnless(HAVE_7Z, "data/bin/7z.exe is not present")
+class AFileTheRunningProgramHoldsOpen(unittest.TestCase):
+    """Windows refuses to rename a file any handle has open without
+    FILE_SHARE_DELETE - and an ordinary open() is such a handle."""
+
+    def setUp(self):
+        self.root = scratch('titan_updater_inuse_')
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self._was_frozen = updater_module.is_frozen
+        updater_module.is_frozen = lambda: True
+        self.addCleanup(lambda: setattr(updater_module, 'is_frozen',
+                                        self._was_frozen))
+        _log_into(self)
+
+    def _file_in_use_is_replaced(self, archive):
+        install = self.install
+        notes = os.path.join(install, 'data', 'notes.txt')
+        instance = make_updater(install, archive)
+        self.addCleanup(instance._release_extractor)
+        instance.MOVE_RETRY_WAIT = 0.01
+
+        holder = open(notes, 'rb')          # the running program, reading it
+        self.addCleanup(holder.close)
+        self.assertTrue(
+            instance._extract_archive(archive, Recorder(), 'extracting'),
+            instance.failure_reason)
+
+        self.assertEqual(instance.files_in_use, [notes])
+        with open(notes, 'rb') as handle:
+            self.assertEqual(handle.read(), b'new notes')
+        with open(notes + '.old', 'rb') as handle:
+            self.assertEqual(handle.read(), b'old notes')
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+        self.assertIn('notes.txt', instance.failure_message())
+
+    def _install_with_notes(self):
+        self.install = build_install(self.root)
+        os.makedirs(os.path.join(self.install, 'data'), exist_ok=True)
+        with open(os.path.join(self.install, 'data', 'notes.txt'), 'wb') as f:
+            f.write(b'old notes')
+
+    @unittest.skipUnless(sys.platform == 'win32', "Windows sharing rules")
+    def test_7zip_leaves_a_file_in_use_out_and_it_is_written_over(self):
+        """7-Zip deletes before it writes, so the file is excluded from the
+        extraction and written over afterwards."""
+        self._install_with_notes()
+        self._file_in_use_is_replaced(build_arm64_archive(self.root))
+
+    @unittest.skipUnless(sys.platform == 'win32' and HAVE_PY7ZR,
+                         "Windows sharing rules, py7zr")
+    def test_py7zr_writes_over_a_file_in_use(self):
+        self._install_with_notes()
+        self._file_in_use_is_replaced(
+            build_archive(self.root, extra={'data/notes.txt': b'new notes'}))
+
+    @unittest.skipUnless(sys.platform == 'win32' and HAVE_PY7ZR,
+                         "Windows sharing rules, py7zr")
+    def test_a_file_in_use_that_would_not_change_is_left_alone(self):
+        """The frozen Titan holds _internal/base_library.zip open itself,
+        and it is the same bytes in both builds: it must not be written over
+        while the process is still reading from it."""
+        self._install_with_notes()
+        notes = os.path.join(self.install, 'data', 'notes.txt')
+        archive = build_archive(self.root, extra={'data/notes.txt': b'old notes'})
+        instance = make_updater(self.install, archive)
+        self.addCleanup(instance._release_extractor)
+        instance.MOVE_RETRY_WAIT = 0.01
+        before = os.stat(notes).st_mtime_ns
+
+        holder = open(notes, 'rb')
+        self.addCleanup(holder.close)
+        self.assertTrue(
+            instance._extract_archive(archive, Recorder(), 'extracting'),
+            instance.failure_reason)
+        self.assertEqual(os.stat(notes).st_mtime_ns, before,
+                         "an unchanged file in use was written over")
+        with open(os.path.join(self.install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+
+    @unittest.skipUnless(sys.platform == 'win32', "Windows sharing rules")
+    def test_rollback_puts_a_copied_file_back(self):
+        install = build_install(self.root)
+        target = os.path.join(install, 'held.bin')
+        with open(target, 'wb') as handle:
+            handle.write(b'original')
+        instance = make_updater(install, os.path.join(self.root, 'x.7z'))
+        instance.MOVE_RETRY_WAIT = 0.01
+
+        holder = open(target, 'rb')
+        self.addCleanup(holder.close)
+        record = instance._move_aside(target, target + '.old')
+        self.assertEqual(record[0], 'copied')
+        with open(target, 'wb') as handle:      # what the extractor would do
+            handle.write(b'replaced')
+
+        instance._rollback_staging([record])
+        with open(target, 'rb') as handle:
+            self.assertEqual(handle.read(), b'original')
+        self.assertFalse(os.path.exists(target + '.old'))
+        self.assertEqual(list(instance.rollback_problems), [])
+
+
+@unittest.skipUnless(HAVE_7Z, "data/bin/7z.exe is not present")
+class WhatWentWrongIsSaid(unittest.TestCase):
+    """A compiled Titan has no console; the log and the dialog are all
+    there is."""
+
+    def setUp(self):
+        self.root = scratch('titan_updater_said_')
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        self.log = _log_into(self)
+
+    def test_the_log_is_written_and_the_dialog_names_the_reason(self):
+        install = build_install(self.root)
+        instance = make_updater(install, os.path.join(self.root, 'none.7z'))
+        self.assertFalse(
+            instance._extract_archive(instance.temp_file, Recorder(), 'x'))
+        self.assertIn('does not exist', instance.failure_reason)
+        message = instance.failure_message()
+        self.assertIn(instance.failure_reason, message)
+        self.assertIn(self.log, message)
+        with open(self.log, encoding='utf-8') as handle:
+            self.assertIn('FAILED', handle.read())
+
+    def test_a_local_archive_is_applied_and_left_in_place(self):
+        install = build_install(self.root)
+        archive = build_archive(self.root, name='given.7z')
+        instance = make_updater(install, os.path.join(install, 'titan_update.7z'))
+        self.addCleanup(instance._release_extractor)
+        self.assertTrue(instance._apply_local_steps(Recorder(), archive))
+        with open(os.path.join(install, 'Titan.exe'), 'rb') as handle:
+            self.assertEqual(handle.read(), b'new titan')
+        self.assertTrue(os.path.exists(archive), "the user's archive was deleted")
+
+    def test_a_missing_local_archive_is_named(self):
+        install = build_install(self.root)
+        instance = make_updater(install, os.path.join(install, 'titan_update.7z'))
+        missing = os.path.join(self.root, 'nowhere.7z')
+        self.assertFalse(instance._apply_local_steps(Recorder(), missing))
+        self.assertIn('nowhere.7z', instance.failure_reason)
 
 
 if __name__ == '__main__':

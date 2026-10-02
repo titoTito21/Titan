@@ -273,6 +273,77 @@ the startup sound's two seconds SPENT loading rather than slept through.
   `requests` with it, for one call that happens once.
 - Tests: `tests/test_startup.py` (run it directly; 17 tests).
 
+### The updater: why every compiled update failed, and how it says so now
+
+`src/system/updater.py`. Reported three times as "Aktualizacja nieudana"
+with nothing else to go on, and that was the first fault: a compiled Titan
+is built `--windowed`, so `sys.stdout` is None and every `print` in the
+updater reached nobody. The failure dialog said "Update failed. Please try
+again later." for every failure there is.
+
+- **Everything the updater does is written down** -
+  `%APPDATA%/titosoft/Titan/logs/update.log` (`log()`, rotated at 2 MB) -
+  and the failure dialog names the reason (`failure_reason`), whether the
+  installation was left as it was, the files another program held open,
+  and the log's path. `Titan.exe --apply-update <titan.main.7z>` applies
+  an archive from the disk through the very same steps and exits: that is
+  how a frozen build is made to update ITSELF on demand, which is the
+  only way to see what the frozen process really does - the version check
+  offers nothing to a build that is already current.
+- **py7zr importing is not py7zr decoding THIS archive.** 7-Zip 23+ picks
+  its filters per file and applies the ARM64 branch filter to an ARM64
+  executable by itself; the tree carries two (sounddevice's
+  `libportaudioarm64*.dll`), so the published titan.main.7z of 2026-10-02
+  had a block with coder `0a` (ARM64) that py7zr 1.1.3 answers with
+  `UnsupportedCompressionMethodError` - from the middle of `extractall`,
+  after hundreds of megabytes had been written. `_py7zr_can_unpack` asks
+  the HEADER before anything is touched: a `SevenZipDecompressor` is built
+  for each block, which is where py7zr decides whether it knows the
+  coders, and nothing is decoded.
+- **The fallback was secured too late.** 7-Zip was resolved only after
+  py7zr had failed - and by then staging had renamed `data/bin/7z.exe` to
+  `7z.exe.old`, so the fallback existed only on a machine with a 7-Zip on
+  PATH. `test_a_missing_py7zr_still_updates_through_7zip` passed here
+  (Program Files has one) while the update failed everywhere else. The
+  private copy of 7-Zip is made BEFORE staging now, whichever extractor is
+  going to be used, and the tests run with `shutil.which` answering None.
+- **A file that is merely OPEN cannot be renamed - and the frozen Titan
+  holds one of its own.** Windows lets a running exe and a loaded DLL be
+  renamed, which staging relies on, but refuses a rename while any handle
+  opened without FILE_SHARE_DELETE exists - and an ordinary `open()` is one
+  (measured: `[WinError 32]`). Run as the compiled build
+  (`dist\Titan\Titan.exe --apply-update ...`, with the update log on),
+  staging hit exactly one such file: **`_internal/base_library.zip`**, which
+  zipimport keeps open for the life of the process. The old staging raised
+  on it, after thousands of renames, rolled everything back and reported
+  "Update failed" - that, not the ARM64 block, is why the installed build
+  failed on a machine that had 7-Zip on PATH, and why nothing was left on
+  the disk to see. A source checkout with `is_frozen` patched never holds
+  that file, which is why every test passed. `_move_aside` retries, then
+  keeps a COPY as the `.old` (`('copied', ...)`, restored by copying back);
+  such files are left out of both extractors' runs (py7zr `targets`, 7-Zip
+  `-x@list`) and handled by `_replace_files_in_use`: unpacked to the side,
+  compared, **left alone when the bytes are the same** (base_library.zip
+  is, between two builds of one Python - writing over an archive the
+  process is still reading from is how an import fails at exit), written
+  over in place otherwise. A holder that shares nothing makes that fail,
+  and the failure names the file.
+- **The archive is packed so the INSTALLED Titan can open it.**
+  `python src/scripts/pack_release.py dist/Titan` packs with `-mf=BCJ`
+  (the x86 branch filter for every executable, which py7zr decodes) and
+  then reads the finished archive's blocks back the way the updater does;
+  `--check titan.main.7z` does only that. An archive made with 7-Zip's
+  defaults is refused by it - the updater already installed on users'
+  machines is the one that has to open the archive, and it cannot be
+  fixed retroactively.
+- 7-Zip is run with `-sccUTF-8`, or its messages arrive in the OEM code
+  page and the log fills with replacement characters.
+- Tests: `tests/test_updater.py` (run it directly; 26 tests, with an
+  ARM64-filtered archive built by `7z a -mf=ARM64`). Live: the frozen build
+  applied the published ARM64 archive to itself with no 7-Zip on PATH in
+  82 s - py7zr refused the block, the private 7-Zip did the work,
+  base_library.zip was the one file in use.
+
 ### Idle processor and startup memory, measured
 
 What Titan does while nobody is touching it, measured on this machine
