@@ -298,7 +298,7 @@ def check_for_updates_on_startup(parent=None):
 # Note: translation.py will auto-detect system language if no preference is saved
 _ = set_language(get_setting('language', get_system_language()))
 
-VERSION = "0.6"
+VERSION = "0.6.1"
 # The one speaker the whole program shares, built on first use.  `Auto()`
 # locates each backend's library by walking the entire current call stack
 # (`inspect.getouterframes`), which at import time - with every one of

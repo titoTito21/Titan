@@ -186,6 +186,8 @@ class TitanAccessEngine:
             return True
         self.running = True
         self._ready.clear()
+        if not _IS_WINDOWS:
+            return self._posix_start()
         self._thread = threading.Thread(target=self._run, name="TitanAccessEngine",
                                         daemon=True)
         self._thread.start()
@@ -209,12 +211,9 @@ class TitanAccessEngine:
             pass
         # Post WM_QUIT to the worker thread's message loop.
         if not _IS_WINDOWS:
-            loop = getattr(self, '_glib_loop', None)
-            if loop is not None:
-                try:
-                    loop.quit()
-                except Exception:
-                    pass
+            self._on_main_thread(self._teardown_subsystems, wait=3.0)
+            TitanAccessEngine.instance = None
+            return
         elif self._thread_id:
             try:
                 ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
@@ -291,112 +290,77 @@ class TitanAccessEngine:
                 pass
 
     def _run_posix(self):
-        """Worker thread on Linux: build the subsystems, then run the GLib
-        main loop that AT-SPI delivers its events on - the focus, the state
-        changes and the keystrokes all arrive here, on this thread, as the
-        Win32 message pump delivers them on Windows.
+        """Not used: on Linux the reader has no thread of its own (see
+        :meth:`_posix_start`)."""
+        return self._posix_start()
 
-        **On a context of the reader's own.** ``Atspi.event_main()`` runs
-        the DEFAULT GLib context, which inside Titan is the context wx's
-        GTK main loop already runs on the main thread. GLib lets whichever
-        thread acquires a context dispatch it, so the moment the main
-        thread let go of it - a modal dialog closing - this thread
-        dispatched GTK: measured, the main frame's close handler ran on
-        the TitanAccessEngine thread (``shutdown_app`` with this loop in
-        its stack), and before that a segmentation fault with the reader
-        speaking. A context of its own is what makes this thread the
-        reader's and nothing else's; ``pin_main_context`` re-attaches a
-        connection libatspi 2.38 put on the default context anyway."""
+    def _posix_start(self):
+        """Linux: the reader lives on the MAIN thread, on the GLib loop wx
+        already runs there.
+
+        libatspi is not thread-safe, and in this process it cannot be kept
+        to a thread of the reader's own: it opens a direct connection to
+        every application it meets on the DEFAULT GLib context whatever it
+        was told, the ATK bridge sends events down that connection, and
+        the main thread then dispatches libatspi's handlers while the
+        reader's thread is inside a libatspi call - measured as two
+        segmentation faults, one in each thread, and a "re-pin" of the
+        connections from the reader's thread that crashed the main thread
+        mid-dispatch. One thread for all of it is the only shape that
+        holds: the events, the reads, the keystroke listener and the
+        reader's own deferred work (`post_to_worker`, `submit_read`,
+        `submit_action`) all run on the main thread, where Titan's own ATK
+        bridge already lives. A synchronous call into Titan's own window
+        is answered reentrantly (dbind spins the loop while it waits).
+        """
+        self._thread = None
         self._glib_context = None
         self._glib_loop = None
-        try:
-            from gi.repository import GLib
-            from . import atspi_focus
-            Atspi = atspi_focus.atspi()
-        except Exception:
-            GLib = None
-            Atspi = None
-        if GLib is not None and Atspi is not None:
+
+        def _build():
             try:
-                self._glib_context = GLib.MainContext()
-                self._glib_context.push_thread_default()
-                try:
-                    Atspi.init()
-                except Exception:
-                    pass
-                atspi_focus.pin_main_context(self._glib_context)
-                self._glib_loop = GLib.MainLoop.new(self._glib_context, False)
+                from . import atspi_focus
+                Atspi = atspi_focus.atspi()
+                if Atspi is not None:
+                    try:
+                        Atspi.init()
+                    except Exception:
+                        pass
+                self._build_subsystems()
+            finally:
+                self._ready.set()
+            try:
+                self._announce_started()
             except Exception as e:
-                print(f"[TitanAccess] AT-SPI context error: {e}")
-                self._glib_context = None
-                self._glib_loop = None
-        self._build_subsystems()
-        self._ready.set()
-        self._announce_started()
-        self._start_context_watch()
-        try:
-            if self._glib_loop is not None:
-                self._glib_loop.run()
-            elif Atspi is not None:
-                Atspi.event_main()
-            else:
-                # No accessibility bus: nothing will ever arrive, but the
-                # speech and the gestures of a walked list still work.
-                while self.running:
-                    time.sleep(0.2)
-        except Exception as e:
-            print(f"[TitanAccess] AT-SPI main loop error: {e}")
-        finally:
-            self._teardown_subsystems()
-            try:
-                if self._glib_context is not None:
-                    self._glib_context.pop_thread_default()
-            except Exception:
-                pass
-            self._glib_loop = None
+                print(f"[TitanAccess] startup announcement error: {e}")
+        self._on_main_thread(_build, wait=20.0)
+        TitanAccessEngine.instance = self
+        return True
 
-    def _start_context_watch(self):
-        """Every few seconds: if an AT-SPI event arrived on a thread that is
-        not this one, an application's connection is on the default context
-        (libatspi 2.38 puts a newly opened one there) - pin everything to
-        ours again. Runs on this thread's own loop, costs nothing when all
-        is well."""
-        ctx = getattr(self, '_glib_context', None)
-        if ctx is None:
-            return
+    @staticmethod
+    def _on_main_thread(fn, wait=None):
+        """Run *fn* on the main thread: now, when this is it; through the
+        GLib loop otherwise, waiting up to *wait* seconds for it."""
+        if threading.current_thread() is threading.main_thread():
+            fn()
+            return True
+        done = threading.Event()
+
+        def _run(*_args):
+            try:
+                fn()
+            finally:
+                done.set()
+            return False
         try:
             from gi.repository import GLib
-            from . import atspi_focus
+            GLib.idle_add(_run)
         except Exception:
-            return
-        self._wrong_thread_seen = 0
-
-        self._repinned = 0
-
-        def _check(*_args):
-            if not self.running:
-                return False
-            provider = self.provider
-            seen = getattr(provider, 'wrong_thread_events', 0)
-            if seen > self._wrong_thread_seen:
-                self._wrong_thread_seen = seen
-                # A few times, then let it be: libatspi drains its deferred
-                # queue from whichever thread last made a call, so some
-                # events will always land elsewhere - and the provider
-                # hands those back to this thread (`marshal`). The re-pin
-                # is for a connection that really sits on the wrong context.
-                if self._repinned < 20:
-                    self._repinned += 1
-                    atspi_focus.pin_main_context(ctx)
-                    print(f"[TitanAccess] AT-SPI: re-pinned the connections to the "
-                          f"reader's thread ({seen} events had arrived elsewhere)")
+            fn()
             return True
-        try:
-            src = GLib.timeout_source_new_seconds(3)
-            src.set_callback(_check)
-            src.attach(ctx)
-        except Exception as e:
-            print(f"[TitanAccess] AT-SPI context watch error: {e}")
+        if wait:
+            return done.wait(wait)
+        return True
 
     def _announce_started(self):
         try:
@@ -475,8 +439,6 @@ class TitanAccessEngine:
                 p.add_focus_listener(self.on_focus)
                 p.add_state_listener(self.on_state_change)
                 p.marshal = self.post_to_worker
-                p.repin = lambda: atspi_focus.pin_main_context(
-                    getattr(self, '_glib_context', None))
                 p.start()
                 return p
             from titan_access.provider_manager import ProviderManager
@@ -1058,14 +1020,11 @@ class TitanAccessEngine:
         with self._invoke_lock:
             self._invoke_queue.append(fn)
         if not _IS_WINDOWS:
-            # The GLib loop the AT-SPI events run on is the worker here -
-            # on ITS context, never the default one (that is wx's).
+            # Linux: the main thread's GLib loop is the reader's (see
+            # _posix_start) - everything libatspi happens there.
             try:
                 from gi.repository import GLib
-                ctx = getattr(self, '_glib_context', None)
-                src = GLib.idle_source_new()
-                src.set_callback(lambda *_a: (self._drain_invokes(), False)[1])
-                src.attach(ctx)
+                GLib.idle_add(lambda *_a: (self._drain_invokes(), False)[1])
             except Exception:
                 self._drain_invokes()
             return
@@ -1149,6 +1108,12 @@ class TitanAccessEngine:
     def submit_read(self, fn):
         """Queue a (possibly blocking) caret read on the background thread.
         Only the latest read is kept, so holding an arrow key never backs up."""
+        if not _IS_WINDOWS:
+            # One thread for libatspi (see _posix_start). The read runs
+            # after the key has been answered, which is when the
+            # application moves its caret.
+            self.post_to_worker(fn)
+            return
         with self._bg_lock:
             self._bg_read = fn
         self._bg_event.set()
@@ -1163,6 +1128,9 @@ class TitanAccessEngine:
         step. Every queued job runs, in order, on the background thread; use
         this (not :meth:`submit_read`) whenever a job's result depends on the
         one before it, so rapid repeats can never skip/reorder a step."""
+        if not _IS_WINDOWS:
+            self.post_to_worker(fn)                   # in order, on the main thread
+            return
         self._action_queue.put(fn)
         self._bg_event.set()
 
@@ -1509,7 +1477,10 @@ class TitanAccessEngine:
             def _fire():
                 if tok == self._announce_token:
                     self.announce_object(obj)
-            threading.Timer(0.12, _fire).start()
+            # On the reader's own thread, not the timer's: the announcement
+            # reads the element (its ancestors, its text), which is COM on
+            # Windows and libatspi on Linux, and neither is for any thread.
+            threading.Timer(0.12, lambda: self.post_to_worker(_fire)).start()
         else:
             self.announce_object(obj)
 

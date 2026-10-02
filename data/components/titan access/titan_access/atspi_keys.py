@@ -14,9 +14,12 @@ into the Windows virtual-key code and the "extended" flag the reader's
 so the whole of its routing - the reader modifier, the chords, the
 gestures, typing echo - is untouched.
 """
+import os
 import sys
 
 from titan_access import atspi_focus
+
+_TRACE = bool(os.environ.get('TITAN_ACCESS_TRACE'))
 
 IS_LINUX = sys.platform.startswith('linux')
 
@@ -149,6 +152,12 @@ def start(hook):
             if not pressed:
                 flags |= LLKHF_UP
             swallow = hook._process(vk, int(event.hw_code or 0), flags, pressed)
+            if _TRACE:
+                print(f"[TitanAccess] key: keysym=0x{int(event.id):x} {event.event_string!r} "
+                      f"hw={event.hw_code} mods={event.modifiers} -> vk=0x{vk:x} ext={extended} "
+                      f"{'down' if pressed else 'up'} swallow={bool(swallow)} "
+                      f"readermod={getattr(hook, '_reader_mod', None)} ctrl={getattr(hook, '_ctrl', None)}",
+                      flush=True)
             return bool(swallow)
         except Exception as e:                       # noqa: BLE001
             print(f"[TitanAccess] atspi_keys: {e}")

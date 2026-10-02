@@ -674,6 +674,59 @@ each was a layer underneath answering nothing, measured in WSLg (Debian
     title. The AI tier and Titan's local model (`rapidocr`, when
     installed) then read it. Windows' own recogniser (`localOcr`) stays
     Windows, and says so.
+  - **OCR is AVAILABLE on Linux, through Titan's local model.** Asked for
+    in as many words. `rapidocr` + `onnxruntime` install for the system
+    Python (Settings offers the download; `local_model.install`), the
+    models land in `~/.config/titosoft/Titan/models/`, and
+    `local_model.read_array` reads a rendered picture in about a second.
+    `portable/localOcr` - the shared module every local reading goes
+    through (the virtual window's picture fallback, scan mode's OCR tier,
+    the watcher, the guest) - was NVDA's Windows recogniser and nothing
+    else; off Windows `available()` is `model_available()`, `read_window`
+    and `read` are `read_window_model` (Titan's `ocr.read_local`, which
+    captures through the posix route), and `_window_rect` is the AT-SPI
+    window's extents. The Linux document builder has an `ocr` tier after
+    `atspi`, taken only when the tree says nothing and the user asked
+    (`allow_ocr`). Measured on a wx window: 11 lines with screen
+    rectangles in 2.2 s ("Lista owocow:", "Jablko", "Ala ma kota."...).
+    The AI tier reads the same capture when a vision key is configured.
+  - **One thread for libatspi, and it is the main one.** Asked for as
+    "make sure it works on Linux applications too, gedit and nautilus",
+    the first gedit session ended in two more segmentation faults - one
+    in the reader's thread walking a window while the main thread rebuilt
+    it, one in the main thread while the reader's thread re-pinned the
+    connections mid-dispatch. libatspi is not thread-safe and in THIS
+    process cannot be confined to a thread of the reader's own (every
+    application it meets gets a direct connection on the default context
+    and the ATK bridge sends events down it), so `engine._posix_start`
+    builds the reader on the main thread and lets wx's GTK loop be its
+    loop: events, reads, the keystroke listener, `post_to_worker`,
+    `submit_read` and `submit_action` all land there (`_on_main_thread`),
+    the deferred container announcement goes through `post_to_worker`
+    rather than a timer thread, and there is no `_run_posix` loop and no
+    re-pin. A synchronous call into Titan's own window is answered
+    reentrantly - dbind spins the loop while it waits.
+  - **gedit and nautilus, read.** Installed here and driven with
+    `xdotool key` (never `xdotool type`, which remaps keycodes under
+    XWayland and produced stray keysyms). gedit: the window's title on
+    arrival, the line on Up/Down/Home, the word on Ctrl+Left, the
+    character on Left/Right, "Otwórz" as Ctrl+O goes through, the Open
+    Files dialog with its file table, the primary menu's entries
+    ("New Window / Przycisk" - GTK's popover menu is buttons). nautilus:
+    the sidebar rows ("Recent files", "Open your personal folder" - GTK
+    names those by DESCRIPTION, so a nameless control is now called by
+    it), the path bar's buttons, and the icon view, which is a
+    LAYERED_PANE of CANVAS items that carry neither ENABLED nor SENSITIVE:
+    a canvas item is a list row, and "unavailable" is claimed only of the
+    roles it is honest for (`_UNAVAILABLE_ROLES`). A nameless notebook or
+    toolbar is no longer announced as context (gedit's editor sits in
+    one, and every return to the page said "Zakładka"); a dialog's
+    message skips labels that label a control (`LABEL_FOR`) and is capped
+    at 400 characters, or a file chooser read its every label. The
+    dropdown MENU container GTK selects before its first item is skipped
+    ("menu, Menu"). `TITAN_ACCESS_TRACE=1` also prints every key the
+    hook receives - which is how a user's own keystrokes, interleaved
+    with the injected ones, were told apart from a fault.
   - **Not ported**: `important_places` (desktop, taskbar, tray and
     Explorer bands are Windows' own places).
   - Measured in a probe process against a wx window in another: Next
@@ -706,7 +759,7 @@ each was a layer underneath answering nothing, measured in WSLg (Debian
     Short calls on the worker, sleeps on the main thread. And GTK emits
     no focus event for `grab_focus` in a window the compositor has not
     activated, so a probe sets `engine.current_object` itself.
-- Tests: `tests/test_linux_reader_and_shell.py` (33; a fake Atspi, so
+- Tests: `tests/test_linux_reader_and_shell.py` (37; a fake Atspi, so
   they run on Windows too). Its `if __name__ == '__main__'` block sat in
   the MIDDLE of the file, so every class after it had never run.
 

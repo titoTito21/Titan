@@ -192,7 +192,8 @@ class _Roles:
               'SPIN_BUTTON', 'PROGRESS_BAR', 'SCROLL_BAR', 'LINK', 'HEADING',
               'IMAGE', 'ICON', 'DOCUMENT_FRAME', 'DOCUMENT_TEXT', 'DOCUMENT_WEB',
               'DOCUMENT_EMAIL', 'VIEWPORT', 'SPLIT_PANE', 'LAYERED_PANE', 'ROOT_PANE',
-              'GLASS_PANE', 'INTERNAL_FRAME', 'TOOL_TIP', 'DESKTOP_FRAME', 'UNKNOWN']
+              'GLASS_PANE', 'INTERNAL_FRAME', 'TOOL_TIP', 'DESKTOP_FRAME', 'UNKNOWN',
+              'CANVAS']
 
     def __init__(self):
         for i, name in enumerate(self._order):
@@ -203,11 +204,16 @@ class _States:
     _order = ['INVALID', 'FOCUSED', 'CHECKABLE', 'CHECKED', 'INDETERMINATE',
               'EXPANDABLE', 'EXPANDED', 'SELECTED', 'ENABLED', 'SENSITIVE',
               'EDITABLE', 'REQUIRED', 'PRESSED', 'BUSY', 'HAS_POPUP', 'ACTIVE',
-              'SHOWING', 'MODAL', 'VISIBLE', 'ICONIFIED']
+              'SHOWING', 'MODAL', 'VISIBLE', 'ICONIFIED', 'FOCUSABLE', 'SELECTABLE']
 
     def __init__(self):
         for i, name in enumerate(self._order):
             setattr(self, name, _Enum(i, name))
+
+
+class _Relation:
+    def __init__(self, kind): self._kind = kind
+    def get_relation_type(self): return self._kind
 
 
 class _StateSet:
@@ -249,6 +255,7 @@ class _Node:
             node = node.parent
         return node
     def get_attributes(self): return {}
+    def get_relation_set(self): return list(getattr(self, 'relations', []))
     # interfaces answered by the object itself, as libatspi does
     def get_text_iface(self): return self if self.text is not None else None
     def get_character_count(self): return len(self.text or '')
@@ -295,6 +302,10 @@ class _FakeAtspi:
         class CoordType:
             SCREEN = 0
         self.CoordType = CoordType
+
+        class RelationType:
+            LABEL_FOR, LABELLED_BY = 'label-for', 'labelled-by'
+        self.RelationType = RelationType
 
     def init(self): return 0
     def set_main_context(self, ctx): self.contexts.append(ctx)
@@ -391,6 +402,9 @@ class TheProviderHearsARowMoveWithoutAFocusEvent(unittest.TestCase):
         self.app.children[0].children.append(bar)
         bar.parent = self.app.children[0]
         self.fake.fire('object:state-changed:selected', menu, 1)
+        dropdown = _Node(R.MENU, '', children=[])
+        menu.children.append(dropdown); dropdown.parent = menu
+        self.fake.fire('object:state-changed:selected', dropdown, 1)   # the popup itself: nothing
         self.fake.fire('object:state-changed:selected', item, 1)
         self.assertEqual([o.name for o in self.heard], ['Program', 'Settings'])
         self.assertEqual([o.role for o in self.heard], ['menu', 'menuitem'])
@@ -404,6 +418,26 @@ class TheProviderHearsARowMoveWithoutAFocusEvent(unittest.TestCase):
         self.table.selected = [0]
         self.fake.fire('object:state-changed:focused', self.table, 1)
         self.assertEqual([o.name for o in self.heard], ['File Manager'])
+
+    def test_a_nameless_button_is_called_by_its_description(self):
+        R = self.fake.Role
+        icon = _Node(R.PUSH_BUTTON, '', children=[]); icon._states = []
+        icon.get_description = lambda: 'Open your personal folder'
+        self.app.children[0].children.append(icon); icon.parent = self.app.children[0]
+        self.fake.fire('object:state-changed:focused', icon, 1)
+        self.assertEqual([o.name for o in self.heard], ['Open your personal folder'])
+
+    def test_a_nautilus_icon_is_a_row_and_not_unavailable(self):
+        R, S = self.fake.Role, self.fake.StateType
+        files = [_Node(R.CANVAS, 'Dokumenty', [S.FOCUSABLE]), _Node(R.CANVAS, 'notatka.txt', [S.FOCUSABLE])]
+        view = _Node(R.LAYERED_PANE, 'Icon View', [S.FOCUSABLE, S.ENABLED, S.SENSITIVE], files)
+        self.app.children[0].children.append(view); view.parent = self.app.children[0]
+        self.fake.fire('object:state-changed:focused', files[1], 1)
+        obj = self.heard[-1]
+        self.assertEqual((obj.name, obj.role, obj.pos_in_set, obj.size_of_set), ('notatka.txt', 'listitem', 2, 2))
+        self.assertNotIn('unavailable', obj.states)
+        button = _Node(R.PUSH_BUTTON, 'Greyed', [])
+        self.assertIn('unavailable', self.mod.to_object(button).states)
 
     def test_focus_leaving_is_nothing(self):
         self.fake.fire('object:state-changed:focused', self.table, 0)
@@ -524,11 +558,16 @@ class TheContextIsWalkedOverAtspi(unittest.TestCase):
         self.focus._Atspi = None
 
     def test_a_dialog_is_its_title_its_kind_and_its_message_once(self):
+        R = self.fake.Role
+        # A label that names a field is the field's, not the message's.
+        field_label = _Node(R.LABEL, 'Name:'); field_label.relations = [_Relation('label-for')]
+        self.dialog.children[0].children.insert(0, field_label); field_label.parent = self.dialog.children[0]
         obj = self.focus.to_object(self.ok)
         segs = self.presenter.context_segments(obj)
         texts = [t for t, _p in segs]
         self.assertTrue(texts and 'Information' in texts[0], texts)
         self.assertIn('The file could not be saved.', texts)
+        self.assertFalse(any('Name:' in t for t in texts), texts)
         # The second focus inside the same dialog says nothing again.
         self.assertEqual(self.presenter.context_segments(obj), [])
 
@@ -537,7 +576,8 @@ class TheContextIsWalkedOverAtspi(unittest.TestCase):
         row = _Node(R.LIST_ITEM, 'Row', [S.FOCUSED])
         lst = _Node(R.LIST, 'Options', children=[row])
         group = _Node(R.PANEL, 'Sounds', children=[lst])
-        layout = _Node(R.PANEL, '', children=[group])
+        notebook = _Node(R.PAGE_TAB_LIST, '', children=[group])       # gedit's editor sits in one
+        layout = _Node(R.PANEL, '', children=[notebook])
         frame = _Node(R.FRAME, 'Settings', [S.ACTIVE], [layout])
         _Node(R.APPLICATION, 'main.py', children=[frame])
         texts = [t for t, _p in self.presenter.context_segments(self.focus.to_object(row))]
@@ -545,6 +585,8 @@ class TheContextIsWalkedOverAtspi(unittest.TestCase):
         self.assertTrue(any('Options' in t for t in texts), texts)
         self.assertTrue(any('Sounds' in t for t in texts), texts)
         self.assertFalse(any(t.strip() in ('group', 'grupa') for t in texts), texts)
+        from titan_access.localization import role_label
+        self.assertNotIn(role_label('tabcontrol'), texts)             # a nameless notebook is furniture
 
 
 class TheMenuTrackerWalksAnAtspiMenu(unittest.TestCase):
@@ -747,10 +789,17 @@ class ScanModesOwnMoveIsNotReadTwice(unittest.TestCase):
         h._char_pos = 0
         return h, node
 
+    def setUp(self):
+        from titan_access import browse_mode
+        self._old_fg = browse_mode.vbuf.foreground_hwnd
+        browse_mode.vbuf.foreground_hwnd = lambda: 0
+
+    def tearDown(self):
+        from titan_access import browse_mode
+        browse_mode.vbuf.foreground_hwnd = self._old_fg   # a patch left behind is every later test's
+
     def test_the_focus_scan_mode_caused_is_its_own(self):
         import time, types
-        from titan_access import browse_mode
-        browse_mode.vbuf.foreground_hwnd = lambda: 0
         h, node = self._handler()
         h._scan_moved = (node.name, node.role, time.time())
         obj = types.SimpleNamespace(name='Dźwięk', role='listitem')
@@ -761,8 +810,6 @@ class ScanModesOwnMoveIsNotReadTwice(unittest.TestCase):
 
     def test_a_focus_the_user_moved_is_announced(self):
         import types
-        from titan_access import browse_mode
-        browse_mode.vbuf.foreground_hwnd = lambda: 0
         h, node = self._handler()
         self.assertFalse(h.update_for_focus(types.SimpleNamespace(name='Ogólne', role='listitem')))
 
@@ -800,7 +847,9 @@ class TheLinuxDocumentFallsBackToAPicture(unittest.TestCase):
         fake, focus = _install_fake()
         R, S = fake.Role, fake.StateType
         frame = _Node(R.FRAME, 'Game', [S.ACTIVE, S.SHOWING])
-        _Node(R.APPLICATION, 'game', children=[frame])
+        app = _Node(R.APPLICATION, 'game', children=[frame])
+        desktop = _Node(R.DESKTOP_FRAME, 'main', children=[app])
+        fake.get_desktop = lambda _i: desktop
         old = (vbuf.build_atspi, vbuf.build_ocr)
         vbuf.build_atspi = lambda window, limit=3000: []
         vbuf.build_ocr = lambda hwnd, on_status=None: [
@@ -810,6 +859,12 @@ class TheLinuxDocumentFallsBackToAPicture(unittest.TestCase):
             self.assertEqual((doc.source, [n.name for n in doc.nodes]), ('ocr', ['Start', 'Quit']))
             doc = vbuf._build_for_window_atspi(False, None, None)
             self.assertEqual(doc.nodes, [])                       # not without being asked
+            # A game is not on the accessibility bus at all: no window,
+            # and still a picture to read.
+            fake.get_desktop = lambda _i: _Node(R.DESKTOP_FRAME, 'main')
+            doc = vbuf._build_for_window_atspi(True, None, None)
+            self.assertEqual((doc.source, len(doc.nodes)), ('ocr', 2))
+            self.assertEqual(vbuf.foreground_hwnd(), vbuf.ATSPI_WINDOW_TOKEN)
         finally:
             vbuf.build_atspi, vbuf.build_ocr = old
             focus._Atspi = None

@@ -89,6 +89,9 @@ def _role_map(Atspi):
         R.GROUPING: C.ROLE_GROUP, R.DIALOG: C.ROLE_DIALOG, R.ALERT: C.ROLE_DIALOG,
         R.FRAME: C.ROLE_WINDOW, R.WINDOW: C.ROLE_WINDOW, R.SEPARATOR: C.ROLE_SEPARATOR,
         R.APPLICATION: C.ROLE_WINDOW,
+        # Nautilus' icon view: a LAYERED_PANE of CANVAS items, one per file,
+        # each focusable and named - a list of rows to the user.
+        R.LAYERED_PANE: C.ROLE_PANE, R.CANVAS: C.ROLE_LISTITEM,
     }
 
 
@@ -103,6 +106,11 @@ def role_of(Atspi, acc):
         return _roles.get(acc.get_role(), C.ROLE_UNKNOWN)
     except Exception:                                # noqa: BLE001
         return C.ROLE_UNKNOWN
+
+
+_UNAVAILABLE_ROLES = (C.ROLE_BUTTON, C.ROLE_MENUITEM, C.ROLE_CHECKBOX, C.ROLE_RADIO,
+                      C.ROLE_EDIT, C.ROLE_PASSWORD, C.ROLE_COMBOBOX, C.ROLE_SLIDER,
+                      C.ROLE_SPINNER, C.ROLE_LINK, C.ROLE_TAB, C.ROLE_MENU, C.ROLE_DOCUMENT)
 
 
 def states_of(Atspi, acc, role):
@@ -124,7 +132,10 @@ def states_of(Atspi, acc, role):
         out.add(C.STATE_EXPANDED if has(S.EXPANDED) else C.STATE_COLLAPSED)
     if has(S.SELECTED):
         out.add(C.STATE_SELECTED)
-    if not has(S.ENABLED) or not has(S.SENSITIVE):
+    # Nautilus' canvas items carry neither ENABLED nor SENSITIVE and are
+    # perfectly usable; "unavailable" is claimed only of a control that
+    # would say so honestly - a greyed button, menu item or field.
+    if (not has(S.ENABLED) or not has(S.SENSITIVE)) and role in _UNAVAILABLE_ROLES:
         out.add(C.STATE_UNAVAILABLE)
     if role in (C.ROLE_EDIT, C.ROLE_DOCUMENT) and not has(S.EDITABLE):
         out.add(C.STATE_READONLY)
@@ -188,6 +199,13 @@ def to_object(acc) -> Optional[AccessibleObject]:
         obj.role = role
         obj.name = acc.get_name() or ''
         obj.description = acc.get_description() or ''
+        if not obj.name.strip() and obj.description.strip() and role not in (
+                C.ROLE_EDIT, C.ROLE_DOCUMENT, C.ROLE_PASSWORD, C.ROLE_TEXT):
+            # GTK names an icon button and a sidebar row by their
+            # DESCRIPTION (the tooltip): "Open your personal folder",
+            # "Recent files". A reader that reads only the name says
+            # "button" for each of them.
+            obj.name = obj.description.strip()
         obj.value = _value_of(Atspi, acc, role)
         obj.states = states_of(Atspi, acc, role)
         obj.bounds = _bounds_of(Atspi, acc)
@@ -501,6 +519,11 @@ class AtspiProvider:
             role = acc.get_role()
             if role in (Atspi.Role.MENU, Atspi.Role.MENU_ITEM, Atspi.Role.CHECK_MENU_ITEM,
                         Atspi.Role.RADIO_MENU_ITEM):
+                # A nameless MENU is the dropdown itself opening under its
+                # entry (GTK selects it before the first item); the item's
+                # own event follows and is the one worth saying.
+                if role == Atspi.Role.MENU and not (acc.get_name() or '').strip():
+                    return
                 self._deliver(acc, 'selected')
                 return
             if role in self._selection_roles(Atspi) and container_has_focus(acc):

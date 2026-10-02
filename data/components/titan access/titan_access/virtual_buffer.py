@@ -322,11 +322,12 @@ def window_rect(hwnd) -> tuple:
 
 def foreground_hwnd() -> int:
     if not _IS_WINDOWS:
-        try:
-            from titan_access import atspi_focus
-            return ATSPI_WINDOW_TOKEN if atspi_focus.active_window() is not None else 0
-        except Exception:
-            return 0
+        # There is always a window in front to READ: one the accessibility
+        # bus knows is walked, and one it does not - a game, a program
+        # drawing its own interface, the very windows OCR exists for - is
+        # photographed. Answering 0 here is what kept scan mode from
+        # starting on exactly those.
+        return ATSPI_WINDOW_TOKEN
     try:
         return int(_user32.GetForegroundWindow())
     except Exception:
@@ -1021,17 +1022,16 @@ def _build_for_window_atspi(allow_ocr, on_status, prefer):
     from titan_access import atspi_focus
     window = atspi_focus.active_window()
     doc = VirtualDocument(hwnd=0, title=atspi_focus.window_title(window))
-    if window is None:
-        return doc
     # The accessibility tree first; a window that answers nothing (a
-    # game, a program drawing its own interface) is read as a picture by
-    # Titan's local model, and by the AI when there is a key - only when
-    # the user asked for this document (`allow_ocr`), as on Windows.
+    # game, a program drawing its own interface - which may not be on
+    # the accessibility bus at all) is read as a picture by Titan's local
+    # model, and by the AI when there is a key - only when the user asked
+    # for this document (`allow_ocr`), as on Windows.
     tiers = [prefer] if prefer else (["atspi", "ocr"] if allow_ocr else ["atspi"])
     for tier in tiers:
         try:
             if tier == "atspi":
-                nodes = build_atspi(window)
+                nodes = build_atspi(window) if window is not None else []
             elif tier == "ocr":
                 if on_status:
                     on_status("ocr")

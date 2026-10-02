@@ -494,8 +494,11 @@ class ContextPresenter:
             role = role_of.get(arole)
             if role == "statusbar":
                 continue
-            # A nameless panel is layout, not a group a user can hear.
-            if role == "group" and not name:
+            # A nameless panel is layout, not a group a user can hear; a
+            # nameless notebook or toolbar is the furniture every page of
+            # a GTK program sits in (gedit's editor is inside one), and
+            # saying its role on every return to the page is noise.
+            if role in ("group", "tabcontrol", "toolbar") and not name:
                 continue
             if role and role not in nearest:
                 nearest[role] = (name, rid)
@@ -563,6 +566,15 @@ class ContextPresenter:
                     return                       # announced separately
                 role = node.get_role()
                 if role in text_roles:
+                    # A label that LABELS a control is that control's name,
+                    # not the dialog's message: a file chooser is full of
+                    # them ("Name", "Folder", "Character encoding").
+                    try:
+                        if any(r.get_relation_type() == Atspi.RelationType.LABEL_FOR
+                               for r in (node.get_relation_set() or [])):
+                            return
+                    except Exception:
+                        pass
                     name = (node.get_name() or "").strip()
                     if not name and role == Atspi.Role.TEXT:
                         try:
@@ -594,7 +606,9 @@ class ContextPresenter:
             if t and t not in seen:
                 seen.add(t)
                 out.append(t)
-        return " ".join(out)[:1500]
+        # A dialog's message is a sentence or three; a file chooser's
+        # every label is not, and reading it all buries the question.
+        return " ".join(out)[:400]
 
     @staticmethod
     def _segment_for(role, name, is_tce=False):
