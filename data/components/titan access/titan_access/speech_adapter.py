@@ -513,6 +513,19 @@ class SpeechAdapter(object):
 
     def _render(self, item, eng):
         if item.segments:
+            # **Parts whose class names a synthesizer of its own** - the
+            # name in SAPI, the type in eSpeak - are grouped by profile and
+            # each group rendered on its engine in turn, waited out between
+            # groups; an interrupt between groups cuts what is left, as it
+            # cuts anything queued. One utterance to the queue, several
+            # clips to the ear.
+            groups = self._groups(item.segments)
+            if len(groups) > 1 or groups[0][0] is not None:
+                for profile, parts in groups:
+                    if self._superseded(item):
+                        return
+                    self._render_group(item, parts, profile)
+                return
             # Preferred path: let the engine synthesize the pitched parts and
             # play them as ONE concatenated clip with a short silence between
             # them. Because the parts are joined before anything is heard, no
@@ -539,11 +552,113 @@ class SpeechAdapter(object):
                 eng.speak_async(item.plain_text,
                                 position=item.first_position, pitch_offset=0)
         else:
-            eng.speak_async(item.text, position=item.position,
-                            pitch_offset=item.pitch)
+            # **Plain text goes the same way as the pitched parts**: rendered
+            # to memory and played on Titan's own channel, where its end is
+            # known exactly. Measured with the reader's own 32-bit SAPI voice
+            # (the cross-bitness cscript bridge): a plain `speak_async` was
+            # lost in the worker's switch to the bridge and the pacing then
+            # waited eight seconds for audio that never started - the reader
+            # mute and late - while the very next pitched announcement,
+            # rendered through `speak_concat`, played at once. An engine that
+            # cannot render to memory keeps `speak_async`.
+            done = False
+            if hasattr(eng, "speak_concat"):
+                try:
+                    done = bool(eng.speak_concat(
+                        [(item.text, item.pitch, item.position)],
+                        gap_ms=self._SEGMENT_GAP_MS))
+                except Exception as e:  # pragma: no cover
+                    print(f"[TitanAccess] speak_concat (plain) error: {e}")
+                    done = False
+            if not done:
+                eng.speak_async(item.text, position=item.position,
+                                pitch_offset=item.pitch)
         self._wait_for_playback(item)
 
-    def _wait_for_playback(self, item):
+    @staticmethod
+    def _groups(segments):
+        """``[(profile or None, [five-element segments])]`` - consecutive
+        parts that share a voice profile, in order. The profile is the
+        sixth element of a segment (`accessible.voice_profile_of`)."""
+        groups = []
+        for seg in segments:
+            profile = None
+            try:
+                found = seg[5] if len(seg) > 5 else None
+                if isinstance(found, dict) and found:
+                    profile = dict(found)
+            except Exception:                        # noqa: BLE001
+                profile = None
+            part = tuple(seg[:5])
+            if groups and groups[-1][0] == profile:
+                groups[-1][1].append(part)
+            else:
+                groups.append((profile, [part]))
+        return groups
+
+    def _voice_engine(self, profile):
+        """The engine a part with a profile is rendered on.
+
+        The reader's own private engine when it has one (the profile is
+        borrowed onto it and the reader's voice put back after); otherwise
+        a private engine of the reader's, never Titan's SHARED engine - a
+        synthesizer switched under Titan's own applications mid-sentence
+        is a bug in every one of them."""
+        if getattr(self, "_own", False) and self._engine is not None:
+            return self._engine
+        try:
+            from src.titan_core import tce_speech
+            engine = tce_speech.get_private_reader_engine()
+            if engine is not None:
+                return engine
+        except Exception:                            # noqa: BLE001
+            pass
+        return self._engine
+
+    def _render_group(self, item, parts, profile):
+        """One group of parts on one engine: the profile borrowed, the parts
+        spoken as one clip, the clip waited out, the voice put back."""
+        gap = max(self._SEGMENT_GAP_MS, int(getattr(item, "gap_ms", 0) or 0))
+        if profile is None:
+            engine = self._engine
+            borrowed = False
+        else:
+            engine = self._voice_engine(profile)
+            borrowed = self._borrow_on(engine, profile)
+        try:
+            done = False
+            if hasattr(engine, "speak_concat"):
+                try:
+                    done = bool(engine.speak_concat(parts, gap_ms=gap))
+                except Exception as e:  # pragma: no cover
+                    print(f"[TitanAccess] speak_concat (group) error: {e}")
+            if not done:
+                text = ", ".join(str(p[0]) for p in parts if p and p[0])
+                engine.speak_async(text, position=parts[0][2] if len(parts[0]) > 2 else 0.0,
+                                   pitch_offset=0)
+            self._wait_for_playback(item, engine)
+        finally:
+            if borrowed:
+                self._give_voice_back_on(engine)
+
+    def _borrow_on(self, engine, profile):
+        """`_borrow_voice`, on a given engine."""
+        kept = self._engine
+        self._engine = engine
+        try:
+            return self._borrow_voice(profile)
+        finally:
+            self._engine = kept
+
+    def _give_voice_back_on(self, engine):
+        kept = self._engine
+        self._engine = engine
+        try:
+            self._give_voice_back()
+        finally:
+            self._engine = kept
+
+    def _wait_for_playback(self, item, engine=None):
         """Block until this utterance's audio has finished (or is superseded).
 
         Pacing signals, in order of reliability: the dedicated pygame TTS
@@ -555,6 +670,15 @@ class SpeechAdapter(object):
         text = item.plain_text
         est = _estimate_duration(text, cap=None)
         t0 = time.time()
+        if engine is not None and engine is not self._engine:
+            # The group's own engine is the one to ask whether it is
+            # still speaking; the mixer's channel is the same for both.
+            kept = self._engine
+            self._engine = engine
+            try:
+                return self._wait_for_playback(item)
+            finally:
+                self._engine = kept
         # Phase 1: wait for the audio to actually start. Synthesis is not
         # instant (a neural engine can take a second), and treating that
         # pre-start silence as "finished" is what let the next utterance
@@ -671,6 +795,19 @@ class SpeechAdapter(object):
     # ------------------------------------------------------------------ #
     # Configuration (mirrors C# SpeechManager setters)
     # ------------------------------------------------------------------ #
+    def current_rate(self):
+        """The rate the engine was last set to, or None where it cannot
+        say - which is the honest answer, and what continuous reading
+        needs before it may change the rate for a while."""
+        eng = self._engine if self._mode == self._MODE_TCE else None
+        if eng is None:
+            return None
+        value = getattr(eng, "_rate_setting", None)
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
     def set_rate(self, rate):
         """Set speech rate (-10 slow .. 10 fast)."""
         if self._mode == self._MODE_TCE and self._engine is not None:
@@ -834,7 +971,7 @@ def speak_in_class(text, tag, interrupt=False):
     try:
         from .portable import classes
         profile = dict(classes.voice_of(tag) or {})
-        if not classes.is_whole(tag):
+        if not classes.may_name_synth(tag):
             profile.pop("synth", None)
             profile.pop("voice", None)
     except Exception:                                # noqa: BLE001

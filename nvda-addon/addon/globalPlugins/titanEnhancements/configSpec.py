@@ -167,6 +167,19 @@ SPEC = {
     # every contact on the pad, and a user who has not asked for gestures
     # should not have them.
     'trackpad': 'boolean(default=False)',
+    # The walked lists - the palette, a message, the virtual window, the
+    # managers: how the arrows walk them (`walkLayout`, also changed on
+    # the spot with NumPad 4 and 6), what a row says beside its name, the
+    # tone per row, whether the end wraps round, and whether a list opens
+    # a window of its own to hold the keyboard. Read by `palette` and
+    # `virtualWindow` through the switchboard, in both readers.
+    'walkLayout': "option('linear', 'screen', 'interact', default='linear')",
+    'walkSayKind': 'boolean(default=True)',
+    'walkSayPosition': 'boolean(default=True)',
+    'walkSayTitle': 'boolean(default=True)',
+    'walkRowBeep': 'boolean(default=True)',
+    'walkWrap': 'boolean(default=False)',
+    'walkHostWindow': 'boolean(default=True)',
     # Whether an utterance is coloured by WHERE IT CAME FROM - keyboard
     # echo, a word being spelled, a message, what another program said
     # through the controller. On: it costs nothing when no class has been

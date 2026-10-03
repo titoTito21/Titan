@@ -165,12 +165,47 @@ def _rate(tag):
 
 
 def _part(text, tag, default_pitch):
-    """One segment with its class's pitch, rate and volume."""
+    """One segment with its class's pitch, rate and volume - and, where the
+    class names a synthesizer or a voice of its own, that profile as the
+    sixth element, for the speech adapter to render this part on it
+    (`voice_profile_of`)."""
     volume = _volume(tag)
     rate = _rate(tag)
+    profile = _voice_profile(tag)
+    if profile:
+        return (text, _pitch(tag, default_pitch), 0.0, rate, volume, profile)
     if volume or rate:
         return (text, _pitch(tag, default_pitch), 0.0, rate, volume)
     return (text, _pitch(tag, default_pitch))
+
+
+def _voice_profile(tag):
+    """``{'synth', 'voice', 'variant'}`` the class asks for, or None.
+
+    Only the NAMES: the dials travel in the segment already. A class that
+    may not name a synthesizer (`classes.may_name_synth`) answers None,
+    so what is stored and what is spoken cannot differ.
+    """
+    try:
+        from .portable import classes
+        if not classes.may_name_synth(tag):
+            return None
+        profile = classes.voice_of(tag)
+        names = {key: str(profile.get(key) or '').strip()
+                 for key in ('synth', 'voice', 'variant')}
+        names = {key: value for key, value in names.items() if value}
+        return names or None
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def voice_profile_of(segment):
+    """The synthesizer and voice a segment asks for, or None."""
+    try:
+        found = segment[5] if len(segment) > 5 else None
+    except Exception:                                # noqa: BLE001
+        return None
+    return dict(found) if isinstance(found, dict) and found else None
 
 
 def _pitch(tag, default):

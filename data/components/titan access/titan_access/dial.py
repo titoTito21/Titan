@@ -123,7 +123,19 @@ class DialManager:
         if cat == SYNTHESIZER:
             return self._change_engine(nxt)
         if cat == CHARACTERS and self.engine.editable is not None:
-            self.engine.editable.navigate_char(nxt)
+            # `Navigation/PhoneticInDial`: a letter reached through the dial
+            # is said phonetically (or not) as THIS setting says, whatever
+            # the text-editing one says about the arrows.
+            try:
+                phonetic = bool(self.engine.settings.get_bool(
+                    "Navigation", "PhoneticInDial", True))
+            except Exception:
+                phonetic = True
+            self.engine.editable.phonetic_override = phonetic
+            try:
+                self.engine.editable.navigate_char(nxt)
+            finally:
+                self.engine.editable.phonetic_override = None
             return True
         if cat == WORDS and self.engine.editable is not None:
             self.engine.editable.navigate_word(nxt)

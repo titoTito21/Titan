@@ -250,9 +250,26 @@ def _window_title(hwnd):
         return ''
 
 
+#: A window that is flashing flashes for a while, and Windows tells the
+#: shell hook about every blink: measured, eight "requires attention" for
+#: one window asking once. One per window per this many seconds.
+ATTENTION_REPEAT_S = 8.0
+_flashed_at = {}
+
+
 def _flashed(hwnd):
+    import time as _time
+    now = _time.time()
     with _LOCK:
         _state['attention'] += 1
+        last = _flashed_at.get(hwnd, 0.0)
+        if now - last < ATTENTION_REPEAT_S:
+            _state['attention_repeated'] = _state.get('attention_repeated', 0) + 1
+            return
+        _flashed_at[hwnd] = now
+        if len(_flashed_at) > 64:
+            oldest = min(_flashed_at, key=_flashed_at.get)
+            _flashed_at.pop(oldest, None)
     title = _window_title(hwnd)
     # Translators: said when a window asks for the user's attention (its
     # taskbar button is flashing). {what} is the window's title.

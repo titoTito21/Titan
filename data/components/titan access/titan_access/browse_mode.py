@@ -357,6 +357,11 @@ class BrowseModeHandler:
             # finds it ready instead of paying for the whole walk.
             self._dispatch(lambda: self._ensure_document())
         want_focus = obj is not None and obj.role in _FOCUS_MODE_ROLES
+        # **Automatic focus mode is a setting** (`Browse/AutoFocusMode`):
+        # off, a form field reached with Tab is still read in browse mode
+        # and the user switches by hand (Insert+Space).
+        if not self._browse_setting("AutoFocusMode", True):
+            want_focus = self._pass_through
         if want_focus == self._pass_through:
             self._manual_override = False
             return
@@ -413,6 +418,37 @@ class BrowseModeHandler:
         page = L("browse.webPage")
         self.engine.play(SND_CURSOR)
         self.engine.speak(f"{title}, {page}" if title else page, interrupt=False)
+        # **A page read from its top as it arrives** (`Browse/SayAllOnPageLoad`).
+        if self._browse_setting("SayAllOnPageLoad", False):
+            def _read_it():
+                if self._ensure_document():
+                    with self._lock:
+                        self._index = 0
+                    self.say_all()
+            self._dispatch(_read_it)
+
+    def _browse_setting(self, key, default):
+        settings = getattr(self.engine, "settings", None)
+        if settings is None:
+            return default
+        try:
+            if isinstance(default, bool):
+                return bool(settings.get_bool("Browse", key, default))
+            return settings.get_int("Browse", key, default)
+        except Exception:
+            return default
+
+    def _report_wanted(self, role):
+        """Whether a role's word is said in the buffer (`Browse/Report*`)."""
+        key = {
+            "link": "ReportLinks", "heading": "ReportHeadings",
+            "list": "ReportLists", "listitem": "ReportLists",
+            "table": "ReportTables", "cell": "ReportTables",
+            "row": "ReportTables", "landmark": "ReportLandmarks",
+        }.get(role)
+        if key is None:
+            return True
+        return self._browse_setting(key, True)
 
     # ==================================================================== #
     # Key handling
@@ -421,8 +457,19 @@ class BrowseModeHandler:
         """Handle a plain key in document mode. Return True to consume it."""
         if self._pass_through or (not _UIA and not self._scan):
             return False
+        # **Control+Alt+arrows move through a table's cells**, the keys every
+        # reader has for it; they are asked before Alt is refused.
+        if ctrl and alt and vk in (_VK_UP, _VK_DOWN, _VK_LEFT, _VK_RIGHT):
+            step = {_VK_UP: (-1, 0), _VK_DOWN: (1, 0),
+                    _VK_LEFT: (0, -1), _VK_RIGHT: (0, 1)}[vk]
+            self._dispatch(lambda: self.table_move(*step))
+            return True
         if alt:
             return False
+        if key_name == "f3":
+            # F3 and Shift+F3: the next and previous match of the last find.
+            self._dispatch(lambda: self.find_next(backward=shift))
+            return True
 
         if ctrl:
             # Ctrl+Home / Ctrl+End jump to the ends of the document; Ctrl+Left /
@@ -455,6 +502,20 @@ class BrowseModeHandler:
             # Let the application move focus; scan mode follows it (see
             # _scan_follow_focus) instead of fighting it.
             return False
+        # **An arrow on a form field may mean "type here"** (`Browse/
+        # FocusModeOnCaretMove`): the cursor is on an edit field or a combo
+        # box and the user pressed an arrow, so focus mode is entered and
+        # the key goes to the field.
+        if vk in (_VK_UP, _VK_DOWN, _VK_LEFT, _VK_RIGHT) and \
+                self._browse_setting("FocusModeOnCaretMove", False) and \
+                not self._scan:
+            node = self._node_at_locked(self._index) if self._index >= 0 else None
+            if node is not None and getattr(node, "role", "") in _FOCUS_MODE_ROLES:
+                self._pass_through = True
+                self._manual_override = True
+                self.engine.play(SND_CLICK)
+                self.engine.speak(L("browse.focusMode"))
+                return False
         if vk == _VK_UP:
             self._dispatch(lambda: self._move_line(-1))
             return True
@@ -480,7 +541,11 @@ class BrowseModeHandler:
             self._dispatch(lambda: self._move_line(+_PAGE))
             return True
 
-        # Single-letter / digit quick navigation.
+        # Single-letter / digit quick navigation (`Browse/QuickNavKeys`:
+        # off, the letters are the page's - a web application that uses
+        # single-letter shortcuts of its own gets them).
+        if not self._browse_setting("QuickNavKeys", True):
+            return False
         ch = _char_for_key(vk, key_name)
         if not ch:
             return False
@@ -976,6 +1041,252 @@ class BrowseModeHandler:
         return False
 
     # ==================================================================== #
+    # The elements list, find, and the table's cells
+    # ==================================================================== #
+    #: What the elements list offers, each a quick-navigation type.
+    ELEMENT_KINDS = (
+        ("browse.elements.links", qn.QuickNavType.LINK),
+        ("browse.elements.headings", qn.QuickNavType.HEADING),
+        ("browse.elements.formFields", qn.QuickNavType.FORM_FIELD),
+        ("browse.elements.landmarks", qn.QuickNavType.LANDMARK),
+        ("browse.elements.tables", qn.QuickNavType.TABLE),
+        ("browse.elements.lists", qn.QuickNavType.LIST),
+    )
+
+    def elements_list(self):
+        """Insert+F7: the document's elements by kind, as a walked list.
+
+        One level per kind, each row an entry of the document; Enter puts
+        the cursor on it and reads it. Built from the buffer in hand, so it
+        is the same on every tier and both platforms. ``(ok, said)``."""
+        from titan_access.portable import palette
+        if not self._ensure_document():
+            return False, L("browse.scanEmpty")
+        nodes = self._nodes()
+        rows = []
+        for label_key, qn_type in self.ELEMENT_KINDS:
+            found = [i for i, node in enumerate(nodes) if self._matches(node, qn_type)]
+            if not found:
+                continue
+            rows.append({
+                'label': '%s (%d)' % (L(label_key), len(found)),
+                'role': L('walk.kind.category'), 'icon': 'open-object',
+                'run': (lambda which=qn_type, key=label_key:
+                        self._elements_of(which, key))})
+        if not rows:
+            return False, L("browse.elements.nothing")
+        return palette.show(rows, L("browse.elements.title"))
+
+    def _elements_of(self, qn_type, label_key):
+        from titan_access.portable import palette
+        nodes = self._nodes()
+        rows = []
+        for i, node in enumerate(nodes):
+            if not self._matches(node, qn_type):
+                continue
+            text = (node.text or '').strip() or L("browse.emptyLine")
+            if node.is_heading and node.level:
+                text = '%s, %s' % (text, L("quickNav.headingLevel", node.level))
+            rows.append({'label': text[:200], 'role': loc.role_label(node.role)
+                         if node.role not in ('text', 'unknown') else '',
+                         'icon': 'list-item',
+                         'run': (lambda at=i: self._jump_to(at))})
+        if not rows:
+            return False, L("browse.elements.nothing")
+        return palette.show(rows, L(label_key), back=self.elements_list)
+
+    def _jump_to(self, index):
+        """The cursor onto entry *index*, said - from a list row, so the
+        list is closed first and the entry is read from the document."""
+        from titan_access.portable import palette
+        palette.stop()
+        nodes = self._nodes()
+        if not 0 <= index < len(nodes):
+            return False, L("browse.scanEmpty")
+        with self._lock:
+            self._index = index
+            self._char_pos = 0
+        self._dispatch(lambda: self._announce_node(nodes[index]))
+        return True, ''
+
+    def ask_find(self):
+        """Insert+Ctrl+F: text to look for, from the cursor on."""
+        from titan_access.portable import dialogs, palette
+        if dialogs._gui() is None or dialogs._wx() is None:
+            self.engine.speak(L("browse.find.noDialog"))
+            return False
+        palette.stop()
+
+        def answered(text):
+            self._find_query = str(text or '')
+            self._dispatch(lambda: self.find_next(backward=False, first=True))
+        dialogs.ask_text(L("browse.find.prompt"), L("browse.find.title"),
+                         on_answer=answered,
+                         default=getattr(self, '_find_query', ''))
+        return True
+
+    def find_next(self, backward=False, first=False):
+        """The next (or previous) entry whose text holds the last query."""
+        query = (getattr(self, '_find_query', '') or '').strip().lower()
+        if not query:
+            self.engine.speak(L("browse.find.nothingToFind"))
+            return False
+        if not self._ensure_document():
+            self.engine.speak(L("browse.scanEmpty"))
+            return False
+        nodes = self._nodes()
+        start = self._index if self._index >= 0 else -1
+        rng = (range(start - 1, -1, -1) if backward
+               else range(start + (0 if first and start < 0 else 1), len(nodes)))
+        for i in rng:
+            if query in (nodes[i].text or '').lower():
+                with self._lock:
+                    self._index = i
+                    self._char_pos = 0
+                self._announce_node(nodes[i])
+                return True
+        self.engine.play(SND_EDGE)
+        self.engine.speak(L("browse.find.notFound", query))
+        return False
+
+    def table_move(self, d_row, d_col):
+        """A cell up, down, left or right of the one the cursor is in.
+
+        The buffer knows no rows and columns; the LIVE element does - UIA's
+        GridItem pattern (its row, its column, the grid it is in) and the
+        grid's `GetItem`; AT-SPI's TableCell and Table interfaces on
+        Linux. The cell found is looked for in the buffer by identity and
+        read from there, or read live where the buffer has not got it."""
+        node = self._node_at(self._index)
+        if node is None:
+            self.engine.speak(L("browse.table.notInTable"))
+            return False
+        target = None
+        where = None
+        try:
+            target, where = self._table_neighbour(node, d_row, d_col)
+        except Exception as e:
+            print(f"[TitanAccess] table move: {e}")
+        if where is None:
+            self.engine.speak(L("browse.table.notInTable"))
+            return False
+        if target is None:
+            self.engine.play(SND_EDGE)
+            self.engine.speak(L("browse.table.edge"))
+            return False
+        row, col = where
+        nodes = self._nodes()
+        for i, one in enumerate(nodes):
+            if self._same_element(one, target):
+                with self._lock:
+                    self._index = i
+                    self._char_pos = 0
+                self._announce_node(one)
+                self.engine.speak(L("browse.table.cell", row + 1, col + 1),
+                                  interrupt=False)
+                return True
+        try:
+            obj = self.engine.provider.element_to_object(target)
+        except Exception:
+            obj = None
+        if obj is not None:
+            self.engine.announce_object(obj, for_navigation=True)
+            self.engine.speak(L("browse.table.cell", row + 1, col + 1),
+                              interrupt=False)
+            return True
+        self.engine.speak(L("browse.table.notInTable"))
+        return False
+
+    @staticmethod
+    def _table_neighbour(node, d_row, d_col):
+        """``(element, (row, col))`` of the neighbouring cell; element None
+        at the table's edge; ``(None, None)`` when not in a table."""
+        element = getattr(node, 'element', None)
+        if element is None:
+            return None, None
+        if getattr(node, 'source', '') == 'atspi':
+            from titan_access import atspi_focus
+            cell = element.get_table_cell_iface() if hasattr(
+                element, 'get_table_cell_iface') else None
+            if cell is None:
+                return None, None
+            row, col = cell.get_position()
+            table = cell.get_table()
+            if table is None:
+                return None, None
+            iface = table.get_table_iface() if hasattr(table, 'get_table_iface') else table
+            r, c = row + d_row, col + d_col
+            if r < 0 or c < 0 or r >= int(iface.get_n_rows()) or c >= int(iface.get_n_columns()):
+                return None, (row, col)
+            return iface.get_accessible_at(r, c), (r, c)
+        item = None
+        probe = element
+        for _depth in range(4):
+            try:
+                item = probe.GetGridItemPattern()
+            except Exception:
+                item = None
+            if item is not None:
+                break
+            try:
+                probe = probe.GetParentControl()
+            except Exception:
+                probe = None
+            if probe is None:
+                break
+        if item is None:
+            return None, None
+        row, col = int(item.Row), int(item.Column)
+        grid_control = item.ContainingGrid
+        grid = grid_control.GetGridPattern() if grid_control is not None else None
+        if grid is None:
+            return None, None
+        r, c = row + d_row, col + d_col
+        if r < 0 or c < 0 or r >= int(grid.RowCount) or c >= int(grid.ColumnCount):
+            return None, (row, col)
+        return grid.GetItem(r, c), (r, c)
+
+    @staticmethod
+    def _same_element(node, element):
+        """Whether the buffer entry IS the live element: by identity, by
+        UIA runtime id (the entry's live control is resolved through the
+        buffer, since a cached build keeps `raw` and no `element`), by
+        AT-SPI path, and last by the rectangle - a cell found through the
+        grid and a cell read into the buffer are the same square."""
+        if element is None:
+            return False
+        own = getattr(node, 'element', None)
+        if own is None:
+            try:
+                own = vbuf.uia_control(node)
+            except Exception:
+                own = None
+        if own is element:
+            return True
+        if own is not None:
+            try:
+                a, b = own.GetRuntimeId(), element.GetRuntimeId()
+                if a and b:
+                    return list(a) == list(b)
+            except Exception:
+                pass
+            try:
+                from titan_access import atspi_focus
+                if atspi_focus.is_accessible(own):
+                    return atspi_focus.path_key(own) == atspi_focus.path_key(element)
+            except Exception:
+                pass
+        rect = getattr(node, 'rect', None)
+        if rect and len(rect) == 4:
+            try:
+                r = element.BoundingRectangle
+                theirs = (int(r.left), int(r.top), int(r.right), int(r.bottom))
+                return tuple(int(v) for v in rect) == theirs
+            except Exception:
+                return False
+        return False
+
+    # ==================================================================== #
     # Activation + say all
     # ==================================================================== #
     def _activate_current(self) -> bool:
@@ -1009,22 +1320,48 @@ class BrowseModeHandler:
             nodes = self._nodes()
             speech = getattr(self.engine, "speech", None)
             start = self._index if self._index >= 0 else 0
-            for j in range(start, len(nodes)):
-                text = nodes[j].text
-                if not text:
-                    continue
-                with self._lock:
-                    self._index = j
-                self.engine.speak(text, interrupt=(j == start))
-                if speech is not None and hasattr(speech, "pending_count"):
-                    # Keep at most a couple of lines queued ahead, so the voice
-                    # never runs dry between lines and an interrupt is instant.
-                    while speech.pending_count() > 2:
-                        time.sleep(0.05)
-                        if not self.is_active:
-                            return
-                else:
-                    time.sleep(min(2.5, 0.28 + len(text) / 16.0))
+            # **Continuous reading at its own rate** (`Browse/SayAllRate`):
+            # a rate the engine can be asked for is moved by that much and
+            # put back when the reading ends or is interrupted; an engine
+            # that cannot say its rate is left alone.
+            base = None
+            delta = self._browse_setting("SayAllRate", 0)
+            if delta and speech is not None and hasattr(speech, "current_rate"):
+                base = speech.current_rate()
+                if base is not None:
+                    speech.set_rate(max(-10, min(10, base + delta)))
+            try:
+                from titan_access import symbols
+            except Exception:
+                symbols = None
+            try:
+                for j in range(start, len(nodes)):
+                    text = nodes[j].text
+                    if not text:
+                        continue
+                    if symbols is not None:
+                        try:
+                            text = symbols.text_for_speech(
+                                text, self.engine.settings) or text
+                        except Exception:
+                            pass
+                    with self._lock:
+                        self._index = j
+                    self.engine.speak(text, interrupt=(j == start))
+                    if speech is not None and hasattr(speech, "pending_count"):
+                        # Keep at most a couple of lines queued ahead, so the voice
+                        # never runs dry between lines and an interrupt is instant.
+                        while speech.pending_count() > 2:
+                            time.sleep(0.05)
+                            if not self.is_active:
+                                return
+                    else:
+                        time.sleep(min(2.5, 0.28 + len(text) / 16.0))
+                if speech is not None and hasattr(speech, "wait_for_queue"):
+                    speech.wait_for_queue(timeout=120)
+            finally:
+                if base is not None:
+                    speech.set_rate(base)
 
         threading.Thread(target=_run, daemon=True).start()
         return True
@@ -1109,17 +1446,25 @@ class BrowseModeHandler:
         # it - NVDA's behaviour, and the reason a page has no "navigation,
         # group" line standing in front of its navigation.
         landmark = self._landmark_segment(node)
-        if landmark:
+        if landmark and self._report_wanted("landmark"):
             segments.append(landmark)
         name = node.name or node.value
         if name:
             segments.append((name, _NAME_PITCH))
         if node.is_heading:
             level = node.level or (qn.heading_level(qn_type) if qn_type else 0)
-            segments.append((L("quickNav.headingLevel", level) if level
-                             else L("quickNav.heading"), _ROLE_PITCH))
+            if self._report_wanted("heading"):
+                segments.append((L("quickNav.headingLevel", level) if level
+                                 else L("quickNav.heading"), _ROLE_PITCH))
         elif node.role and node.role not in ("text", "unknown"):
-            segments.append((loc.role_label(node.role), _ROLE_PITCH))
+            # A role's word is said unless the user turned that kind off
+            # (`Browse/ReportLinks` and the rest); a table with no name is
+            # a layout table, said only when `Browse/LayoutTables` asks.
+            say_role = self._report_wanted(node.role)
+            if say_role and node.role == "table" and not (node.name or "").strip():
+                say_role = self._browse_setting("LayoutTables", False)
+            if say_role:
+                segments.append((loc.role_label(node.role), _ROLE_PITCH))
         if node.value and node.value != node.name:
             segments.append((node.value, _NAME_PITCH))
         for state in node.states:

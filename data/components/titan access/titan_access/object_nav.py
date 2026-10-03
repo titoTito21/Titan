@@ -72,17 +72,36 @@ class ObjectNavigator:
 
         target = self._step(native, direction)
         if target is None:
-            self.engine.play(SND_EDGE, self.engine.current_object)
+            self._edge()
             return True
 
         obj = self._to_object(target)
         if obj is None:
-            self.engine.play(SND_EDGE, self.engine.current_object)
+            self._edge()
             return True
 
         self.engine.current_object = obj
         self.engine.announce_object(obj, for_navigation=True)
         return True
+
+    def _edge(self):
+        """The edge of what there is to walk, said as `Navigation/
+        WindowBoundsMode` asks: a sound, the words, both or nothing. The
+        setting came over from the C# reader and was read by nothing."""
+        try:
+            from titan_access.settings_store import AnnouncementMode
+            mode = AnnouncementMode.normalize(
+                self.engine.settings.get("Navigation", "WindowBoundsMode"))
+        except Exception:
+            mode = "SpeechAndSound"
+        try:
+            from titan_access.settings_store import AnnouncementMode
+            if AnnouncementMode.plays(mode):
+                self.engine.play(SND_EDGE, self.engine.current_object)
+            if AnnouncementMode.speaks(mode):
+                self.engine.speak(L("navigation.edge"), interrupt=True)
+        except Exception as e:
+            print(f"[TitanAccess] object_nav: edge: {e}")
 
     # ------------------------------------------------------------------ #
     # Tree stepping

@@ -28,6 +28,7 @@ older client only the live regions are registered and `report()` says so.
 """
 
 import threading
+import sys
 import time
 
 try:
@@ -47,6 +48,16 @@ _UIA_LIVE_REGION_CHANGED = 20024
 
 #: The same words again inside this many seconds are the same news.
 REPEAT_WINDOW = 1.0
+#: One sender may have a notification spoken at most this often: a
+#: console raises one per fragment of output, ten a second while a
+#: spinner turns, each marked important - measured as the reader babbling
+#: "?", "4", "*" with every fragment cutting off the last.
+NOTIFY_MIN_GAP = 0.5
+#: And may INTERRUPT at most this often, whatever it asks.
+INTERRUPT_MIN_GAP = 2.0
+#: Windows whose output is somebody else's business: the terminal module
+#: reads a console's new text itself, properly, as lines.
+TERMINAL_CLASSES = ('ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS')
 #: A live region that changes faster than this is read at most this often.
 LIVE_MIN_GAP = 0.3
 
@@ -138,8 +149,10 @@ class UIANotifications(object):
         self.why_not = ''
         self._last = {}            # text -> when it was last said
         self._live_last = {}       # runtime id -> (text, when)
+        self._notify_last = {}     # runtime id -> (last said, last interrupt)
         self.counts = {'notifications': 0, 'live': 0, 'said': 0,
-                       'repeated': 0, 'muted': 0, 'interrupted': 0}
+                       'repeated': 0, 'muted': 0, 'interrupted': 0,
+                       'burst': 0, 'terminal': 0}
 
     # ------------------------------------------------------------ lifetime
     def start(self, client):
@@ -254,16 +267,91 @@ class UIANotifications(object):
                 self._last.pop(oldest, None)
         return now - when < REPEAT_WINDOW
 
+    def _sender_key(self, sender, text):
+        try:
+            return ','.join(str(x) for x in (sender.GetRuntimeId() or ()))
+        except Exception:                            # noqa: BLE001
+            return text
+
+    @staticmethod
+    def _from_terminal(sender):
+        """Whether the sender belongs to a console or terminal.
+
+        By the PROCESS first - a console's text element has no window
+        handle of its own, so the class of its window cannot be asked of
+        it (measured: 47 notifications from conhost, none recognised by
+        the window) - and by the window's class where there is one.
+        """
+        if not sys.platform.startswith('win'):
+            return False
+        pid = 0
+        for ask in ('CachedProcessId', 'CurrentProcessId'):
+            try:
+                pid = int(getattr(sender, ask) or 0)
+            except Exception:                        # noqa: BLE001
+                pid = 0
+            if pid:
+                break
+        if pid:
+            try:
+                from titan_access import nvda_shape
+                from titan_access.app_modules.terminal import TerminalModule
+                if nvda_shape.executable_of(pid) in TerminalModule.process_names:
+                    return True
+            except Exception:                        # noqa: BLE001
+                pass
+        try:
+            import ctypes
+            hwnd = 0
+            for ask in ('CachedNativeWindowHandle', 'CurrentNativeWindowHandle'):
+                try:
+                    hwnd = int(getattr(sender, ask) or 0)
+                except Exception:                    # noqa: BLE001
+                    hwnd = 0
+                if hwnd:
+                    break
+            if not hwnd:
+                return False
+            root = ctypes.windll.user32.GetAncestor(hwnd, 2) or hwnd
+            buf = ctypes.create_unicode_buffer(256)
+            ctypes.windll.user32.GetClassNameW(root, buf, 256)
+            return buf.value in TERMINAL_CLASSES
+        except Exception:                            # noqa: BLE001
+            return False
+
+    def _burst(self, key, now, interrupt):
+        """Too soon after this sender's last one: dropped, and an
+        interrupt too soon after its last interrupt is demoted."""
+        with self._lock:
+            last_said, last_cut = self._notify_last.get(key, (0.0, 0.0))
+            if now - last_said < NOTIFY_MIN_GAP:
+                return True, interrupt
+            if interrupt and now - last_cut < INTERRUPT_MIN_GAP:
+                interrupt = False
+            self._notify_last[key] = (now, now if interrupt else last_cut)
+            if len(self._notify_last) > 64:
+                oldest = min(self._notify_last, key=lambda k: self._notify_last[k][0])
+                self._notify_last.pop(oldest, None)
+        return False, interrupt
+
     def notification(self, sender, kind, processing, text, activity):
         """One `UIA_NotificationEventId`, from any window."""
         self.counts['notifications'] += 1
+        text = ' '.join(str(text or '').split())
         if not text or not self._allowed():
+            return False
+        if self._from_terminal(sender):
+            self.counts['terminal'] += 1
             return False
         now = time.time()
         if self._repeated(text, now):
             self.counts['repeated'] += 1
             return False
         interrupt = int(processing) in IMPORTANT
+        dropped, interrupt = self._burst(self._sender_key(sender, text), now, interrupt)
+        if dropped:
+            self.counts['burst'] += 1
+            return False
         if interrupt:
             self.counts['interrupted'] += 1
         self.counts['said'] += 1
@@ -277,6 +365,9 @@ class UIANotifications(object):
         """One `UIA_LiveRegionChangedEventId`: the element's new text."""
         self.counts['live'] += 1
         if not self._allowed():
+            return False
+        if self._from_terminal(sender):
+            self.counts['terminal'] += 1
             return False
         text = ''
         key = ''

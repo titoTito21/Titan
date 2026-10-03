@@ -18,6 +18,7 @@ control exposes no ``TextPattern`` every method announces ``edit.cannotNavigate`
 """
 
 import os
+import sys
 import time
 
 from titan_access.localization import L, character_announcement
@@ -384,7 +385,166 @@ class EditableTextHandler:
         if _DEBUG_CARET:
             print(f"[TitanAccess][caret] uia kind={kind} moved={moved} "
                   f"read={text!r}")
+        if kind == "word" and text.strip() and self._misspelled(caret, unit):
+            # **A word the program has underlined in red** (UIA's spelling
+            # annotation) says so after the word.
+            return self._speak_caret_text(kind, text.strip() + ", "
+                                          + L("edit.misspelled"))
         return self._speak_caret_text(kind, text)
+
+    @staticmethod
+    def _misspelled(rng, unit):
+        """Whether the unit at *rng* carries UIA's spelling-error annotation
+        (AnnotationTypes 60001). False where the control answers nothing."""
+        if _auto is None:
+            return False
+        try:
+            work = rng.Clone()
+            work.ExpandToEnclosingUnit(unit)
+            value = work.GetAttributeValue(_auto.TextAttributeId.AnnotationTypesAttribute)
+        except Exception:
+            return False
+        try:
+            values = list(value) if not isinstance(value, (int, float)) else [value]
+        except Exception:
+            return False
+        return any(int(one) == 60001 for one in values
+                   if isinstance(one, (int, float)))
+
+    # ================================================================== #
+    # The selection as it changes, and the formatting at the caret
+    # ================================================================== #
+    def _selection_text(self):
+        """The selected text now, or None where it cannot be asked."""
+        text = self._atspi_text()
+        if text is not None:
+            try:
+                return text.selection() or ""
+            except Exception:
+                return None
+        tp = self._text_pattern()
+        if tp is not None:
+            try:
+                sel = tp.GetSelection()
+                return (sel[0].GetText(-1) or "") if sel else ""
+            except Exception:
+                return None
+        hwnd = self._edit_hwnd()
+        if hwnd and sys.platform.startswith("win"):
+            try:
+                start = _ctypes.c_int(0)
+                end = _ctypes.c_int(0)
+                _user32.SendMessageW(hwnd, _EM_GETSEL, _ctypes.addressof(start),
+                                     _ctypes.addressof(end))
+                info = _win32_caret_text(hwnd)
+                if info is None:
+                    return None
+                _pos, text = info
+                lo, hi = sorted((start.value, end.value))
+                return text[lo:hi]
+            except Exception:
+                return None
+        return None
+
+    def read_selection_change(self):
+        """Shift with an arrow: what was just selected, or unselected.
+
+        The selection before and after are compared as text: what the new
+        one has and the old had not was selected, the other way round
+        unselected - the words NVDA says, so a user who shift-arrows
+        through a line hears each word as it joins the selection.
+        """
+        time.sleep(0.05)
+        now = self._selection_text()
+        if now is None:
+            return self.read_selection()
+        before = getattr(self, "_last_selection", "") or ""
+        self._last_selection = now
+        if now == before:
+            self.engine.speak(L("edit.noSelectionChange"))
+            return True
+        if len(now) > len(before) and (now.startswith(before) or now.endswith(before)):
+            added = now[len(before):] if now.startswith(before) else now[:len(now) - len(before)]
+            said = L("edit.selected", self._words(added))
+        elif len(before) > len(now) and (before.startswith(now) or before.endswith(now)):
+            gone = before[len(now):] if before.startswith(now) else before[:len(before) - len(now)]
+            said = L("edit.unselected", self._words(gone))
+        elif now:
+            said = L("edit.selected", self._words(now))
+        else:
+            said = L("edit.unselected", self._words(before))
+        self.engine.speak(said, obj=self.engine.current_object)
+        return True
+
+    def _words(self, text):
+        try:
+            from titan_access import symbols
+            return symbols.text_for_speech(text.strip(), self.engine.settings) \
+                or L("edit.emptyWord")
+        except Exception:
+            return text.strip() or L("edit.emptyWord")
+
+    def read_formatting(self):
+        """The font at the caret - name, size, bold, italic, underline -
+        out of UIA's text attributes; AT-SPI's text attributes on Linux."""
+        parts = []
+        text = self._atspi_text()
+        if text is not None:
+            try:
+                native = getattr(self.engine.current_object, "native", None)
+                iface = native.get_text_iface() if hasattr(native, "get_text_iface") else native
+                attrs = iface.get_attribute_run(max(0, text.caret()), False)[0]
+                attrs = dict(attrs or {})
+                if attrs.get("family-name"):
+                    parts.append(attrs["family-name"])
+                if attrs.get("size"):
+                    parts.append(L("edit.fontSize", attrs["size"]))
+                if str(attrs.get("weight", "")).isdigit() and int(attrs["weight"]) >= 700:
+                    parts.append(L("edit.bold"))
+                if attrs.get("style") == "italic":
+                    parts.append(L("edit.italic"))
+                if attrs.get("underline") not in (None, "", "none"):
+                    parts.append(L("edit.underline"))
+            except Exception:
+                pass
+        else:
+            tp = self._text_pattern()
+            rng = self._caret_range(tp) if tp is not None else None
+            if rng is not None and _auto is not None:
+                try:
+                    rng.ExpandToEnclosingUnit(_UNIT_CHAR)
+                except Exception:
+                    pass
+                ids = _auto.TextAttributeId
+
+                def ask(attr):
+                    try:
+                        value = rng.GetAttributeValue(attr)
+                    except Exception:
+                        return None
+                    if value is None or str(type(value).__name__) in ("POINTER(IUnknown)",):
+                        return None
+                    return value
+                name = ask(ids.FontNameAttribute)
+                if isinstance(name, str) and name:
+                    parts.append(name)
+                size = ask(ids.FontSizeAttribute)
+                if isinstance(size, (int, float)) and size:
+                    parts.append(L("edit.fontSize", int(round(float(size)))))
+                weight = ask(ids.FontWeightAttribute)
+                if isinstance(weight, (int, float)) and weight >= 700:
+                    parts.append(L("edit.bold"))
+                if ask(ids.IsItalicAttribute) is True:
+                    parts.append(L("edit.italic"))
+                underline = ask(ids.UnderlineStyleAttribute) if hasattr(
+                    ids, "UnderlineStyleAttribute") else None
+                if isinstance(underline, (int, float)) and underline:
+                    parts.append(L("edit.underline"))
+        if not parts:
+            self.engine.speak(L("edit.noFormatting"))
+            return True
+        self.engine.speak(", ".join(parts), obj=self.engine.current_object)
+        return True
 
     def _read_caret_win32(self, kind):
         hwnd = self._edit_hwnd()
@@ -426,10 +586,33 @@ class EditableTextHandler:
                 return True
             self._speak_char(text)
         else:
-            stripped = text.strip()
-            empty = L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
-            self.engine.speak(stripped or empty, obj=self.engine.current_object)
+            self.engine.speak(self._text_for_speech(kind, text),
+                              obj=self.engine.current_object)
         return True
+
+    def _text_for_speech(self, kind, text):
+        """A word or a line as the symbol settings want it: punctuation at
+        the chosen level said as words, digits grouped, the indent taken
+        off - or counted, where the user wants to hear it."""
+        settings = self.engine.settings
+        try:
+            from titan_access import symbols
+        except Exception:                            # noqa: BLE001
+            stripped = (text or "").strip()
+            empty = L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
+            return stripped or empty
+        prefix = ""
+        body = (text or "").rstrip()
+        if kind == "line" and not symbols.trim_wanted(settings):
+            body, indent = symbols.trim_leading(body)
+            if indent:
+                prefix = L("symbols.indent", indent) + ", "
+        else:
+            body = body.strip()
+        said = symbols.text_for_speech(body, settings)
+        if not said:
+            return L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
+        return prefix + said
 
     def _wait_caret_moved_win32(self, hwnd, timeout=0.30):
         """Win32 counterpart of :meth:`_wait_caret_moved`: poll ``EM_GETSEL``
@@ -704,8 +887,28 @@ class EditableTextHandler:
             phonetic = bool(self.engine.settings.phonetic_letters)
         except Exception:
             phonetic = False
-        self.engine.speak(character_announcement(ch, use_phonetic=phonetic),
-                          obj=self.engine.current_object)
+        # The dial says whether ITS letters are phonetic (`Navigation/
+        # PhoneticInDial`); the arrows follow the text-editing setting.
+        override = getattr(self, "phonetic_override", None)
+        if override is not None:
+            phonetic = bool(override)
+        # **A capital letter as the user chose** (`Symbols/CapitalLetters`):
+        # the word in front, a beep, a higher pitch, or nothing of the
+        # kind; a symbol by its name always.
+        try:
+            from titan_access import symbols
+            said, pitch, beep = symbols.describe_char(ch, self.engine.settings,
+                                                      phonetic=phonetic)
+        except Exception:                            # noqa: BLE001
+            said, pitch, beep = character_announcement(
+                ch, use_phonetic=phonetic), 0, False
+        if beep:
+            try:
+                self.engine.sound.play_tone(1000, 30, gain=0.4)
+            except Exception:                        # noqa: BLE001
+                pass
+        self.engine.speak(said, obj=self.engine.current_object,
+                          pitch_offset=pitch)
 
     def _cannot(self):
         self.engine.speak(L("edit.cannotNavigate"))

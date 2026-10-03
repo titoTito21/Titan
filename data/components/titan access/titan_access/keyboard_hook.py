@@ -31,6 +31,8 @@ import ctypes
 import platform
 import sys
 
+from titan_access.log import log
+
 _IS_WINDOWS = sys.platform.startswith("win") or platform.system() == "Windows"
 
 # --------------------------------------------------------------------------- #
@@ -123,6 +125,12 @@ _ARROW_TO_NUMPAD = {
 }
 # Real (extended) caret-movement keys that trigger reading inside an edit field.
 _EDIT_CARET_KEYS = {"left", "right", "up", "down", "home", "end"}
+# Keys that type nothing and are said as commands when the user asks for
+# command keys (`Keyboard/SpeakCommandKeys`), beside F1..F24.
+_BARE_COMMAND_KEYS = {"escape", "delete", "insert", "pageup", "pagedown",
+                      "home", "end"}
+_MODIFIER_NAMES = {"vk10", "vk11", "vk12", "vka0", "vka1", "vka2", "vka3",
+                   "vka4", "vka5"}
 VK_RMENU = 0xA5  # right Alt (AltGr)
 
 
@@ -232,9 +240,9 @@ class KeyboardHook:
                 from . import atspi_keys
                 self._installed = bool(atspi_keys.start(self))
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: AT-SPI keys unavailable: {e}")
+                log(f"[TitanAccess] keyboard_hook: AT-SPI keys unavailable: {e}")
             if not self._installed:
-                print("[TitanAccess] keyboard_hook: no keyboard on this platform")
+                log("[TitanAccess] keyboard_hook: no keyboard on this platform")
             return self
         if self._installed:
             return self
@@ -249,17 +257,17 @@ class KeyboardHook:
                 self._native = native_hook.NativeHook(self._decide_native)
                 if self._native.install():
                     self._installed = True
-                    print("[TitanAccess] keyboard_hook: native hook installed "
+                    log("[TitanAccess] keyboard_hook: native hook installed "
                           "(deadline %d ms)" % self._native.timeout_ms)
                     return self
-                print("[TitanAccess] keyboard_hook: native hook refused; "
+                log("[TitanAccess] keyboard_hook: native hook refused; "
                       "using the Python hook")
                 self._native = None
             else:
-                print("[TitanAccess] keyboard_hook: no native hook (%s); "
+                log("[TitanAccess] keyboard_hook: no native hook (%s); "
                       "using the Python hook" % native_hook.why_not())
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: native hook error: {e}")
+            log(f"[TitanAccess] keyboard_hook: native hook error: {e}")
             self._native = None
         try:
             self._proc = HOOKPROC(self._hook_proc)
@@ -269,11 +277,11 @@ class KeyboardHook:
             self._installed = bool(self._hook)
             if not self._installed:
                 err = ctypes.get_last_error()
-                print(f"[TitanAccess] keyboard_hook: install failed (err={err})")
+                log(f"[TitanAccess] keyboard_hook: install failed (err={err})")
             else:
-                print("[TitanAccess] keyboard_hook: installed")
+                log("[TitanAccess] keyboard_hook: installed")
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: install error: {e}")
+            log(f"[TitanAccess] keyboard_hook: install error: {e}")
         return self
 
     def stop(self):
@@ -294,14 +302,14 @@ class KeyboardHook:
             try:
                 native.uninstall()
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: native unhook error: {e}")
+                log(f"[TitanAccess] keyboard_hook: native unhook error: {e}")
             self._native = None
             self._installed = False
             return
         try:
             self._user32.UnhookWindowsHookEx(self._hook)
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: unhook error: {e}")
+            log(f"[TitanAccess] keyboard_hook: unhook error: {e}")
         finally:
             self._installed = False
             self._hook = None
@@ -328,7 +336,7 @@ class KeyboardHook:
             return 1 if self._process(int(vk), int(scan), int(flags),
                                       bool(is_down)) else 0
         except Exception as e:  # never let an exception reach the DLL
-            print(f"[TitanAccess] keyboard_hook: proc error: {e}")
+            log(f"[TitanAccess] keyboard_hook: proc error: {e}")
             return 0
 
     # ==================================================================== #
@@ -349,7 +357,7 @@ class KeyboardHook:
                 is_down = wParam in (WM_KEYDOWN, WM_SYSKEYDOWN)
                 swallow = self._process(vk, scan, flags, is_down)
         except Exception as e:  # never let an exception escape the hook
-            print(f"[TitanAccess] keyboard_hook: proc error: {e}")
+            log(f"[TitanAccess] keyboard_hook: proc error: {e}")
         if swallow:
             return 1
         return self._user32.CallNextHookEx(self._hook, nCode, wParam, lParam)
@@ -392,17 +400,24 @@ class KeyboardHook:
                 try:
                     self.engine.on_stop_speech_key()
                 except Exception as e:
-                    print(f"[TitanAccess] keyboard_hook: stop-speech error: {e}")
+                    log(f"[TitanAccess] keyboard_hook: stop-speech error: {e}")
+                self._modifier_pressed('control')
             return False
         if vk in _ALT_KEYS:
             self._alt = is_down
             if vk == VK_RMENU:
                 self._ralt = is_down
+            if is_down:
+                self._modifier_pressed('alt')
             return False
         if vk in _SHIFT_KEYS:
             self._shift = is_down
+            if is_down:
+                self._modifier_pressed('shift')
             return False
         if vk in _WIN_KEYS:
+            if is_down:
+                self._modifier_pressed('windows')
             return False
 
         # Toggle keys: announce the resulting on/off state on key-up.
@@ -426,7 +441,7 @@ class KeyboardHook:
                                                    with_modifier=True):
                     return True
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: modifier gesture error: {e}")
+                log(f"[TitanAccess] keyboard_hook: modifier gesture error: {e}")
             # Modifier held but unhandled: do not echo, do not block.
             return False
 
@@ -448,13 +463,13 @@ class KeyboardHook:
                         vk, key_name, self._shift):
                     return True
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: walked numpad error: {e}")
+                log(f"[TitanAccess] keyboard_hook: walked numpad error: {e}")
             try:
                 if self.engine.on_modifier_gesture(vk, key_name, self._ctrl,
                                                    self._alt, self._shift):
                     return True
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: numpad nav error: {e}")
+                log(f"[TitanAccess] keyboard_hook: numpad nav error: {e}")
 
         # (Ctrl+Alt review shortcuts removed -- they clashed with AltGr typing on
         # a Polish keyboard, so Ctrl+Alt combos now pass straight through.)
@@ -473,7 +488,7 @@ class KeyboardHook:
                                         self._alt, self._shift):
                 return True
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: plain key error: {e}")
+            log(f"[TitanAccess] keyboard_hook: plain key error: {e}")
 
         # ---- 4b. Edit-field caret tracking (read after the caret moves) --- #
         # In an edit / document control, arrow / Home / End movements are NOT
@@ -485,9 +500,10 @@ class KeyboardHook:
                 and key_name in _EDIT_CARET_KEYS):
             if not (self._ctrl and key_name not in ("left", "right")):
                 try:
-                    self.engine.on_edit_caret_move(key_name, self._ctrl)
+                    self.engine.on_edit_caret_move(key_name, self._ctrl,
+                                                   self._shift)
                 except Exception as e:
-                    print(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
+                    log(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
             return False  # never swallow caret movement
 
         # ---- 5. Character / word echo --------------------------------- #
@@ -496,9 +512,53 @@ class KeyboardHook:
             try:
                 self._echo(vk, scan)
             except Exception as e:
-                print(f"[TitanAccess] keyboard_hook: echo error: {e}")
+                log(f"[TitanAccess] keyboard_hook: echo error: {e}")
+            # **A command key, said as it goes through** (`Keyboard/
+            # SpeakCommandKeys`): a function key, Escape, Delete - keys
+            # that type nothing. Tab, Enter and the arrows are left out:
+            # the control they land on is what is read.
+            if key_name in _BARE_COMMAND_KEYS or key_name.startswith('f'):
+                self._command_pressed(key_name)
+        elif (self._ctrl or self._alt) and not self._reader_mod \
+                and not self._ralt:
+            # Control+S, Alt+F4: with a modifier every key is a command.
+            # AltGr is a letter being typed (`_ralt`), never a command.
+            held = []
+            if self._ctrl:
+                held.append('control')
+            if self._alt:
+                held.append('alt')
+            if self._shift:
+                held.append('shift')
+            if key_name not in _MODIFIER_NAMES:
+                self._command_pressed('+'.join(held + [key_name]))
 
         return False
+
+    # ==================================================================== #
+    # Keys said as keys (Keyboard/SpeakCommandKeys, SpeakModifierKeys)
+    # ==================================================================== #
+    def _setting_on(self, key):
+        try:
+            return bool(self.engine.settings.get_bool("Keyboard", key, False))
+        except Exception:
+            return False
+
+    def _modifier_pressed(self, name):
+        if not self._setting_on("SpeakModifierKeys"):
+            return
+        try:
+            self.engine.on_modifier_key(name)
+        except Exception as e:
+            log(f"[TitanAccess] keyboard_hook: modifier key error: {e}")
+
+    def _command_pressed(self, label):
+        if not self._setting_on("SpeakCommandKeys"):
+            return
+        try:
+            self.engine.on_command_key(label)
+        except Exception as e:
+            log(f"[TitanAccess] keyboard_hook: command key error: {e}")
 
     # ==================================================================== #
     # Reader modifier detection (port of InsertKeyHandler)
@@ -546,7 +606,7 @@ class KeyboardHook:
             _user32.keybd_event(VK_CAPITAL, 0, KEYEVENTF_KEYUP, _INJECT_SENTINEL)
             self.engine.on_toggle_key("caps", not cur)
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: caps tap error: {e}")
+            log(f"[TitanAccess] keyboard_hook: caps tap error: {e}")
 
     def _numlock_on(self):
         try:
@@ -565,7 +625,7 @@ class KeyboardHook:
         try:
             self.engine.on_toggle_key(kind, on)
         except Exception as e:
-            print(f"[TitanAccess] keyboard_hook: toggle callback error: {e}")
+            log(f"[TitanAccess] keyboard_hook: toggle callback error: {e}")
 
     # ==================================================================== #
     # vk -> key_name normalisation

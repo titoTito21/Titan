@@ -24,6 +24,38 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 TITAN = os.path.dirname(HERE)
 COMPONENT = os.path.join(TITAN, 'data', 'components', 'titan access')
+
+
+def _work_on_a_copy_of_the_users_stores():
+    """A probe must never change the user's settings.
+
+    A walked-settings scenario flipped "announce block controls" OFF in the
+    user's REAL `screenReader.ini` and a scheme scenario left a pause in
+    their speech-scheme store - and the next morning the compiled Titan,
+    reading that file, said no window, no list and no status-bar item,
+    which was reported as a regression. So every probe runs on a COPY:
+    the user's `titosoft/Titan` folder is copied to a temporary one and
+    APPDATA points there before anything of the reader is imported. Pass
+    ``--real`` to run on the real stores, knowingly.
+    """
+    if '--real' in sys.argv:
+        sys.argv.remove('--real')
+        return
+    import shutil
+    import tempfile
+    base = os.getenv('APPDATA') or os.path.expanduser('~')
+    source = os.path.join(base, 'titosoft', 'Titan')
+    target = tempfile.mkdtemp(prefix='titan_access_probe_')
+    for name in ('screenreader', 'accessibility', 'logs'):
+        there = os.path.join(source, name)
+        if os.path.isdir(there):
+            shutil.copytree(there, os.path.join(target, 'titosoft', 'Titan', name),
+                            ignore=shutil.ignore_patterns('*.log'))
+    os.environ['APPDATA'] = target
+    print('probing on a copy of the user\'s stores:', target, flush=True)
+
+
+_work_on_a_copy_of_the_users_stores()
 for path in (COMPONENT, TITAN):
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -281,7 +313,121 @@ def scenario_web(engine, process=None):
     return process
 
 
+def scenario_worker(engine, process=None):
+    """The reader's worker thread, pinged across a window being minimised.
+
+    Minimising Titan puts the focus on a WINDOW (the desktop, the next
+    program), and a window is a container: its announcement is deferred
+    and then posted to the worker - the first thread message the loop
+    ever saw in ordinary use, and the one that killed it (`msg.hwnd`,
+    a field `MSG` has not got). A TIMEOUT here is the reader dead with
+    `running` still True.
+    """
+    import threading
+    process = process or open_program('charmap.exe', 2.5)
+
+    def ping(tag):
+        done = threading.Event()
+        engine.post_to_worker(done.set)
+        ok = done.wait(4.0)
+        mark('%s: worker %s' % (tag, 'answered' if ok else 'TIMEOUT'))
+        return ok
+    ping('before')
+    hwnd = user32.GetForegroundWindow()
+    mark('minimise the window in front')
+    user32.ShowWindow(hwnd, 6)                        # SW_MINIMIZE
+    time.sleep(1.5)
+    ping('after minimise')
+    time.sleep(1.0)
+    ping('a second later')
+    user32.ShowWindow(hwnd, 9)                        # SW_RESTORE
+    time.sleep(1.0)
+    ping('after restore')
+    return process
+
+
+PROBE_PAGE = """<!doctype html><html><head><title>Titan Access probe</title></head>
+<body><h1>Probe heading</h1><p>Some text about cats and dogs.</p>
+<a href="#one">First link</a> <a href="#two">Second link</a>
+<h2>A table</h2>
+<table><tr><th>Name</th><th>Age</th></tr>
+<tr><td>Anna</td><td>31</td></tr><tr><td>Bartek</td><td>42</td></tr></table>
+<form><label>Search <input type="text" name="q"></label>
+<button type="button">Go</button></form></body></html>"""
+
+
+def scenario_document(engine, process=None):
+    """A web page: the elements list, find, and the table's cells.
+
+    Writes a small page, opens it in a NEW browser window, waits for
+    browse mode, then drives the three document commands straight on the
+    engine (no keys injected) and closes that window alone - never the
+    browser the user may have open beside it.
+    """
+    import tempfile
+    page = os.path.join(tempfile.gettempdir(), 'titan_access_probe.html')
+    with open(page, 'w', encoding='utf-8') as handle:
+        handle.write(PROBE_PAGE)
+    # `start` resolves the browser the way the shell does (App Paths), which
+    # a bare `msedge` on PATH does not; a new window, so only that window is
+    # closed at the end.
+    subprocess.Popen(['cmd', '/c', 'start', '', 'msedge', '--new-window', page],
+                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    for _wait in range(30):
+        time.sleep(0.5)
+        if engine.browse is not None and engine.browse.is_active:
+            break
+    time.sleep(1.5)
+    browse = engine.browse
+    mark('browse active: %s web: %s' % (browse.is_active, browse.is_web))
+    if browse.is_active:
+        browse._ensure_document()
+        time.sleep(1.0)
+        mark('nodes: %d' % len(browse._nodes()))
+        mark('elements list'); engine.action_elements_list(); time.sleep(0.8)
+        plain(engine, 'down'); time.sleep(0.4)
+        plain(engine, 'return'); time.sleep(0.6)      # the headings
+        plain(engine, 'return'); time.sleep(0.8)      # jump to the first heading
+        mark('find "bartek"'); browse._find_query = 'bartek'
+        browse.find_next(first=True); time.sleep(0.8)
+        mark('table: right'); browse.table_move(0, 1); time.sleep(0.8)
+        mark('table: up'); browse.table_move(-1, 0); time.sleep(0.8)
+        mark('table: down twice'); browse.table_move(1, 0); time.sleep(0.5)
+        browse.table_move(1, 0); time.sleep(0.8)
+        mark('table: down at the edge'); browse.table_move(1, 0); time.sleep(0.6)
+    sup = getattr(engine, 'supervisor', None)
+    mark('supervisor: %s' % (sup.report() if sup else 'none'))
+    try:
+        from titan_access import log as _log
+        mark('log: %s (%d lines)' % (_log.path(), _log.report().get('lines', 0)))
+    except Exception as e:                           # noqa: BLE001
+        mark('log: %s' % e)
+    # Close the probe's window and nothing else.
+    _close_windows_titled('Titan Access probe')
+    return None
+
+
+def _close_windows_titled(fragment):
+    import ctypes.wintypes as wt
+    found = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
+    def each(hwnd, _lp):
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hwnd, buf, n + 1)
+            if fragment in buf.value and user32.IsWindowVisible(hwnd):
+                found.append(hwnd)
+        return True
+    user32.EnumWindows(each, 0)
+    for hwnd in found:
+        user32.PostMessageW(hwnd, 0x0010, 0, 0)       # WM_CLOSE
+
+
 SCENARIOS = {
+    'document': scenario_document,
+    'worker': scenario_worker,
     'web': scenario_web,
     'menu': scenario_menu, 'sysmenu': scenario_sysmenu,
     'alttab': scenario_alttab, 'columns': scenario_columns,

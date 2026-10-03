@@ -8117,6 +8117,324 @@ in NVDA - "NVDA+shift+space, Managers, O" (`layers.chord`) - and no key
 at all in Titan Access. Tests: `APaletteRowSaysARealKey` (add-on),
 `APaletteRowSaysThisReadersOwnKey` (Titan Access).
 
+#### The worker's loop died at the first posted callable (2026-10-02)
+
+Reported as "in the compiled build, minimising TCE hangs the screen
+reader; the previous Titan Access did not". Found by pinging the engine's
+worker thread from a probe (`post_to_worker(event.set)` and a wait): the
+FIRST ping timed out, before anything was minimised, and the log held one
+line - `message loop error: 'MSG' object has no attribute 'hwnd'`.
+
+- **`ctypes.wintypes.MSG` has `hWnd`, never `hwnd`.** The loop recognised
+  a thread message (`WM_TA_INVOKE`) with `not msg.hwnd`, the
+  `AttributeError` left the loop through its one `except`, the `finally`
+  tore every subsystem down, and the reader was dead with `running` still
+  True - every host call a no-op reporting success, the hotkey a toggle
+  that "turned off" a reader already gone. The line had been there since
+  June and nothing in ordinary use posted to the worker until the deferred
+  CONTAINER announcement started going through it on 2026-10-01 (so the
+  element is read on the thread that owns it). A window or a pane getting
+  the focus is a container, and that is what Titan minimising puts the
+  focus on. Hence "minimising".
+- `engine._dispatch_message` handles one message inside its own `try`,
+  a loop that ends on its own says so and sets `running = False`, and
+  `tests/test_titan_access_worker.py` runs the dispatch against a real
+  `MSG` (proved by putting the bug back: three failures). The live probe
+  is `tests/check_titan_access_live.py worker` - pings across a window
+  being minimised.
+- **`gui.mainFrame.prePopup()` is called on the FRAME.** NVDA's MainFrame
+  has it; the plain `wx.Frame` `portable/compat.py` handed out had not,
+  so every question the shared modules asked in Titan Access
+  (`dialogs.confirm`, `choose`, `ask_text`, `customise`) raised inside a
+  `wx.CallAfter` and no dialog ever appeared - "read this window as a
+  picture?", the name of a new speech scheme. The frame is given both
+  calls as the nothing they are here.
+- Measured after, on the real engine: the worker answers every ping
+  across hide and restore, the walked manager, the speech schemes, the
+  class manager and manager forms, the walked settings and the palette
+  all open and speak.
+- **"Enable screen reader" is the first control of General**, on the
+  settings page and in the walked settings (`General/Enabled`, read off
+  the running engine, starting or stopping it when changed - the stop a
+  moment later on a thread of its own, because Enter arrives on the hook's
+  decider thread and stopping from there joins the thread that has to
+  uninstall that very hook). The parent category keeps only the note.
+
+#### Every setting described once: `settings_schema.py` (2026-10-02)
+
+Asked for as "expand the settings" with four areas chosen (keyboard and
+echo, mouse, punctuation/capitals/numbers, browse mode) and the three
+undecided questions taken at their recommended answers: one schema for
+both faces, full per-program profiles, a settings ring with help.
+
+- **`titan_access/settings_schema.py` is the one table.** An entry is
+  `(INI section, key, kind, label key, help key, default, extra)`, and the
+  UI section it is shown under is separate from the INI section it is
+  kept in - the keyboard echo has always lived under `TextEditing` and is
+  shown under Keyboard, with no migration. Built from it: the store's
+  `DEFAULTS` (`register_defaults`, imported at the bottom of
+  `settings_store`), the settings page (`settings_panel._build_generic`,
+  every control the real one for its kind with the help sentence as its
+  tooltip; Speech stays hand-built for its engine-dependent voice lists),
+  the walked settings (`settings_walk.SCHEMA = as_walk_schema()`), the
+  profiles and the ring. **A setting nothing reads does not exist**:
+  `tests/test_titan_access_settings.py` greps the engine for every key,
+  which is how `Navigation/WindowBoundsMode` and `PhoneticInDial` were
+  found read by nobody since the C# port (wired now: `object_nav._edge`,
+  the dial's `phonetic_override`) and `AdvancedNavigation` was dropped.
+- **New sections**: Keyboard (`TypingInterruptsSpeech`, `SpeakCommandKeys`,
+  `SpeakModifierKeys`, `PasswordEcho`, `CapsLockWarning` - read in
+  `keyboard_hook._command_pressed` / `_modifier_pressed` and
+  `engine.on_char_typed`); Symbols (`symbols.py`: `PunctuationLevel`
+  none/some/most/all inside TEXT - a lone character is always named -
+  `CapitalLetters` none/word/beep/pitch with `CapitalPitchOffset`,
+  `NumbersAs` whole/digits/pairs, `TrimLeadingWhitespace`; applied in
+  `editable_text._speak_char` / `_text_for_speech`, the typing echo, say
+  all and the text under the mouse); Browse (`AutoFocusMode`,
+  `FocusModeOnCaretMove`, `QuickNavKeys`, `SayAllOnPageLoad`, `SayAllRate`
+  - the engine's `_rate_setting` moved and put back round the reading -
+  `ReportLinks/Headings/Lists/Tables/Landmarks`, `LayoutTables`, all in
+  `browse_mode`); Mouse (`mouse_tracker.py`: a 50 ms poll of the pointer
+  - `GetCursorPos` on Windows, python-xlib on Linux - the control or the
+  character/word/line under it read after `MouseDelayMs` at rest through
+  the provider, UIA `RangeFromPoint` or AT-SPI `get_offset_at_point`;
+  `AudioCoordinates` a tone by y and pan by x, louder over a bright pixel;
+  Insert+M toggles). Two more rows the C# port stored and never showed:
+  `ProgressBeepInterval`, `ProgressSpeechInterval`.
+- **Profiles** (`profiles.py`): a program's overrides in
+  `accessibility/profiles/<program>.json`, laid over the store by
+  `settings_store.set_overlay` - the store knows only that a value may
+  come from above the file - and chosen by the program in front
+  (`profiles.follow` on the focus path, the program remembered per pid).
+  `General/Enabled` is never in a profile. Edited in the walked settings
+  ("Settings for this program only: X" opens the same sections writing
+  into the profile; rows a profile overrides say so); the page lists
+  profiles and removes one.
+- **The ring** (`settings_ring.py`): Insert+Ctrl+Left/Right choose, Up/Down
+  change, over `settings_schema.RING` through `settings_walk.set_value` -
+  the same write and apply as Enter in the walk. With the modifier held
+  the arrows reach the hook as NumPad names, so the specs are
+  `control+numpad4` and the like. **F1 on any walked row says its help.**
+- `engine.apply_settings()` is the one place a change is applied (the
+  page's save, the walk, a profile coming into force): the voice, the
+  mouse tracker's thread. Zero is a value: `value_word` said "not set"
+  for a pitch of 0.
+- Measured on the real engine: the ring moved and changed, F1 read the
+  help, the walked list offered the game in front as a profile, the
+  tracker started and read the desktop under the pointer and stopped,
+  a capital typed beeped, a comma was said, Control+S was said as a
+  command. 23 tests in `test_titan_access_settings.py`; the Linux
+  Python imports every new module and the X pointer answers.
+
+#### Watched, logged, and the document walked (2026-10-02, the /goal round)
+
+Asked for as "expand the reader (design questions, a plan) and stabilise
+it"; the one design answer given was "supervision and self-repair first".
+`data/components/titan access/READER_PLAN.md` holds the answers, the
+assumptions and what is still to do.
+
+- **`titan_access/log.py`**: `.../titosoft/Titan/logs/titan_access.log`,
+  rotated at 2 MB, every `[TitanAccess]` line of the engine and the hook
+  routed through it - a compiled Titan has no stdout, which is how the
+  dead worker loop was a report with nothing behind it. `log.stacks()`
+  writes every Python thread's stack.
+- **`titan_access/supervisor.py`**: pings the worker every 3 s with 4 s of
+  patience; a dead thread is restarted at once, a silent one has its
+  stack logged and is restarted after three in a row (the old engine's
+  loop quit, its subsystems torn down, a fresh engine started, "Screen
+  reader restarted" said); the background worker is put back; the
+  native hook's counters are logged every two minutes. On Linux the
+  reader is the main thread and only the log is written.
+  **Insert+Shift+F1** says a sentence of `engine.diagnostics()` and
+  writes the whole of it to the log.
+- **A console raises a UIA NOTIFICATION per fragment of output, marked
+  important.** Measured with the reader started in front of this very
+  terminal: 47 notifications in six seconds, each spoken with an
+  interrupt - "?", "4", "*", "Shimmying" - the reader babbling the
+  spinner. `uia_notifications` now refuses a notification (and a live
+  region) from a process in `TerminalModule.process_names` - the terminal
+  module reads a console's new text itself, as lines - rate-limits every
+  sender to one notification per 0.5 s and one interrupt per 2 s, and
+  collapses the words onto one line. The process is asked, not the
+  window: a console's text element has no window handle of its own, and
+  the class check alone recognised none of the 47. After: 47 refused,
+  0 said.
+- **The document, walked three more ways** (`browse_mode`): the elements
+  list (Insert+F7: links, headings, form fields, landmarks, tables, lists
+  as levels of the walked palette, Enter puts the cursor there), find
+  (Insert+Ctrl+F asks, F3 / Shift+F3 the next and previous match, from
+  the cursor on) and the table's cells (Ctrl+Alt+arrows: UIA GridItem
+  row/column and the containing grid's `GetItem`, AT-SPI TableCell and
+  Table on Linux; "row 3, column 2" after the cell). Measured on a probe
+  page in Edge: Bartek, right 42 "row 3, column 2", up 31 "row 2,
+  column 2", down 42, down "edge of the table". **A cached buffer keeps
+  `raw`, not `element`**, so a cell found through the grid matched no
+  entry until `_same_element` resolved the entry's live control through
+  the buffer and, failing that, compared rectangles - the first run read
+  the right cell live and left the cursor where it was, so the next move
+  started from the wrong cell.
+- **Text editing**: Shift+arrows say what joined or left the selection
+  (`read_selection_change`, the two selections compared as text; the
+  hook passes Shift now); a word carrying UIA's spelling annotation
+  (AnnotationTypes 60001) says "spelling error" after it; Insert+F says
+  the font, size, bold, italic and underline at the caret (UIA text
+  attributes, AT-SPI attribute runs on Linux).
+- Tests: `tests/test_titan_access_stability.py` (19); live:
+  `tests/check_titan_access_live.py document|worker`.
+
+#### "SAPI has to work, and the compiled build no longer says the list's name" (2026-10-03)
+
+Three faults, and the one that produced the report was the probe's own.
+
+- **The regression was written by yesterday's probe.** A walked-settings
+  scenario run on the user's REAL store flipped `Verbosity/
+  AnnounceBlockControls` off (it pressed Enter on a row to prove a tick
+  box flips in place) and a scheme scenario left `pause: 30` in their
+  speech-scheme store; `context_presenter._compute` returns nothing when
+  that switch is off, so the compiled Titan - reading the same file -
+  said no window, no "Lista aplikacji" region and no "element paska
+  stanu". Both put back by hand. `tests/check_titan_access_live.py` now
+  COPIES `titosoft/Titan` to a temporary folder and points APPDATA at it
+  before importing anything (`--real` to run on the real stores,
+  knowingly); every ad-hoc probe must do the same.
+- **The reader's own 32-bit SAPI voice was mute for its first sentence.**
+  A plain `speak_async` through the SAPI worker was lost in its switch to
+  the cross-bitness cscript bridge, and the adapter's pacing then waited
+  eight seconds for audio that never started; the very next pitched
+  announcement, rendered through `speak_concat`, played at once.
+  `speech_adapter._render` renders plain text the same way (one segment,
+  rendered to memory, played on Titan's channel - measured: busy within
+  a second, done in two), `speak_async` only where an engine cannot
+  render.
+- **A flashing window said "requires attention" eight times**: Windows
+  sends `HSHELL_FLASH` per blink. `states._flashed` (shared with the
+  add-on, vendored) says it once per window per 8 s.
+- **The regression guard is `tests/test_titan_access_tce.py`**: the real
+  engine, a wx frame in the test's own process (so it IS Titan to the
+  engine), a list named `Lista aplikacji` and a list named `Status Bar`
+  through `src.shell.a11y.name_control`, and the engine handed the row's
+  focus off the real UIA tree. It asserts the region's name, "element
+  listy", "element paska stanu", and that the worker still answers after
+  the frame is hidden. Three traps on the way: `wx.App` has no
+  `Pending`/`Dispatch` in wxPython 4; a `SetFocus` on a window that is
+  not in front raises no UIA focus event; and the MAIN thread must run
+  `app.MainLoop()` while the worker reads, because a UIA call into this
+  process's own window is answered on the thread that owns it - parked in
+  `wait`, it is the worker stalled, and the supervisor restarted the
+  engine under the first shape of the test.
+- The compiled build's copy of the component is DATA (`dist/Titan/data/
+  components/titan access`), not frozen: it is brought up to date by
+  copying the component over it (stale `__pycache__` removed), no rebuild.
+  Verified by running `dist\Titan\Titan.exe` with the reader enabled:
+  the native hook, the supervisor's pings and Insert+Shift+F1's report
+  all arrived in `titan_access.log`.
+
+#### Every setting does something, and the walked lists have their own (2026-10-03)
+
+Asked for as "make sure every reader setting works and is not a
+placeholder, and expand them - the virtual window and the palette may
+have settings too".
+
+- **The audit**: every one of the 94 entries of `settings_schema` was
+  traced to the line that reads it and the behaviour that changes - the
+  grep in `tests/test_titan_access_settings.py` says a key is READ,
+  this said what it DOES. Three had been read by nothing since the C#
+  port and were wired the day before (`WindowBoundsMode`,
+  `PhoneticInDial`) or dropped (`AdvancedNavigation`); nothing else was
+  a placeholder.
+- **"Virtual windows and the palette"** is a section of its own, read by
+  the shared `palette.py` and `virtualWindow.py` through the switchboard
+  (so NVDA has the same seven in its panel, `configSpec` and panel kept in
+  step by the add-on's own tests): `walkLayout` (simple / screen /
+  interaction - and NumPad 4 and 6 now WRITE it, so the layout chosen on
+  the spot is the layout the next session opens with), `walkSayKind`,
+  `walkSayPosition`, `walkSayTitle`, `walkRowBeep`, `walkWrap` (past the
+  last row, round to the first) and `walkHostWindow` (the window a walked
+  list holds the keyboard with; off, the keys are only borrowed). Each is
+  proved by flipping it and walking a list:
+  `tests/test_titan_access_walk_settings.py` (7).
+
+#### The synthesised sounds, heard (2026-10-03)
+
+Asked for as "make sure the generated sounds - the progress bar, the tones
+of the virtual windows as in NVDA - work, and test them, even the
+progress bar".
+
+- **The row tones never played in Titan Access.** `compat._Tones.beep`
+  (what the shared palette, message and virtual window call) looked for
+  `play_tone` on the `sound_manager` MODULE; it is a method of the
+  engine's `SoundManager`, so the shim found nothing and answered False
+  for ever - silent here, perfect in NVDA. It plays through
+  `engine.sound` now, NVDA's left/right volumes turned into the mixer's
+  pan, with a manager of its own where no engine runs.
+- **The tone generator is real**: a 40 ms sine at 440 Hz is a Sound of
+  0.04 s on a busy channel (measured); the progress curve is NVDA's,
+  110 Hz at 0 % doubling every 25 % to 1760 Hz, panned hard left to hard
+  right; a row's tone runs 1650 Hz at the top of a list to 420 Hz at the
+  bottom.
+- **A real `wx.Gauge` driven 0 to 100 under the real engine**
+  (`tests/test_titan_access_sounds.py`, 6): the beeps rose 110 -> 1760 Hz
+  and travelled -1 -> +1, and the monitor said "0 procent, 10 procent ...
+  90 procent, gotowe". Measured, not assumed.
+- **The live status-bar watcher read "Connected to titoNet, signal 85 %"
+  every few seconds** while Titan was in front: Titan rebuilds its status
+  bar as items change, and keyed by INDEX the item at a slot was a
+  different one without anything new said. It compares the SET of texts
+  per window now and says only a text that was not on the bar before.
+- **A test on the real engine runs on a FRESH store.** The TCE and sounds
+  tests set APPDATA to a temporary folder before importing: one on the
+  user's own store depends on the scheme they chose a minute ago (it
+  failed while the user was switching schemes) and can write into it.
+
+#### A part of an announcement may come from another synthesizer (2026-10-03)
+
+Asked as a question: "can the control's name, its type, a message, be
+said in another voice or another Titan TTS engine?". A WHOLE utterance
+(a notification, an alert, a dialog) always could - `classes.WHOLE`,
+the class manager's synthesizer field, `speak_in_class`. A PART of a
+control's reading could not, by design, because NVDA renders one
+utterance on one synthesizer and the shared `classes.py` is NVDA's rule.
+
+- **Titan Access can, and now says so**: it renders each part to memory
+  itself, so the engine sets `classes.PARTS_MAY_NAME_SYNTH = True` at
+  start-up and the shared `may_name_synth(tag)` answers yes for every
+  class there; under NVDA it stays False and nothing changes. The class
+  manager (`classManager`) enables its synthesizer field on that answer
+  and says why in a note.
+- **The profile rides in the segment**: `accessible._part` adds a sixth
+  element `{'synth','voice','variant'}` where the class names one
+  (`voice_profile_of`); `engine.speak_segments` carries `seg[3:6]`;
+  `speech_adapter._render` groups consecutive parts by profile and
+  renders each group on its engine in turn (`_render_group`: borrow the
+  voice, `speak_concat` the group, wait the clip out, give the voice
+  back). A part on a SHARED Titan engine is rendered on the reader's own
+  private engine (`tce_speech.get_private_reader_engine`), never by
+  switching Titan's.
+- Live, with real speech: "Zapisz" on the reader's eSpeak, "przycisk" on
+  a borrowed eSpeak profile, "zaznaczony" back on the reader's - three
+  clips, the voice put back after. Tests:
+  `APartOfAnAnnouncementMayComeFromAnotherSynthesizer` (4) in
+  `tests/test_titan_access_speech_queue.py`, whose `__main__` block sat
+  in the middle of the file and hid every class after it.
+
+#### Every setting, under the real engine on Linux (2026-10-03)
+
+`tests/check_titan_access_linux_settings.py` (WSLg, `python3`): the real
+engine on GTK and AT-SPI, every entry of the schema written through the
+walked list's own `set_value`, read back and applied (577 writes), the
+behaviours asked (the type word, the name, punctuation, numbers, the
+mouse tracker, the walked row's kind and place), then every section's
+GTK panel filled with a changed value, saved and read back (91
+controls). It found one fault, true on both platforms: **the walked
+list told the speech alone**. `settings_walk._apply` called
+`speech.apply_settings()` and never `engine.apply_settings()`, so a
+subsystem that has to be TOLD - the mouse tracker, whose thread runs
+only while its switch is on - started from the settings panel and never
+from Insert+Ctrl+G or the ring. It asks the engine now;
+`test_the_walk_tells_the_whole_reader_not_only_its_voice` pins it. Two
+tests depended on the machine: a source check that named the exact slice,
+and an OCR test that depended on whether the user has an AI key.
+
 #### Beginner is unhurried in its PARTS, not in dead air
 
 Reported from Titan Access as "the pauses got longer". The active scheme

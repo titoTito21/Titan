@@ -37,103 +37,20 @@ _open = {'section': '', 'rows': [], 'at': 0}
 # --------------------------------------------------------------------------- #
 # The schema: (ini section, key, label key, kind, extra, default)
 # --------------------------------------------------------------------------- #
-def _announce():
-    return [(value, "settings.announce." + name) for value, name in zip(
-        AnnouncementMode.ALL, ("none", "sound", "speech", "speechAndSound"))]
+#: Read out of `settings_schema` - the one description of every setting -
+#: in the shape this walker has always used. Kinds: bool, choice (extra =
+#: callable or list answering [(value, label key)]), range (extra =
+#: (minimum, maximum, step)), text, engines, voices, scheme, braille_table.
+from titan_access import settings_schema as _schema
+
+SCHEMA = _schema.as_walk_schema()
+
+#: Which program's profile is being edited, or '' for the global settings.
+_scope = {'program': ''}
 
 
-def _modifiers():
-    return [(value, "settings.modifier." + name) for value, name in zip(
-        ScreenReaderModifier.ALL, ("insert", "capsLock", "insertAndCapsLock"))]
-
-
-def _echoes():
-    return [(value, "settings.echo." + name) for value, name in zip(
-        KeyboardEchoSetting.ALL, ("none", "characters", "words",
-                                  "charactersAndWords"))]
-
-
-#: Kinds: bool, choice (extra = callable answering [(value, label key)]),
-#: range (extra = (minimum, maximum, step)), text, engines, voices, scheme,
-#: braille_table.
-SCHEMA = (
-    ('speech', 'settings.section.speech', (
-        ('__scheme__', '', 'settings.speech.scheme', 'scheme', None, ''),
-        ('Speech', 'OwnVoice', 'settings.speech.ownVoice', 'bool', None, False),
-        ('Speech', 'Synthesizer', 'settings.speech.engine', 'engines', None, ''),
-        ('Speech', 'Voice', 'settings.speech.voice', 'voices', None, ''),
-        ('Speech', 'Rate', 'settings.speech.rate', 'range', (-10, 10, 1), 0),
-        ('Speech', 'Pitch', 'settings.speech.pitch', 'range', (-10, 10, 1), 0),
-        ('Speech', 'Volume', 'settings.speech.volume', 'range', (0, 100, 5), 100),
-    )),
-    ('general', 'settings.section.general', (
-        ('General', 'MuteOutsideTCE', 'settings.general.muteOutsideTce', 'bool', None, False),
-        ('General', 'StartupAnnouncement', 'settings.general.startupAnnouncement', 'choice', _announce, AnnouncementMode.SPEECH_AND_SOUND),
-        ('General', 'TCEEntrySound', 'settings.general.tceEntrySound', 'bool', None, True),
-        ('General', 'Modifier', 'settings.general.modifier', 'choice', _modifiers, ScreenReaderModifier.INSERT_AND_CAPSLOCK),
-        ('General', 'WelcomeMessage', 'settings.general.welcomeMessage', 'text', None, ''),
-        ('General', 'SpeakHints', 'settings.general.speakHints', 'bool', None, True),
-        ('General', 'VirtualScreen', 'settings.general.virtualScreen', 'bool', None, False),
-    )),
-    ('verbosity', 'settings.section.verbosity', (
-        ('Verbosity', 'AnnounceBasicControls', 'settings.verbosity.announceBasicControls', 'bool', None, True),
-        ('Verbosity', 'AnnounceBlockControls', 'settings.verbosity.announceBlockControls', 'bool', None, True),
-        ('Verbosity', 'AnnounceListPosition', 'settings.verbosity.announceListPosition', 'bool', None, True),
-        ('Verbosity', 'MenuItemCount', 'settings.verbosity.menuItemCount', 'bool', None, True),
-        ('Verbosity', 'MenuName', 'settings.verbosity.menuName', 'bool', None, True),
-        ('Verbosity', 'MenuSounds', 'settings.verbosity.menuSounds', 'bool', None, True),
-        ('Verbosity', 'ElementName', 'settings.verbosity.elementName', 'bool', None, True),
-        ('Verbosity', 'ElementType', 'settings.verbosity.elementType', 'bool', None, True),
-        ('Verbosity', 'ElementState', 'settings.verbosity.elementState', 'bool', None, True),
-        ('Verbosity', 'ElementParameter', 'settings.verbosity.elementParameter', 'bool', None, True),
-        ('Verbosity', 'ToggleKeysMode', 'settings.verbosity.toggleKeysMode', 'choice', _announce, AnnouncementMode.SPEECH_AND_SOUND),
-    )),
-    ('navigation', 'settings.section.navigation', (
-        ('Navigation', 'AdvancedNavigation', 'settings.navigation.advancedNavigation', 'bool', None, False),
-        ('Navigation', 'AnnounceControlTypesNavigation', 'settings.navigation.announceControlTypes', 'bool', None, True),
-        ('Navigation', 'AnnounceHierarchyLevel', 'settings.navigation.announceHierarchyLevel', 'bool', None, True),
-        ('Navigation', 'WindowBoundsMode', 'settings.navigation.windowBoundsMode', 'choice', _announce, AnnouncementMode.SPEECH_AND_SOUND),
-        ('Navigation', 'PhoneticInDial', 'settings.navigation.phoneticInDial', 'bool', None, True),
-    )),
-    ('dial', 'settings.section.dial', (
-        ('Dial', 'DialCharacters', 'settings.dial.characters', 'bool', None, True),
-        ('Dial', 'DialWords', 'settings.dial.words', 'bool', None, True),
-        ('Dial', 'DialButtons', 'settings.dial.buttons', 'bool', None, True),
-        ('Dial', 'DialHeadings', 'settings.dial.headings', 'bool', None, True),
-        ('Dial', 'DialVolume', 'settings.dial.volume', 'bool', None, True),
-        ('Dial', 'DialSpeed', 'settings.dial.speed', 'bool', None, True),
-        ('Dial', 'DialVoice', 'settings.dial.voice', 'bool', None, True),
-        ('Dial', 'DialSynthesizer', 'settings.dial.synthesizer', 'bool', None, True),
-        ('Dial', 'DialImportantPlaces', 'settings.dial.importantPlaces', 'bool', None, True),
-    )),
-    ('reader', 'settings.section.reader', (
-        ('Reader', 'ScanMode', 'settings.reader.scanMode', 'bool', None, True),
-        ('Reader', 'UseAiOcr', 'settings.reader.useAiOcr', 'bool', None, True),
-        ('Reader', 'AiOcrLabels', 'settings.reader.aiOcrLabels', 'bool', None, True),
-        ('Reader', 'ProgressMode', 'settings.reader.progressMode', 'choice', _announce, AnnouncementMode.SPEECH_AND_SOUND),
-    )),
-    ('sounds', 'settings.section.sounds', tuple(
-        ('Reader', key, 'settings.reader.' + key, 'bool', None, default)
-        for key, default in (
-            ("auditoryIcons", True), ("auditoryIconsEverywhere", False),
-            ("soundScheme", True), ("dialogKinds", True), ("busyState", True),
-            ("attentionState", True), ("liveStatusBars", True),
-            ("monitors", True), ("surfaceReading", False),
-            ("guestCursor", False), ("agentLink", False),
-            ("windowsSemantics", True), ("speakShortcuts", True),
-            ("uiaNotifications", True),
-        ))),
-    ('braille', 'settings.section.braille', (
-        ('Braille', 'Enabled', 'settings.braille.enabled', 'bool', None, False),
-        ('Braille', 'Table', 'settings.braille.table', 'braille_table', None, ''),
-        ('Braille', 'Viewer', 'settings.braille.viewer', 'bool', None, True),
-    )),
-    ('textEditing', 'settings.section.textEditing', (
-        ('TextEditing', 'PhoneticLetters', 'settings.textEditing.phoneticLetters', 'bool', None, True),
-        ('TextEditing', 'KeyboardEcho', 'settings.textEditing.keyboardEcho', 'choice', _echoes, KeyboardEchoSetting.CHARACTERS_AND_WORDS),
-        ('TextEditing', 'AnnounceTextBounds', 'settings.textEditing.announceTextBounds', 'bool', None, True),
-    )),
-)
+def scope():
+    return _scope['program']
 
 
 def report():
@@ -157,8 +74,9 @@ def _store():
 def _options(entry, engine=None):
     """``[(value, label)]`` for a choice-like entry."""
     _section, _key, _label, kind, extra, _default = entry
-    if kind == 'choice' and callable(extra):
-        return [(value, L(key)) for value, key in extra()]
+    if kind == 'choice':
+        rows = extra() if callable(extra) else (extra or [])
+        return [(value, L(key)) for value, key in rows]
     if kind == 'range':
         low, high, step = extra
         return [(value, str(value)) for value in range(low, high + 1, step)]
@@ -202,15 +120,43 @@ def _options(entry, engine=None):
 
 
 def value_of(entry, store=None):
-    """What the setting holds now, as the store keeps it."""
+    """What the setting holds now, as the store keeps it - or, while a
+    program's profile is being edited, what THAT profile says (the global
+    value where the profile says nothing)."""
     store = store or _store()
     section, key, _label, kind, _extra, default = entry
+    program = _scope['program']
+    if program and key:
+        try:
+            from titan_access import profiles
+            kept = profiles.get(program, section, key)
+        except Exception:                            # noqa: BLE001
+            kept = None
+        if kept is not None:
+            if kind == 'bool':
+                return str(kept).strip().lower() in ('true', '1', 'yes', 'tak')
+            if kind == 'range':
+                try:
+                    return int(kept)
+                except (TypeError, ValueError):
+                    return int(default)
+            return str(kept)
     if kind == 'scheme':
         try:
             from .portable import speechSchemes
             return speechSchemes.active()
         except Exception:                            # noqa: BLE001
             return ''
+    if (section, key) == ('General', 'Enabled'):
+        # What the switch SAYS is whether the reader is running, not what
+        # the file remembers: the hotkey and the page both write the file,
+        # and a file that says "off" about a reader that is talking is a
+        # row that lies.
+        try:
+            from titan_access.engine import is_running
+            return bool(is_running())
+        except Exception:                            # noqa: BLE001
+            return store.get_bool(section, key, bool(default))
     if kind == 'bool':
         return store.get_bool(section, key, bool(default))
     if kind == 'range':
@@ -228,13 +174,35 @@ def value_word(entry, value, engine=None):
             if str(known) == str(value):
                 return label
         return str(value or '') or L('walk.notSet')
+    if kind == 'range':
+        # Zero is a value - the pitch at 0, the rate at 0 - not "not set".
+        return str(int(value)) if value is not None else L('walk.notSet')
     return str(value or '') or L('walk.notSet')
 
 
 def set_value(entry, value, engine=None):
-    """Write one setting and apply it to the running reader."""
+    """Write one setting and apply it to the running reader.
+
+    While a program's profile is being edited the value goes into THAT
+    profile and the file is left alone; the running reader is told only
+    when that program is the one in front.
+    """
     store = _store()
     section, key, _label, kind, _extra, _default = entry
+    program = _scope['program']
+    if program and key and (section, key) not in _schema.NEVER_IN_A_PROFILE:
+        from titan_access import profiles
+        if kind == 'bool':
+            kept = 'true' if value else 'false'
+        else:
+            kept = str(value)
+        profiles.override(program, section, key, kept)
+        with _LOCK:
+            _counted['changed'] += 1
+        if profiles.active() == program:
+            profiles.activate(program, force=True)
+            _apply(engine, section)
+        return
     if kind == 'scheme':
         from .portable import speechSchemes
         speechSchemes.use(str(value))
@@ -248,17 +216,66 @@ def set_value(entry, value, engine=None):
         store.save()
     with _LOCK:
         _counted['changed'] += 1
+    if (section, key) == ('General', 'Enabled'):
+        _switch_reader(bool(value))
+        return
     _apply(engine, section)
 
 
+def _switch_reader(on):
+    """Start or stop the reader for the Enabled row.
+
+    Stopping is done a moment later on a thread of its own: Enter on the
+    row arrives on the keyboard hook's decider thread, and stopping the
+    engine from there joins the thread that must first UNINSTALL the hook
+    the decider belongs to - which is two threads waiting for each other.
+    Starting is cheap and safe from anywhere.
+    """
+    try:
+        from titan_access.engine import TitanAccessEngine, get_engine
+    except Exception as error:                       # noqa: BLE001
+        print('[TitanAccess] settings walk: engine: %s' % error)
+        return
+    if on:
+        try:
+            get_engine().start()
+        except Exception as error:                   # noqa: BLE001
+            print('[TitanAccess] settings walk: start: %s' % error)
+        return
+
+    def stop():
+        try:
+            running = TitanAccessEngine.instance
+            if running is not None:
+                running.stop()
+        except Exception as error:                   # noqa: BLE001
+            print('[TitanAccess] settings walk: stop: %s' % error)
+    threading.Timer(0.6, stop).start()
+
+
 def _apply(engine, section):
-    """Tell the running reader. Speech settings reach its own voice."""
+    """Tell the running reader - the WHOLE of it.
+
+    This told the speech alone, so a setting whose subsystem has to be
+    told - the mouse tracker, whose thread runs only while its switch is
+    on - took effect from the settings panel (`settings_panel._apply_live`
+    asks `engine.apply_settings`) and never from the walked list or the
+    ring: Insert+Ctrl+G, "track the mouse: on", and nothing followed the
+    pointer, on Windows and on Linux alike. Found by the Linux settings
+    probe (`tests/check_titan_access_linux_settings.py`)."""
     if engine is None:
         return
     try:
         engine.settings = _store()
     except Exception:                                # noqa: BLE001
         pass
+    apply_all = getattr(engine, 'apply_settings', None)
+    if callable(apply_all):
+        try:
+            apply_all('walk:%s' % section)
+            return
+        except Exception as error:                   # noqa: BLE001
+            print('[TitanAccess] settings walk: apply: %s' % error)
     speech = getattr(engine, 'speech', None)
     if speech is not None and hasattr(speech, 'apply_settings'):
         try:
@@ -279,20 +296,91 @@ def _kind_word(kind):
 
 def _row_label(entry, engine=None):
     label = L(entry[2]).strip().rstrip(':').strip()
-    return '%s: %s' % (label, value_word(entry, value_of(entry), engine))
+    said = '%s: %s' % (label, value_word(entry, value_of(entry), engine))
+    program = _scope['program']
+    if program and entry[1]:
+        try:
+            from titan_access import profiles
+            if profiles.get(program, entry[0], entry[1]) is not None:
+                # Translators: marks a setting a program's profile overrides.
+                said = '%s (%s)' % (said, L('walk.inThisProgram'))
+        except Exception:                            # noqa: BLE001
+            pass
+    return said
 
 
-def open_it(engine=None):
-    """The sections, as a list. ``(ok, said)``."""
+def _help_of(entry):
+    """One sentence about a setting, or '' where none is written."""
+    found = _schema.find(entry[0], entry[1]) if entry[1] else None
+    if found is None and entry[0] == '__scheme__':
+        found = _schema.find('__scheme__', '')
+    if found is None:
+        return ''
+    text = L(found.help)
+    return '' if text == found.help else text
+
+
+def open_it(engine=None, program=None, at=0):
+    """The sections, as a list. ``(ok, said)``.
+
+    ``program`` names a profile to edit instead of the global settings:
+    the same sections, every row then written into that program's
+    profile. The program in front is offered as a row of the global
+    list, so "make it so in THIS program" is one Enter away.
+    """
     from .portable import palette
+    with _LOCK:
+        _scope['program'] = str(program or '')
     rows = []
     for sid, title, _entries in SCHEMA:
         rows.append({'label': L(title), 'role': L('walk.kind.category'),
                      'icon': 'open-object',
                      'run': (lambda which=sid: open_section(engine, which))})
+    if program:
+        rows.append({
+            # Translators: a row that deletes a program's settings profile.
+            'label': L('walk.removeProfile'), 'role': '',
+            'run': (lambda: _remove_profile(engine, program))})
+        title = L('walk.profileTitle', program)
+        back = (lambda: open_it(engine))
+    else:
+        title = L('walk.title')
+        back = None
+        try:
+            from titan_access import profiles
+            here = profiles.program_in_front()
+            if here:
+                rows.append({
+                    # Translators: a row that opens a program's own profile.
+                    'label': L('walk.forThisProgram', here),
+                    'role': '', 'icon': 'open-object',
+                    'run': (lambda which=here: open_it(engine, which))})
+            for known in profiles.programs():
+                if known != here:
+                    rows.append({'label': L('walk.profileOf', known),
+                                 'role': '', 'icon': 'open-object',
+                                 'run': (lambda which=known:
+                                         open_it(engine, which))})
+        except Exception as error:                   # noqa: BLE001
+            print('[TitanAccess] settings walk: profiles: %s' % error)
     with _LOCK:
         _counted['opened'] += 1
-    return palette.show(rows, L('walk.title'))
+    return palette.show(rows, title, back=back, at=at)
+
+
+def _remove_profile(engine, program):
+    from titan_access import profiles
+    profiles.remove(program)
+    if profiles.active() == program:
+        profiles.activate('', force=True)
+        _apply(engine, '')
+    # Translators: said when a program's profile has been removed.
+    return _reopen_top(engine, L('walk.profileRemoved', program))
+
+
+def _reopen_top(engine, said):
+    open_it(engine)
+    return True, said
 
 
 def open_section(engine, sid, at=0):
@@ -304,14 +392,17 @@ def open_section(engine, sid, at=0):
         rows = []
         for entry in entries:
             row = {'label': _row_label(entry, engine),
-                   'role': _kind_word(entry[3]), 'icon': 'form-field'}
+                   'role': _kind_word(entry[3]), 'icon': 'form-field',
+                   'help': _help_of(entry)}
             row['run'] = (lambda one=entry, where=row:
                           _change(engine, sid, one, where))
             rows.append(row)
         with _LOCK:
             _counted['sections'] += 1
             _open.update({'section': sid, 'rows': rows, 'at': at})
-        return palette.show(rows, L(title), back=lambda: open_it(engine),
+        program = _scope['program']
+        return palette.show(rows, L(title),
+                            back=lambda: open_it(engine, program or None),
                             at=at)
     return False, ''
 

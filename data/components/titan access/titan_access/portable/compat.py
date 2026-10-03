@@ -125,19 +125,56 @@ class _Ui(object):
 
 
 class _Tones(object):
-    """NVDA's ``tones.beep``. Titan has a mixer; a tone is a tone."""
+    """NVDA's ``tones.beep``. Titan has a mixer; a tone is a tone.
+
+    **It reached nothing.** `play_tone` is a METHOD of `SoundManager` -
+    the instance the running engine holds as `engine.sound` - and this
+    asked the `sound_manager` MODULE for a function of that name, found
+    none, and answered False. Every row tone of the palette, a message and
+    the virtual window, and every beep a shared module asked for, was
+    silent in Titan Access while perfect in NVDA. The engine's own manager
+    plays it now; NVDA's ``left``/``right`` volumes (0..100) become the
+    pan the mixer takes.
+    """
 
     def beep(self, hz, length, left=50, right=50):
+        manager = self._manager()
+        if manager is None:
+            return False
         try:
-            from .. import sound_manager
-            for name in ('beep', 'play_tone', 'tone'):
-                found = getattr(sound_manager, name, None)
-                if callable(found):
-                    found(hz, length)
-                    return True
+            left_v = max(0.0, min(100.0, float(left)))
+            right_v = max(0.0, min(100.0, float(right)))
+            total = left_v + right_v
+            pan = 0.0 if total <= 0 else (right_v - left_v) / total
+            gain = 0.45 * (max(left_v, right_v) / 100.0) if total else 0.0
+            manager.play_tone(float(hz), int(length), pan=pan,
+                              gain=max(0.05, gain))
+            return True
+        except Exception:                            # noqa: BLE001
+            return False
+
+    @staticmethod
+    def _manager():
+        """The running engine's sound manager, or one of our own."""
+        try:
+            from titan_access.engine import TitanAccessEngine
+            engine = TitanAccessEngine.instance
+            if engine is not None and getattr(engine, 'sound', None) is not None:
+                return engine.sound
         except Exception:                            # noqa: BLE001
             pass
-        return False
+        try:
+            from titan_access import sound_manager
+            import os
+            spare = getattr(sound_manager, '_SPARE', None)
+            if spare is None:
+                sfx = os.path.join(os.path.dirname(os.path.dirname(
+                    os.path.abspath(sound_manager.__file__))), 'sfx')
+                spare = sound_manager.SoundManager(sfx)
+                sound_manager._SPARE = spare
+            return spare
+        except Exception:                            # noqa: BLE001
+            return None
 
 
 class _Log(object):
@@ -291,6 +328,21 @@ class _Gui(object):
                 return None
         except Exception:                            # noqa: BLE001
             return None
+        # **The calls are made ON THE FRAME.** The shared dialogs say
+        # ``gui.mainFrame.prePopup()`` - NVDA's MainFrame has the method -
+        # and a plain wx.Frame has not, so every question the shared
+        # modules asked here (`dialogs.confirm`, `choose`, `ask_text`,
+        # `customise`) raised `AttributeError` inside a `wx.CallAfter`,
+        # where nothing catches it: no dialog, nothing said. Measured:
+        # "read this window as a picture?" never appeared, and a new
+        # speech scheme could not be named. The two are given to the
+        # frame, as the nothing they honestly are here.
+        for name in ('prePopup', 'postPopup'):
+            if not hasattr(found, name):
+                try:
+                    setattr(found, name, _no_popup)
+                except Exception:                    # noqa: BLE001
+                    pass
         return found
 
     def prePopup(self):
@@ -298,6 +350,12 @@ class _Gui(object):
 
     def postPopup(self):
         return None
+
+
+def _no_popup():
+    """What NVDA's ``prePopup`` / ``postPopup`` are here: nothing. wx
+    gives a dialog parented to Titan's window the foreground itself."""
+    return None
 
 
 speech = _Speech()

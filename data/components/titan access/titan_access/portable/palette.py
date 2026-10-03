@@ -223,13 +223,28 @@ def here():
     return rows[at] if 0 <= at < len(rows) else None
 
 
+def _wanted(name, default=True):
+    """One of the walked lists' own switches (`switchboard`, the Reader
+    section in Titan Access, the add-on's spec in NVDA)."""
+    try:
+        from . import switchboard
+        return bool(switchboard.read(name, default))
+    except Exception:                                # noqa: BLE001
+        return default
+
+
 def parts_of(row, at=0, count=0):
-    """``[(text, voice class)]`` for one row."""
+    """``[(text, voice class)]`` for one row.
+
+    What a row says beside its label is the user's choice: its KIND
+    (`walkSayKind`) and its PLACE in the list (`walkSayPosition`), each a
+    switch of the walked lists, so a list of forty can be walked without
+    "3 of 40, page" after every name."""
     parts = [(_text(row.get('label')), 'name')]
     kind = _text(row.get('role'))
-    if kind:
+    if kind and _wanted('walkSayKind', True):
         parts.append((kind, 'kind'))
-    if count > 1:
+    if count > 1 and _wanted('walkSayPosition', True):
         # Translators: where a row is in a list. {at} is its number,
         # {count} how many there are.
         parts.append((_('{at} of {count}').format(at=at + 1, count=count),
@@ -246,7 +261,8 @@ def say_here(beep=True, prefix=None):
     with _LOCK:
         at = _state['at']
         count = len(_state['rows'])
-    if beep and not icons.play(_text(row.get('icon')) or 'list-item'):
+    if beep and _wanted('walkRowBeep', True) and \
+            not icons.play(_text(row.get('icon')) or 'list-item'):
         _beep(at, count)
     parts = list(prefix or []) + parts_of(row, at=at, count=count)
     _say_parts(parts)
@@ -296,7 +312,7 @@ def show(rows, title, back=None, kind='', at=0):
         icons.play('reader.palette-open')
 
     def announce():
-        if title:
+        if title and _wanted('walkSayTitle', True):
             _say(_text(title))
         if kind == 'text':
             # **An answer says that it IS one.** Somebody who asked a
@@ -317,7 +333,12 @@ def show(rows, title, back=None, kind='', at=0):
     # that cancels speech on a focus change cannot cut it off.
     try:
         from . import hostWindow
-        if first:
+        if not _wanted('walkHostWindow', True):
+            # The user would rather the list borrowed the keys without a
+            # window of its own (a program that never reads its own keys
+            # loses nothing, and no window flashes up).
+            announce()
+        elif first:
             hostWindow.show(_text(title), walking, then=announce)
         else:
             hostWindow.retitle(_text(title))
@@ -356,8 +377,13 @@ def move(delta):
             return _nothing()
         at = _state['at'] + delta
         if at < 0 or at >= len(rows):
-            _edge()
-            return say_here(beep=False)
+            # The end of the list: a bump and the row again, or - with
+            # `walkWrap` on - straight round to the other end.
+            if _wanted('walkWrap', False):
+                at = at % len(rows)
+            else:
+                _edge()
+                return say_here(beep=False)
         _state['at'] = at
         _state['letter'] = 0
         _state['inner'] = 0

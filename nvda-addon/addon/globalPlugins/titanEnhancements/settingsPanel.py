@@ -56,6 +56,12 @@ WORDS = {
     # Translators: which recogniser reads a window - Titan's AI OCR.
     'ai': lambda: _('Titan\'s AI (understands it, sends a picture to your '
                     'provider)'),
+    # Translators: the layout of a walked list - row by row.
+    'linear': lambda: _('simple (row by row)'),
+    # Translators: the layout of a walked list - the arrows follow the screen.
+    'screen': lambda: _('screen (the arrows follow the screen)'),
+    # Translators: the layout of a walked list - Down enters, Up leaves.
+    'interact': lambda: _('interaction (Down enters a control, Up leaves it)'),
 }
 
 
@@ -322,6 +328,30 @@ def _page():
             ('trackpad',
              _('Use the laptop\'s touchpad as a touch screen, so NVDA\'s own '
                'touch gestures work on it'), ''),
+        )),
+        # Translators: a group of settings in the Titan panel.
+        (_('Walked lists'),
+         # Translators: what the 'Walked lists' category is for.
+         _('The palette, a message, the virtual window and the managers: '
+           'lists the arrows walk.'), (
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkLayout', _('Layout of the walked lists:'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkSayKind',
+             _('Say the kind of a row (page, category, check box)'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkSayPosition', _('Say the place in the list (3 of 12)'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkSayTitle', _('Say the list\'s title on opening'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkRowBeep',
+             _('A tone per row, pitched by how far down the list it is'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkWrap', _('Past the last row, round to the first'), ''),
+            # Translators: a setting in the Titan enhancements panel.
+            ('walkHostWindow',
+             _('A walked list has a window of its own that holds the '
+               'keyboard'), ''),
         )),
     )
 

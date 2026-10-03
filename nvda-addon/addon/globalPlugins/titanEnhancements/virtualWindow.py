@@ -716,7 +716,9 @@ def start(hwnd=0, speak=True):
     # every arrow the reader borrowed and moved its own cursor with it.
     # The first row is said once the keyboard has moved.
     try:
-        from . import hostWindow
+        from . import hostWindow, switchboard
+        if not switchboard.read('walkHostWindow', True):
+            raise RuntimeError('no host window wanted')
         hostWindow.show(_text(getattr(window, 'name', '')), reviewing,
                         then=announce)
     except Exception:                                # noqa: BLE001
@@ -1117,8 +1119,18 @@ LAYOUTS = ('linear', 'screen', 'interact')
 
 
 def layout():
+    """The layout in force: what was last chosen this session, else the
+    one the settings keep (`walkLayout`), else the simple one."""
     with _LOCK:
-        return _state.get('layout', 'linear')
+        chosen = _state.get('layout')
+    if chosen in LAYOUTS:
+        return chosen
+    try:
+        from . import switchboard
+        kept = str(switchboard.value('walkLayout', 'linear') or 'linear')
+    except Exception:                                # noqa: BLE001
+        kept = 'linear'
+    return kept if kept in LAYOUTS else 'linear'
 
 
 def layout_name(which):
@@ -1134,12 +1146,19 @@ def layout_name(which):
 
 def layout_cycle(delta=1):
     """The next (or previous) layout, and say which. ``(ok, said)``."""
+    now = layout()
     with _LOCK:
-        now = _state.get('layout', 'linear')
         at = LAYOUTS.index(now) if now in LAYOUTS else 0
         now = LAYOUTS[(at + (1 if delta > 0 else -1)) % len(LAYOUTS)]
         _state['layout'] = now
         _state['depth'] = None
+    # Kept, so the layout chosen with Numpad 4 and 6 is the layout the
+    # next session opens with - and the one the settings page shows.
+    try:
+        from . import switchboard
+        switchboard.write('walkLayout', now)
+    except Exception:                                # noqa: BLE001
+        pass
     icons.play('reader.layout-changed')
     return True, layout_name(now)
 

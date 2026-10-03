@@ -120,7 +120,7 @@ class AFiveElementSegmentDoesNotSilenceTheReader(unittest.TestCase):
         source = _source('engine.py')
         at = source.index('def speak_segments(')
         block = source[at:source.index('\n    def ', at + 10)]
-        self.assertIn('seg[3:5]', block)
+        self.assertTrue('seg[3:5]' in block or 'seg[3:6]' in block, block[:300])
         self.assertIn('gap_ms', block)
 
 
@@ -317,7 +317,10 @@ class TheReadersSettingsAreWalked(unittest.TestCase):
         self.walk.open_section(None, 'verbosity')
         _title, rows, _at = self.shown[-1]
         row = rows[1]
-        entry = self.walk.SCHEMA[2][2][1]
+        # The section by its id, not its place: the schema has grown
+        # sections in front of it.
+        entry = [rows_ for sid, _t, rows_ in self.walk.SCHEMA
+                 if sid == 'verbosity'][0][1]
         self.assertTrue(self.store.get_bool('Verbosity', entry[1], True))
         ok, said = row['run']()
         self.assertTrue(ok)
@@ -868,7 +871,8 @@ class WhatAProgramSaysWithoutMovingTheFocus(unittest.TestCase):
             words = json.load(io.open(os.path.join(COMPONENT, 'locale',
                                                    lang + '.json'), encoding='utf-8'))
             self.assertIn('settings.reader.uiaNotifications', words)
-        self.assertIn('"uiaNotifications", True', _source('settings_walk.py'))
+        # The walk and the page are built from the one schema now.
+        self.assertIn("'uiaNotifications', True", _source('settings_schema.py'))
         self.assertIn('"uiaNotifications", True', _source('settings_panel.py'))
 
 

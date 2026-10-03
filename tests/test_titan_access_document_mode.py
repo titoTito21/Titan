@@ -308,9 +308,15 @@ class OcrAssistTests(unittest.TestCase):
                                        elements=[element], title="Setup",
                                        summary="")
         ocr_assist._cache[7] = (screen, __import__("time").time())
+        # Whether AI OCR is AVAILABLE is the user's settings and a key, which
+        # on the machine running this may be anything; the question here is
+        # what a reading becomes, so availability is answered yes.
+        had = ocr_assist.unavailable_reason
+        ocr_assist.unavailable_reason = lambda settings=None: ""
         try:
             nodes = ocr_assist.build_nodes(7, VNode)
         finally:
+            ocr_assist.unavailable_reason = had
             ocr_assist.forget(7)
         names = [n.name for n in nodes]
         self.assertIn("Install", names)

@@ -383,8 +383,9 @@ class AWholeUtteranceIsSpokenInItsClassesOwnVoice(unittest.TestCase):
         self.assertIn('Zapisano', self.engine.spoken)
 
     def test_a_part_class_may_not_name_a_synthesizer(self):
-        """`button` is part of a control's reading; two programs producing
-        one sentence is not something anybody asked for."""
+        """`button` is part of a control's reading, and under a reader that
+        speaks one utterance on one synthesizer (NVDA, and this adapter
+        until the engine says otherwise) its synth is ignored."""
         from titan_access import speech_adapter as sa
         from titan_access.portable import classes
         had = classes.voice_of
@@ -410,6 +411,88 @@ class AWholeUtteranceIsSpokenInItsClassesOwnVoice(unittest.TestCase):
             compat.speech.speak_in_class = had
         self.assertEqual(asked, [('Gotowe', 'notification')])
 
+
+
+
+class APartOfAnAnnouncementMayComeFromAnotherSynthesizer(unittest.TestCase):
+    """Asked for as "can the control's name, its type, a message, come from
+    another voice or another Titan TTS engine?". The whole-utterance
+    classes always could; a PART could not, because one utterance was
+    rendered in one `speak_concat`. Titan Access renders each part to
+    memory itself, so once the engine says so (`PARTS_MAY_NAME_SYNTH`) the
+    parts are grouped by voice profile and each group is spoken on its own
+    synthesizer in turn - the name in the reader's voice, the type in
+    another - and the reader's own voice is put back after."""
+
+    def setUp(self):
+        from titan_access.portable import classes
+        self.classes = classes
+        self.was = classes.PARTS_MAY_NAME_SYNTH
+        classes.PARTS_MAY_NAME_SYNTH = True
+        self.had = classes.voice_of
+        classes.voice_of = lambda tag: ({'synth': 'smp', 'voice': 'pl', 'pitch': -4}
+                                        if tag == 'kind' else {})
+        self.engine = VoiceEngine()
+        self.adapter = _voice_adapter(self.engine, _Settings())
+        self.adapter._own = True
+
+    def tearDown(self):
+        self.classes.PARTS_MAY_NAME_SYNTH = self.was
+        self.classes.voice_of = self.had
+
+    def _settle(self):
+        for _ in range(300):
+            if not self.adapter.pending_count() and not self.engine.is_speaking:
+                break
+            time.sleep(0.01)
+        time.sleep(0.05)
+
+    def test_the_segment_carries_the_profile_only_where_allowed(self):
+        from titan_access import accessible
+        part = accessible._part('przycisk', 'kind', -4)
+        self.assertEqual(accessible.voice_profile_of(part), {'synth': 'smp', 'voice': 'pl'})
+        self.assertIsNone(accessible.voice_profile_of(accessible._part('Zapisz', 'name', 0)))
+        self.classes.PARTS_MAY_NAME_SYNTH = False
+        self.assertIsNone(accessible.voice_profile_of(accessible._part('przycisk', 'kind', -4)))
+
+    def test_the_type_is_spoken_on_its_own_synthesizer_and_the_voice_put_back(self):
+        from titan_access import accessible
+        segments = [accessible._part('Zapisz', 'name', 0),
+                    accessible._part('przycisk', 'kind', -4),
+                    accessible._part('zaznaczony', 'state', 4)]
+        self.adapter.speak_segments(segments)
+        self._settle()
+        # Three groups: name on the reader's own, type on smp, state on own.
+        texts = [[seg[0] for seg in call] for call in self.engine.concat_calls]
+        self.assertEqual(texts, [['Zapisz'], ['przycisk'], ['zaznaczony']])
+        self.assertIn(('engine', 'smp'), self.engine.calls)
+        borrowed = self.engine.calls.index(('engine', 'smp'))
+        self.assertIn(('engine', 'sapi5'), self.engine.calls[borrowed + 1:])
+        self.assertEqual(self.engine.engine, 'sapi5')
+        # No segment handed to the engine still carries the profile dict.
+        for call in self.engine.concat_calls:
+            for seg in call:
+                self.assertLessEqual(len(seg), 5)
+
+    def test_without_a_profile_the_whole_announcement_is_one_clip(self):
+        from titan_access import accessible
+        self.classes.voice_of = lambda tag: {}
+        segments = [accessible._part('Zapisz', 'name', 0),
+                    accessible._part('przycisk', 'kind', -4)]
+        self.adapter.speak_segments(segments)
+        self._settle()
+        self.assertEqual(len(self.engine.concat_calls), 1)
+        self.assertNotIn(('engine', 'smp'), self.engine.calls)
+
+    def test_the_part_class_may_name_a_synth_when_told_so(self):
+        from titan_access import speech_adapter as sa
+        sa._current, was = self.adapter, sa._current
+        try:
+            sa.speak_in_class('przycisk', 'kind')
+            self._settle()
+        finally:
+            sa._current = was
+        self.assertIn(('engine', 'smp'), self.engine.calls)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

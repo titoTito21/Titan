@@ -79,6 +79,16 @@ WHOLE = frozenset({'notification', 'controller', 'text', 'typed',
                    'spelling', 'alert', 'dialog', 'live', 'monitor',
                    'busy', 'attention'})
 
+#: **A reader that can speak the PARTS of one announcement one after the
+#: other, each on a synthesizer of its own, says so here.** NVDA cannot -
+#: one utterance is one synthesizer - and leaves it False, so under NVDA
+#: a part class never names a synth. Titan Access renders each part to
+#: memory itself and plays them in turn (`speech_adapter`), so it sets
+#: this True at start-up and the name of a control may come from SAPI and
+#: its type from eSpeak, which is what somebody who wants the type to be
+#: unmistakable asks for.
+PARTS_MAY_NAME_SYNTH = False
+
 _LOCK = threading.RLock()
 _overrides = None
 _order = None
@@ -478,6 +488,13 @@ def is_whole(tag):
     return str(tag or '') in WHOLE
 
 
+def may_name_synth(tag):
+    """Whether this class may name a synthesizer of its own: a whole
+    utterance always, a part of one where the reader underneath can speak
+    parts on different synthesizers (`PARTS_MAY_NAME_SYNTH`)."""
+    return is_whole(tag) or bool(PARTS_MAY_NAME_SYNTH)
+
+
 def synth_of(tag):
     """The synthesizer a class asks for, or '' - and only where it may.
 
@@ -486,7 +503,7 @@ def synth_of(tag):
     '' whatever is stored: a table that can hold a wrong answer must not
     act on it.
     """
-    if not is_whole(tag):
+    if not may_name_synth(tag):
         return ''
     return str(voice_of(tag).get('synth') or '').strip()
 
@@ -502,7 +519,7 @@ def set_voice(tag, profile):
     if not name:
         return False
     kept = _clean(profile)
-    if not is_whole(name):
+    if not may_name_synth(name):
         kept.pop('synth', None)
     with _LOCK:
         _load()[name] = kept
@@ -645,7 +662,7 @@ def speak_sample(tag, profile=None):
     from . import compat
     wanted = dict(profile) if profile is not None else voice_of(tag)
     text = sample_text(tag)
-    if not is_whole(tag):
+    if not may_name_synth(tag):
         wanted.pop('synth', None)
     # A reader that takes a whole profile itself (Titan Access) is handed
     # it: the synthesizer, the voice and the dials as they stand.
@@ -656,7 +673,7 @@ def speak_sample(tag, profile=None):
     except Exception:                                # noqa: BLE001
         pass
     from . import voices
-    if is_whole(tag) and str(wanted.get('synth') or '').strip():
+    if may_name_synth(tag) and str(wanted.get('synth') or '').strip():
         try:
             from . import speaking
             if speaking.speak_with(wanted, text):

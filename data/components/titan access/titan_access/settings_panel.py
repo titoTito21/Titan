@@ -127,8 +127,12 @@ def _apply_live(store):
     try:
         from titan_access.engine import TitanAccessEngine
         inst = TitanAccessEngine.instance
-        if inst is not None and getattr(inst, "speech", None) is not None:
-            inst.speech.apply_settings()   # no-op for speech params by design
+        if inst is None:
+            return
+        if hasattr(inst, 'apply_settings'):
+            inst.apply_settings()
+        elif getattr(inst, "speech", None) is not None:
+            inst.speech.apply_settings()
     except Exception:
         pass
 
@@ -190,28 +194,24 @@ def _announce_labels():
 # --------------------------------------------------------------------------- #
 # Panel construction
 # --------------------------------------------------------------------------- #
-#: The sections, each a category of its own inside "Titan Access". The
-#: main category holds the switch; every section is a child category
-#: (`register_settings_category(..., parent=...)`), so the settings window
-#: lists "Titan Access" and, indented under it, Speech, General, Verbosity,
-#: Navigation, Dial, Reader, Sounds and Text editing - a category in a
-#: category, which is what a page of eighty controls needed to become.
-SECTIONS = ('speech', 'general', 'verbosity', 'navigation', 'dial',
-            'reader', 'sounds', 'braille', 'textEditing')
+#: The sections, each a category of its own inside "Titan Access", read
+#: out of `settings_schema` - the one description of every setting. The
+#: main category holds the note; every section is a child category
+#: (`register_settings_category(..., parent=...)`).
+try:
+    from titan_access import settings_schema as _schema
+    SECTIONS = tuple(sid for sid, _title, _rows in _schema.SECTIONS)
+    _TITLES = {sid: title for sid, title, _rows in _schema.SECTIONS}
+except Exception as _schema_error:  # pragma: no cover
+    _schema = None
+    SECTIONS = ('speech', 'general')
+    _TITLES = {'speech': 'settings.section.speech',
+               'general': 'settings.section.general'}
+    print(f"[TitanAccess] settings_panel: schema unavailable: {_schema_error}")
 
 
 def _section_title(which):
-    return L({
-        'speech': 'settings.section.speech',
-        'general': 'settings.section.general',
-        'verbosity': 'settings.section.verbosity',
-        'navigation': 'settings.section.navigation',
-        'dial': 'settings.section.dial',
-        'reader': 'settings.section.reader',
-        'sounds': 'settings.section.sounds',
-        'braille': 'settings.section.braille',
-        'textEditing': 'settings.section.textEditing',
-    }[which])
+    return L(_TITLES.get(which, 'settings.section.' + which))
 
 
 def build_panel(parent, section=None):
@@ -245,12 +245,19 @@ def build_panel(parent, section=None):
 
 
 def _build_main(panel, scroller, s):
+    # The category that holds the sections says where they are. The
+    # switch itself is the first control of General (`_build_enable`),
+    # which is where a user looks for "turn the reader on".
+    s.Add(wx.StaticText(scroller, label=L("settings.main.note")), 0, wx.ALL, 6)
+    _build_profiles(panel, scroller, s)
+
+
+def _build_enable(panel, scroller, box):
     # ------------------- Enable screen reader (live) ------------------- #
     # Checking this turns the reader ON immediately; unchecking turns it OFF
     # immediately. The state is also persisted (General/Enabled) so the reader
     # auto-starts with the component next time.
-    panel.chk_enabled = wx.CheckBox(scroller, label=L("settings.general.enable"))
-    s.Add(panel.chk_enabled, 0, wx.ALL, 8)
+    panel.chk_enabled = _checkbox(scroller, box, L("settings.general.enable"))
 
     def _on_enable(_evt):
         want_on = panel.chk_enabled.GetValue()
@@ -273,7 +280,6 @@ def _build_main(panel, scroller, s):
         except Exception:
             pass
     panel.chk_enabled.Bind(wx.EVT_CHECKBOX, _on_enable)
-    s.Add(wx.StaticText(scroller, label=L("settings.main.note")), 0, wx.ALL, 6)
 
 
 def _build_speech(panel, scroller, s):
@@ -352,102 +358,100 @@ def _populate_voices_for(panel, engine_id, keep=''):
         panel.cmb_voice.SetSelection(0)
 
 
-def _build_general(panel, scroller, s):
-    gen = _section(scroller, s, L("settings.section.general"))
-    panel.chk_mute = _checkbox(scroller, gen, L("settings.general.muteOutsideTce"))
-    panel.cmb_startup = _choice_row(scroller, gen,
-                                    L("settings.general.startupAnnouncement"),
-                                    _announce_labels())
-    panel.chk_entry_sound = _checkbox(scroller, gen,
-                                      L("settings.general.tceEntrySound"))
-    panel.cmb_modifier = _choice_row(scroller, gen, L("settings.general.modifier"),
-                                     [L("settings.modifier.insert"),
-                                      L("settings.modifier.capsLock"),
-                                      L("settings.modifier.insertAndCapsLock")])
-    panel.txt_welcome = _text_row(scroller, gen, L("settings.general.welcomeMessage"))
-    panel.chk_speak_hints = _checkbox(scroller, gen,
-                                      L("settings.general.speakHints"))
-    panel.chk_virtual_screen = _checkbox(scroller, gen,
-                                         L("settings.general.virtualScreen"))
+def _build_generic(panel, scroller, s, sid):
+    """One ui section of the schema, control by control.
+
+    Every control is the real one for its kind - a tick box is a
+    `wx.CheckBox`, a choice a `wx.Choice` behind a label, a number a
+    `wx.SpinCtrl`, a text a `wx.TextCtrl` - and every one carries its
+    help sentence as its tooltip and help text. What is built is written
+    down in ``panel.controls`` so loading and saving need no list of
+    attribute names, which is how a control used to be forgotten by one
+    of the two.
+    """
+    rows = ()
+    for known, _title, entries in (_schema.SECTIONS if _schema else ()):
+        if known == sid:
+            rows = entries
+            break
+    box = _section(scroller, s, _section_title(sid))
+    if not hasattr(panel, 'controls'):
+        panel.controls = {}
+    for entry in rows:
+        if (entry.section, entry.key) == ('General', 'Enabled'):
+            _build_enable(panel, scroller, box)
+            panel.controls[(entry.section, entry.key)] = (entry, panel.chk_enabled)
+            continue
+        label = L(entry.label)
+        if entry.kind == 'bool':
+            ctrl = _checkbox(scroller, box, label)
+        elif entry.kind in ('choice', 'braille_table'):
+            if entry.kind == 'braille_table':
+                try:
+                    from titan_access import braille
+                    tables = braille.tables_available()
+                except Exception:
+                    tables = []
+                panel._braille_tables = [''] + [name for name, _l in tables]
+                names = [L("settings.braille.autoTable")] + [l for _n, l in tables]
+            else:
+                names = [L(key) for _value, key in _schema.options(entry)]
+            ctrl = _choice_row(scroller, box, label, names)
+        elif entry.kind == 'range':
+            low, high, _step = entry.extra
+            ctrl = _spin_row(scroller, box, label, low, high)
+        elif entry.kind == 'text':
+            ctrl = _text_row(scroller, box, label)
+        else:
+            continue
+        help_text = L(entry.help)
+        if help_text and help_text != entry.help:
+            try:
+                ctrl.SetToolTip(help_text)
+                ctrl.SetHelpText(help_text)
+            except Exception:
+                pass
+        panel.controls[(entry.section, entry.key)] = (entry, ctrl)
 
 
-def _build_verbosity(panel, scroller, s):
-    vb = _section(scroller, s, L("settings.section.verbosity"))
-    panel.chk_basic = _checkbox(scroller, vb,
-                                L("settings.verbosity.announceBasicControls"))
-    panel.chk_block = _checkbox(scroller, vb,
-                                L("settings.verbosity.announceBlockControls"))
-    panel.chk_list_pos = _checkbox(scroller, vb,
-                                   L("settings.verbosity.announceListPosition"))
-    vb.Add(wx.StaticText(scroller, label=L("settings.verbosity.menuInfo")),
-           0, wx.LEFT | wx.TOP, 6)
-    panel.chk_menu_count = _checkbox(scroller, vb,
-                                     L("settings.verbosity.menuItemCount"))
-    panel.chk_menu_name = _checkbox(scroller, vb, L("settings.verbosity.menuName"))
-    panel.chk_menu_sounds = _checkbox(scroller, vb,
-                                      L("settings.verbosity.menuSounds"))
-    vb.Add(wx.StaticText(scroller, label=L("settings.verbosity.elementInfo")),
-           0, wx.LEFT | wx.TOP, 6)
-    panel.chk_elem_name = _checkbox(scroller, vb,
-                                    L("settings.verbosity.elementName"))
-    panel.chk_elem_type = _checkbox(scroller, vb,
-                                    L("settings.verbosity.elementType"))
-    panel.chk_elem_state = _checkbox(scroller, vb,
-                                     L("settings.verbosity.elementState"))
-    panel.chk_elem_param = _checkbox(scroller, vb,
-                                     L("settings.verbosity.elementParameter"))
-    panel.cmb_toggle_keys = _choice_row(scroller, vb,
-                                        L("settings.verbosity.toggleKeysMode"),
-                                        _announce_labels())
+def _build_profiles(panel, scroller, s):
+    """The per-program profiles that exist, and a way to drop one.
+
+    A profile is EDITED in the walked settings (Insert+Ctrl+G, "Settings
+    for this program only"), where the program in front is known; here
+    it can be seen and removed.
+    """
+    try:
+        from titan_access import profiles
+        names = profiles.programs()
+    except Exception:
+        return
+    box = _section(scroller, s, L("settings.profiles.title"))
+    box.Add(wx.StaticText(scroller, label=L("settings.profiles.note")),
+            0, wx.LEFT | wx.BOTTOM, 6)
+    panel.lst_profiles = wx.ListBox(scroller, choices=names)
+    panel.lst_profiles.SetName(L("settings.profiles.title"))
+    box.Add(panel.lst_profiles, 0, wx.EXPAND | wx.ALL, 4)
+    remove = wx.Button(scroller, label=L("settings.profiles.remove"))
+    box.Add(remove, 0, wx.ALL, 4)
+
+    def _remove(_evt):
+        at = panel.lst_profiles.GetSelection()
+        if at == wx.NOT_FOUND:
+            return
+        try:
+            from titan_access import profiles
+            profiles.remove(panel.lst_profiles.GetString(at))
+        except Exception as e:
+            print(f"[TitanAccess] profile remove: {e}")
+            return
+        panel.lst_profiles.Delete(at)
+    remove.Bind(wx.EVT_BUTTON, _remove)
 
 
-def _build_navigation(panel, scroller, s):
-    nav = _section(scroller, s, L("settings.section.navigation"))
-    panel.chk_adv_nav = _checkbox(scroller, nav,
-                                  L("settings.navigation.advancedNavigation"))
-    panel.chk_nav_types = _checkbox(scroller, nav,
-                                    L("settings.navigation.announceControlTypes"))
-    panel.chk_hierarchy = _checkbox(scroller, nav,
-                                    L("settings.navigation.announceHierarchyLevel"))
-    panel.cmb_window_bounds = _choice_row(scroller, nav,
-                                          L("settings.navigation.windowBoundsMode"),
-                                          _announce_labels())
-    panel.chk_phonetic_dial = _checkbox(scroller, nav,
-                                        L("settings.navigation.phoneticInDial"))
-
-
-def _build_dial(panel, scroller, s):
-    dial = _section(scroller, s, L("settings.section.dial"))
-    panel.chk_dial_chars = _checkbox(scroller, dial, L("settings.dial.characters"))
-    panel.chk_dial_words = _checkbox(scroller, dial, L("settings.dial.words"))
-    panel.chk_dial_buttons = _checkbox(scroller, dial, L("settings.dial.buttons"))
-    panel.chk_dial_headings = _checkbox(scroller, dial, L("settings.dial.headings"))
-    panel.chk_dial_volume = _checkbox(scroller, dial, L("settings.dial.volume"))
-    panel.chk_dial_speed = _checkbox(scroller, dial, L("settings.dial.speed"))
-    panel.chk_dial_voice = _checkbox(scroller, dial, L("settings.dial.voice"))
-    panel.chk_dial_synth = _checkbox(scroller, dial, L("settings.dial.synthesizer"))
-    panel.chk_dial_places = _checkbox(scroller, dial,
-                                      L("settings.dial.importantPlaces"))
-
-
-def _build_reader(panel, scroller, s):
-    rd = _section(scroller, s, L("settings.section.reader"))
-    panel.chk_scan_mode = _checkbox(scroller, rd, L("settings.reader.scanMode"))
-    rd.Add(wx.StaticText(scroller, label=L("settings.reader.scanModeInfo")),
-           0, wx.LEFT | wx.BOTTOM, 6)
-    panel.chk_ai_ocr = _checkbox(scroller, rd, L("settings.reader.useAiOcr"))
-    panel.chk_ai_ocr_labels = _checkbox(scroller, rd,
-                                        L("settings.reader.aiOcrLabels"))
-    rd.Add(wx.StaticText(scroller, label=L("settings.reader.aiOcrInfo")),
-           0, wx.LEFT | wx.BOTTOM, 6)
-    panel.cmb_progress = _choice_row(scroller, rd,
-                                     L("settings.reader.progressMode"),
-                                     _announce_labels())
-    rd.Add(wx.StaticText(scroller, label=L("settings.reader.progressInfo")),
-           0, wx.LEFT | wx.BOTTOM, 6)
-
-
-#: The shared switches (`portable/switchboard.py`) and their defaults.
+#: The shared switches (`portable/switchboard.py`) and their defaults -
+#: kept as a table of their own because the switchboard and the tests
+#: read it; the schema's "sounds" section is built from the same list.
 SHARED_SWITCHES = (
     ("auditoryIcons", True), ("auditoryIconsEverywhere", False),
     ("soundScheme", True), ("dialogKinds", True), ("busyState", True),
@@ -458,56 +462,9 @@ SHARED_SWITCHES = (
 )
 
 
-def _build_sounds(panel, scroller, s):
-    # The switches of the modules this reader shares with the NVDA add-on:
-    # they used to answer "on" here and could be changed from nowhere.
-    rd = _section(scroller, s, L("settings.section.sounds"))
-    panel.chk_reader = {}
-    for key, _default in SHARED_SWITCHES:
-        panel.chk_reader[key] = _checkbox(scroller, rd,
-                                          L("settings.reader." + key))
-
-
-def _build_braille(panel, scroller, s):
-    br = _section(scroller, s, L("settings.section.braille"))
-    panel.chk_braille = _checkbox(scroller, br, L("settings.braille.enabled"))
-    br.Add(wx.StaticText(scroller, label=L("settings.braille.info")),
-           0, wx.LEFT | wx.BOTTOM, 6)
-    try:
-        from titan_access import braille
-        tables = [L("settings.braille.autoTable")] + [
-            label for _name, label in braille.tables_available()]
-        panel._braille_tables = [''] + [
-            name for name, _label in braille.tables_available()]
-    except Exception:
-        tables = [L("settings.braille.autoTable")]
-        panel._braille_tables = ['']
-    panel.cmb_braille_table = _choice_row(scroller, br,
-                                          L("settings.braille.table"), tables)
-    panel.chk_braille_viewer = _checkbox(scroller, br,
-                                         L("settings.braille.viewer"))
-
-
-def _build_text_editing(panel, scroller, s):
-    te = _section(scroller, s, L("settings.section.textEditing"))
-    panel.chk_phonetic = _checkbox(scroller, te,
-                                   L("settings.textEditing.phoneticLetters"))
-    panel.cmb_echo = _choice_row(scroller, te,
-                                 L("settings.textEditing.keyboardEcho"),
-                                 [L("settings.echo.none"),
-                                  L("settings.echo.characters"),
-                                  L("settings.echo.words"),
-                                  L("settings.echo.charactersAndWords")])
-    panel.chk_text_bounds = _checkbox(scroller, te,
-                                      L("settings.textEditing.announceTextBounds"))
-
-
-_BUILDERS = {
-    'speech': _build_speech, 'general': _build_general,
-    'verbosity': _build_verbosity, 'navigation': _build_navigation,
-    'dial': _build_dial, 'reader': _build_reader, 'sounds': _build_sounds,
-    'braille': _build_braille, 'textEditing': _build_text_editing,
-}
+_BUILDERS = {sid: (lambda p, sc, sz, which=sid: _build_generic(p, sc, sz, which))
+             for sid in SECTIONS}
+_BUILDERS['speech'] = _build_speech
 
 
 def _populate_voices(panel, keep):
@@ -572,9 +529,26 @@ def load_panel(panel):
         panel.spn_pitch.SetValue(st.get_int(SEC_SPEECH, "Pitch", 0))
         panel.spn_volume.SetValue(st.get_int(SEC_SPEECH, "Volume", 100))
 
-    for key, box in getattr(panel, "chk_reader", {}).items():
-        default = dict(SHARED_SWITCHES).get(key, True)
-        box.SetValue(st.get_bool("Reader", key, default))
+    for (section, key), (entry, ctrl) in getattr(panel, 'controls', {}).items():
+        try:
+            if (section, key) == ('General', 'Enabled'):
+                continue                           # set above, off the engine
+            if entry.kind == 'bool':
+                ctrl.SetValue(st.get_bool(section, key, bool(entry.default)))
+            elif entry.kind == 'range':
+                ctrl.SetValue(st.get_int(section, key, int(entry.default)))
+            elif entry.kind == 'text':
+                ctrl.SetValue(str(st.get(section, key, entry.default) or ''))
+            elif entry.kind == 'braille_table':
+                tables = getattr(panel, '_braille_tables', [''])
+                chosen = str(st.get(section, key, '') or '')
+                ctrl.SetSelection(tables.index(chosen) if chosen in tables else 0)
+            elif entry.kind == 'choice':
+                values = [str(v) for v, _k in _schema.options(entry)]
+                now = str(st.get(section, key, entry.default) or '')
+                ctrl.SetSelection(values.index(now) if now in values else 0)
+        except Exception as e:
+            print(f"[TitanAccess] settings load {section}/{key}: {e}")
 
     if getattr(panel, 'cmb_scheme', None) is not None:
         try:
@@ -585,76 +559,6 @@ def load_panel(panel):
                 panel.cmb_scheme.SetSelection(keys.index(active))
         except Exception:
             pass
-
-    if _has(panel, 'chk_braille'):
-        panel.chk_braille.SetValue(st.get_bool("Braille", "Enabled", False))
-        panel.chk_braille_viewer.SetValue(
-            st.get_bool("Braille", "Viewer", True))
-        chosen = str(st.get("Braille", "Table", "") or "")
-        tables = getattr(panel, '_braille_tables', [''])
-        panel.cmb_braille_table.SetSelection(
-            tables.index(chosen) if chosen in tables else 0)
-
-    if _has(panel, 'chk_mute'):
-        panel.chk_mute.SetValue(st.mute_outside_tce)
-        panel.cmb_startup.SetSelection(
-            _enum_index(list(AnnouncementMode.ALL), st.startup_announcement, 3))
-        panel.chk_entry_sound.SetValue(st.tce_entry_sound)
-        panel.cmb_modifier.SetSelection(
-            _enum_index(list(ScreenReaderModifier.ALL), st.modifier, 2))
-        panel.txt_welcome.SetValue(st.welcome_message)
-        panel.chk_speak_hints.SetValue(st.speak_hints)
-        panel.chk_virtual_screen.SetValue(st.virtual_screen)
-
-    if _has(panel, 'chk_basic'):
-        panel.chk_basic.SetValue(st.get_bool(SEC_VERBOSITY, "AnnounceBasicControls", True))
-        panel.chk_block.SetValue(st.get_bool(SEC_VERBOSITY, "AnnounceBlockControls", True))
-        panel.chk_list_pos.SetValue(st.get_bool(SEC_VERBOSITY, "AnnounceListPosition", True))
-        panel.chk_menu_count.SetValue(st.get_bool(SEC_VERBOSITY, "MenuItemCount", True))
-        panel.chk_menu_name.SetValue(st.get_bool(SEC_VERBOSITY, "MenuName", True))
-        panel.chk_menu_sounds.SetValue(st.get_bool(SEC_VERBOSITY, "MenuSounds", True))
-        panel.chk_elem_name.SetValue(st.get_bool(SEC_VERBOSITY, "ElementName", True))
-        panel.chk_elem_type.SetValue(st.get_bool(SEC_VERBOSITY, "ElementType", True))
-        panel.chk_elem_state.SetValue(st.get_bool(SEC_VERBOSITY, "ElementState", True))
-        panel.chk_elem_param.SetValue(st.get_bool(SEC_VERBOSITY, "ElementParameter", True))
-        panel.cmb_toggle_keys.SetSelection(_enum_index(
-            list(AnnouncementMode.ALL),
-            AnnouncementMode.normalize(st.get(SEC_VERBOSITY, "ToggleKeysMode")), 3))
-
-    if _has(panel, 'chk_adv_nav'):
-        panel.chk_adv_nav.SetValue(st.get_bool(SEC_NAVIGATION, "AdvancedNavigation", False))
-        panel.chk_nav_types.SetValue(
-            st.get_bool(SEC_NAVIGATION, "AnnounceControlTypesNavigation", True))
-        panel.chk_hierarchy.SetValue(
-            st.get_bool(SEC_NAVIGATION, "AnnounceHierarchyLevel", True))
-        panel.cmb_window_bounds.SetSelection(_enum_index(
-            list(AnnouncementMode.ALL),
-            AnnouncementMode.normalize(st.get(SEC_NAVIGATION, "WindowBoundsMode")), 3))
-        panel.chk_phonetic_dial.SetValue(st.get_bool(SEC_NAVIGATION, "PhoneticInDial", True))
-
-    if _has(panel, 'chk_dial_chars'):
-        panel.chk_dial_chars.SetValue(st.get_bool(SEC_DIAL, "DialCharacters", True))
-        panel.chk_dial_words.SetValue(st.get_bool(SEC_DIAL, "DialWords", True))
-        panel.chk_dial_buttons.SetValue(st.get_bool(SEC_DIAL, "DialButtons", True))
-        panel.chk_dial_headings.SetValue(st.get_bool(SEC_DIAL, "DialHeadings", True))
-        panel.chk_dial_volume.SetValue(st.get_bool(SEC_DIAL, "DialVolume", True))
-        panel.chk_dial_speed.SetValue(st.get_bool(SEC_DIAL, "DialSpeed", True))
-        panel.chk_dial_voice.SetValue(st.get_bool(SEC_DIAL, "DialVoice", True))
-        panel.chk_dial_synth.SetValue(st.get_bool(SEC_DIAL, "DialSynthesizer", True))
-        panel.chk_dial_places.SetValue(st.get_bool(SEC_DIAL, "DialImportantPlaces", True))
-
-    if _has(panel, 'chk_scan_mode'):
-        panel.chk_scan_mode.SetValue(st.scan_mode)
-        panel.chk_ai_ocr.SetValue(st.ai_ocr)
-        panel.chk_ai_ocr_labels.SetValue(st.ai_ocr_labels)
-        panel.cmb_progress.SetSelection(
-            _enum_index(list(AnnouncementMode.ALL), st.progress_mode, 3))
-
-    if _has(panel, 'chk_phonetic'):
-        panel.chk_phonetic.SetValue(st.phonetic_letters)
-        panel.cmb_echo.SetSelection(
-            _enum_index(list(KeyboardEchoSetting.ALL), st.keyboard_echo, 3))
-        panel.chk_text_bounds.SetValue(st.announce_text_bounds)
 
 
 def save_panel(panel):
@@ -676,65 +580,27 @@ def save_panel(panel):
         st.set_int(SEC_SPEECH, "Pitch", panel.spn_pitch.GetValue())
         st.set_int(SEC_SPEECH, "Volume", panel.spn_volume.GetValue())
 
-    for key, box in getattr(panel, "chk_reader", {}).items():
-        st.set_bool("Reader", key, box.GetValue())
-
-    if _has(panel, 'chk_mute'):
-        st.mute_outside_tce = panel.chk_mute.GetValue()
-        st.startup_announcement = AnnouncementMode.ALL[
-            max(0, panel.cmb_startup.GetSelection())]
-        st.tce_entry_sound = panel.chk_entry_sound.GetValue()
-        st.modifier = ScreenReaderModifier.ALL[
-            max(0, panel.cmb_modifier.GetSelection())]
-        st.welcome_message = panel.txt_welcome.GetValue()
-        st.speak_hints = panel.chk_speak_hints.GetValue()
-        st.virtual_screen = panel.chk_virtual_screen.GetValue()
-
-    if _has(panel, 'chk_basic'):
-        st.set_bool(SEC_VERBOSITY, "AnnounceBasicControls", panel.chk_basic.GetValue())
-        st.set_bool(SEC_VERBOSITY, "AnnounceBlockControls", panel.chk_block.GetValue())
-        st.set_bool(SEC_VERBOSITY, "AnnounceListPosition", panel.chk_list_pos.GetValue())
-        st.set_bool(SEC_VERBOSITY, "MenuItemCount", panel.chk_menu_count.GetValue())
-        st.set_bool(SEC_VERBOSITY, "MenuName", panel.chk_menu_name.GetValue())
-        st.set_bool(SEC_VERBOSITY, "MenuSounds", panel.chk_menu_sounds.GetValue())
-        st.set_bool(SEC_VERBOSITY, "ElementName", panel.chk_elem_name.GetValue())
-        st.set_bool(SEC_VERBOSITY, "ElementType", panel.chk_elem_type.GetValue())
-        st.set_bool(SEC_VERBOSITY, "ElementState", panel.chk_elem_state.GetValue())
-        st.set_bool(SEC_VERBOSITY, "ElementParameter", panel.chk_elem_param.GetValue())
-        st.set(SEC_VERBOSITY, "ToggleKeysMode",
-               AnnouncementMode.ALL[max(0, panel.cmb_toggle_keys.GetSelection())])
-
-    if _has(panel, 'chk_adv_nav'):
-        st.set_bool(SEC_NAVIGATION, "AdvancedNavigation", panel.chk_adv_nav.GetValue())
-        st.set_bool(SEC_NAVIGATION, "AnnounceControlTypesNavigation",
-                    panel.chk_nav_types.GetValue())
-        st.set_bool(SEC_NAVIGATION, "AnnounceHierarchyLevel", panel.chk_hierarchy.GetValue())
-        st.set(SEC_NAVIGATION, "WindowBoundsMode",
-               AnnouncementMode.ALL[max(0, panel.cmb_window_bounds.GetSelection())])
-        st.set_bool(SEC_NAVIGATION, "PhoneticInDial", panel.chk_phonetic_dial.GetValue())
-
-    if _has(panel, 'chk_dial_chars'):
-        st.set_bool(SEC_DIAL, "DialCharacters", panel.chk_dial_chars.GetValue())
-        st.set_bool(SEC_DIAL, "DialWords", panel.chk_dial_words.GetValue())
-        st.set_bool(SEC_DIAL, "DialButtons", panel.chk_dial_buttons.GetValue())
-        st.set_bool(SEC_DIAL, "DialHeadings", panel.chk_dial_headings.GetValue())
-        st.set_bool(SEC_DIAL, "DialVolume", panel.chk_dial_volume.GetValue())
-        st.set_bool(SEC_DIAL, "DialSpeed", panel.chk_dial_speed.GetValue())
-        st.set_bool(SEC_DIAL, "DialVoice", panel.chk_dial_voice.GetValue())
-        st.set_bool(SEC_DIAL, "DialSynthesizer", panel.chk_dial_synth.GetValue())
-        st.set_bool(SEC_DIAL, "DialImportantPlaces", panel.chk_dial_places.GetValue())
-
-    if _has(panel, 'chk_scan_mode'):
-        st.scan_mode = panel.chk_scan_mode.GetValue()
-        st.ai_ocr = panel.chk_ai_ocr.GetValue()
-        st.ai_ocr_labels = panel.chk_ai_ocr_labels.GetValue()
-        st.progress_mode = AnnouncementMode.ALL[
-            max(0, panel.cmb_progress.GetSelection())]
-
-    if _has(panel, 'chk_phonetic'):
-        st.phonetic_letters = panel.chk_phonetic.GetValue()
-        st.keyboard_echo = KeyboardEchoSetting.ALL[max(0, panel.cmb_echo.GetSelection())]
-        st.announce_text_bounds = panel.chk_text_bounds.GetValue()
+    for (section, key), (entry, ctrl) in getattr(panel, 'controls', {}).items():
+        try:
+            if (section, key) == ('General', 'Enabled'):
+                continue                           # written above
+            if entry.kind == 'bool':
+                st.set_bool(section, key, ctrl.GetValue())
+            elif entry.kind == 'range':
+                st.set_int(section, key, ctrl.GetValue())
+            elif entry.kind == 'text':
+                st.set(section, key, ctrl.GetValue())
+            elif entry.kind == 'braille_table':
+                tables = getattr(panel, '_braille_tables', [''])
+                at = ctrl.GetSelection()
+                st.set(section, key, tables[at] if 0 <= at < len(tables) else '')
+            elif entry.kind == 'choice':
+                values = [str(v) for v, _k in _schema.options(entry)]
+                at = ctrl.GetSelection()
+                if 0 <= at < len(values):
+                    st.set(section, key, values[at])
+        except Exception as e:
+            print(f"[TitanAccess] settings save {section}/{key}: {e}")
 
     if getattr(panel, 'cmb_scheme', None) is not None:
         try:
@@ -745,13 +611,6 @@ def save_panel(panel):
                 _ss.use(keys[at])
         except Exception:
             pass
-
-    if _has(panel, 'chk_braille'):
-        st.set_bool("Braille", "Enabled", panel.chk_braille.GetValue())
-        st.set_bool("Braille", "Viewer", panel.chk_braille_viewer.GetValue())
-        tables = getattr(panel, '_braille_tables', [''])
-        at = panel.cmb_braille_table.GetSelection()
-        st.set("Braille", "Table", tables[at] if 0 <= at < len(tables) else "")
 
     st.save()
     _apply_live(st)

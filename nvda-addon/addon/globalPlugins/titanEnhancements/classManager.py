@@ -826,9 +826,13 @@ def build():
             # synthesizer**, and the honest way to say so is to take the
             # control away rather than to accept the answer and ignore it.
             whole = bool((row or {}).get('whole'))
-            self.synth.Enable(whole)
+            # ...unless the reader underneath speaks the parts of an
+            # announcement in turn, each on its own synthesizer (Titan
+            # Access does; `classes.PARTS_MAY_NAME_SYNTH`).
+            may_synth = whole or classes.may_name_synth((row or {}).get('id'))
+            self.synth.Enable(may_synth)
             self._select(self.synth, self._synths,
-                         voice.get('synth') if whole else '')
+                         voice.get('synth') if may_synth else '')
             self._fill_voices(voice.get('voice') or '',
                               voice.get('variant') or '')
             self.note.SetLabel(self._note_for(row, whole))
@@ -885,6 +889,13 @@ def build():
                 # Translators: shown for a class that is a whole message.
                 return _('This is a whole message, so it may have a '
                          'synthesizer of its own.')
+            if classes.may_name_synth(row['id']):
+                # Translators: shown for a part of a control's reading in a
+                # reader that speaks the parts one after the other.
+                return _('This is part of a control\'s reading. This reader '
+                         'speaks the parts one after the other, so it may '
+                         'have a synthesizer of its own - the name in one '
+                         'voice, the type in another.')
             # Translators: shown for a class that is part of a control's
             # reading.
             return _('This is part of a control\'s reading, so it shares the '

@@ -242,6 +242,11 @@ class SettingsStore:
         return self._sections[section]
 
     def get(self, section, key, default=""):
+        if _overlay:
+            with _overlay_lock:
+                over = _overlay.get((section, key))
+            if over is not None:
+                return over
         with self._lock:
             sec = self._sections.get(section)
             if sec:
@@ -448,6 +453,29 @@ class SettingsStore:
 
 
 # --------------------------------------------------------------------------- #
+# A profile's overrides, laid over the file (see `profiles.py`)
+# --------------------------------------------------------------------------- #
+#: ``{(section, key): value}`` of the program in front, set by
+#: `profiles.activate` and read before the file by :meth:`SettingsStore.get`.
+#: The store itself knows nothing about programs - it only knows that a
+#: value may come from above the file.
+_overlay = {}
+_overlay_lock = threading.Lock()
+
+
+def set_overlay(values):
+    """Replace the overrides laid over every store. ``{}`` for none."""
+    global _overlay
+    with _overlay_lock:
+        _overlay = dict(values or {})
+
+
+def overlay():
+    with _overlay_lock:
+        return dict(_overlay)
+
+
+# --------------------------------------------------------------------------- #
 # Process-wide singleton
 # --------------------------------------------------------------------------- #
 _instance = None
@@ -461,3 +489,13 @@ def get_settings():
             if _instance is None:
                 _instance = SettingsStore()
     return _instance
+
+
+# The schema adds the defaults of every setting it describes (the new
+# sections, and any key the table above does not spell out). Imported last
+# so the names it needs from here exist; a schema that will not import
+# costs only its defaults, never the store.
+try:
+    from titan_access import settings_schema as _schema  # noqa: E402,F401
+except Exception as _schema_error:                       # pragma: no cover
+    print(f"[TitanAccess] settings schema unavailable: {_schema_error}")
