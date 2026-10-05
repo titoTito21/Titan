@@ -76,6 +76,20 @@ _state = {'on': False, 'session': '', 'name': '', 'screen': {},
           'menu': None, 'typing': None, 'field': None, 'letter': 0}
 
 
+
+def _real_word(kind, name, fallback):
+    """The word the reader says for a REAL control: ``kind`` is 'role' or
+    'state', ``name`` NVDA's enum name. A walked list must name a control
+    exactly as the reader names it in a real window; ``fallback`` is only
+    for a reader that has no word for it."""
+    try:
+        from . import elements
+        word = (elements.role_word(name) if kind == 'role'
+                else elements.state_word(name))
+    except Exception:                                # noqa: BLE001
+        word = ''
+    return word or fallback
+
 def report():
     with _LOCK:
         return {'reviewing': _state['on'], 'application': _state['name'],
@@ -885,8 +899,10 @@ def parts_of(control, at=0, count=0, inner=0):
     if word:
         parts.append((word, 'kind'))
     if kind in ('check',):
-        parts.append((_('checked') if control.get('value')
-                      else _('unchecked'), 'state'))
+        on = bool(control.get('value'))
+        parts.append((_real_word('state', 'CHECKED' if on else 'UNCHECKED',
+                                 _('checked') if on else _('unchecked')),
+                      'state'))
     rows = _inside(control)
     if rows:
         where = max(0, min(inner, len(rows) - 1))
@@ -903,8 +919,31 @@ def parts_of(control, at=0, count=0, inner=0):
     return parts
 
 
+#: A described control's kind (`src/app_ui/model.py`) as NVDA's role -
+#: the control the application really built - so it is named with the
+#: word the reader says for that control in a real window: an edit field
+#: is "edit field", not a word of this module's own.
+_KIND_ROLES = {'button': 'BUTTON', 'check': 'CHECKBOX', 'choice': 'COMBOBOX',
+               'list': 'LIST', 'table': 'TABLE', 'tree': 'TREEVIEW',
+               'text': 'EDITABLETEXT', 'multiline': 'EDITABLETEXT',
+               'slider': 'SLIDER', 'gauge': 'PROGRESSBAR',
+               'tabs': 'TABCONTROL'}
+
+
 def kind_word(kind):
-    """What a control IS, in the user's own language."""
+    """What a control IS - the reader's own word for the real one."""
+    role = _KIND_ROLES.get(str(kind or ''))
+    word = _real_word('role', role, '') if role else ''
+    if word:
+        if str(kind) == 'multiline':
+            # Translators: added after the kind of a field of several lines.
+            return '%s, %s' % (word, _('multi line'))
+        return word
+    return _own_kind_word(kind)
+
+
+def _own_kind_word(kind):
+    """The words used when the reader has none for the role."""
     return {
         # Translators: a kind of control in a Titan application.
         'button': _('button'),

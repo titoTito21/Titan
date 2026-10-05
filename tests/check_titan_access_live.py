@@ -77,7 +77,8 @@ class RecordingSpeech:
     def __init__(self, settings=None):
         pass
 
-    def speak(self, text, position=0.0, interrupt=True, pitch_offset=0):
+    def speak(self, text, position=0.0, interrupt=True, pitch_offset=0,
+              voice=None):
         said.append((round(time.time() - T0, 2), 'I' if interrupt else 'q',
                      text))
         print('SAY', said[-1], flush=True)
@@ -174,6 +175,46 @@ def open_program(name, wait=3.0):
     process = subprocess.Popen([os.path.join(os.environ.get('WINDIR', r'C:\Windows'), 'System32', name)])
     time.sleep(wait)
     return process
+
+
+def scenario_sharedkeys(engine, process=None):
+    """The NVDA add-on's keys in this reader: status, the two switches,
+    the screen review walked over the window in front, and Insert+Ctrl+S
+    (the dialog itself is not put up - it would take the user's
+    foreground - only that the key reaches it)."""
+    def gesture(name, ctrl=False, alt=False, shift=False):
+        return engine.on_modifier_gesture(0, name, ctrl, alt, shift,
+                                          with_modifier=True)
+    mark('Insert+Alt+T')
+    gesture('t', alt=True)
+    time.sleep(1.0)
+    for _ in range(2):
+        mark('Insert+Alt+P')
+        gesture('p', alt=True)
+        time.sleep(0.6)
+    for _ in range(2):
+        mark('Insert+Alt+N')
+        gesture('n', alt=True)
+        time.sleep(0.6)
+    mark('Insert+O')
+    gesture('o')
+    time.sleep(5.0)
+    for _ in range(2):
+        mark('Down')
+        plain(engine, 'down', 0x28)
+        time.sleep(0.6)
+    mark('Escape')
+    plain(engine, 'escape', 0x1B)
+    time.sleep(0.6)
+    from titan_access import speech_system_dialog
+    keep = speech_system_dialog._show
+    speech_system_dialog._show = lambda eng: mark('speech system dialog')
+    try:
+        mark('Insert+Ctrl+S')
+        print('ctrl+s handled:', gesture('s', ctrl=True), flush=True)
+        time.sleep(0.8)
+    finally:
+        speech_system_dialog._show = keep
 
 
 def scenario_menu(engine):
@@ -433,6 +474,7 @@ SCENARIOS = {
     'alttab': scenario_alttab, 'columns': scenario_columns,
     'vw': scenario_vw, 'palette': scenario_palette,
     'settings': scenario_settings, 'checkbox': scenario_checkbox,
+    'sharedkeys': scenario_sharedkeys,
 }
 
 

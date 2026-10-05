@@ -3630,6 +3630,18 @@ def _tcs_say(text, wait=False, interrupt=False, position=None, pitch=None,
     ends however it ends.
     """
     message = str(text)
+    # **A caller that brings its own voice is spoken in it.** A Titan
+    # Access script (`run_tcs_text(speak=...)`) is the reader talking, so
+    # `say` there is the reader's own voice - its engine, its queue, its
+    # position and pitch - not Titan's.
+    own = getattr(_tcs_running, 'speak', None)
+    if callable(own):
+        try:
+            own(message, interrupt=bool(interrupt), wait=bool(wait),
+                position=position, pitch=pitch)
+            return
+        except Exception:
+            pass
     speech = None
     positional = (position not in (None, 0.0)) or (pitch not in (None, 0))
     if interrupt or positional or rate is not None:
@@ -5387,7 +5399,8 @@ def _tcs_announce_problems(problems, announce):
             len(problems) - 1))
 
 
-def run_tcs_text(text, announce=True, base_dir='', title='', answer=None):
+def run_tcs_text(text, announce=True, base_dir='', title='', answer=None,
+                 variables=None, speak=None):
     """(ok, transcript). Runs a script that is already in memory.
 
     ``base_dir`` is the folder the script came from: the sounds and helper
@@ -5401,8 +5414,14 @@ def run_tcs_text(text, announce=True, base_dir='', title='', answer=None):
     which is the right thing to say to somebody who ran a macro and the
     wrong thing to hand an Elten application that asked Titan a question.
     A caller that does not pass one sees exactly what it always saw.
+
+    ``variables`` are set before the first line runs - what a Titan
+    Access script is told about the control it was started on - and
+    ``speak(text, interrupt, wait, position, pitch)`` is the voice `say`
+    uses (the reader's, for such a script).
     """
     _tcs_running.title = str(title or '')
+    _tcs_running.speak = speak
     program, errors = _ai_parse(text)
     if errors:
         problems = [e.describe() for e in errors]
@@ -5424,7 +5443,7 @@ def run_tcs_text(text, announce=True, base_dir='', title='', answer=None):
             _tcs_announce_problems(problems, announce)
             return False, problems
     transcript = []
-    variables = {}
+    variables = dict(variables or {})
     # 'prose' is the per-run translation cache: a pseudocode line inside a
     # repeat costs one request, not one per turn of the loop. 'chain' is the
     # scripts already running, so they cannot call each other in a circle.
@@ -5457,6 +5476,7 @@ def run_tcs_text(text, announce=True, base_dir='', title='', answer=None):
         # user's own voice comes back. A borrowed engine that outlived the
         # script would leave them listening to somebody else's choice.
         _tcs_voice_restore(budget)
+        _tcs_running.speak = None
 
 
 def run_tcs(script_path, title=''):

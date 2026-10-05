@@ -1004,6 +1004,53 @@ def _ocr_read_local(args):
             'ms': local_model.report().get('ms', 0.0)}
 
 
+def _ocr_windows_status(args):
+    """Whether WINDOWS' own recogniser answers here, and in which language.
+
+    Titan Access is not NVDA and has no `contentRecog`, so this is how it
+    reaches the recogniser every Windows 10 and 11 has built in."""
+    from src.ai.ocr import windows_ocr
+    ok, why = windows_ocr.available(force=bool(args.get('force')))
+    found = windows_ocr.report()
+    found.update({'ok': bool(ok), 'text': why})
+    return found
+
+
+def _ocr_read_windows(args):
+    """Read one window with Windows' own recogniser. Nothing leaves the
+    machine. Lines of WORDS, every rectangle in screen coordinates - the
+    capture alone knows its scale and origin, so it converts."""
+    from src.ai.ocr import capture as capture_module
+    from src.ai.ocr import windows_ocr
+    hwnd = int(args.get('hwnd') or 0)
+    with capture_module.full_resolution():
+        shot = (capture_module.capture_window(hwnd) if hwnd
+                else capture_module.capture_screen())
+    if shot is None or getattr(shot, 'blank', False):
+        return {'ok': False, 'lines': [],
+                'text': 'that window could not be photographed'}
+    ok, found = windows_ocr.read_png(getattr(shot, 'png', b''),
+                                     language=str(args.get('language') or ''))
+    if not ok:
+        return {'ok': False, 'lines': [], 'text': str(found)}
+    lines = []
+    for words in found:
+        line = []
+        for word in words:
+            rect = [word.get('left', 0), word.get('top', 0),
+                    word.get('width', 0), word.get('height', 0)]
+            where = shot.rect_to_screen(rect) \
+                if hasattr(shot, 'rect_to_screen') else rect
+            line.append({'text': str(word.get('text') or ''),
+                         'left': int(where[0]), 'top': int(where[1]),
+                         'width': int(where[2]), 'height': int(where[3])})
+        if line:
+            lines.append(line)
+    return {'ok': True, 'lines': lines,
+            'ms': windows_ocr.report().get('ms', 0.0),
+            'language': windows_ocr.report().get('language', '')}
+
+
 def _picture_of(shot):
     """The capture's PNG back as an ``(h, w, 3)`` array.
 
@@ -1159,6 +1206,7 @@ READ_ONLY = frozenset((
     # anywhere and costs nothing, so it is served like any other reading.
     # Installing it is a download and deliberately is NOT here.
     'ocr.model', 'ocr.read_local',
+    'ocr.windows', 'ocr.read_windows',
 ))
 
 
@@ -1267,6 +1315,8 @@ CALLS = {
     'ocr.model': _ocr_model_status,
     'ocr.install_model': _ocr_install_model,
     'ocr.read_local': _ocr_read_local,
+    'ocr.windows': _ocr_windows_status,
+    'ocr.read_windows': _ocr_read_windows,
     'ocr.overlay': _ocr_overlay,
     'ocr.overlay_show': _ocr_overlay_show,
     'ocr.overlay_refresh': _ocr_overlay_refresh,

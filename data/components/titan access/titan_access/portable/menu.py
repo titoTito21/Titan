@@ -182,7 +182,7 @@ def _run_command(name, *args):
     """
     try:
         from . import commands
-        what = getattr(commands, name, None)
+        what = commands.find(name)
     except ImportError as error:                     # noqa: BLE001
         return dialogs.report(_('This reader has not got that: {what}')
                               .format(what=error))

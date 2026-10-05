@@ -110,8 +110,11 @@ SCRIPT_OF = {
 GESTURE_OF = {
     'manager': 'readerManager', 'next_speech_scheme': 'speechScheme',
     'titan_window': 'titanWindow', 'titan_menu': 'titanMenu',
-    'read_locally': 'virtualWindow', 'status': 'readWindowTitle',
-    'speech_schemes': 'speechScheme',
+    'read_locally': 'readLocally', 'status': 'titanStatus',
+    'ocr_review': 'screenReview', 'where_am_i': 'whereAmI',
+    'describe_control': 'describeControl', 'label_control': 'labelControl',
+    'read_journal': 'journal', 'voice_classes': 'voiceClasses',
+    'draft_module': 'draftModule',
 }
 
 

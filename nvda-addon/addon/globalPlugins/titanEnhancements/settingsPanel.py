@@ -249,6 +249,12 @@ def _page():
            'installed in the guest.'), (
             # Translators: a setting in the Titan enhancements panel.
             ('guestCursor', _('Read what the pointer is on'), ''),
+            # Translators: a setting in the Titan enhancements panel - a
+            # Tkinter program, GTK on Windows or a game exposes nothing,
+            # and is read from its picture after each key instead.
+            ('drawnApps',
+             _('Read programs that draw their own controls (Tkinter, '
+               'games)'), ''),
             # Translators: a setting in the Titan enhancements panel. The
             # agent channel: something INSIDE the guest, or inside a game,
             # reporting what it sees - which is the only way to get real

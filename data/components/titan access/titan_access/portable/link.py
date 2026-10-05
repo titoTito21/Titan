@@ -38,6 +38,40 @@ def _text(value):
     return str(value or '').strip()
 
 
+def _own_calls():
+    """What Titan Access answers ITSELF, never asking Titan.
+
+    The reader's own features must not depend on which Titan it runs in:
+    a compiled Titan freezes `bridge_api` into Titan.exe while this
+    component is plain data beside it, so a newer reader asking an older
+    Titan for ``ocr.read_windows`` was answered "this Titan has no bridge
+    call" - and the screen review, the local reading and the picture
+    fallback all went silent. Reading the screen is the reader's job, so
+    the reader carries it (`titan_access.windows_ocr`,
+    `titan_access.local_model`), libraries and model files in its own
+    folder."""
+    from titan_access import local_model, windows_ocr
+    return {'ocr.windows': windows_ocr.call_windows,
+            'ocr.read_windows': windows_ocr.call_read_windows,
+            'ocr.model': local_model.call_model,
+            'ocr.install_model': local_model.call_install,
+            'ocr.read_local': local_model.call_read_local}
+
+
+def _answer_own(call, args):
+    """``(True, data)`` when this reader answers the call itself, else None."""
+    try:
+        handler = _own_calls().get(str(call or ''))
+    except Exception:                                # noqa: BLE001
+        return None
+    if handler is None:
+        return None
+    try:
+        return True, handler(dict(args or {}))
+    except Exception as error:                       # noqa: BLE001
+        return False, '%s: %s' % (type(error).__name__, error)
+
+
 class Link(object):
     """The add-on's ``Link``, with Titan in the same process."""
 
@@ -67,7 +101,19 @@ class Link(object):
         and there is none. Accepted rather than refused because the shared
         modules pass it, and a signature that differed between the two
         trees would stop them being one file.
+
+        A call this reader answers ITSELF (`_own_calls`) never reaches
+        Titan at all.
         """
+        own = _answer_own(call, args)
+        if own is not None:
+            with _LOCK:
+                _counted['calls'] += 1
+                if not own[0]:
+                    _counted['failed'] += 1
+            if not own[0]:
+                self.last_error = own[1]
+            return own
         try:
             from src.titan_core import bridge_api
         except Exception as error:                   # noqa: BLE001

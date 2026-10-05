@@ -10,15 +10,13 @@ very same file the standalone C# reader uses.
 
 Speech specifics
 ----------------
-Titan Access speaks **only** through Titan's own TTS layer
-(:mod:`src.titan_core.tce_speech`); the user's SAPI5 / OneCore synthesizers are
-not ported. So instead of the C# synthesizer picker we expose:
-
-* **Engine** - populated from :func:`tce_speech.get_available_engines`; the
-  selection is stored under ``Speech/Synthesizer`` and applied with
-  :func:`tce_speech.set_engine`.
-* **Voice** - populated from :func:`tce_speech.get_available_voices`; stored
-  under ``Speech/Voice``.
+* **Speech system / Synthesizer / Voice** - the three levels of
+  :mod:`titan_access.speech_systems`, the same ones the speech system dialog
+  (Insert+Ctrl+S), the walked settings, the settings ring and the TPad offer
+  (external NVDA add-on synthesizers included). Written through
+  ``speech_systems.settings_for`` into ``Speech/OwnVoice``,
+  ``Speech/Synthesizer``, ``Speech/Voice`` and
+  ``Speech/SpeechDispatcherModule``.
 * **Rate / Volume / Pitch** - numeric spinners passed straight through to the
   Titan engine.
 
@@ -30,6 +28,8 @@ Titan internals. :func:`register` no-ops when wxPython is unavailable.
 # --------------------------------------------------------------------------- #
 # Optional GUI / engine imports (keep this module importable headless)
 # --------------------------------------------------------------------------- #
+import threading
+
 try:
     import wx
     WX_AVAILABLE = True
@@ -83,37 +83,6 @@ def _tce_speech():
         return tce_speech
     except Exception:
         return None
-
-
-def _engine_ids():
-    tts = _tce_speech()
-    if tts is None:
-        return []
-    try:
-        return list(tts.get_available_engines() or [])
-    except Exception:
-        return []
-
-
-def _voice_entries():
-    """Return the current engine's voices as ``(display, id)`` pairs."""
-    tts = _tce_speech()
-    if tts is None:
-        return []
-    try:
-        voices = list(tts.get_available_voices() or [])
-    except Exception:
-        return []
-    pairs = []
-    for v in voices:
-        if isinstance(v, dict):
-            disp = v.get("display_name") or v.get("name") or v.get("id") or str(v)
-            vid = v.get("id") or v.get("name") or disp
-        else:
-            disp = str(v)
-            vid = str(v)
-        pairs.append((disp, vid))
-    return pairs
 
 
 def _apply_live(store):
@@ -307,55 +276,113 @@ def _build_speech(panel, scroller, s):
            0, wx.LEFT | wx.BOTTOM, 6)
     sp.Add(wx.StaticText(scroller, label=L("settings.speech.inheritNote")),
            0, wx.ALL, 6)
-    panel.chk_own_voice = _checkbox(scroller, sp, L("settings.speech.ownVoice"))
-    engines = _engine_ids()
-    panel._engine_ids = list(engines)
-    panel.cmb_engine = _choice_row(scroller, sp, L("settings.speech.engine"),
-                                   [str(e) for e in engines] or [L("settings.speech.noEngine")])
+    # **Speech system, synthesizer, voice** - the three levels of
+    # `speech_systems`, exactly as the speech system dialog
+    # (Insert+Ctrl+S), the walked settings and the TPad offer them. This
+    # page used to show Titan's flat engine list and fill the voices by
+    # SWITCHING the reader's own engine to the one being looked at, and
+    # had no NVDA add-on synthesizers at all.
+    from titan_access import speech_systems as _sys
+    panel._systems = list(_sys.systems())
+    panel.cmb_system = _choice_row(scroller, sp, L("settings.speech.system"),
+                                   [label for _k, label in panel._systems])
+    panel.cmb_synth = _choice_row(scroller, sp, L("settings.speech.engine"),
+                                  [])
+    panel._synth_ids = []
     panel.cmb_voice = _choice_row(scroller, sp, L("settings.speech.voice"), [])
     panel.voice_choice = panel.cmb_voice
     panel._voice_ids = []
+    panel._voice_ticket = [0]
     panel.spn_rate = _spin_row(scroller, sp, L("settings.speech.rate"), -10, 10)
     panel.spn_pitch = _spin_row(scroller, sp, L("settings.speech.pitch"), -10, 10)
     panel.spn_volume = _spin_row(scroller, sp, L("settings.speech.volume"), 0, 100)
 
-    def _engine_chosen(_evt):
-        _populate_voices_for(panel, _chosen_engine(panel), keep='')
-    panel.cmb_engine.Bind(wx.EVT_CHOICE, _engine_chosen)
+    def _system_chosen(_evt):
+        _fill_synths(panel, keep='')
+
+    def _synth_chosen(_evt):
+        _fill_voices(panel, keep='')
+    for ctrl, key in ((panel.cmb_system, 'OwnVoice'),
+                      (panel.cmb_synth, 'Synthesizer'),
+                      (panel.cmb_voice, 'Voice')):
+        try:
+            ctrl.SetToolTip(L('settings.help.Speech.%s' % key))
+        except Exception:
+            pass
+    panel.cmb_system.Bind(wx.EVT_CHOICE, _system_chosen)
+    panel.cmb_synth.Bind(wx.EVT_CHOICE, _synth_chosen)
 
 
-def _chosen_engine(panel):
-    at = panel.cmb_engine.GetSelection()
-    ids = getattr(panel, '_engine_ids', [])
+def _picked(choice, ids):
+    at = choice.GetSelection()
     return ids[at] if 0 <= at < len(ids) else ''
 
 
-def _populate_voices_for(panel, engine_id, keep=''):
-    """The voices of ONE engine, asked of the reader's private engine so the
-    shared one (Titan's apps and games) is never switched to list them."""
-    pairs = []
-    try:
-        tts = _tce_speech()
-        engine = tts.get_private_reader_engine() if tts else None
-        if engine is not None and engine_id:
-            engine.set_engine(engine_id)
-            for v in (engine.get_available_voices() or []):
-                if isinstance(v, dict):
-                    disp = v.get("display_name") or v.get("name") or v.get("id") or str(v)
-                else:
-                    disp = str(v)
-                pairs.append((disp, disp))
-    except Exception as e:
-        print(f"[TitanAccess] voices of {engine_id}: {e}")
+def _chosen_system(panel):
+    return _picked(panel.cmb_system, [k for k, _l in panel._systems])
+
+
+def _chosen_synth(panel):
+    return _picked(panel.cmb_synth, panel._synth_ids)
+
+
+def _fill_synths(panel, keep=''):
+    from titan_access import speech_systems as _sys
+    rows = _sys.synthesizers(_chosen_system(panel))
+    panel.cmb_synth.Clear()
+    panel._synth_ids = [key for key, _label in rows]
+    for _key, label in rows:
+        panel.cmb_synth.Append(label)
+    if keep in panel._synth_ids:
+        panel.cmb_synth.SetSelection(panel._synth_ids.index(keep))
+    elif panel._synth_ids:
+        panel.cmb_synth.SetSelection(0)
+    panel.cmb_synth.Enable(len(panel._synth_ids) > 1)
+    _fill_voices(panel, keep=getattr(panel, '_keep_voice', '') or '')
+    panel._keep_voice = ''
+
+
+def _fill_voices(panel, keep=''):
+    """The voices of the chosen synthesizer, read on a worker (SAPI is
+    COM, a Wine bridge is a process) and put in on the GUI thread - the
+    page never waits for them."""
+    from titan_access import speech_systems as _sys
+    synth = _chosen_synth(panel)
+    panel._voice_ticket[0] += 1
+    ticket = panel._voice_ticket[0]
     panel.cmb_voice.Clear()
     panel._voice_ids = []
-    for disp, vid in pairs:
-        panel.cmb_voice.Append(disp)
-        panel._voice_ids.append(vid)
-    if keep and keep in panel._voice_ids:
-        panel.cmb_voice.SetSelection(panel._voice_ids.index(keep))
-    elif panel._voice_ids:
-        panel.cmb_voice.SetSelection(0)
+    if not synth:
+        panel.cmb_voice.Enable(False)
+        return
+    panel.cmb_voice.Append(L("settings.speech.loadingVoices"))
+    panel.cmb_voice.SetSelection(0)
+
+    def read():
+        try:
+            rows = _sys.voices(synth)
+        except Exception as e:                       # noqa: BLE001
+            print(f"[TitanAccess] voices of {synth}: {e}")
+            rows = []
+
+        def put():
+            try:
+                if ticket != panel._voice_ticket[0] or not panel:
+                    return
+                panel.cmb_voice.Clear()
+                panel._voice_ids = [key for key, _label in rows]
+                for _key, label in rows:
+                    panel.cmb_voice.Append(label)
+                if keep in panel._voice_ids:
+                    panel.cmb_voice.SetSelection(panel._voice_ids.index(keep))
+                elif panel._voice_ids:
+                    panel.cmb_voice.SetSelection(0)
+                panel.cmb_voice.Enable(bool(panel._voice_ids))
+            except RuntimeError:
+                pass                                 # the page has gone
+        wx.CallAfter(put)
+    threading.Thread(target=read, name='TitanAccessVoices',
+                     daemon=True).start()
 
 
 def _build_generic(panel, scroller, s, sid):
@@ -456,7 +483,8 @@ SHARED_SWITCHES = (
     ("auditoryIcons", True), ("auditoryIconsEverywhere", False),
     ("soundScheme", True), ("dialogKinds", True), ("busyState", True),
     ("attentionState", True), ("liveStatusBars", True), ("monitors", True),
-    ("surfaceReading", False), ("guestCursor", False), ("agentLink", False),
+    ("surfaceReading", False), ("guestCursor", False), ("drawnApps", True),
+    ("agentLink", False),
     ("windowsSemantics", True), ("speakShortcuts", True),
     ("uiaNotifications", True),
 )
@@ -465,23 +493,6 @@ SHARED_SWITCHES = (
 _BUILDERS = {sid: (lambda p, sc, sz, which=sid: _build_generic(p, sc, sz, which))
              for sid in SECTIONS}
 _BUILDERS['speech'] = _build_speech
-
-
-def _populate_voices(panel, keep):
-    """(Re)fill the voice choice; try to keep selection ``keep`` (a voice id)."""
-    pairs = _voice_entries()
-    panel.voice_choice.Clear()
-    panel._voice_ids = []
-    for disp, vid in pairs:
-        panel.voice_choice.Append(disp)
-        panel._voice_ids.append(vid)
-    if keep:
-        for i, vid in enumerate(panel._voice_ids):
-            if str(vid) == str(keep) or pairs[i][0] == keep:
-                panel.voice_choice.SetSelection(i)
-                return
-    if panel._voice_ids:
-        panel.voice_choice.SetSelection(0)
 
 
 # --------------------------------------------------------------------------- #
@@ -514,17 +525,14 @@ def load_panel(panel):
         except Exception:
             panel.chk_enabled.SetValue(st.enabled)
 
-    if _has(panel, 'chk_own_voice'):
-        panel.chk_own_voice.SetValue(st.get_bool(SEC_SPEECH, "OwnVoice", False))
-        engine_id = str(st.get(SEC_SPEECH, "Synthesizer", "") or "")
-        ids = getattr(panel, '_engine_ids', [])
-        if engine_id in ids:
-            panel.cmb_engine.SetSelection(ids.index(engine_id))
-        elif ids:
-            panel.cmb_engine.SetSelection(0)
-        if panel.chk_own_voice.GetValue():
-            _populate_voices_for(panel, engine_id or _chosen_engine(panel),
-                                 keep=str(st.get(SEC_SPEECH, "Voice", "") or ""))
+    if _has(panel, 'cmb_system'):
+        from titan_access import speech_systems as _sys
+        system, synth, voice = _sys.current(st)
+        keys = [k for k, _l in panel._systems]
+        panel.cmb_system.SetSelection(keys.index(system) if system in keys
+                                      else 0)
+        panel._keep_voice = voice
+        _fill_synths(panel, keep=synth)
         panel.spn_rate.SetValue(st.get_int(SEC_SPEECH, "Rate", 0))
         panel.spn_pitch.SetValue(st.get_int(SEC_SPEECH, "Pitch", 0))
         panel.spn_volume.SetValue(st.get_int(SEC_SPEECH, "Volume", 100))
@@ -570,12 +578,21 @@ def save_panel(panel):
     if _has(panel, 'chk_enabled'):
         st.enabled = panel.chk_enabled.GetValue()
 
-    if _has(panel, 'chk_own_voice'):
-        st.set_bool(SEC_SPEECH, "OwnVoice", panel.chk_own_voice.GetValue())
-        st.set(SEC_SPEECH, "Synthesizer", _chosen_engine(panel))
-        at = panel.cmb_voice.GetSelection()
-        ids = getattr(panel, '_voice_ids', [])
-        st.set(SEC_SPEECH, "Voice", ids[at] if 0 <= at < len(ids) else "")
+    if _has(panel, 'cmb_system'):
+        from titan_access import speech_systems as _sys
+        system = _chosen_system(panel)
+        synth = _chosen_synth(panel)
+        voice = _picked(panel.cmb_voice, panel._voice_ids)
+        if not panel._voice_ids:
+            # The voices had not arrived: the voice already chosen stays.
+            now = _sys.current(st)
+            voice = now[2] if (now[0], now[1]) == (system, synth) else ''
+        for (section, key), value in _sys.settings_for(system, synth,
+                                                        voice).items():
+            if isinstance(value, bool):
+                st.set_bool(section, key, value)
+            else:
+                st.set(section, key, value)
         st.set_int(SEC_SPEECH, "Rate", panel.spn_rate.GetValue())
         st.set_int(SEC_SPEECH, "Pitch", panel.spn_pitch.GetValue())
         st.set_int(SEC_SPEECH, "Volume", panel.spn_volume.GetValue())

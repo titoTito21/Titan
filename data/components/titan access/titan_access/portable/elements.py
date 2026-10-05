@@ -62,6 +62,24 @@ def _state_word(name):
     return name.lower().replace('_', ' ')
 
 
+def role_word(name):
+    """The word this reader says for a REAL control of NVDA's role
+    ``name`` ('EDITABLETEXT', 'CHECKBOX'...), or '' - the add-on's own
+    ``elements.role_word``, answered out of Titan Access's catalogue."""
+    try:
+        from .. import nvda_shape
+        return nvda_shape._Named(str(name or '')).displayString or ''
+    except Exception:                                # noqa: BLE001
+        return ''
+
+
+def state_word(name):
+    """The word for NVDA's state ``name`` ('CHECKED', 'UNCHECKED'...)."""
+    if not name:
+        return ''
+    return _state_word(str(name))
+
+
 def _names_of(states):
     """The upper-case NAMES of an object's states, whatever they are."""
     out = []

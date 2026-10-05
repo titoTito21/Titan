@@ -28,6 +28,7 @@ from . import commands           # noqa: F401
 from . import dialog_kind        # noqa: F401
 from . import dialogs            # noqa: F401
 from . import draft              # noqa: F401
+from . import fieldWriter        # noqa: F401
 from . import findControl        # noqa: F401
 from . import gestures           # noqa: F401
 from . import iconNames          # noqa: F401
@@ -37,6 +38,7 @@ from . import labels             # noqa: F401
 from . import layers             # noqa: F401
 from . import localOcr           # noqa: F401
 from . import managerWalk        # noqa: F401
+from . import ocrReview          # noqa: F401
 from . import markers            # noqa: F401
 from . import menu               # noqa: F401
 from . import menuWalk           # noqa: F401
@@ -67,9 +69,9 @@ from . import windowsAndActions  # noqa: F401
 
 __all__ = [
     'anchors', 'appReview', 'appScreen', 'classes', 'commands',
-    'dialog_kind', 'dialogs', 'draft', 'findControl', 'gestures',
+    'dialog_kind', 'dialogs', 'draft', 'fieldWriter', 'findControl', 'gestures',
     'iconNames', 'icons', 'journal', 'labels', 'layers', 'localOcr',
-    'managerWalk', 'markers', 'menu', 'menuWalk', 'monitors',
+    'managerWalk', 'markers', 'menu', 'menuWalk', 'monitors', 'ocrReview',
     'palette', 'perProgram', 'procedures', 'sceneModel', 'schemes',
     'touchWalk', 'switchboard', 'touchRecognizer', 'states',
     'readerApi', 'guest', 'guestNative', 'vgaFont', 'vmware', 'drawnText',

@@ -303,7 +303,16 @@ class TheReadersSettingsAreWalked(unittest.TestCase):
             self.assertIn(key, walked)
 
     def test_every_section_is_a_row_and_opens(self):
-        ok, _said = self.walk.open_it(None)
+        # The program in front adds a row of its own (its profile), so the
+        # count would depend on what is on the machine's screen.
+        from titan_access import profiles
+        keep = (profiles.program_in_front, profiles.programs)
+        profiles.program_in_front = lambda: ''
+        profiles.programs = lambda: []
+        try:
+            ok, _said = self.walk.open_it(None)
+        finally:
+            profiles.program_in_front, profiles.programs = keep
         self.assertTrue(ok)
         title, rows, _at = self.shown[-1]
         self.assertEqual(len(rows), len(self.walk.SCHEMA))
@@ -326,7 +335,10 @@ class TheReadersSettingsAreWalked(unittest.TestCase):
         self.assertTrue(ok)
         self.assertFalse(self.store.get_bool('Verbosity', entry[1], True))
         self.assertEqual(said, row['label'])
-        self.assertTrue(said.endswith(self.walk.L('walk.off')))
+        # The word a real check box says when it is not ticked - the
+        # walked list names a control exactly as a real window does.
+        from titan_access import localization
+        self.assertTrue(said.endswith(localization.state_label('unchecked')))
         # In place: no new level was put up.
         self.assertEqual(len(self.shown), 1)
         # And it is on disk.

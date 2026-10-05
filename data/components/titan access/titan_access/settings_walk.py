@@ -40,7 +40,8 @@ _open = {'section': '', 'rows': [], 'at': 0}
 #: Read out of `settings_schema` - the one description of every setting -
 #: in the shape this walker has always used. Kinds: bool, choice (extra =
 #: callable or list answering [(value, label key)]), range (extra =
-#: (minimum, maximum, step)), text, engines, voices, scheme, braille_table.
+#: (minimum, maximum, step)), text, speech_system, synthesizer, voices,
+#: scheme, braille_table.
 from titan_access import settings_schema as _schema
 
 SCHEMA = _schema.as_walk_schema()
@@ -86,28 +87,22 @@ def _options(entry, engine=None):
             return [(key, label) for key, label in speechSchemes.names()]
         except Exception:                            # noqa: BLE001
             return []
-    if kind == 'engines':
+    if kind in _schema.SPEECH_LEVELS:
+        # **The same three levels as the speech system dialog**: the
+        # systems this machine has, the synthesizers of the CHOSEN system,
+        # the voices of the CHOSEN synthesizer - external (NVDA add-on)
+        # synthesizers among them. The walk used to offer Titan's flat
+        # engine list and the voices of whatever engine was speaking.
+        from . import speech_systems
+        system, synth, _voice = speech_systems.current(_speech_view())
         try:
-            from . import settings_panel
-            return [(str(one), str(one)) for one in settings_panel._engine_ids()]
+            if kind == 'speech_system':
+                return speech_systems.systems()
+            if kind == 'synthesizer':
+                return speech_systems.synthesizers(system)
+            return speech_systems.voices(synth) if synth else []
         except Exception:                            # noqa: BLE001
             return []
-    if kind == 'voices':
-        pairs = []
-        try:
-            speech = getattr(engine, 'speech', None)
-            voices = speech.get_voices() if speech is not None else []
-        except Exception:                            # noqa: BLE001
-            voices = []
-        for one in voices or []:
-            if isinstance(one, dict):
-                shown = one.get("display_name") or one.get("name") \
-                    or one.get("id") or str(one)
-                pairs.append((str(one.get("id") or one.get("name") or shown),
-                              str(shown)))
-            else:
-                pairs.append((str(one), str(one)))
-        return pairs
     if kind == 'braille_table':
         rows = [('', L('settings.braille.autoTable'))]
         try:
@@ -119,12 +114,90 @@ def _options(entry, engine=None):
     return []
 
 
+class _SpeechView(object):
+    """The Speech settings as they are in force while walking: a program's
+    profile over the store when a profile is being edited."""
+
+    def __init__(self, store, program):
+        self.store = store
+        self.program = program
+
+    def _kept(self, section, key):
+        if not self.program:
+            return None
+        try:
+            from titan_access import profiles
+            return profiles.get(self.program, section, key)
+        except Exception:                            # noqa: BLE001
+            return None
+
+    def get(self, section, key, default=None):
+        kept = self._kept(section, key)
+        return kept if kept is not None else self.store.get(section, key,
+                                                            default)
+
+    def get_bool(self, section, key, default=False):
+        kept = self._kept(section, key)
+        if kept is not None:
+            return str(kept).strip().lower() in ('true', '1', 'yes', 'tak')
+        return self.store.get_bool(section, key, default)
+
+
+def _speech_view(store=None):
+    return _SpeechView(store or _store(), _scope['program'])
+
+
+def _set_speech(entry, value, engine):
+    """One of the three speech levels chosen: the other two follow (a new
+    system takes its first synthesizer, a new synthesizer its first
+    voice), written as `speech_systems.settings_for` says - into the
+    program's profile while one is being edited."""
+    from . import speech_systems
+    kind = entry[3]
+    system, synth, voice = speech_systems.current(_speech_view())
+    value = str(value or '')
+    if kind == 'speech_system':
+        system, synth, voice = value, speech_systems.first_synth(value), ''
+    elif kind == 'synthesizer':
+        synth, voice = value, ''
+    else:
+        voice = value
+    wanted = speech_systems.settings_for(system, synth, voice)
+    program = _scope['program']
+    store = _store()
+    if program:
+        from titan_access import profiles
+        for (section, key), kept in wanted.items():
+            if isinstance(kept, bool):
+                kept = 'true' if kept else 'false'
+            profiles.override(program, section, key, str(kept))
+        with _LOCK:
+            _counted['changed'] += 1
+        if profiles.active() == program:
+            profiles.activate(program, force=True)
+            _apply(engine, 'speech')
+        return
+    for (section, key), kept in wanted.items():
+        if isinstance(kept, bool):
+            store.set_bool(section, key, kept)
+        else:
+            store.set(section, key, str(kept))
+    store.save()
+    with _LOCK:
+        _counted['changed'] += 1
+    _apply(engine, 'speech')
+
+
 def value_of(entry, store=None):
     """What the setting holds now, as the store keeps it - or, while a
     program's profile is being edited, what THAT profile says (the global
     value where the profile says nothing)."""
     store = store or _store()
     section, key, _label, kind, _extra, default = entry
+    if kind in _schema.SPEECH_LEVELS:
+        from . import speech_systems
+        now = speech_systems.current(_speech_view(store))
+        return now[_schema.SPEECH_LEVELS.index(kind)]
     program = _scope['program']
     if program and key:
         try:
@@ -168,8 +241,25 @@ def value_word(entry, value, engine=None):
     """The value as words: on/off, the option's label, the number."""
     kind = entry[3]
     if kind == 'bool':
-        return L('walk.on') if value else L('walk.off')
-    if kind in ('choice', 'scheme', 'engines', 'voices', 'braille_table'):
+        # The words the reader says for a REAL check box - the walked list
+        # and the settings page must name one control the same way.
+        from titan_access import localization
+        return localization.state_label('checked' if value else 'unchecked')
+    if kind == 'voices':
+        # Naming the voice must not wait for the synthesizer to list its
+        # voices (a Wine bridge is seconds): the list already known, else
+        # the voice's own id, and the list is read for next time.
+        from . import speech_systems
+        _system, synth, _voice = speech_systems.current(_speech_view())
+        rows = speech_systems.cached_voices(synth)
+        if rows is None:
+            speech_systems.prefetch_voices(synth)
+            rows = []
+        for known, label in rows:
+            if str(known) == str(value):
+                return label
+        return str(value or '') or L('walk.notSet')
+    if kind in ('choice', 'scheme', 'braille_table') + _schema.SPEECH_LEVELS:
         for known, label in _options(entry, engine):
             if str(known) == str(value):
                 return label
@@ -189,6 +279,9 @@ def set_value(entry, value, engine=None):
     """
     store = _store()
     section, key, _label, kind, _extra, _default = entry
+    if kind in _schema.SPEECH_LEVELS:
+        _set_speech(entry, value, engine)
+        return
     program = _scope['program']
     if program and key and (section, key) not in _schema.NEVER_IN_A_PROFILE:
         from titan_access import profiles
@@ -288,10 +381,18 @@ def _apply(engine, section):
 # The walk
 # --------------------------------------------------------------------------- #
 def _kind_word(kind):
-    return L({
-        'bool': 'walk.kind.checkBox', 'choice': 'walk.kind.choice',
-        'range': 'walk.kind.number', 'text': 'walk.kind.field',
-    }.get(kind, 'walk.kind.choice'))
+    """What a setting IS, in the word the reader says for the real control
+    the settings page builds for it: a `wx.CheckBox`, a `wx.Choice` (a
+    combo box), a `wx.SpinCtrl`, a `wx.TextCtrl` (an edit field). Its own
+    words ("field", "number") made the walked list name one control two
+    ways."""
+    from titan_access import localization
+    return localization.role_label({
+        'bool': 'checkbox', 'choice': 'combobox', 'braille_table': 'combobox',
+        'scheme': 'combobox', 'speech_system': 'combobox',
+        'synthesizer': 'combobox', 'voices': 'combobox',
+        'range': 'spinner', 'text': 'edit',
+    }.get(kind, 'combobox'))
 
 
 def _row_label(entry, engine=None):
@@ -427,7 +528,8 @@ def _change(engine, sid, entry, row):
         # Said in place: the level is not put up again, because that
         # would read the title on top of the answer.
         return True, row['label']
-    if kind in ('choice', 'range', 'scheme', 'engines', 'voices',
+    if kind in ('choice', 'range', 'scheme', 'speech_system', 'synthesizer',
+                'voices',
                 'braille_table'):
         options = _options(entry, engine)
         if not options:

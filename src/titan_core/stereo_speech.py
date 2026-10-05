@@ -1706,6 +1706,10 @@ class StereoSpeech:
         self.say_voice = None     # macOS say voice name
         self.say_rate = 175       # macOS say rate (WPM)
         self.spd_voice = None     # Linux spd-say voice name
+        # The speech-dispatcher OUTPUT MODULE (espeak-ng, festival, rhvoice,
+        # pico...) - speech-dispatcher's own word for a synthesizer. None
+        # is speech-dispatcher's default module.
+        self.spd_module = None
         self.spd_rate = 0         # Linux spd-say rate (-100 to 100)
         self._native_process = None  # Running native TTS subprocess
 
@@ -2424,6 +2428,8 @@ class StereoSpeech:
                 self._native_process.kill()
 
             cmd = [SPD_PATH]
+            if self.spd_module:
+                cmd.extend(['-o', self.spd_module])
             if self.spd_voice:
                 cmd.extend(['-y', self.spd_voice])
             if self.spd_rate != 0:
@@ -3758,8 +3764,11 @@ class StereoSpeech:
         if not SPD_AVAILABLE:
             return []
         try:
+            command = [SPD_PATH]
+            if self.spd_module:
+                command += ['-o', self.spd_module]
             result = subprocess.run(
-                [SPD_PATH, '-L'],
+                command + ['-L'],
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
@@ -3774,11 +3783,21 @@ class StereoSpeech:
                 line = line.strip()
                 if not line:
                     continue
-                # Format varies: "VOICE_NAME  LANGUAGE" or just "VOICE_NAME"
+                # Format varies: "VOICE_NAME  LANGUAGE" or just
+                # "VOICE_NAME"; newer speech-dispatchers print a header
+                # (NAME LANGUAGE VARIANT) and three columns, where the name
+                # may itself contain spaces - so the LAST two are the
+                # language and the variant, and the header is not a voice.
                 parts = line.split()
+                if not parts or parts[0] == 'NAME':
+                    continue
                 if parts:
-                    voice_name = parts[0]
-                    lang = parts[1] if len(parts) > 1 else ''
+                    if len(parts) >= 3:
+                        voice_name = ' '.join(parts[:-2])
+                        lang = parts[-2]
+                    else:
+                        voice_name = parts[0]
+                        lang = parts[1] if len(parts) > 1 else ''
                     display = f"{voice_name} ({lang})" if lang else voice_name
                     voices.append({
                         'id': voice_name,
@@ -3788,6 +3807,38 @@ class StereoSpeech:
         except Exception as e:
             print(f"[StereoSpeech] Error getting spd-say voices: {e}")
             return []
+
+    def get_spd_modules(self):
+        """speech-dispatcher's output modules - its synthesizers.
+
+        ``spd-say -O`` prints a header line and then one module per line.
+        Empty where speech-dispatcher is not installed."""
+        if not SPD_AVAILABLE:
+            return []
+        try:
+            result = subprocess.run([SPD_PATH, '-O'], capture_output=True,
+                                    text=True, encoding='utf-8',
+                                    errors='ignore', timeout=5)
+        except Exception as e:
+            print(f"[StereoSpeech] Error getting spd-say modules: {e}")
+            return []
+        if result.returncode != 0:
+            return []
+        modules = []
+        for line in result.stdout.splitlines():
+            name = line.strip()
+            if not name or name.upper() == 'OUTPUT MODULES' or ' ' in name:
+                continue
+            modules.append(name)
+        return modules
+
+    def set_spd_module(self, module):
+        """Choose speech-dispatcher's output module; '' for its default.
+        A voice belongs to its module, so the voice is forgotten."""
+        module = str(module or '').strip() or None
+        if module != self.spd_module:
+            self.spd_module = module
+            self.spd_voice = None
 
     def _get_all_sapi_voices(self):
         """Get ALL SAPI5 voices including 32-bit voices on 64-bit Windows.

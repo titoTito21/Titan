@@ -115,6 +115,35 @@ def _close_described_applications():
         pass
 
 
+def _altgr_character(gesture, shift=False):
+    """The character an AltGr key types in the foreground window's
+    keyboard layout, or ''. NVDA names the KEY ('control+alt+a'); what it
+    TYPES is the layout's business, and Windows says it."""
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        vk = int(getattr(gesture, 'vkCode', 0) or 0)
+        scan = int(getattr(gesture, 'scanCode', 0) or 0)
+        if not vk:
+            return ''
+        state = (ctypes.c_ubyte * 256)()
+        for key in (0x11, 0x12, 0xA2, 0xA5):          # Control, Alt, AltGr
+            state[key] = 0x80
+        if shift:
+            state[0x10] = 0x80
+        thread = user32.GetWindowThreadProcessId(user32.GetForegroundWindow(),
+                                                 None)
+        layout = user32.GetKeyboardLayout(thread)
+        buffer = ctypes.create_unicode_buffer(8)
+        count = user32.ToUnicodeEx(vk, scan, state, buffer, len(buffer), 0,
+                                   layout)
+        if count == 1 and buffer.value and buffer.value[0] >= ' ':
+            return buffer.value[0]
+    except Exception:                                # noqa: BLE001
+        pass
+    return ''
+
+
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
     scriptCategory = CATEGORY
 
@@ -660,11 +689,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._keep_guest_keys_right()
             return
         try:
+            key = str(getattr(gesture, 'mainKeyName', '') or '')
             if compat.core is not None:
                 compat.core.callLater(int(guest.SETTLE * 1000),
-                                      guest.after_key)
+                                      lambda: guest.after_key(key=key))
             else:
-                guest.after_key()
+                guest.after_key(key=key)
         except Exception:                            # noqa: BLE001
             pass
 
@@ -1273,6 +1303,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         for character in self.TYPING_CHARACTERS:
             wanted['kb:%s' % character] = 'virtualType'
             wanted['kb:shift+%s' % character] = 'virtualType'
+            # AltGr is Control+Alt to NVDA: on a Polish keyboard that is
+            # how ą, ę, ł, ż are typed, and a key the copy never hears is
+            # a letter the next write of the whole text takes away again.
+            wanted['kb:control+alt+%s' % character] = 'virtualType'
+            wanted['kb:control+alt+shift+%s' % character] = 'virtualType'
         for name in self.TYPING_KEYS:
             wanted['kb:%s' % name] = 'virtualType'
             wanted['kb:control+%s' % name] = 'virtualType'
@@ -1288,6 +1323,16 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._keep_virtual_keys_right()
             gesture.send()
             return
+        modifiers = [str(one).lower() for one in
+                     (getattr(gesture, 'modifierNames', None) or [])]
+        if 'control' in modifiers and 'alt' in modifiers:
+            character = _altgr_character(gesture, 'shift' in modifiers)
+            if character:
+                _ok, said = virtualWindow.type_character(character,
+                                                         gesture.send)
+                if said:
+                    dialogs.report(said)
+                return
         # **With the modifiers**, or Control and an arrow is a plain
         # arrow and Control and Backspace takes one character.
         _ok, said = virtualWindow.type_key(

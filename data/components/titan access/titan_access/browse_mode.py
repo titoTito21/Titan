@@ -174,6 +174,13 @@ class BrowseModeHandler:
         self._last_landmark = ""        # region last announced while arrowing
         self._scrolling = False
         self._scroll_target = None
+        # **The hybrid**: the document walked the way a virtual window is.
+        # `_depth` is the interaction layout's level - None or 'node' (the
+        # entries), 'region' (the landmarks), 'word', 'char' - and
+        # `_forms_by_key` says forms mode was entered with Enter or an arrow,
+        # so Escape is the way back out of it.
+        self._depth = None
+        self._forms_by_key = False
 
     # ==================================================================== #
     # Activation state
@@ -455,6 +462,14 @@ class BrowseModeHandler:
     # ==================================================================== #
     def handle_key(self, vk, key_name, ctrl, alt, shift) -> bool:
         """Handle a plain key in document mode. Return True to consume it."""
+        # **Escape leaves a forms mode that a key put the user in.** Enter on
+        # a field, or an arrow onto one, hands the keys to the page; Escape is
+        # how the document is walked again - NVDA's own way out of a focus
+        # mode it switched to by itself.
+        if self._pass_through and self._forms_by_key and key_name == "escape" \
+                and not ctrl and not alt:
+            self._leave_forms()
+            return True
         if self._pass_through or (not _UIA and not self._scan):
             return False
         # **Control+Alt+arrows move through a table's cells**, the keys every
@@ -488,6 +503,14 @@ class BrowseModeHandler:
             return False
 
         if key_name == "enter":
+            # **Enter on a field is "type here"** (`Browse/FormsModeOnEnter`):
+            # the field takes the keyboard and the keys are the page's until
+            # Escape. Everything else Enter presses, as before.
+            if self._enter_forms_wanted():
+                node = self._node_at_locked(self._index) if self._index >= 0 else None
+                if node is not None and getattr(node, "role", "") in _FOCUS_MODE_ROLES:
+                    self._dispatch(lambda: self._enter_forms(node))
+                    return True
             self._dispatch(self._activate_current)
             return True
         if key_name == "escape" and self._scan:
@@ -513,9 +536,40 @@ class BrowseModeHandler:
             if node is not None and getattr(node, "role", "") in _FOCUS_MODE_ROLES:
                 self._pass_through = True
                 self._manual_override = True
+                self._forms_by_key = True
                 self.engine.play(SND_CLICK)
                 self.engine.speak(L("browse.focusMode"))
                 return False
+        # **The arrows follow the layout the virtual window is in** - one
+        # setting for every walked thing (`walkLayout`, Numpad 4 and 6):
+        # simple (the document as read), screen (the entry above, below and
+        # beside by where it is on the page), interaction (Left and Right
+        # between siblings, Down into an entry, Up out of it).
+        layout = self._layout()
+        if vk in (_VK_UP, _VK_DOWN, _VK_LEFT, _VK_RIGHT):
+            delta = 1 if vk in (_VK_DOWN, _VK_RIGHT) else -1
+            vertical = vk in (_VK_UP, _VK_DOWN)
+            if layout == "screen":
+                if vertical:
+                    self._dispatch(lambda: self._move_screen(0, delta))
+                elif shift:
+                    self._dispatch(lambda: self._move_char(delta))
+                else:
+                    self._dispatch(lambda: self._move_screen(delta, 0))
+                return True
+            if layout == "interact":
+                if vertical:
+                    self._dispatch(self._interact_in if delta > 0 else self._interact_out)
+                elif shift:
+                    self._dispatch(lambda: self._move_char(delta))
+                else:
+                    self._dispatch(lambda: self._move_sibling(delta))
+                return True
+            if not vertical and shift:
+                # Shift+Left/Right in the simple layout: the entry beside,
+                # as the virtual window has it.
+                self._dispatch(lambda: self._move_screen(delta, 0))
+                return True
         if vk == _VK_UP:
             self._dispatch(lambda: self._move_line(-1))
             return True
@@ -553,6 +607,375 @@ class BrowseModeHandler:
         if qn_type == qn.QuickNavType.NONE:
             return False
         self._dispatch(lambda: self._quick_nav(qn_type, backward=shift))
+        return True
+
+    # ==================================================================== #
+    # The hybrid: the document walked as a virtual window
+    # ==================================================================== #
+    def handle_numpad(self, key_name, shift=False) -> bool:
+        """A NumPad key with NumLock off, in a document: 7/9/1/3 the corners
+        of the page as it is on the screen, 4/6 the layout, 8/2 up and down,
+        5 Enter - the virtual window's own keys, over the document."""
+        if self._pass_through or (not _UIA and not self._scan):
+            return False
+        name = str(key_name or "").lower()
+        if name in ("numpad4", "numpad6"):
+            self._dispatch(lambda: self._layout_cycle(1 if name == "numpad6" else -1))
+            return True
+        corners = {"numpad7": (-1, -1), "numpad9": (1, -1),
+                   "numpad1": (-1, 1), "numpad3": (1, 1)}
+        if name in corners:
+            dx, dy = corners[name]
+            self._dispatch(lambda: self._corner(dx, dy))
+            return True
+        if name in ("numpad8", "numpad2"):
+            return self.handle_key(_VK_UP if name == "numpad8" else _VK_DOWN,
+                                   "up" if name == "numpad8" else "down",
+                                   False, False, shift)
+        if name == "numpad5":
+            return self.handle_key(0x0D, "enter", False, False, shift)
+        return False
+
+    @staticmethod
+    def _layout() -> str:
+        try:
+            from .portable import virtualWindow
+            return str(virtualWindow.layout() or "linear")
+        except Exception:                            # noqa: BLE001
+            return "linear"
+
+    @staticmethod
+    def _walk_switch(name, default=True) -> bool:
+        """One of the walked lists' switches (`walkRowBeep`, `walkWrap`...)."""
+        try:
+            from .portable import switchboard
+            return bool(switchboard.read(name, default))
+        except Exception:                            # noqa: BLE001
+            return default
+
+    def _layout_cycle(self, delta) -> bool:
+        try:
+            from .portable import virtualWindow
+            _ok, said = virtualWindow.layout_cycle(delta)
+        except Exception:                            # noqa: BLE001
+            return False
+        with self._lock:
+            self._depth = None
+        if said:
+            self.engine.speak(str(said))
+        return True
+
+    def _enter_forms_wanted(self) -> bool:
+        return (not self._scan) and self._browse_setting("FormsModeOnEnter", True)
+
+    def _enter_forms(self, node) -> bool:
+        """The field takes the keyboard: focus it, keys to the page."""
+        try:
+            vbuf.focus_node(node)
+        except Exception:                            # noqa: BLE001
+            pass
+        self._pass_through = True
+        self._manual_override = True
+        self._forms_by_key = True
+        self.engine.play(SND_CLICK)
+        self.engine.speak(L("browse.focusMode"))
+        return True
+
+    def _leave_forms(self):
+        self._pass_through = False
+        self._manual_override = True
+        self._forms_by_key = False
+        self.engine.play(SND_CURSOR)
+        self.engine.speak(L("browse.browseMode"))
+
+    def _set_index(self, index):
+        with self._lock:
+            self._index = index
+            self._char_pos = 0
+
+    def _row_tone(self, index, count):
+        """The walked lists' tone for where the row is (`walkRowBeep`)."""
+        if not self._walk_switch("walkRowBeep", True):
+            return
+        try:
+            from .portable import palette
+            palette._beep(index, count)
+        except Exception:                            # noqa: BLE001
+            pass
+
+    def _nodes_with_rects(self):
+        nodes = self._nodes()
+        return [(i, n, n.rect) for i, n in enumerate(nodes)
+                if n.rect and len(n.rect) == 4 and n.rect[2] > n.rect[0]
+                and n.rect[3] > n.rect[1]]
+
+    def _edge_here(self):
+        self.engine.play(SND_EDGE)
+
+    def _move_screen(self, dx, dy) -> bool:
+        """The entry above, below or beside this one on the page itself."""
+        if not self._ensure_document():
+            return False
+        placed = self._nodes_with_rects()
+        current = self._node_at(self._index)
+        rect = getattr(current, "rect", ()) if current is not None else ()
+        if not placed or not rect or len(rect) != 4:
+            # No geometry to go by: the simple layout's step.
+            return self._move_line(dy if dy else dx)
+        left, top, right, bottom = rect
+        cx, cy = (left + right) / 2.0, (top + bottom) / 2.0
+        best, best_score = None, None
+        for index, _node, other in placed:
+            if index == self._index:
+                continue
+            ol, ot, orr, ob = other
+            ocx, ocy = (ol + orr) / 2.0, (ot + ob) / 2.0
+            if dy:
+                ahead = (ocy - cy) * dy
+                if ahead <= 0:
+                    continue
+                gap = (ot - bottom) if dy > 0 else (top - ob)
+                overlaps = ol < right and orr > left
+                score = (0 if overlaps else 1, max(gap, 0), abs(ocx - cx))
+            else:
+                same_line = ot < bottom and ob > top
+                if not same_line:
+                    continue
+                ahead = (ocx - cx) * dx
+                if ahead <= 0:
+                    continue
+                score = (ahead, abs(ocy - cy))
+            if best_score is None or score < best_score:
+                best, best_score = index, score
+        if best is None:
+            self._edge_here()
+            return True
+        self._set_index(best)
+        self._announce_node(self._nodes()[best])
+        return True
+
+    def _corner(self, dx, dy) -> bool:
+        """The entry in a corner of the page as shown: the viewport's corner
+        where the window's rectangle is known, the page's otherwise; the
+        entry's OWN corner is measured, a tie goes to the smaller."""
+        if not self._ensure_document():
+            return False
+        placed = self._nodes_with_rects()
+        if not placed:
+            self._edge_here()
+            return True
+        box = None
+        try:
+            hwnd = getattr(self._doc, "hwnd", 0) or 0
+            box = vbuf.window_rect(hwnd) if hwnd else None
+        except Exception:                            # noqa: BLE001
+            box = None
+        if not box or len(box) != 4 or box[2] <= box[0]:
+            box = (min(r[0] for _i, _n, r in placed), min(r[1] for _i, _n, r in placed),
+                   max(r[2] for _i, _n, r in placed), max(r[3] for _i, _n, r in placed))
+        left, top, right, bottom = box
+        cx = right if dx > 0 else left
+        cy = bottom if dy > 0 else top
+        best, best_score = None, None
+        for index, _node, (l, t, r, b) in placed:
+            if not (l < right and r > left and t < bottom and b > top):
+                continue
+            own_x = r if dx > 0 else l
+            own_y = b if dy > 0 else t
+            score = ((own_x - cx) ** 2 + (own_y - cy) ** 2, (r - l) * (b - t))
+            if best_score is None or score < best_score:
+                best, best_score = index, score
+        if best is None:
+            self._edge_here()
+            return True
+        self._set_index(best)
+        prefix = ""
+        try:
+            from .portable import virtualWindow, icons
+            prefix = str(virtualWindow.corner_name(dx, dy) or "")
+            icons.play("reader.corner")
+        except Exception:                            # noqa: BLE001
+            pass
+        node = self._nodes()[best]
+        segments = self._segments_for(node)
+        if prefix:
+            segments = [(prefix, _ROLE_PITCH)] + segments
+        self._scroll_later(node)
+        self.engine.speak_segments(segments)
+        return True
+
+    # -- the interaction layout ------------------------------------------ #
+    def _depth_now(self) -> str:
+        with self._lock:
+            return self._depth or "node"
+
+    def _words(self, node):
+        text = getattr(node, "text", "") or ""
+        starts = _word_starts(text)
+        return [text[a:b].strip() for a, b in zip(starts, starts[1:] + [len(text)])]
+
+    def _word_index(self, node) -> int:
+        starts = _word_starts(getattr(node, "text", "") or "")
+        at = 0
+        for i, start in enumerate(starts):
+            if start <= self._char_pos:
+                at = i
+        return at
+
+    def _region_of(self, node) -> str:
+        return getattr(node, "landmark", "") or ""
+
+    def _region_members(self, region):
+        return [i for i, n in enumerate(self._nodes()) if self._region_of(n) == region]
+
+    def _say_in(self, name, rest):
+        try:
+            from .portable import icons
+            icons.play("reader.interact-in")
+        except Exception:                            # noqa: BLE001
+            pass
+        self.engine.speak_segments([(L("browse.in", name), _ROLE_PITCH)] + list(rest))
+
+    def _say_out(self, name, rest):
+        try:
+            from .portable import icons
+            icons.play("reader.interact-out")
+        except Exception:                            # noqa: BLE001
+            pass
+        self.engine.speak_segments([(L("browse.out", name), _ROLE_PITCH)] + list(rest))
+
+    def _region_segments(self, region):
+        members = self._region_members(region)
+        name = region or L("browse.document")
+        return [(L("browse.region", name), _NAME_PITCH),
+                (L("browse.regionCount", len(members)), _ROLE_PITCH)]
+
+    def _interact_in(self) -> bool:
+        if not self._ensure_document():
+            return False
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        depth = self._depth_now()
+        if depth == "region":
+            members = self._region_members(self._region_of(node))
+            first = members[0] if members else self._index
+            self._set_index(first)
+            with self._lock:
+                self._depth = "node"
+            inner = self._nodes()[first]
+            self._say_in(self._region_of(node) or L("browse.document"),
+                         self._segments_for(inner))
+            return True
+        if depth == "node":
+            words = self._words(node)
+            if not words:
+                self._edge_here()
+                return True
+            with self._lock:
+                self._depth = "word"
+                self._char_pos = 0
+            self._say_in(node.text, [(words[0], _NAME_PITCH)])
+            return True
+        if depth == "word":
+            text = node.text or ""
+            if not text:
+                self._edge_here()
+                return True
+            starts = _word_starts(text)
+            at = self._word_index(node)
+            with self._lock:
+                self._depth = "char"
+                self._char_pos = starts[at] if starts else 0
+            word = self._words(node)[at] if self._words(node) else text
+            self._say_in(word, [(loc.character_announcement(text[self._char_pos],
+                                                              use_phonetic=False),
+                                 _NAME_PITCH)])
+            return True
+        self._edge_here()
+        return True
+
+    def _interact_out(self) -> bool:
+        if not self._ensure_document():
+            return False
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        depth = self._depth_now()
+        if depth == "char":
+            words = self._words(node)
+            at = self._word_index(node)
+            with self._lock:
+                self._depth = "word"
+            self._say_out(words[at] if at < len(words) else node.text,
+                          [(words[at] if at < len(words) else node.text, _NAME_PITCH)])
+            return True
+        if depth == "word":
+            with self._lock:
+                self._depth = "node"
+                self._char_pos = 0
+            self._say_out(node.text, self._segments_for(node))
+            return True
+        if depth == "node":
+            region = self._region_of(node)
+            if not any(self._region_of(n) for n in self._nodes()):
+                self._edge_here()
+                return True
+            members = self._region_members(region)
+            if members:
+                self._set_index(members[0])
+            with self._lock:
+                self._depth = "region"
+            self._say_out(region or L("browse.document"), self._region_segments(region))
+            return True
+        self._edge_here()
+        return True
+
+    def _move_sibling(self, delta) -> bool:
+        """Left and Right in the interaction layout: the next thing at the
+        level the cursor is on."""
+        if not self._ensure_document():
+            return False
+        node = self._node_at(self._index)
+        if node is None:
+            return False
+        depth = self._depth_now()
+        if depth == "char":
+            return self._move_char(delta)
+        if depth == "word":
+            words = self._words(node)
+            at = self._word_index(node) + delta
+            if at < 0 or at >= len(words):
+                self._edge_here()
+                return True
+            starts = _word_starts(node.text or "")
+            with self._lock:
+                self._char_pos = starts[at]
+            self.engine.speak(words[at])
+            return True
+        nodes = self._nodes()
+        if depth == "region":
+            regions = []
+            for i, n in enumerate(nodes):
+                r = self._region_of(n)
+                if not regions or regions[-1][0] != r:
+                    regions.append((r, i))
+            here = self._region_of(node)
+            at = next((k for k, (r, _i) in enumerate(regions) if r == here), 0) + delta
+            if at < 0 or at >= len(regions):
+                self._edge_here()
+                return True
+            region, first = regions[at]
+            self._set_index(first)
+            self.engine.speak_segments(self._region_segments(region))
+            return True
+        members = self._region_members(self._region_of(node))
+        at = members.index(self._index) + delta if self._index in members else -1
+        if at < 0 or at >= len(members):
+            self._edge_here()
+            return True
+        self._set_index(members[at])
+        self._announce_node(nodes[members[at]])
         return True
 
     def _dispatch(self, fn):
@@ -825,7 +1248,7 @@ class BrowseModeHandler:
         """Bounded BFS for the largest web ``DocumentControl`` under *window*."""
         from collections import deque
         best = None
-        best_area = 0
+        best_area = (-1, 0)
         queue = deque([(window, 0)])
         seen = 0
         while queue:
@@ -844,9 +1267,16 @@ class BrowseModeHandler:
                     if _ctype(child) == "DocumentControl":
                         fw = (child.FrameworkId or "").lower()
                         if not fw or fw in _WEB_FRAMEWORKS:
-                            area = _control_area(child)
-                            if area > best_area:
-                                best_area, best = area, child
+                            # **The page, not Edge's own shell.** Edge has
+                            # several DocumentControls of exactly the page's
+                            # size - its WebView shells, each holding one
+                            # empty NativeViewHost - and the first of equal
+                            # areas won, so a page opened without the focus
+                            # in it read as nothing. The page is the one
+                            # the render widget window hosts.
+                            score = (_hosted_by_renderer(node), _control_area(child))
+                            if score > best_area:
+                                best_area, best = score, child
                         continue
                 except Exception:
                     pass
@@ -886,18 +1316,29 @@ class BrowseModeHandler:
         nodes = self._nodes()
         with self._lock:
             new = self._index + delta
+        # Past the last entry round to the first, when the walked lists are
+        # set to (`walkWrap`); otherwise the edge, said.
+        wrap = self._walk_switch("walkWrap", False) and nodes
         if new < 0:
             if self._index <= 0:
-                self.engine.play(SND_EDGE)
-                self.engine.speak(L("browse.documentStart"))
-                return True
-            new = 0
+                if wrap:
+                    new = len(nodes) - 1
+                else:
+                    self.engine.play(SND_EDGE)
+                    self.engine.speak(L("browse.documentStart"))
+                    return True
+            else:
+                new = 0
         if new >= len(nodes):
             if self._index >= len(nodes) - 1:
-                self.engine.play(SND_EDGE)
-                self.engine.speak(L("browse.documentEnd"))
-                return True
-            new = len(nodes) - 1
+                if wrap:
+                    new = 0
+                else:
+                    self.engine.play(SND_EDGE)
+                    self.engine.speak(L("browse.documentEnd"))
+                    return True
+            else:
+                new = len(nodes) - 1
         with self._lock:
             self._index = new
             self._char_pos = 0
@@ -1034,6 +1475,9 @@ class BrowseModeHandler:
         roles = qn.roles_for(qn_type)
         if not roles:
             return False
+        # A heading that is a link is a link as well (K finds it).
+        if getattr(node, "link", False) and "link" in roles:
+            return True
         if node.role in roles:
             if qn_type == qn.QuickNavType.PARAGRAPH and not node.name:
                 return False
@@ -1409,6 +1853,12 @@ class BrowseModeHandler:
         else:
             self._scroll_later(node)
         self.engine.play(SND_CURSOR)
+        # The walked lists' row tone: high at the top of the page, low at
+        # the bottom - the same curve the virtual window and the palette use.
+        try:
+            self._row_tone(self._index, len(self._nodes()))
+        except Exception:                            # noqa: BLE001
+            pass
         self.engine.speak_segments(self._segments_for(node, qn_type))
 
     def _scroll_later(self, node):
@@ -1456,6 +1906,8 @@ class BrowseModeHandler:
             if self._report_wanted("heading"):
                 segments.append((L("quickNav.headingLevel", level) if level
                                  else L("quickNav.heading"), _ROLE_PITCH))
+            if getattr(node, "link", False) and self._report_wanted("link"):
+                segments.append((loc.role_label("link"), _ROLE_PITCH))
         elif node.role and node.role not in ("text", "unknown"):
             # A role's word is said unless the user turned that kind off
             # (`Browse/ReportLinks` and the rest); a table with no name is
@@ -1473,6 +1925,16 @@ class BrowseModeHandler:
         if node.size_of_set and node.pos_in_set and self._want_position():
             segments.append((L("element.positionOf", node.pos_in_set,
                                node.size_of_set), _NAME_PITCH))
+        # Where in the DOCUMENT the entry is ("12 of 340"), as a walked
+        # list says its row - off by default, a page being long.
+        if self._browse_setting("SayDocumentPosition", False):
+            try:
+                count = len(self._nodes())
+                if count and 0 <= self._index < count:
+                    segments.append((L("browse.position", self._index + 1, count),
+                                     _NAME_PITCH))
+            except Exception:                        # noqa: BLE001
+                pass
         if not segments:
             segments = [(L("browse.emptyLine"), _NAME_PITCH)]
         return segments
@@ -1541,6 +2003,19 @@ def _foreground_pid() -> int:
 # Brief cache so the EnumChildWindows walk below does not run on every key /
 # focus event. Keyed by foreground hwnd; (hwnd, time, result).
 _web_doc_cache = (0, 0.0, False)
+
+
+#: The window classes a browser renders a PAGE into.
+_RENDER_HOSTS = ("Chrome_RenderWidgetHostHWND", "MozillaWindowClass",
+                 "Internet Explorer_Server")
+
+
+def _hosted_by_renderer(parent) -> int:
+    """1 when ``parent`` is the window a browser renders the page in."""
+    try:
+        return 1 if (parent.ClassName or "") in _RENDER_HOSTS else 0
+    except Exception:
+        return 0
 
 
 def _foreground_hosts_web_document() -> bool:

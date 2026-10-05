@@ -43,6 +43,7 @@ import threading
 import time
 
 from . import i18n
+from . import switchboard
 
 _ = i18n.install(globals())
 
@@ -531,7 +532,17 @@ def consider(obj):
     from . import surface
     with _LOCK:
         _counted['asked'] = _counted.get('asked', 0) + 1
-    if not wanted():
+    # **A program that draws its own controls is followed by default**
+    # (`drawnApps`): a Tkinter window before Tk 9.1, GTK on Windows, a
+    # game - each a picture to every accessibility API, so without this
+    # the reader is silent in them. A virtual machine still waits for its
+    # own switch, because following a guest is a bigger thing to do.
+    try:
+        own_drawing = surface.drawn_by_toolkit(obj) and \
+            switchboard.read('drawnApps', True)
+    except Exception:                                # noqa: BLE001
+        own_drawing = False
+    if not (wanted() or own_drawing):
         _refused('the setting is off')
         return False
     try:
@@ -551,20 +562,21 @@ def consider(obj):
     except Exception as error:                       # noqa: BLE001
         _refused('%s: %s' % (type(error).__name__, error))
         return False
-    ok, _said = enter(obj)
+    ok, _said = enter(obj, allowed=True) if own_drawing and not wanted() \
+        else enter(obj)
     if not ok:
         _refused('its screen could not be found')
     return ok
 
 
-def enter(obj, product='', say=True):
+def enter(obj, product='', say=True, allowed=False):
     """Start following the pointer on this guest's screen.
 
     ``(ok, said)``. False when this is not a guest's window or the user
     has not asked for it.
     """
     global _watcher
-    if not wanted():
+    if not (wanted() or allowed):
         return False, ''
     where, hwnd = display_of(obj)
     if not hwnd:
@@ -882,16 +894,30 @@ def changed_in(reading, hwnd):
 CHANGED_AT_MOST = 3
 
 
-def after_key(say=True):
+def after_key(say=True, key=''):
     """A navigation key was pressed: say what it moved onto.
 
     ``(ok, said)``. Silence is the commonest answer and the right one:
-    an arrow inside a field moves a caret and no rows.
+    an arrow inside a field moves a caret and no rows - unless the program
+    shows a CARET, which is the one thing a drawn text field tells Windows
+    (Tk sets it for every entry and text widget, `Tk_SetCaretPos`, so that
+    Magnifier can follow it): then the key is read at the caret.
     """
     with _LOCK:
         hwnd = _state['hwnd']
     if not hwnd:
         return False, ''
+    key = CARET_KEY_NAMES.get(_text(key).lower(), _text(key).lower())
+    if key in CARET_KEYS:
+        caret = caret_rect()
+        if caret is not None:
+            said = at_the_caret(hwnd, caret, key)
+            if said and say:
+                _say(said)
+            if said:
+                with _LOCK:
+                    _counted['caret'] = _counted.get('caret', 0) + 1
+                return True, said
     with _LOCK:
         _counted['keys'] = _counted.get('keys', 0) + 1
     # **What the key CHANGED, first.** A guest is a screen, not a list:
@@ -982,6 +1008,103 @@ BIGGEST_CHANGE = 220
 #: guest can be 640x480 or a maximised 2358x1285, and the cost of looking
 #: has to be the same on both - this runs several times a second.
 BLOCKS_ACROSS = 60
+
+
+#: The keys that move a caret, by every name the two readers use.
+CARET_KEYS = frozenset({'left', 'right', 'up', 'down', 'home', 'end'})
+CARET_KEY_NAMES = {'leftarrow': 'left', 'rightarrow': 'right',
+                   'uparrow': 'up', 'downarrow': 'down'}
+
+
+def caret_rect():
+    """The foreground program's caret in SCREEN pixels, or None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class GUITHREADINFO(ctypes.Structure):
+            _fields_ = [('cbSize', wintypes.DWORD),
+                        ('flags', wintypes.DWORD),
+                        ('hwndActive', wintypes.HWND),
+                        ('hwndFocus', wintypes.HWND),
+                        ('hwndCapture', wintypes.HWND),
+                        ('hwndMenuOwner', wintypes.HWND),
+                        ('hwndMoveSize', wintypes.HWND),
+                        ('hwndCaret', wintypes.HWND),
+                        ('rcCaret', wintypes.RECT)]
+
+        user32 = ctypes.windll.user32
+        front = user32.GetForegroundWindow()
+        thread = user32.GetWindowThreadProcessId(front, None)
+        info = GUITHREADINFO()
+        info.cbSize = ctypes.sizeof(GUITHREADINFO)
+        if not user32.GetGUIThreadInfo(thread, ctypes.byref(info)) \
+                or not info.hwndCaret:
+            return None
+        corner = wintypes.POINT(info.rcCaret.left, info.rcCaret.top)
+        user32.ClientToScreen(info.hwndCaret, ctypes.byref(corner))
+        height = max(1, info.rcCaret.bottom - info.rcCaret.top)
+        return corner.x, corner.y, height
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+#: How tall a strip round the caret is read. A caret Tk sets has NO
+#: height (`CreateCaret(hwnd, NULL, 0, 0)`), so its line is found by
+#: reading a band and taking the line nearest it.
+CARET_BAND = 40
+
+
+def at_the_caret(hwnd, caret, key):
+    """What the key moved onto in a drawn text field: the character at
+    the caret for Left and Right, the line for the rest. ``''`` when the
+    picture says nothing there."""
+    from . import localOcr
+    x, y, height = caret
+    rect = _rect_of(hwnd)
+    if rect is None:
+        return ''
+    left, top, right, bottom = rect
+    # **Tk's caret has no height** - it is created at the TOP of the line
+    # with `CreateCaret(hwnd, NULL, 0, 0)` - so the band reaches mostly
+    # BELOW it; centred on it, the band cut every letter in half.
+    tall = max(int(height), CARET_BAND // 2)
+    middle = y + tall // 2
+    band_top = max(top, y - CARET_BAND // 4)
+    band = (left, band_top, right - left,
+            max(4, min(tall + CARET_BAND // 2, bottom - band_top)))
+    try:
+        reading = localOcr.read(*band, hwnd=hwnd)
+    except Exception:                                # noqa: BLE001
+        reading = None
+    lines = list(getattr(reading, 'lines', None) or [])
+    if not lines:
+        return ''
+    line = min(lines, key=lambda words: abs(
+        words[0].get('top', 0) + words[0].get('height', 0) / 2.0 - middle))
+    if key not in ('left', 'right'):
+        return _text(' '.join(_text(word.get('text')) for word in line))
+    return _character_at(line, x)
+
+
+def _character_at(line, x):
+    """The character a caret at screen x stands before, from the words'
+    rectangles - a word's letters are taken as equally wide, which is the
+    best a picture says about where one letter ends."""
+    for word in line:
+        text = _text(word.get('text'))
+        start = int(word.get('left', 0))
+        width = int(word.get('width', 0))
+        if not text or width <= 0:
+            continue
+        if x < start:
+            # Translators: what is at the caret in a drawn field.
+            return _('space')
+        if x < start + width:
+            index = int((x - start) * len(text) / float(width))
+            return text[max(0, min(index, len(text) - 1))]
+    # Translators: the caret is after the last character of a drawn field.
+    return _('end')
 
 
 def _block_for(width):

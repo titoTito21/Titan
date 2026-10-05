@@ -216,6 +216,10 @@ class VNode:
     # "navigation, group" on the way into every one of them.
     landmark: str = ""
     landmark_start: bool = False
+    # A heading that IS a link (``<h3><a>..</a></h3>``): one line, as NVDA
+    # reads it - "General Game Discussion, heading level 3, link" - which
+    # quick navigation finds with H and with K, and Enter follows.
+    link: bool = False
 
     @property
     def text(self) -> str:
@@ -226,7 +230,11 @@ class VNode:
 
     @property
     def is_heading(self) -> bool:
-        return self.role == C.ROLE_HEADING or self.level > 0
+        # **The role, not the level.** Chromium gives a list item, a tree
+        # item and a row an aria-level too, and "a level means a heading"
+        # announced every menu entry of a page as "heading level 1" and made
+        # H land on them.
+        return self.role == C.ROLE_HEADING
 
     @property
     def centre(self):
@@ -447,12 +455,145 @@ def build_uia_cached(root, deadline=None, web=False) -> List[VNode]:
             nodes.append(node)
     if web:
         nodes = _flatten_web(uc, elements, nodes)
+        nodes = merge_web_containers(nodes)
     return nodes
+
+
+#: Containers whose own line is only their contents said again: in a page
+#: the list item, the cell and the paragraph are not lines of their own.
+_GIVES_WAY = (C.ROLE_LISTITEM, C.ROLE_GRIDITEM, C.ROLE_TEXT, C.ROLE_UNKNOWN,
+              C.ROLE_TREEITEM, "cell")
+#: Controls that ARE what they contain: their text children are their label.
+_ABSORBS = (C.ROLE_LINK, C.ROLE_BUTTON, C.ROLE_MENUITEM, C.ROLE_TAB,
+            C.ROLE_CHECKBOX, C.ROLE_RADIO)
+
+
+def _squash(text) -> str:
+    return "".join(str(text or "").split()).lower()
+
+
+def _inside(outer, inner) -> bool:
+    if not outer or not inner or len(outer) != 4 or len(inner) != 4:
+        return False
+    if outer[2] <= outer[0] or outer[3] <= outer[1]:
+        return False
+    return _encloses(outer, inner)
+
+
+def _contents_of(nodes, index):
+    """The entries right after ``nodes[index]`` that make up its text: the
+    shortest run of descendants (inside its rectangle, in tree order) whose
+    words together ARE its words. ``[]`` when they are not."""
+    node = nodes[index]
+    wanted = _squash(node.name)
+    if not wanted:
+        return []
+    run, said = [], ""
+    for other in nodes[index + 1:]:
+        if not _inside(node.rect, other.rect):
+            break
+        run.append(other)
+        said += _squash(other.name or other.value)
+        if said == wanted:
+            return run
+        if not wanted.startswith(said):
+            return []
+    return []
+
+
+def merge_web_containers(nodes):
+    """One line where a page has one thing, not two.
+
+    Chromium names a container after its contents, so a heading holding a
+    link, a list item holding a link or a number, and a link holding a
+    span all came out as two lines with the same words ("General Game
+    Discussion, heading level 3" and then "General Game Discussion, link").
+    NVDA reads each of them once, and so does this:
+
+    * a list item, a cell, a paragraph give way to their contents, which
+      take over the item's place in its list ("1 of 8");
+    * a heading keeps its line; if what it holds is a link, the heading IS
+      that link (``link``), and pressing it presses the link;
+    * a link, a button, a menu item absorb the text inside them.
+    """
+    nodes = _drop_echoed_labels(nodes)
+    out = []
+    skip = set()
+    for index, node in enumerate(nodes):
+        if index in skip:
+            continue
+        inner = _contents_of(nodes, index)
+        if not inner:
+            out.append(node)
+            continue
+        if node.role == C.ROLE_HEADING:
+            links = [one for one in inner if one.role == C.ROLE_LINK]
+            if links:
+                node.link = True
+                node.raw = links[0].raw or node.raw
+                node.element = links[0].element or node.element
+                node.states = tuple(dict.fromkeys(
+                    tuple(node.states) + tuple(links[0].states)))
+            skip.update(range(index + 1, index + 1 + len(inner)))
+            out.append(node)
+        elif node.role in _ABSORBS:
+            skip.update(range(index + 1, index + 1 + len(inner)))
+            out.append(node)
+        elif node.role in _GIVES_WAY:
+            first = inner[0]
+            if node.pos_in_set and not first.pos_in_set:
+                first.pos_in_set = node.pos_in_set
+                first.size_of_set = node.size_of_set
+            if node.landmark_start and not first.landmark_start:
+                first.landmark_start = True
+                first.landmark = first.landmark or node.landmark
+        else:
+            out.append(node)
+    return _drop_echoed_labels(out)
+
+
+#: Controls a page labels with a separate <label> element: the label's text
+#: is already the control's name.
+_LABELLED = (C.ROLE_EDIT, C.ROLE_CHECKBOX, C.ROLE_RADIO, C.ROLE_COMBOBOX,
+             C.ROLE_BUTTON, C.ROLE_SLIDER, C.ROLE_SPINNER, C.ROLE_LINK,
+             C.ROLE_LISTBOX, "password")
+
+
+def _drop_echoed_labels(nodes):
+    """A label's own line beside the control it names, dropped.
+
+    ``<label for=x>Szukaj:</label><input id=x>`` is a text line "Szukaj:"
+    and an edit field NAMED "Szukaj:"; a radio button and its label are
+    "Mały" twice. The control says the words, so the text beside it with
+    exactly those words is the duplicate."""
+    keep = []
+    for index, node in enumerate(nodes):
+        if node.role == C.ROLE_TEXT and node.name:
+            words = _squash(node.name)
+            near = [nodes[i] for i in (index - 1, index + 1)
+                    if 0 <= i < len(nodes)]
+            if any(other.role in _LABELLED and _squash(other.name) == words
+                   for other in near):
+                continue
+            # A table's caption is the table's name: said with the table,
+            # not again as the first line inside it.
+            if index and nodes[index - 1].role in (C.ROLE_TABLE, C.ROLE_GRID) \
+                    and _squash(nodes[index - 1].name) == words \
+                    and _inside(nodes[index - 1].rect, node.rect):
+                continue
+        keep.append(node)
+    return keep
 
 
 def _node_from_cached(uc, cached, web):
     """One buffer entry from a cached element, or None to skip it."""
-    if uc.flag(cached, uc.IS_OFFSCREEN, False):
+    # **A page is the whole page, not the part on the screen.** Chromium
+    # marks everything outside the viewport IsOffscreen - and every
+    # "visually hidden" text a page writes FOR screen readers - so dropping
+    # off-screen elements left a web document holding only what happened
+    # to be scrolled into view (nothing at all on some pages). NVDA's buffer
+    # is the whole page; an application's scan mode still skips them.
+    if not web and uc.flag(cached, uc.IS_OFFSCREEN, False):
         return None
     ctid = uc.get(cached, uc.CONTROL_TYPE, 0)
     try:
@@ -589,7 +730,7 @@ def _build_uia_walk(root, deadline=None, web=False) -> List[VNode]:
         if deadline and time.time() > deadline:
             break
         try:
-            if pres.presentation_type(control) == pres.UNAVAILABLE:
+            if not web and pres.presentation_type(control) == pres.UNAVAILABLE:
                 continue
             ctype = control.ControlTypeName or ""
             name = (control.Name or "").strip()
@@ -621,6 +762,8 @@ def _build_uia_walk(root, deadline=None, web=False) -> List[VNode]:
         nodes.append(node)
         if len(nodes) >= MAX_NODES:
             break
+    if web:
+        nodes = merge_web_containers(nodes)
     return nodes
 
 

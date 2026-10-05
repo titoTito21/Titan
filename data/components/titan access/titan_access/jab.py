@@ -202,6 +202,10 @@ def _declare(dll):
     dll.doAccessibleActions.restype = wintypes.BOOL
     dll.requestFocus.argtypes = [VMID, JOBJECT64]
     dll.requestFocus.restype = wintypes.BOOL
+    # Java 7u6+ only; an older bridge simply has no way to write a field.
+    if hasattr(dll, 'setTextContents'):
+        dll.setTextContents.argtypes = [VMID, JOBJECT64, ctypes.c_wchar_p]
+        dll.setTextContents.restype = wintypes.BOOL
 
 
 def available():
@@ -299,6 +303,18 @@ class Context:
             return str(buffer.value or '')
         except Exception:                            # noqa: BLE001
             return ''
+
+    def set_text(self, text):
+        """Replace an editable text's whole contents. True when Java took
+        it - `setTextContents`, which a read-only component refuses."""
+        dll = _state['dll']
+        if dll is None or not hasattr(dll, 'setTextContents'):
+            return False
+        try:
+            return bool(dll.setTextContents(self.vmid, self.handle,
+                                            str(text or '')))
+        except Exception:                            # noqa: BLE001
+            return False
 
     def press(self):
         """The control's first accessible action, or focus it."""

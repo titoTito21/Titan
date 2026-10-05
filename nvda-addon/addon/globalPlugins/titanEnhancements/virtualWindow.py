@@ -132,7 +132,7 @@ def typing_mode():
         return bool(_state['on'] and _state['typing'])
 
 
-def enter_typing():
+def enter_typing(clicked=False):
     """Type into the row the cursor is on. ``(ok, said)``.
 
     **This is a mode of the VIRTUAL WINDOW**, not a hand-over to whatever
@@ -164,7 +164,7 @@ def enter_typing():
         if not ok:
             # Translators: said when a field could not be typed into.
             return False, _('This cannot be typed into')
-    else:
+    elif not clicked:
         # A row off a picture. Clicking is how the caret gets there, and
         # it is the same click Enter would make - so a window that
         # answers a click answers this, and one that does not was never
@@ -178,11 +178,46 @@ def enter_typing():
     # window's controls are, which is what "the edit field IS a virtual
     # window" means.
     from . import textField
+    from . import readerApi
+    # **How the real control will be written** - decided once, by its
+    # toolkit (`fieldWriter.PLANS`): a provider writes the whole text
+    # after every change; 'keys' passes the user's own keys on to the
+    # real control, which is focused for them. A row read off a picture
+    # has no control, so its keys go to the guest.
+    writer = readerApi.field_mode(obj) if obj is not None else 'keys'
+    start = readerApi.field_text(obj) if obj is not None else None
+    if start is None:
+        start = _value_of(node)
+    if obj is None and not start:
+        # A row off a picture: the words that were READ are the best copy
+        # there is of what the field holds - without them the copy starts
+        # empty while the real field does not, and the first letter goes
+        # in at a different place in each.
+        start = _text(node.get('name'))
+    multiline = _is_multiline(node) or '\n' in start
     with _LOCK:
         _state['typing'] = True
+        _state['writer'] = writer
         _state['field'] = textField.Field(
-            text=_value_of(node), multiline=_is_multiline(node),
-            readonly=False)
+            text=start, multiline=multiline, readonly=False)
+    if writer == 'keys':
+        # The real control must HAVE the keyboard for the keys passed on
+        # to reach it - the list's own window steps aside until the field
+        # is left.
+        try:
+            from . import hostWindow
+            hostWindow.lend()
+        except Exception:                            # noqa: BLE001
+            pass
+    if writer == 'keys':
+        # The copy and the control must have their caret in one place:
+        # both go to the end, which is where somebody about to type
+        # expects to be.
+        readerApi.send_key('control+end' if multiline else 'end')
+        try:
+            _state['field'].end(whole=True)
+        except Exception:                            # noqa: BLE001
+            pass
     icons.play('open-object')
     # Translators: said when the virtual window hands the keyboard to a
     # field. The pair has to be symmetrical with 'Edit field off'.
@@ -269,13 +304,53 @@ def type_key(name, send):
         except Exception:                            # noqa: BLE001
             pass
         return True, ''
+    return _after_edit(found, was, what, said, send)
+
+
+def type_character(character, send):
+    """A CHARACTER typed into the field being walked - what a key produced
+    in the user's own keyboard layout (AltGr+a on a Polish keyboard is
+    'ą'), which a key's name cannot say. ``(ok, said)``."""
+    if not typing_mode():
+        return False, ''
+    found = field()
+    if found is None or not character:
+        return False, ''
+    was = found.text
+    ok, put = found.insert(str(character))
+    return _after_edit(found, was, 'typed' if ok else 'edge',
+                       put if ok else '', send)
+
+
+def _after_edit(found, was, what, said, send):
+    """The copy has changed (or not): bring the real control along."""
     with _LOCK:
         _state['typed'] += 1
+        writer = _state.get('writer') or 'keys'
     if what == 'edge':
         _edge()
         return True, ''
-    if found.text != was:
-        _write_back(found.text)
+    if writer == 'keys':
+        # The control is focused and gets the very key the user pressed.
+        try:
+            send()
+        except Exception:                            # noqa: BLE001
+            pass
+    elif found.text != was and not _write_back(found.text):
+        # The control refused what its toolkit should have taken. From
+        # here on the keys are passed on instead, starting with this one:
+        # a field that silently stops changing is the fault this fixes.
+        with _LOCK:
+            _state['writer'] = 'keys'
+        try:
+            from . import hostWindow
+            hostWindow.lend()
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
+            send()
+        except Exception:                            # noqa: BLE001
+            pass
     if said:
         _say(said)
     return True, ''
@@ -321,27 +396,22 @@ def close_menu():
 
 
 def _write_back(text):
-    """Put the text into the real control, where there is one.
-
-    A row read off a picture has none - there the keys have already been
-    typed into the guest by the program itself, because the row was
-    clicked and the guest has the keyboard.
-    """
+    """Put the whole text into the real control, the way its toolkit
+    takes it (`readerApi.set_field_text`). False when it did not."""
     node = here()
     obj = (node or {}).get('obj')
     if obj is None:
         return False
-    for setter in ('value',):
-        try:
-            setattr(obj, setter, text)
-            return True
-        except Exception:                            # noqa: BLE001
-            continue
-    try:
-        obj.setFocus()
-    except Exception:                                # noqa: BLE001
-        pass
-    return False
+    from . import readerApi
+    with _LOCK:
+        writer = _state.get('writer') or 'keys'
+    return readerApi.set_field_text(obj, text, writer)
+
+
+def writer():
+    """How the field being walked reaches the real control."""
+    with _LOCK:
+        return _state.get('writer') or ''
 
 
 def typed():
@@ -355,6 +425,12 @@ def leave_typing():
         was = _state['typing']
         _state['typing'] = False
         _state['field'] = None
+        _state['writer'] = ''
+    try:
+        from . import hostWindow
+        hostWindow.reclaim()
+    except Exception:                                # noqa: BLE001
+        pass
     if not was:
         return False, ''
     icons.play('close-object')
@@ -587,6 +663,18 @@ def nodes_of(window, note=None):
         # presses it by clicking where it really is, which is the only way
         # to press anything in somebody else's computer.
         found = _read_the_screen(window, note)
+    elif _nothing_in_the_client(window, found):
+        # **Only the frame answered.** A Tkinter window before Tk 9.1, GTK
+        # on Windows, a game: the title bar's buttons and the system menu
+        # are accessible because WINDOWS draws them, and everything the
+        # program drew is not - so the walk found a list of furniture and
+        # nothing of the program. That is a window that exposes nothing,
+        # and it is read as one; the furniture stays only if the picture
+        # cannot be read either.
+        pictured = _read_the_screen(window, note)
+        if pictured:
+            note['pictured'] = True
+            found = pictured
     _number(found)
     note['seen'] = seen
     note['ms'] = int((time.time() - started) * 1000)
@@ -596,6 +684,87 @@ def nodes_of(window, note=None):
         elif len(found) >= MAX_NODES:
             note['ran_out'] = 'controls'
     return found
+
+
+#: How long a click is given to put the program's caret in place.
+CARET_SETTLES = 0.25
+
+
+def _caret_appeared():
+    """Whether the window in front now shows a text caret
+    (`GetGUIThreadInfo`'s `hwndCaret`) - what a program does only where
+    text is typed."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class GUITHREADINFO(ctypes.Structure):
+            _fields_ = [('cbSize', wintypes.DWORD),
+                        ('flags', wintypes.DWORD),
+                        ('hwndActive', wintypes.HWND),
+                        ('hwndFocus', wintypes.HWND),
+                        ('hwndCapture', wintypes.HWND),
+                        ('hwndMenuOwner', wintypes.HWND),
+                        ('hwndMoveSize', wintypes.HWND),
+                        ('hwndCaret', wintypes.HWND),
+                        ('rcCaret', wintypes.RECT)]
+
+        time.sleep(CARET_SETTLES)
+        user32 = ctypes.windll.user32
+        front = user32.GetForegroundWindow()
+        thread = user32.GetWindowThreadProcessId(front, None)
+        info = GUITHREADINFO()
+        info.cbSize = ctypes.sizeof(GUITHREADINFO)
+        if not user32.GetGUIThreadInfo(thread, ctypes.byref(info)):
+            return False
+        return bool(info.hwndCaret)
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def _client_rect(window):
+    """The window's client area in screen pixels, or None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        hwnd = int(getattr(window, 'windowHandle', 0) or 0)
+        if not hwnd:
+            return None
+        user32 = ctypes.windll.user32
+        rect = wintypes.RECT()
+        if not user32.GetClientRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+            return None
+        corner = wintypes.POINT(0, 0)
+        user32.ClientToScreen(wintypes.HWND(hwnd), ctypes.byref(corner))
+        return (corner.x, corner.y, corner.x + rect.right,
+                corner.y + rect.bottom)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def _nothing_in_the_client(window, rows):
+    """Whether every row lies OUTSIDE the window's client area - the title
+    bar, the system menu - so the program itself exposed nothing.
+
+    Asked by geometry, never by names: "Minimise" is a different word in
+    every language and a program may call its own button anything. A row
+    that will not say where it is counts as inside, so a window is never
+    taken for empty on a guess."""
+    client = _client_rect(window)
+    if client is None or client[2] - client[0] < 8 \
+            or client[3] - client[1] < 8:
+        return False
+    left, top, right, bottom = client
+    for row in rows or []:
+        try:
+            where = row['obj'].location
+            x = int(where.left) + int(where.width) // 2
+            y = int(where.top) + int(where.height) // 2
+        except Exception:                            # noqa: BLE001
+            return False
+        if left + 2 <= x < right - 2 and top + 2 <= y < bottom - 2:
+            return False
+    return True
 
 
 def _number(rows):
@@ -1788,10 +1957,9 @@ def typing_now():
     document, in a terminal, the letters are the user's. Browse mode has
     exactly this problem and answers it exactly this way.
     """
-    try:
-        import api
-        obj = api.getFocusObject()
-    except Exception:                                # noqa: BLE001
+    from . import readerApi
+    obj = readerApi.focus()
+    if obj is None:
         return False
     role = _role_name(obj).upper()
     if role in TYPING:
@@ -1876,6 +2044,15 @@ def activate():
         # can do, so Enter is a click at the place the words are.
         ok, why = click_here()
         if ok:
+            # **And if the click put a text caret there, it was a field.**
+            # A window read as a picture - Tkinter before Tk 9.1, GTK on
+            # Windows - has no control to say "I am an edit field", but
+            # Windows knows where the program's caret is, and a program
+            # shows one only where text is typed. So the row becomes a
+            # field written with the user's own keys; without this a
+            # Tkinter entry could be found and never typed into.
+            if _caret_appeared():
+                return enter_typing(clicked=True)
             return True, _('Clicked')
         # **And when it could not, it says which of the four reasons it
         # was.** "Nothing could be done here" is the least useful true
@@ -1980,9 +2157,9 @@ def click_here(double=False):
         # is underneath it.
         return False, 'it has no place on the screen'
     try:
-        import winUser
+        winUser = _win_user()
     except Exception as error:                       # noqa: BLE001
-        return False, 'this NVDA has no winUser: %s' % error
+        return False, 'the pointer cannot be moved here: %s' % error
     # **The window is brought forward before it is clicked.** A click into
     # a window that is not the active one is spent activating it - which
     # in a virtual machine is the whole of "it goes to the guest and
@@ -2071,6 +2248,44 @@ def _point_owner(x, y):
         return int(root or found)
     except Exception:                                # noqa: BLE001
         return int(found)
+
+
+class _CtypesWinUser(object):
+    """The four things a click needs from NVDA's `winUser`, straight from
+    Windows - for a reader that is not NVDA (Titan Access), where `import
+    winUser` has nothing to import and every press in a window read as a
+    picture answered "this NVDA has no winUser"."""
+
+    MOUSEEVENTF_LEFTDOWN = 0x0002
+    MOUSEEVENTF_LEFTUP = 0x0004
+
+    @staticmethod
+    def _user32():
+        import ctypes
+        return ctypes.windll.user32
+
+    def getCursorPos(self):
+        import ctypes
+        from ctypes import wintypes
+        point = wintypes.POINT()
+        self._user32().GetCursorPos(ctypes.byref(point))
+        return point.x, point.y
+
+    def setCursorPos(self, x, y):
+        self._user32().SetCursorPos(int(x), int(y))
+
+    def mouse_event(self, flags, x, y, data, extra):
+        self._user32().mouse_event(int(flags), int(x), int(y), int(data),
+                                   int(extra))
+
+
+def _win_user():
+    """NVDA's `winUser` where there is one, Windows' own calls otherwise."""
+    try:
+        import winUser
+        return winUser
+    except Exception:                                # noqa: BLE001
+        return _CtypesWinUser()
 
 
 def _bring_forward(hwnd):

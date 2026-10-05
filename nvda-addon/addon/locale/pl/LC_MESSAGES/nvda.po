@@ -6686,3 +6686,15 @@ msgid ""
 msgstr ""
 "To część odczytu kontrolki. Ten czytnik wypowiada części jedna po drugiej, "
 "więc może mieć własny syntezator - nazwa jednym głosem, typ innym."
+
+#. Translators: why the review cursor could not be moved to a control.
+msgid "the reader would not take it"
+msgstr "czytnik ekranu go nie przyjął"
+
+#. Translators: added after the kind of a field of several lines.
+msgid "multi line"
+msgstr "wielowierszowe"
+
+#. Translators: a setting in the Titan enhancements panel.
+msgid "Read programs that draw their own controls (Tkinter, games)"
+msgstr "Czytaj programy, które same rysują kontrolki (Tkinter, gry)"

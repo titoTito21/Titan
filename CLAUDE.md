@@ -8103,6 +8103,343 @@ section, walked and in the panel); mute-outside-TCE applies.
 - Tests: `WhatAProgramSaysWithoutMovingTheFocus` in
   `tests/test_titan_access_reading.py`.
 
+#### TA scripts and NVDA add-ons, in the user's own folders (2026-10-05)
+
+**TA scripts** (`titan_access/ta_scripts.py`): ``.tas`` files in
+`accessibility/scripts/` (made with an example and a README on first use)
+- Titan Script, run by the Macro Manager's own interpreter
+(`run_tcs_text(variables=, speak=)`: `say` is the READER's voice), with
+reader lines at the top: `when key "insert+j"` (in front of the reader's
+own binding) / any key without the modifier, `when focus`/`when window`
+with `program= role= name= class= id= title contains=`, `when reader
+starts`; `for program "x"` scopes a file to one program, as a JAWS script
+file is. **JAWS-style control rules**: `control class="TCustomGrid" as
+list`, `name "..."`, `describe "..."`, `say "{{value}}"`, `silent` -
+applied in `engine.announce_object` to a COPY (the real object, which
+actions act on, is untouched). Variables: name role value description
+window program key class id. Actions `titan_access.list_scripts /
+run_script / check_script / reload_scripts / scripts_folder`; reader menu
+"Titan Access scripts". Tests: `tests/test_titan_access_scripts.py` (17).
+
+**NVDA add-ons** (`titan_access/nvda_host/`), installed IN Titan Access
+(`accessibility/nvda_addons/<name>`, from a `.nvda-addon` file, the manager
+window, or - asked once at first start - migrated from NVDA's own
+folder; `titanEnhancements` is never taken). Never part of Titan TTS: a
+synthesizer is EXTERNAL SYNTHESIS, a speech system of the reader's own
+("External synthesizers (NVDA add-ons)", synth id `nvda:<name>`,
+`speech_adapter._speak_external` gives it one NVDA sequence per utterance
+with a PitchCommand per part and waits for its index).
+- **Stand-ins for NVDA's modules** (`shims/`, ~45 modules, written for
+  Titan Access - nothing copied from NVDA, which is GPL): config (JSON in
+  `accessibility/nvda_config/`), synthDriverHandler, speech.commands, a
+  working `speechXml` balancer (RHVoice subclasses SsmlConverter), nvwave
+  on `sounddevice` (index callbacks when the audio has PLAYED;
+  `TITAN_ACCESS_SILENT_AUDIO=1` for tests), addonHandler (getRunningAddons,
+  initTranslation), api/controlTypes over Titan Access's objects (role
+  members compare equal by name), scriptHandler, ui, tones, gui (real wx;
+  the tray's Tools/Preferences menus are real and their bound items are
+  offered in the reader menu), core, queueHandler, inputCore,
+  keyboardHandler, winUser/winKernel. A name no stand-in has resolves to a
+  harmless subclassable stand-in and is recorded (`shims.missing`).
+- **Served ONLY to add-on code** (`importer`, a `builtins.__import__`
+  wrapper keyed on the importing module's package or file): a module
+  called `api` on the ordinary path would make Titan Access's shared code
+  believe it is inside NVDA.
+- Global plugins start with the reader; app modules load for their
+  program; `event_gainFocus` runs first with NVDA's `nextHandler` chain (an
+  add-on that does not pass it on silences the reader's announcement);
+  `kb:NVDA+...` gestures come before the reader's own keys. Libraries NVDA
+  ships (configobj) live in `lib/python/<platform>` of the component.
+- Measured against the user's real add-ons: RHVoice + its Polish voice
+  Natan speak (157 920 bytes of PCM in 0.4 s), the ELTEN, RHVoice and
+  Cerence voice-manager global plugins load with no errors, Cerence's
+  Tools menu item is offered. The real engine under WSLg ran a script, an
+  add-on's script (in the add-on's own Polish), its focus handler and a
+  control rule (`tests/check_titan_access_linux_scripts_addons.py` - run
+  it under WSLg, NOT on the user's desktop, where the real engine follows
+  the real foreground). Tests: `tests/test_titan_access_nvda_host.py` (26,
+  a built `.nvda-addon`, Windows and Linux).
+- **External synthesis is as quick as Titan TTS, and its pauses are the
+  pauses** (measured on Cerence, Samsung Galaxy Voices and RHVoice through
+  a fake sound device that keeps what it played). Cerence and Samsung
+  report an index when they MAKE the audio, so waiting for the index
+  returned in milliseconds and utterances piled up in the player:
+  `external.speak_parts` waits for the final index AND then "done
+  speaking" or every player drained. A synth with no `BreakCommand` gets
+  its gap as silence fed into the player at the index between the parts
+  (after what is fed for a made-time synth; in front of what waits for a
+  played-time one, RHVoice), the synth's own padding cut first - `nvwave`
+  trims silence (Samsung pads 0.65 s per part, Cerence 0.1 s in front;
+  threshold 300, at most 400 ms in front, never a buffer with nothing
+  loud, off below volume 20). Streams open WASAPI shared at low latency
+  (25 ms; MME was the default). `external.warm` says one muted word when
+  the synth is chosen (Samsung's host takes 2 s to start, the stream's
+  first open 0.3 s). Cerence needed `speech.CHUNK_SEPARATOR`; Samsung's
+  voices live in NVDA's config folder and had not been migrated, so
+  `bring_missing_data` copies what is missing (never over) at every load.
+  First sound after the warm-up: Cerence ~10 ms, RHVoice ~30, Samsung
+  ~190 (its own synthesis). Tests: `WhatIsPlayed`, `AddOnsLikeCerenceRun`.
+  A key held down - 200 utterances each cut by the next - never hangs,
+  leaks a thread or leaves audio behind
+  (`test_rapid_interruptions_never_hang_or_leak`).
+- **Speech system, synthesizer, voice: ONE choice, the same everywhere.**
+  The speech system dialog (Insert+Ctrl+S) had three levels with the NVDA
+  add-on synthesizers; the settings page and the walked settings had
+  Titan's flat engine list (the page filled its voices by SWITCHING the
+  reader's own engine to the one looked at), and the TPad cycled that flat
+  list on the live engine without saving - with an external synthesizer
+  chosen it changed nothing. Now `speech_systems` is the one model:
+  `settings_for` (what a choice is in the store), `step` (the TPad and the
+  ring), `current`; the schema shows `speech_system` / `synthesizer` /
+  `voices` (kept in OwnVoice / Synthesizer (+ SpeechDispatcherModule) /
+  Voice), the walk and a profile write the whole choice, the page reads
+  voices on a worker, the TPad has a "Speech system" category beside
+  Synthesizer and Voice. Voices are cached a minute
+  (`speech_systems.voices`), prefetched when settings apply, and a walked
+  row names a voice from the cache only - never waiting for a Wine bridge.
+  Tests: `tests/test_titan_access_speech_choice.py` (8).
+- **A long text is heard after its first sentence, not after all of it**
+  (`speech_adapter._speech_chunks`, over `CHUNK_FROM` 240 characters): a
+  paragraph rendered whole was 88 ms (eSpeak), 161 ms (SAPI 64-bit) and
+  184 ms (SAPI 32-bit through its bridge) of silence before the first word;
+  a sentence is 7-27 ms. Labels were already 2-17 ms. Each chunk is waited
+  out, so an interrupt cuts the rest.
+
+#### Tkinter, WPF, Qt and Unity in their own windows (2026-10-05)
+
+Asked for as general support for Tkinter, Avalon (WPF), Qt and Unity
+programs in their NATIVE windows, researched first:
+
+- **WPF, Qt 5.11+/6, Windows Forms, wx** already answer UI Automation,
+  and were measured to read natively (roles, names, values) - PySide6
+  6.11 installed into a temporary folder for the Qt test, never into the
+  user's Python.
+- **Tk before 9.1 exposes nothing** ("recognised as images", nishimotz's
+  2026 talk; TIP 733 gives 9.1 MSAA). Read in Tk's own source
+  (`win/tkWinPointer.c`, `tkWinX.c`): `TkpChangeFocus` does NOT move the
+  Windows focus between widgets (measured: `GetFocus` stays on one
+  `TkChild`), and the one system signal a Tk text field gives is the
+  CARET - `Tk_SetCaretPos` creates it with zero height at the top of the
+  line, for Magnifier. So a Tkinter window is followed as a picture:
+  `surface.drawn_by_toolkit` (`DRAWS_ITS_OWN` = tk, gtk, unity, godot,
+  sdl, by the libraries the process loaded) + `named_inside_client`
+  (nothing named inside the client rectangle; Tk 9.1 and a Unity 6.3 game
+  that carries its accessibility hierarchy are therefore NATIVE), and
+  `guest` follows it by default under its own switch `drawnApps` (on;
+  virtual machines keep `guestCursor`, off). After a key, what changed is
+  read; with a caret (`guest.caret_rect`, `GetGUIThreadInfo`) Left/Right
+  say the character at it and Up/Down/Home/End the line
+  (`at_the_caret`, a band reaching mostly BELOW the zero-height caret).
+- **Unity**: 6.3 has native desktop screen reader support (Narrator,
+  i.e. UI Automation) - an engine class is a picture only while nothing
+  named is inside; games and mods using Tolk / the UI Accessibility
+  Plugin speak through the NVDA controller DLL, which Titan Access
+  already serves.
+- **The recogniser was too slow and read the wrong place**: Windows OCR is
+  now a RESIDENT PowerShell process (`windows_ocr._SERVER`, one request
+  per line; measured 13-190 ms against 1.7 s), small pictures are
+  enlarged up to four times as NVDA's `UwpOcr` does (a 40-pixel strip read
+  nothing), `localOcr.read` passes its RECTANGLE on in Titan Access (it
+  read the whole window) to both tiers, and a window that is not in front
+  is captured from its own drawing, not from the screen.
+- Probes: `tests/probe_drawn_apps.py` (no keys, no foreground: wx/WPF/Qt
+  native, Tk drawn, "n" read at a caret in "Anna"),
+  `tests/probe_toolkit_fields.py` (adds Qt). **A probe must never inject
+  keys into a window that did not get the foreground** - one did, and
+  five Tabs went into the user's own window. Tests:
+  `tests/test_titan_access_toolkits.py` (27).
+
+#### A walked edit field writes the REAL control, per toolkit (2026-10-05)
+
+Reported as "in the virtual window it says 'pole', it must say 'pole
+edycji', and the edit field must work as in the application reviews; a
+check box says włączone/wyłączone and must say zaznaczone/odznaczone -
+control names in a virtual window are the names in a real window".
+
+- **One word per control, the reader's own.** Both `elements` modules
+  have `role_word(NVDA role name)` / `state_word(name)` (NVDA:
+  controlTypes, UNCHECKED as CHECKED's negativeDisplayString; Titan
+  Access: its catalogue through `nvda_shape`), and every walked list
+  asks them: `appReview.kind_word` (TCE apps), `titanWalk` (Titan's
+  settings, by what `ui_model` builds), `menuWalk`, `titanWindow`, and
+  Titan Access's own `settings_walk` (a wx.CheckBox is "Pole wyboru",
+  "zaznaczono / niezaznaczono"; a wx.Choice a combo box; a SpinCtrl
+  "Pole numeryczne"; a TextCtrl "Pole edycji").
+- **The field never reached the real control.** `_write_back` assigned
+  `obj.value`, a read-only property in both readers, so the user typed,
+  heard every letter, and the field stayed as it was. Now the writer is
+  chosen per TOOLKIT on Enter (`readerApi.field_mode`): `fieldWriter.PLANS`
+  (shared) / `titan_access/toolkits/` (one module per toolkit -
+  `wpf` (Avalon), `winforms`, `qt`, `tk`, `java`, `gtk`, `wx`, `vcl`,
+  `web`, `xaml`, `drawn`, `win32` - over `toolkits/providers.py`: UIA
+  ValuePattern, MSAA put_accValue, WM_SETTEXT, JAB setTextContents, AT-SPI
+  EditableText). `'keys'` passes the user's own key on to the focused
+  control (marked with the hook's sentinel in Titan Access, so it is not
+  heard twice) and is the only way into Tk before 9.1, GTK on Windows,
+  consoles and games, and the right way into a web page (a value set
+  through accessibility fires no `input` event). A provider that refuses
+  turns the field to keys. A test fails if a toolkit module and the
+  shared plan disagree.
+- Research behind the plans: Tk 9.1 (TIP 733) is MSAA on Windows, ATK on
+  X11; Qt 5.11+ is UIA, older Qt MSAA only (nvaccess/nvda#8604); WPF's
+  TextBox takes ValuePattern.SetValue, RichTextBox/PasswordBox do not,
+  virtualized items need VirtualizedItemPattern.Realize.
+- **AltGr** (Ctrl+Alt) reaches a walked field in both readers and is
+  inserted as the character the layout types (ą ę ł ż); the walkers
+  used to return on any Alt.
+- **Tkinter**: Python 3.14 ships Tk 9 (`tcl90.dll`, `tcl9tk90.dll`) -
+  added to `toolkit.BY_LIBRARY`. A window whose rows all lie OUTSIDE its
+  client area (only the frame answered) is read as a picture
+  (`_nothing_in_the_client`, geometry, no names); Enter on a picture row
+  that leaves a system caret (`GetGUIThreadInfo.hwndCaret`) enters the
+  field, written with keys, its copy started from the read words.
+- **The host window steps aside** while a field is typed with keys
+  (`hostWindow.lend` / `reclaim`), or the passed-on keys went into it.
+- Fixed on the way: Titan Access's adapted `location` was
+  (left, top, RIGHT, BOTTOM) where NVDA's is (left, top, WIDTH, HEIGHT) -
+  every click, layout and corner key in the shared modules measured
+  wrong rectangles; `_document_rows` answered for the foreground window,
+  not the one asked about.
+- Live, through the real engine's key path (`tests/probe_virtual_typing.py`):
+  wx (win32), WPF (uia), Windows Forms (win32) - "z", "a", AltGr+z,
+  Backspace leave exactly "za" in the real control; Tkinter (keys) -
+  the real entry holds "start tkza". `tests/probe_toolkit_fields.py`
+  writes "Zażółć gęślą jaźń" into each. Tests:
+  `tests/test_titan_access_toolkits.py` (17).
+
+#### Titan Access reads the screen by itself (2026-10-05)
+
+Reported as "this Titan has no bridge call 'ocr.read_windows'": Titan
+Access asked TITAN for Windows OCR through `bridge_api`, which a compiled
+Titan freezes into Titan.exe while this component is plain data beside
+it - so a newer reader in an older build lost its screen review, local
+reading and picture fallback. **A reader feature may not depend on the
+Titan build, on Titan's own OCR modules, on NVDA or on the NVDA add-on.**
+
+- `titan_access/windows_ocr.py`: its own GDI capture (the screen, then
+  `PrintWindow`), its own PNG encoder, `Windows.Media.Ocr` through a
+  PowerShell script. `titan_access/local_model.py`: RapidOCR + ONNX
+  Runtime loaded from `lib/python/<win|linux>-cpXY/` **inside the
+  component** (appended to `sys.path`, so Titan's own numpy wins), models
+  in `lib/ocr_models/`, installed by `pip install --target` with a real
+  Python of the same version (`py -3.14` from a compiled Titan, whose
+  `sys.executable` is Titan.exe). Both folders are git-ignored.
+- `portable/link.py` answers `ocr.windows`, `ocr.read_windows`,
+  `ocr.model`, `ocr.read_local`, `ocr.install_model` itself
+  (`_own_calls`) and never asks Titan for them; `ocr_assist.local_lines`
+  uses the same two. New actions `titan_access.read_text` /
+  `ocr_status` (`needs_gui=False`).
+- The shared modules stopped importing NVDA where the seam answers:
+  `readerApi.top_windows()` (EnumWindows off NVDA), focus/foreground/
+  navigate_to in findControl, journal, surface, windowsAndActions;
+  `virtualWindow._win_user()` (ctypes stand-in for `winUser`, so Enter in
+  a window read as a picture clicks); `localOcr.from_window` no longer
+  requires `screenBitmap` (the guest reader's capture). The vendor
+  script carries `lib/guestscreen.dll` into `portable/lib/`.
+- Verified inside the compiled Titan.exe of 2026-10-02 with no rebuild,
+  over the Action Bus: Windows OCR 0.6 s, the model 1.7 s, read from the
+  component folder. Tests: `tests/test_titan_access_own_ocr.py` (12).
+
+#### Real pages, read once each (2026-10-05)
+
+Reported as "tyflopodcast.net shows nothing in Titan Access, and on
+forum.audiogames.net the headings are links - why the doubles?". Measured
+with `tests/check_titan_access_web.py <url>`: a separate Edge (temporary
+profile, app mode, off-screen and not activated, with
+`CalculateNativeWinOcclusion` off - an off-screen Chromium window otherwise
+renders an EMPTY accessibility tree) loads the page and the reader's own
+browse-mode code builds it. Four faults:
+
+- **The wrong document.** Edge has several DocumentControls of exactly
+  the page's size - its own WebView shells, each holding one empty
+  NativeViewHost - and `_find_main_document` took the first of equal
+  areas. With the focus outside the page (in the address bar after typing
+  a URL) the page read as NOTHING. The document the render widget window
+  hosts (`Chrome_RenderWidgetHostHWND`, Firefox's, IE's) wins now.
+- **Off-screen was dropped.** Chromium marks everything outside the
+  viewport, and every "visually hidden" text, `IsOffscreen`; a web
+  document keeps them now (an application's scan mode still skips them).
+- **A container and its content were two lines** (`merge_web_containers`):
+  a heading holding a link is ONE line that is also a link (`VNode.link`:
+  "heading level 3, link"; H and K both find it; Enter presses the link),
+  a list item / cell / paragraph gives way to its content (which keeps
+  "3 of 9"), a link or button absorbs its text, and a `<label>` beside its
+  control or a table caption is not said again (`_drop_echoed_labels`).
+- **A list item was "heading level 1".** `VNode.is_heading` was "role is
+  heading OR level > 0", and Chromium gives list items a level, so H landed
+  on every menu entry. The role decides.
+- Measured after: forum 179 -> 134 lines, tyflopodcast.net 189 lines (every
+  episode one heading-link), pl.wikipedia 299 -> 287; consecutive
+  duplicates 0 on all three. Tests: `tests/test_titan_access_web_pages.py`
+  (11). Cloudflare answers a fresh profile with its challenge page, which
+  also reads correctly.
+
+#### Every add-on command works in Titan Access, and Insert+Ctrl+S (2026-10-05)
+
+Asked for as "everything tied to NVDA must be tied to Titan Access; every
+placeholder like OCR, Insert+O must work; Insert+Ctrl+S opens a list to
+choose the speech system, synthesizer and voice". An audit ran every
+shared command (`portable/commands`) under Titan Access's own shims and
+found the placeholders:
+
+- **The screen review was never vendored.** `ocrReview.py` is called by
+  `commands.ocr_review`, `reviews` and `touchWalk`, all vendored; it was
+  not, so Insert+O ended on `cannot import name 'ocrReview'`. It is in
+  `SHARED` now and its keys (arrows, Page Up/Down, Home/End, the NumPad
+  corners and layout, Enter/NumPad 5 click, F5, Escape) are walked in
+  `engine._walked_key`.
+- **Every local reading refused: "this NVDA has no Windows OCR".**
+  `localOcr` reached Windows' recogniser only through NVDA's
+  `contentRecog`. Outside NVDA (`_in_nvda()`, a `find_spec`) it now asks
+  TITAN: `ocr.read_windows` (`src/ai/ocr/windows_ocr.py` - the picture as
+  a PNG and a PowerShell script loading `Windows.Media.Ocr` through WinRT,
+  0.7 s, nothing to install, word rectangles converted by the capture),
+  then the local model. The capture is taken at full resolution for it
+  (`capture.full_resolution()`): `MAX_SIDE` halves a 2560-pixel screen,
+  which is right for a paid model and loses small print here.
+- **Status, positioned speech and Titan's announcements imported NVDA's
+  `channel`/`panner`.** `commands.OWN` is a table the reader underneath
+  fills with its own meanings (`engine._own_commands`), and `commands.find`
+  / the menu's `_run_command` look there first: status says what the
+  reader speaks with, positioned speech is the virtual screen, and Titan's
+  own announcements are a real switch (`General/TitanAnnouncements`, read
+  by `host_bridge`: off, Titan is told the reader took the call and the
+  reader reads Titan's controls itself).
+- **The Titan window form was on `gui.guiHelper`**; it is on `wxkit` like
+  the managers, so it opens here.
+- **The add-on's keys have Insert twins** (`engine.SHARED_KEYS`): Alt+T
+  status, Alt+M macros, Alt+A actions, Alt+O / Alt+Q / Alt+Shift+O AI OCR,
+  Alt+I / Alt+Shift+I the assistant, Shift+O read locally, O screen review,
+  Ctrl+W windows and actions, Shift+H journal, Ctrl+Shift+F find a control
+  (and Ctrl+F outside a document), Ctrl+Shift+W watched areas, Shift+A TCE
+  applications, Alt+W where am I, Alt+C voices, Alt+L label, Alt+G
+  describe, Alt+U read as a picture, Alt+D draft a module, Alt+P / Alt+N
+  the two switches; plus Shift+M, Shift+I, Alt+S as aliases. Insert+M and
+  R/Shift+R/Shift+W stay this reader's own. An Insert+Alt gesture presses
+  an unassigned key (0xE8) so the program behind does not open its menu
+  bar on the Alt release (`keyboard_hook._mask_alt`).
+- **Insert+Ctrl+S** (`speech_system_dialog`, model `speech_systems`): a
+  dialog of three native lists - speech system (Titan's own voice, Titan
+  TTS, SAPI 5, eSpeak NG, Speech Dispatcher, say; only what this machine
+  has), synthesizer (a Titan TTS engine, or a Speech Dispatcher OUTPUT
+  MODULE), voice - with Test (borrows the voice for a sentence), OK and
+  Cancel. Voices load on a worker (a Wine bridge takes seconds), are listed
+  without switching the reader's engine, and SAPI needs COM initialised on
+  that worker or it lists none. OK writes `OwnVoice`/`Synthesizer`/`Voice`/
+  `SpeechDispatcherModule` and applies. StereoSpeech gained
+  `get_spd_modules`/`set_spd_module` (`spd-say -O` / `-o`), and
+  `get_spd_voices` no longer reads the header row "NAME" as a voice.
+  Verified: Windows (Titan TTS 8 engines, SAPI 20 voices, eSpeak 321) and
+  WSLg GTK (Titan TTS through Wine, eSpeak 173, Speech Dispatcher with
+  espeak-ng speaking as `spd-say -o espeak-ng -y Polish`).
+- **A probe dialog on the live desktop takes the user's keystrokes.** The
+  first dialog probe put the window up with the foreground and "the
+  selection jumped" - it was the user typing. Build such a dialog without
+  `Show()`; and a live-engine scenario installs the real keyboard hook, so
+  it hears the user too.
+- Tests: `tests/test_titan_access_shared_keys.py` (20); live:
+  `tests/check_titan_access_live.py sharedkeys`.
+
 #### A palette row says a real key
 
 "Voices and reading order (o)" taught a letter that is a key only inside
@@ -8416,6 +8753,76 @@ utterance on one synthesizer and the shared `classes.py` is NVDA's rule.
   `APartOfAnAnnouncementMayComeFromAnotherSynthesizer` (4) in
   `tests/test_titan_access_speech_queue.py`, whose `__main__` block sat
   in the middle of the file and hid every class after it.
+
+#### A part of an announcement on another engine, on Linux too (2026-10-03)
+
+Asked as "and does it work on Linux?". Measured under WSLg with the real
+`StereoSpeech` on a FRESH home: "Zapisz" on the reader's eSpeak,
+"przycisk" on DECtalk through its Wine bridge (and on Eloquence in the
+run before), "zaznaczony" back on eSpeak - three clips, 2.6 s. Two faults
+on the way, both in Titan's TTS layer rather than the reader, and both
+only visible on an account that has never run Titan:
+
+- **Wine was started into a prefix whose parent folder did not exist.**
+  `native_bridge.popen_kwargs` named `~/.local/share/titan/wine` and
+  made nothing; wine answered "chdir to ...: No such file or directory"
+  and DECtalk, Eloquence, SMP and Festival all "failed to initialize".
+  Never seen before because this machine had the folder from an earlier
+  session. `_ensure_prefix` makes it.
+- **A fresh prefix's first boot is longer than a bridge waits for
+  READY** (15 s), and `wineboot --init` run to prepare it HUNG: the
+  "install Wine Mono?" dialog, waited on for ever. With
+  `WINEDLLOVERRIDES=mscoree=d;mshtml=d` (a bridge is a console program)
+  it is done in 21 s, so the prefix is booted once, synchronously, before
+  the first bridge, and a prefix with a `system.reg` is left alone.
+- **The reader's own voice no longer pushes SAPI5 at a Linux engine.**
+  The store's default synthesizer is SAPI5; `_apply_own_voice` set it
+  after every borrowed part and Titan refused it each time.
+  `_engine_offered` asks the engine what it lists; a name it has not got
+  is not set (`TheOwnVoiceIsOnlyASynthesizerThisPlatformOffers`, 3).
+- `tests/test_posix_platform.py` still expected `platforms = windows` of
+  the four Wine-capable engines whose manifests have said all three
+  since the Wine round; it asserts the documented split now.
+
+#### Browse mode is a virtual window too (2026-10-03)
+
+Asked for as "a hybrid of browse mode and the virtual window: H moves by
+headings, the quick navigation keys AND the virtual window's shortcuts
+both work, the document is a half-palette, and Enter or the arrows -
+by a setting - turn on forms mode, which is editing text".
+`browse_mode.py`, web documents and scan mode alike:
+
+- **The arrows follow the walked lists' layout** (`virtualWindow.layout()`,
+  the one `walkLayout` setting, Numpad 4 and 6): simple - the document
+  as read, with Shift+Left/Right the entry beside; screen - the entry
+  above, below and beside by its rectangle on the page (`_move_screen`:
+  an entry that overlaps horizontally wins over a nearer one that does
+  not); interaction - Left/Right between siblings, Down INTO an entry
+  (region -> entries -> words -> characters, "W, ..."), Up OUT of it
+  ("Poza, ..."), where a region is the landmark and a page without
+  landmarks has one region, the document. Quick navigation letters are
+  untouched in every layout.
+- **The NumPad is the document's** (`handle_numpad`, asked by the
+  engine's `on_walked_numpad` after the walked lists): 7/9/1/3 the
+  corners of the page as shown (the window's rectangle through
+  `vbuf.window_rect`, the entry's OWN corner measured, a tie to the
+  smaller - the virtual window's own rule), 4/6 the layout, 8/2 up and
+  down, 5 Enter.
+- **A half-palette**: the walked lists' row tone (`walkRowBeep`, the same
+  curve) on every entry, `walkWrap` past the last entry round to the
+  first, and `Browse/SayDocumentPosition` ("12 z 340", off by default - a
+  page is long).
+- **Forms mode by key**: `Browse/FormsModeOnEnter` (on) - Enter on an
+  edit field or a combo box focuses it and hands the keys to the page;
+  the existing `FocusModeOnCaretMove` does the same for an arrow. Either
+  way **Escape is the way back** (`_forms_by_key`), asked before the
+  pass-through check so the key reaches the reader at all. Enter on
+  anything else still presses it.
+- Tests: `TheDocumentIsWalkedLikeAVirtualWindow` (6) in
+  `tests/test_titan_access_document_mode.py` (53). The OCR node test
+  there now stubs the LOCAL model tier: on a Linux Python with rapidocr
+  it photographed the real screen for a window that does not exist and
+  answered whatever was on it.
 
 #### Every setting, under the real engine on Linux (2026-10-03)
 

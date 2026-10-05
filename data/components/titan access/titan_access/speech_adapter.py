@@ -46,6 +46,25 @@ _SYNTH_TO_ENGINE = {
 }
 
 
+def _engine_offered(engine, name):
+    """Whether *engine* lists *name* (or its Titan spelling) as available.
+    An engine that cannot say is believed."""
+    asked = _SYNTH_TO_ENGINE.get(str(name).lower(), str(name))
+    try:
+        offered = engine.get_available_engines()
+    except Exception:                                # noqa: BLE001
+        return True
+    names = set()
+    for one in offered or []:
+        if isinstance(one, dict):
+            one = one.get("id") or one.get("name") or ""
+        names.add(str(one).lower())
+    if not names:
+        return True
+    return asked.lower() in names or str(name).lower() in names \
+        or (asked.lower() == "sapi5" and "sapi5_32" in names)
+
+
 def _estimate_duration(text, cap=2.5):
     """Rough spoken duration (seconds) used to pace speech.
 
@@ -221,8 +240,22 @@ class SpeechAdapter(object):
         st = self._settings
         try:
             wanted = str(st.get("Speech", "Synthesizer", "") or "")
-            if wanted and hasattr(engine, "set_engine"):
+            # **Only a synthesizer this platform offers.** The store's
+            # default is SAPI5, which a Linux Titan refuses ("not available
+            # on this platform") every time the voice is put back after a
+            # borrowed part - the refusal is logged and the engine left
+            # wherever the borrower put it. A name the engine does not
+            # list is not set, and what it is running stays.
+            if wanted and hasattr(engine, "set_engine") and \
+                    _engine_offered(engine, wanted):
                 engine.set_engine(wanted)
+            # **speech-dispatcher's synthesizer is its output module**, and
+            # the voice list depends on it - so the module goes on before
+            # the voice is looked for.
+            if str(getattr(engine, "engine", "") or "") == "spd" and \
+                    hasattr(engine, "set_spd_module"):
+                engine.set_spd_module(str(st.get(
+                    "Speech", "SpeechDispatcherModule", "") or ""))
             voice = str(st.get("Speech", "Voice", "") or "")
             if voice and hasattr(engine, "set_voice"):
                 # **By id, by display name, by name, then by index.** The
@@ -263,6 +296,9 @@ class SpeechAdapter(object):
                 self._engine, self._own = engine, False
         if getattr(self, "_own", False):
             self._apply_own_voice()
+        external = self._external_synth()
+        if external:
+            self._apply_external(external)
 
     def _underlying_speaker(self):
         """Return the reader's live ``StereoSpeech`` engine, or None.
@@ -346,14 +382,61 @@ class SpeechAdapter(object):
         self._enqueue(_Utterance(segments=segments, gap_ms=gap_ms),
                       interrupt=True)
 
+    # ------------------------------------------------------------------ #
+    # Pausing - Shift, as in NVDA: speech holds where it is and goes on
+    # from there, rather than being thrown away as Control throws it away
+    # ------------------------------------------------------------------ #
+    paused = False
+
+    def pause(self, switch):
+        """Hold speech (True) or let it go on (False)."""
+        switch = bool(switch)
+        if switch == self.paused:
+            return False
+        self.paused = switch
+        external = self._external_synth()
+        if external:
+            try:
+                from .nvda_host import external as _external
+                _external.pause(external, switch)
+            except Exception:
+                pass
+        channel = self._tts_channel()
+        if channel is not None:
+            try:
+                channel.pause() if switch else channel.unpause()
+            except Exception:
+                pass
+        if not switch:
+            self._wake.set()
+        return True
+
+    def toggle_pause(self):
+        """Pause what is being said, or go on with it. ``True`` when the
+        speech is paused now."""
+        if not self.paused and not self.is_speaking:
+            return False
+        self.pause(not self.paused)
+        return self.paused
+
     def stop(self):
         """Stop what is speaking and DISCARD everything queued behind it."""
+        if self.paused:
+            # Stopping ends a pause too: what was held is thrown away.
+            self.pause(False)
         with self._q_lock:
             self._queue = []
             self._generation += 1
         with self._seq_lock:
             self._seq_id += 1  # invalidate in-flight segment waits
         self._speaking_until = 0.0
+        external = self._external_synth()
+        if external:
+            try:
+                from .nvda_host import external as _external
+                _external.stop(external)
+            except Exception:
+                pass
         if self._mode == self._MODE_TCE and self._engine is not None:
             try:
                 self._engine.stop()
@@ -422,6 +505,10 @@ class SpeechAdapter(object):
             self._current = None
             return None
 
+    def _hold_while_paused(self):
+        while self.paused:
+            time.sleep(0.05)
+
     def _pump(self):
         """Speak queued utterances one at a time, in order, for ever.
 
@@ -437,6 +524,9 @@ class SpeechAdapter(object):
                 self._wake.clear()
                 continue
             try:
+                # A pause holds the NEXT utterance too - pausing is "wait",
+                # not "skip this one".
+                self._hold_while_paused()
                 self._speak_now(item)
             except Exception as e:  # pragma: no cover - never kill the pump
                 print(f"[TitanAccess] speech pump error: {e}")
@@ -454,6 +544,10 @@ class SpeechAdapter(object):
         if self._superseded(item):
             # Interrupted between being taken off the queue and being spoken.
             return
+        external = self._external_synth()
+        if external:
+            self._speak_external(external, item)
+            return
         if self._mode != self._MODE_TCE or self._engine is None:
             print(f"[TitanAccess] (speech) {item.plain_text}")
             return
@@ -464,6 +558,52 @@ class SpeechAdapter(object):
         finally:
             if borrowed:
                 self._give_voice_back()
+
+    # ------------------------------------------------------------------ #
+    # External synthesis - an NVDA add-on's synthesizer (`nvda_host`)
+    # ------------------------------------------------------------------ #
+    def _external_synth(self):
+        """The external synthesizer the reader speaks with, or ''."""
+        if not self._own_voice_wanted():
+            return ""
+        wanted = str(self._settings.get("Speech", "Synthesizer", "") or "")
+        return wanted if wanted.startswith("nvda:") else ""
+
+    def _speak_external(self, synth_id, item):
+        try:
+            from .nvda_host import external
+            if item.segments:
+                parts = [(seg[0], seg[1] if len(seg) > 1 else 0)
+                         for seg in item.segments]
+            else:
+                parts = [(item.text, item.pitch)]
+            self._mark_speaking(item.plain_text)
+            external.speak_parts(synth_id, parts,
+                                 cancelled=lambda: self._superseded(item),
+                                 gap_ms=max(self._SEGMENT_GAP_MS,
+                                            int(item.gap_ms or 0))
+                                 if item.segments else 0,
+                                 paused=lambda: self.paused)
+        except Exception as e:
+            print(f"[TitanAccess] external synthesis: {e}")
+            print(f"[TitanAccess] (speech) {item.plain_text}")
+
+    def _apply_external(self, synth_id):
+        """The reader's voice and levels, on the external synthesizer."""
+        st = self._settings
+        try:
+            from .nvda_host import external
+            voice = str(st.get("Speech", "Voice", "") or "")
+            if voice:
+                external.set_voice(synth_id, voice)
+            rate = st.get_int("Speech", "Rate", 0)
+            pitch = st.get_int("Speech", "Pitch", 0)
+            volume = st.get_int("Speech", "Volume", 100)
+            external.set_levels(synth_id, rate=50 + int(rate) * 5,
+                                pitch=50 + int(pitch) * 5, volume=volume)
+            external.warm(synth_id)
+        except Exception as e:
+            print(f"[TitanAccess] external synthesis settings: {e}")
 
     def _borrow_voice(self, profile):
         """Put a class's own synthesizer and voice on the private engine
@@ -478,6 +618,11 @@ class SpeechAdapter(object):
             synth = str(profile.get("synth") or "").strip()
             if synth and hasattr(engine, "set_engine"):
                 engine.set_engine(_SYNTH_TO_ENGINE.get(synth.lower(), synth))
+                changed = True
+            # speech-dispatcher's synthesizer is a MODULE of one engine;
+            # the speech system dialog's Test hands it over this way.
+            if "spd_module" in profile and hasattr(engine, "set_spd_module"):
+                engine.set_spd_module(str(profile.get("spd_module") or ""))
                 changed = True
             voice = profile.get("voice")
             if voice not in (None, "") and hasattr(engine, "set_voice"):
@@ -561,6 +706,32 @@ class SpeechAdapter(object):
             # mute and late - while the very next pitched announcement,
             # rendered through `speak_concat`, played at once. An engine that
             # cannot render to memory keeps `speak_async`.
+            chunks = _speech_chunks(item.text)
+            if len(chunks) > 1 and hasattr(eng, "speak_concat"):
+                # **A long text is heard after its first sentence is
+                # rendered, not the whole of it.** Rendered whole, a
+                # paragraph was 88 ms (eSpeak) and 161 ms (SAPI) of silence
+                # before its first word - measured; one sentence is a few.
+                # Each chunk is played and waited out, so an interrupt
+                # between two of them cuts the rest at once.
+                import copy
+                for chunk in chunks:
+                    if self._superseded(item):
+                        return
+                    piece = copy.copy(item)
+                    piece.text = chunk
+                    try:
+                        ok = bool(eng.speak_concat(
+                            [(chunk, item.pitch, item.position)],
+                            gap_ms=self._SEGMENT_GAP_MS))
+                    except Exception as e:  # pragma: no cover
+                        print(f"[TitanAccess] speak_concat (chunk) error: {e}")
+                        ok = False
+                    if not ok:
+                        eng.speak_async(chunk, position=item.position,
+                                        pitch_offset=item.pitch)
+                    self._wait_for_playback(piece)
+                return
             done = False
             if hasattr(eng, "speak_concat"):
                 try:
@@ -702,6 +873,10 @@ class SpeechAdapter(object):
             while time.time() < end_cap:
                 if self._superseded(item):
                     return
+                if self.paused:
+                    end_cap += 0.012
+                    time.sleep(0.012)
+                    continue
                 busy = self._audio_busy()
                 if busy is None or not busy:
                     return
@@ -713,7 +888,11 @@ class SpeechAdapter(object):
         while remaining > 0:
             if self._superseded(item):
                 return
-            time.sleep(min(0.05, remaining))
+            if self.paused:
+                t0 += 0.05
+                time.sleep(0.05)
+            else:
+                time.sleep(min(0.05, remaining))
             remaining = est - (time.time() - t0)
 
     def _audio_busy(self):
@@ -935,6 +1114,40 @@ def use(adapter):
 def current():
     """The adapter that is really speaking, or None."""
     return _current
+
+
+#: A text longer than this is spoken a sentence group at a time.
+CHUNK_FROM = 240
+#: A chunk after the first gathers sentences up to about this long.
+CHUNK_SIZE = 160
+
+_SENTENCE_END = None
+
+
+def _speech_chunks(text):
+    """``text`` cut where its sentences end: the first sentence alone (it
+    is what has to be heard soonest), then groups of about `CHUNK_SIZE`.
+    A text short enough, or with no sentence ends, is one chunk."""
+    global _SENTENCE_END
+    text = str(text or '')
+    if len(text) <= CHUNK_FROM:
+        return [text]
+    if _SENTENCE_END is None:
+        import re
+        _SENTENCE_END = re.compile(r'(?<=[.!?\u2026;:])\s+')
+    sentences = [one for one in _SENTENCE_END.split(text) if one.strip()]
+    if len(sentences) < 2:
+        return [text]
+    chunks = [sentences[0]]
+    current = ''
+    for one in sentences[1:]:
+        current = (current + ' ' + one).strip() if current else one
+        if len(current) >= CHUNK_SIZE:
+            chunks.append(current)
+            current = ''
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def speak(text, position=0.0, interrupt=True, pitch_offset=0, voice=None):

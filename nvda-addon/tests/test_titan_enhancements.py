@@ -3216,6 +3216,12 @@ class AWindowThatAnswersNothing(unittest.TestCase):
         self._read = configSpec.read
         configSpec.read = lambda: dict(configSpec.defaults())
         self.addCleanup(lambda: setattr(configSpec, 'read', self._read))
+        # The fakes all say process id 1, and `toolkit` remembers a
+        # process's answer: a test earlier in the run can leave pid 1
+        # named as anything. Each test here asks about its own window.
+        from titanEnhancements import toolkit
+        toolkit.forget()
+        self.addCleanup(toolkit.forget)
 
     def test_an_engine_window_is_recognised_by_its_class(self):
         self.assertTrue(self.surface.looks_drawn(

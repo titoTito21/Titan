@@ -23,6 +23,7 @@ from __future__ import annotations
 import math
 import os
 import sys
+import threading
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence, Tuple
 
@@ -139,12 +140,35 @@ class Capture:
 # --------------------------------------------------------------------------- #
 # Capturing
 # --------------------------------------------------------------------------- #
+_FULL = threading.local()
+
+
+class full_resolution(object):
+    """``with full_resolution(): capture_window(hwnd)`` - no downscaling.
+
+    `MAX_SIDE` is for a picture a provider is PAID to look at. A local
+    recogniser reads small print and is free, so halving a 2560-pixel
+    screen for it only loses the words. A thread-local rather than an
+    argument threaded through every capture route."""
+
+    def __enter__(self):
+        self._was = getattr(_FULL, 'on', False)
+        _FULL.on = True
+        return self
+
+    def __exit__(self, *_):
+        _FULL.on = self._was
+        return False
+
+
 def _prepare(rgb, origin, source, title='', hwnd=0, screen_size=(0, 0)) -> Capture:
     """Downscale, encode and fingerprint one raw RGB array."""
     from src.ai.agent_tools import _encode_png, _looks_blank
 
     h0, w0 = rgb.shape[0], rgb.shape[1]
     factor = max(1, math.ceil(max(w0, h0) / float(MAX_SIDE)))
+    if getattr(_FULL, 'on', False):
+        factor = 1
     small = rgb[::factor, ::factor] if factor > 1 else rgb
     height, width = small.shape[0], small.shape[1]
 

@@ -631,10 +631,101 @@ def looks_drawn(obj, module=None):
     if window_class in NOT_DRAWN_CLASSES:
         return False
     if window_class in DRAWN_CLASSES:
+        # **An engine's window is a picture only while it SAYS nothing.**
+        # Unity 6.3 games can carry a UI Automation hierarchy of their own
+        # (built for Narrator); taken by class alone, such a game was read
+        # as a picture with its real controls right there.
+        return not named_inside_client(obj)
+    if drawn_by_toolkit(obj):
         return True
     if _role(obj) not in ('WINDOW', 'PANE', 'APPLICATION', 'UNKNOWN'):
         return False
     return _has_no_children(obj)
+
+
+#: Toolkits that draw their own widgets and may expose NOTHING of them:
+#: Tk before 9.1 (TIP 733 gave 9.1 MSAA; before it a Tkinter window is a
+#: picture to every accessibility API), GTK on Windows, and the game
+#: engines - Unity before 6.3 or without its accessibility hierarchy,
+#: Godot, SDL. Named by `toolkit` from the libraries the process loaded.
+DRAWS_ITS_OWN = frozenset({'tk', 'gtk', 'unity', 'godot', 'sdl'})
+
+
+def drawn_by_toolkit(obj):
+    """Whether this window is a toolkit's own drawing with nothing in it
+    a reader can reach - judged by the toolkit AND by what is really
+    exposed, so a Tk 9.1 window (MSAA) or a Unity 6.3 game (UI
+    Automation) is read as the native window it is."""
+    try:
+        from . import toolkit
+        framework = toolkit.of(obj)[0]
+    except Exception:                                # noqa: BLE001
+        return False
+    if framework not in DRAWS_ITS_OWN:
+        return False
+    return not named_inside_client(obj)
+
+
+#: How far a window is looked into before it is called empty.
+INSIDE_LOOKED_AT = 160
+
+
+def named_inside_client(obj):
+    """Whether anything with a NAME sits inside the window's client area.
+
+    The title bar's buttons and the system menu are Windows' own and are
+    always there, so "has children" says nothing about the program; a
+    named control inside the client rectangle is the program speaking.
+    Asked by geometry, never by names, and bounded."""
+    client = _client_rect_of(obj)
+    # With no client rectangle to measure against, ANY named descendant
+    # counts - the question is still whether the program says anything.
+    left, top, right, bottom = client if client is not None else (
+        -10 ** 9, -10 ** 9, 10 ** 9, 10 ** 9)
+    queue, seen = [obj], 0
+    while queue and seen < INSIDE_LOOKED_AT:
+        current = queue.pop(0)
+        seen += 1
+        try:
+            children = list(current.children or [])
+        except Exception:                            # noqa: BLE001
+            children = []
+        for child in children:
+            queue.append(child)
+            try:
+                if not _text(getattr(child, 'name', '')):
+                    continue
+                if client is None:
+                    return True
+                where = child.location
+                x = int(where.left) + int(where.width) // 2
+                y = int(where.top) + int(where.height) // 2
+            except Exception:                        # noqa: BLE001
+                continue
+            if left + 2 <= x < right - 2 and top + 2 <= y < bottom - 2:
+                return True
+    return False
+
+
+def _client_rect_of(obj):
+    try:
+        import ctypes
+        from ctypes import wintypes
+        hwnd = int(getattr(obj, 'windowHandle', 0) or 0)
+        if not hwnd:
+            return None
+        user32 = ctypes.windll.user32
+        rect = wintypes.RECT()
+        if not user32.GetClientRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+            return None
+        corner = wintypes.POINT(0, 0)
+        user32.ClientToScreen(wintypes.HWND(hwnd), ctypes.byref(corner))
+        if rect.right < 8 or rect.bottom < 8:
+            return None
+        return (corner.x, corner.y, corner.x + rect.right,
+                corner.y + rect.bottom)
+    except Exception:                                # noqa: BLE001
+        return None
 
 
 def _has_no_children(obj):
@@ -1425,10 +1516,9 @@ def _mode_here():
     window class - is asked here too, rather than one of the three being made
     the default for a window nobody has looked at.
     """
-    try:
-        import api
-        obj = api.getFocusObject()
-    except Exception:                                # noqa: BLE001
+    from . import readerApi
+    obj = readerApi.focus()
+    if obj is None:
         return MODE_NATIVE
     try:
         from . import focus

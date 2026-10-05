@@ -72,6 +72,9 @@ BY_LIBRARY = (
     ('jvm.dll', 'java'), ('awt.dll', 'java'), ('java.dll', 'java'),
     ('libgtk-3', 'gtk'), ('libgtk-4', 'gtk'), ('gtk-3', 'gtk'),
     ('tk86', 'tk'), ('tk87', 'tk'), ('tcl86', 'tk'),
+    # Tk 9: Python 3.14 ships `tcl90.dll` and `tcl9tk90.dll`, and a
+    # Tkinter window was reported as plain "Python" without these.
+    ('tcl9tk9', 'tk'), ('tk9', 'tk'), ('tcl9', 'tk'),
     ('presentationcore', 'wpf'), ('presentationframework', 'wpf'),
     ('system.windows.forms', 'winforms'),
     ('mfc140', 'mfc'), ('mfc120', 'mfc'), ('mfc110', 'mfc'), ('mfc42', 'mfc'),

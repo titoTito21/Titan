@@ -247,6 +247,10 @@ SPEC = {
     # recogniser) and nothing leaves the machine, but a reader that talks
     # while somebody is working is a decision to make for oneself.
     'guestCursor': 'boolean(default=False)',
+    # Follow programs that draw their own controls (Tkinter before Tk
+    # 9.1, GTK on Windows, a game): read what a key changed off the
+    # window's picture. Everything is local.
+    'drawnApps': 'boolean(default=True)',
     # Titan's own cursor cues on every focus change, everywhere EXCEPT
     # Titan's own windows (which already play their own). Off by default: it
     # changes what the whole machine sounds like, which is not a decision to

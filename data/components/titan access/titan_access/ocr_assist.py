@@ -178,51 +178,44 @@ def forget(hwnd=None):
 def local_lines(hwnd):
     """Read *hwnd* with the model on THIS machine. ``[]`` when it cannot.
 
-    **The tier between Windows' recogniser and the AI, and here it is the
-    only local one there is**: the Windows path in `portable/localOcr.py`
-    is NVDA's own `contentRecog`, which Titan Access has not got. So this
-    is what makes a drawn window - a game's menu, a virtual machine -
-    readable in this reader without an AI key, without sending a picture
-    of the screen anywhere and without spending anything.
-
-    In-process, because Titan Access is not on the other side of
-    anything: the add-on asks Titan for this over a pipe and this calls
-    the same code directly.
+    **The local tiers, both owned by this reader**
+    (`titan_access.local_model`, `titan_access.windows_ocr`): the model
+    first - it reads a game's menu or a virtual machine better - and
+    Windows' own recogniser when the model is not installed. Neither
+    needs Titan's own OCR modules, the NVDA add-on or an AI key, and
+    nothing leaves the machine; the libraries and model files live in the
+    component's own folder.
 
     Answers ``[{'text', 'left', 'top', 'width', 'height', 'score'}]`` in
-    SCREEN pixels - the `Capture` is the only thing that knows how to
-    convert them, so it happens once, here.
+    SCREEN pixels.
     """
+    from . import local_model, windows_ocr
+    lines = []
     try:
-        from src.ai.ocr import capture as capture_module
-        from src.ai.ocr import local_model
-    except Exception:                                # noqa: BLE001
-        return []
-    ok, _why = local_model.available()
-    if not ok:
-        return []
-    try:
-        shot = capture_module.capture_window(int(hwnd or 0))
-        if shot is None or getattr(shot, "blank", False):
-            return []
-        from src.titan_core.bridge_api import _picture_of
-        picture = _picture_of(shot)
-        if picture is None:
-            return []
-        ok, found = local_model.read_array(picture)
-        if not ok:
-            return []
+        found = local_model.read_window(int(hwnd or 0))
+        if found.get('ok'):
+            lines = [dict(one) for one in found.get('lines') or []]
     except Exception as e:                           # noqa: BLE001
         if _DBG:
             print(f"[TitanAccess][ocr] local model failed: {e}", flush=True)
+    if lines:
+        return lines
+    try:
+        found = windows_ocr.read_window(int(hwnd or 0))
+    except Exception as e:                           # noqa: BLE001
+        if _DBG:
+            print(f"[TitanAccess][ocr] Windows OCR failed: {e}", flush=True)
         return []
-    lines = []
-    for one in found:
-        left, top, width, height = one["box"]
-        where = shot.rect_to_screen([left, top, width, height])
-        lines.append({"text": one["text"], "score": one.get("score", 0.0),
-                      "left": int(where[0]), "top": int(where[1]),
-                      "width": int(where[2]), "height": int(where[3])})
+    for words in found.get('lines') or [] if found.get('ok') else []:
+        if not words:
+            continue
+        left = min(w['left'] for w in words)
+        top = min(w['top'] for w in words)
+        right = max(w['left'] + w['width'] for w in words)
+        bottom = max(w['top'] + w['height'] for w in words)
+        lines.append({'text': ' '.join(w['text'] for w in words),
+                      'score': 1.0, 'left': left, 'top': top,
+                      'width': right - left, 'height': bottom - top})
     return lines
 
 

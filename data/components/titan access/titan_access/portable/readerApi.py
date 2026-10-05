@@ -193,6 +193,99 @@ def send_key(name):
         return False
 
 
+def field_mode(obj):
+    """How a walked edit field reaches this real control: a provider
+    method ('uia', 'msaa', 'win32', 'jab', 'atspi') or 'keys' - the
+    user's own keys passed on. The reader underneath decides (Titan
+    Access through its per-toolkit modules); NVDA through `fieldWriter`."""
+    ask = _hook('field_mode')
+    if ask is not None:
+        try:
+            return str(ask(obj) or 'keys')
+        except Exception:                            # noqa: BLE001
+            return 'keys'
+    try:
+        from . import fieldWriter
+        return fieldWriter.mode(obj)
+    except Exception:                                # noqa: BLE001
+        return 'keys'
+
+
+def set_field_text(obj, text, method):
+    """Write a field's whole text into the real control. True when it
+    took it."""
+    ask = _hook('set_text')
+    if ask is not None:
+        try:
+            return bool(ask(obj, text, method))
+        except Exception:                            # noqa: BLE001
+            return False
+    try:
+        from . import fieldWriter
+        return fieldWriter.set_text(obj, text, method)
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def field_text(obj):
+    """A field's whole text from the real control, or None."""
+    ask = _hook('read_text')
+    if ask is not None:
+        try:
+            return ask(obj)
+        except Exception:                            # noqa: BLE001
+            return None
+    try:
+        from . import fieldWriter
+        return fieldWriter.read_text(obj)
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def top_windows():
+    """The top-level windows on the desktop, as the reader's objects.
+
+    NVDA answers out of its desktop object; anywhere else the reader's
+    hook is asked, and failing that Windows itself (`EnumWindows`: the
+    visible windows with a title, each through :func:`window_object`)."""
+    api = _nvda_api()
+    if api is not None:
+        try:
+            return list(api.getDesktopObject().children or [])
+        except Exception:                            # noqa: BLE001
+            return []
+    ask = _hook('top_windows')
+    if ask is not None:
+        try:
+            return list(ask() or [])
+        except Exception:                            # noqa: BLE001
+            return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+    except Exception:                                # noqa: BLE001
+        return []
+    handles = []
+    proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def each(hwnd, _param):
+        try:
+            if user32.IsWindowVisible(hwnd) and \
+                    user32.GetWindowTextLengthW(hwnd) > 0:
+                handles.append(int(hwnd))
+        except Exception:                            # noqa: BLE001
+            pass
+        return True
+
+    try:
+        user32.EnumWindows(proc(each), 0)
+    except Exception:                                # noqa: BLE001
+        return []
+    return [obj for obj in (window_object(one) for one in handles)
+            if obj is not None]
+
+
 def type_text(text):
     """Type text where the keyboard is, one key at a time."""
     ask = _hook('type_text')

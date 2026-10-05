@@ -153,6 +153,16 @@ class TheSchemaIsTheOneDescription(unittest.TestCase):
 
 class TheSymbolRules(unittest.TestCase):
 
+    def setUp(self):
+        # The words are Polish whatever this machine's Titan is set to.
+        from titan_access import localization
+        self._lang = localization.get_language()
+        localization.set_language('pl')
+
+    def tearDown(self):
+        from titan_access import localization
+        localization.set_language(self._lang)
+
     def test_punctuation_levels(self):
         from titan_access import symbols
         text = 'a, b; c_d'

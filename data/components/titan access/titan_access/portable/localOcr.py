@@ -92,6 +92,8 @@ def available():
     scan mode's OCR tier, the watcher - needs no second question."""
     if not _IS_WINDOWS:
         return model_available()
+    if not _in_nvda():
+        return _titan_available()
     try:
         from contentRecog import uwpOcr
     except Exception as error:                       # noqa: BLE001
@@ -105,6 +107,77 @@ def available():
         return False, ('Windows has no OCR language installed. Add one in '
                        'Windows Settings, under Language.')
     return True, ''
+
+
+def _in_nvda():
+    """Whether NVDA's own recogniser wrapper is here to be asked.
+
+    Inside NVDA it always is. In Titan Access - the same file, vendored -
+    it never is, and asking it there is how every local reading in that
+    reader answered "this NVDA has no Windows OCR" on a machine with a
+    recogniser built in."""
+    try:
+        import importlib.util
+        return importlib.util.find_spec('contentRecog') is not None
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def _titan_available():
+    """Outside NVDA: Windows' recogniser through Titan, then Titan's local
+    model. ``(ok, why)``."""
+    from .link import LINK
+    ok, data = LINK.bridge('ocr.windows', timeout=25.0)
+    if ok and isinstance(data, dict) and data.get('ok'):
+        return True, ''
+    windows_why = _text((data or {}).get('text')
+                        if isinstance(data, dict) else data)
+    model_ok, model_why = model_available()
+    if model_ok:
+        return True, ''
+    return False, windows_why or model_why or 'nothing here reads the screen'
+
+
+def read_window_titan(hwnd, timeout=30.0, rect=None):
+    """Read one window through TITAN: Windows' own recogniser first, then
+    the local model. ``Reading`` or None. What Titan Access reads with,
+    since NVDA's `contentRecog` is not there."""
+    from .link import LINK
+    started = time.time()
+    asked = {'hwnd': int(hwnd or 0)}
+    if rect:
+        # **The rectangle asked about, not the whole window.** "What did
+        # this key change" is one small region, and reading the whole
+        # window there answered with everything in it.
+        asked.update(dict(zip(('left', 'top', 'width', 'height'),
+                              (int(one) for one in rect))))
+    ok, data = LINK.bridge('ocr.read_windows', timeout=timeout, **asked)
+    if ok and isinstance(data, dict) and data.get('ok'):
+        lines = []
+        for words in data.get('lines') or []:
+            line = [{'text': _text(word.get('text')),
+                     'left': int(word.get('left') or 0),
+                     'top': int(word.get('top') or 0),
+                     'width': int(word.get('width') or 0),
+                     'height': int(word.get('height') or 0)}
+                    for word in words or [] if _text(word.get('text'))]
+            if line:
+                lines.append(line)
+        if lines:
+            reading = Reading(lines)
+            reading.highlights = []
+            with _LOCK:
+                _state['reads'] += 1
+                _state['ms'] = round((time.time() - started) * 1000.0, 1)
+            return reading
+        why = 'Windows read nothing in that window'
+    else:
+        why = _text((data or {}).get('text') if isinstance(data, dict)
+                    else data) or 'Windows OCR answered nothing'
+    fallback = _try_model(hwnd, rect=rect) if hwnd else None
+    if fallback is not None:
+        return fallback
+    return _note(why)
 
 
 def _recognizer():
@@ -256,11 +329,14 @@ def from_window(hwnd, width, height, source=None):
     """
     if not hwnd or width <= 0 or height <= 0:
         return _no_picture('no window, or a size of nothing')
-    try:
-        import ctypes
-        import screenBitmap                          # noqa: F401
-    except Exception as error:                       # noqa: BLE001
-        return _no_picture('this NVDA has no screenBitmap: %s' % error)
+    # Windows' own calls, nothing of NVDA's: `_pixel_type` declares the
+    # pixel itself where NVDA has none, so Titan Access - which is not
+    # NVDA - photographs a guest exactly as the add-on does. The import
+    # of `screenBitmap` that used to stand here refused every capture
+    # there, and the guest reader with it.
+    if not _IS_WINDOWS:
+        return _no_picture('a window picture is a Windows thing')
+    import ctypes
     RGBQUAD = _pixel_type()
     try:
         user32 = ctypes.windll.user32
@@ -390,14 +466,14 @@ def _inside_window(hwnd, info):
     return inside
 
 
-def _try_model(hwnd, timeout=12.0):
+def _try_model(hwnd, timeout=12.0, rect=None):
     """Titan's local model as a fallback for Windows OCR, when there is a
     window to read. None when the model is not there or answered nothing -
     Windows OCR's own reason is then reported instead."""
     try:
         if not model_available(timeout=3.0)[0]:
             return None
-        return read_window_model(int(hwnd), timeout=timeout)
+        return read_window_model(int(hwnd), timeout=timeout, rect=rect)
     except Exception:                                # noqa: BLE001
         return None
 
@@ -470,6 +546,13 @@ def read(left, top, width, height, hwnd=0):
         # with the window in front, which is what every caller here asks
         # a rectangle of anyway.
         return read_window_model(hwnd)
+    if not _in_nvda():
+        # Titan reads a WINDOW; a rectangle is answered with the window it
+        # lies in (or the one in front), which is what every caller here
+        # asks a rectangle of anyway.
+        return read_window_titan(hwnd or _window_at(left, top, width,
+                                                    height),
+                                 rect=(left, top, width, height))
     try:
         import ctypes                                # noqa: F401
         import screenBitmap
@@ -606,6 +689,15 @@ def read_window(hwnd):
         # (the one in front, through AT-SPI). The display model is NVDA's
         # injected hook and does not exist here.
         return read_window_model(hwnd)
+    if not _in_nvda():
+        drawn = None
+        if _drawn_text_wanted():
+            try:
+                from . import drawnText
+                drawn = drawnText.read_window(hwnd)
+            except Exception:                        # noqa: BLE001
+                drawn = None
+        return drawn or read_window_titan(hwnd)
     if _drawn_text_wanted():
         try:
             from . import drawnText
@@ -621,6 +713,22 @@ def read_window(hwnd):
         return _note('that window has no place on the screen')
     left, top, right, bottom = rect
     return read(left, top, right - left, bottom - top, hwnd=hwnd)
+
+
+def _window_at(left, top, width, height):
+    """The top-level window under the middle of a rectangle, or 0."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        point = wintypes.POINT(int(left + width // 2), int(top + height // 2))
+        user32.WindowFromPoint.restype = ctypes.c_void_p
+        user32.GetAncestor.restype = ctypes.c_void_p
+        found = user32.WindowFromPoint(point)
+        return int(user32.GetAncestor(ctypes.c_void_p(found), 2) or 0) \
+            if found else 0
+    except Exception:                                # noqa: BLE001
+        return 0
 
 
 def _drawn_text_wanted():
@@ -642,7 +750,7 @@ def model_report():
         return dict(_model)
 
 
-def read_window_model(hwnd, timeout=30.0):
+def read_window_model(hwnd, timeout=30.0, rect=None):
     """Read one window with TITAN's local model. ``Reading`` or None.
 
     The third tier, and the one worth having: Windows' recogniser is
@@ -660,8 +768,11 @@ def read_window_model(hwnd, timeout=30.0):
     from .link import LINK
     with _LOCK:
         _model['asked'] += 1
-    ok, data = LINK.bridge('ocr.read_local', timeout=timeout,
-                           hwnd=int(hwnd or 0))
+    asked = {'hwnd': int(hwnd or 0)}
+    if rect:
+        asked.update(dict(zip(('left', 'top', 'width', 'height'),
+                              (int(one) for one in rect))))
+    ok, data = LINK.bridge('ocr.read_local', timeout=timeout, **asked)
     if not ok:
         return _model_failed(str(data))
     if not isinstance(data, dict) or not data.get('ok'):

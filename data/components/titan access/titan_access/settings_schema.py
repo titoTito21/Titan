@@ -12,8 +12,8 @@ hand-written copies, and a test could only check that their keys met.
 An entry: ``Entry(section, key, kind, label, help, default, extra)``
     section  the INI section the value is kept in
     key      the INI key
-    kind     'bool' | 'choice' | 'range' | 'text' | 'scheme' | 'engines'
-             | 'voices' | 'braille_table'
+    kind     'bool' | 'choice' | 'range' | 'text' | 'scheme'
+             | 'speech_system' | 'synthesizer' | 'voices' | 'braille_table'
     label    the locale key of the control's label
     help     the locale key of one sentence saying what it does
     default  the default, as Python (bool / int / str)
@@ -84,8 +84,16 @@ SECTIONS = (
     ('speech', 'settings.section.speech', (
         Entry('__scheme__', '', 'scheme', 'settings.speech.scheme',
               _h('Speech', 'scheme'), '', None),
-        _e('Speech', 'OwnVoice', 'bool', 'settings.speech.ownVoice', False),
-        _e('Speech', 'Synthesizer', 'engines', 'settings.speech.engine', 'SAPI5'),
+        # **Speech system, synthesizer, voice** - the three levels of
+        # `speech_systems`, the same three the speech system dialog
+        # (Insert+Ctrl+S), the settings page and the TPad show. The system
+        # is kept as OwnVoice + Synthesizer, the synthesizer as Synthesizer
+        # (+ SpeechDispatcherModule for speech-dispatcher's ``spd:<module>``),
+        # so they are read and written only through `speech_systems`.
+        _e('Speech', 'OwnVoice', 'speech_system', 'settings.speech.system',
+           False),
+        _e('Speech', 'Synthesizer', 'synthesizer', 'settings.speech.engine',
+           'SAPI5'),
         _e('Speech', 'Voice', 'voices', 'settings.speech.voice', ''),
         _e('Speech', 'Rate', 'range', 'settings.speech.rate', 0, (-10, 10, 1)),
         _e('Speech', 'Pitch', 'range', 'settings.speech.pitch', 0, (-10, 10, 1)),
@@ -104,6 +112,8 @@ SECTIONS = (
            'Czytnik ekranu uruchomiony'),
         _e('General', 'SpeakHints', 'bool', 'settings.general.speakHints', True),
         _e('General', 'VirtualScreen', 'bool', 'settings.general.virtualScreen', False),
+        _e('General', 'TitanAnnouncements', 'bool',
+           'settings.general.titanAnnouncements', True),
     )),
     ('keyboard', 'settings.section.keyboard', (
         _e('TextEditing', 'KeyboardEcho', 'choice', 'settings.textEditing.keyboardEcho',
@@ -112,6 +122,8 @@ SECTIONS = (
            'settings.textEditing.phoneticLetters', True),
         _e(SEC_KEYBOARD, 'TypingInterruptsSpeech', 'bool',
            'settings.keyboard.typingInterruptsSpeech', True),
+        _e(SEC_KEYBOARD, 'ShiftPausesSpeech', 'bool',
+           'settings.keyboard.shiftPausesSpeech', True),
         _e(SEC_KEYBOARD, 'SpeakCommandKeys', 'bool',
            'settings.keyboard.speakCommandKeys', False),
         _e(SEC_KEYBOARD, 'SpeakModifierKeys', 'bool',
@@ -176,6 +188,9 @@ SECTIONS = (
         _e(SEC_BROWSE, 'ReportTables', 'bool', 'settings.browse.reportTables', True),
         _e(SEC_BROWSE, 'ReportLandmarks', 'bool', 'settings.browse.reportLandmarks', True),
         _e(SEC_BROWSE, 'LayoutTables', 'bool', 'settings.browse.layoutTables', False),
+        _e(SEC_BROWSE, 'FormsModeOnEnter', 'bool', 'settings.browse.formsModeOnEnter', True),
+        _e(SEC_BROWSE, 'SayDocumentPosition', 'bool',
+           'settings.browse.sayDocumentPosition', False),
     )),
     ('dial', 'settings.section.dial', tuple(
         _e('Dial', key, 'bool', 'settings.dial.' + label, True)
@@ -183,7 +198,8 @@ SECTIONS = (
             ('DialCharacters', 'characters'), ('DialWords', 'words'),
             ('DialButtons', 'buttons'), ('DialHeadings', 'headings'),
             ('DialVolume', 'volume'), ('DialSpeed', 'speed'),
-            ('DialVoice', 'voice'), ('DialSynthesizer', 'synthesizer'),
+            ('DialSpeechSystem', 'speechSystem'),
+            ('DialSynthesizer', 'synthesizer'), ('DialVoice', 'voice'),
             ('DialImportantPlaces', 'importantPlaces')))),
     ('mouse', 'settings.section.mouse', (
         _e(SEC_MOUSE, 'TrackMouse', 'bool', 'settings.mouse.trackMouse', False),
@@ -215,7 +231,8 @@ SECTIONS = (
             ('soundScheme', True), ('dialogKinds', True), ('busyState', True),
             ('attentionState', True), ('liveStatusBars', True),
             ('monitors', True), ('surfaceReading', False),
-            ('guestCursor', False), ('agentLink', False),
+            ('guestCursor', False), ('drawnApps', True),
+            ('agentLink', False),
             ('windowsSemantics', True), ('speakShortcuts', True),
             ('uiaNotifications', True)))),
     ('walk', 'settings.section.walk', (
@@ -253,7 +270,8 @@ NEVER_IN_A_PROFILE = {('General', 'Enabled')}
 #: What the settings ring (Insert+Ctrl+arrows) steps through, in order.
 RING = (
     ('Speech', 'Rate'), ('Speech', 'Pitch'), ('Speech', 'Volume'),
-    ('Speech', 'Voice'), ('Speech', 'Synthesizer'), ('__scheme__', ''),
+    ('Speech', 'OwnVoice'), ('Speech', 'Synthesizer'), ('Speech', 'Voice'),
+    ('__scheme__', ''),
     (SEC_SYMBOLS, 'PunctuationLevel'), ('TextEditing', 'KeyboardEcho'),
     (SEC_MOUSE, 'TrackMouse'),
 )
@@ -283,7 +301,7 @@ def section_of(entry):
 
 def encode(entry, value):
     """A value as the INI keeps it."""
-    if entry.kind == 'bool':
+    if entry.kind in ('bool', 'speech_system'):
         return 'true' if value else 'false'
     if entry.kind == 'range':
         return str(int(value))
@@ -310,10 +328,20 @@ def as_walk_schema():
         for sid, title, rows in SECTIONS)
 
 
+#: Kept in the store, shown as part of another entry (the synthesizer).
+STORED_ONLY = (
+    _e('Speech', 'SpeechDispatcherModule', 'text', 'settings.speech.spdModule',
+       ''),
+)
+
+#: The three speech levels, by entry kind.
+SPEECH_LEVELS = ('speech_system', 'synthesizer', 'voices')
+
+
 def register_defaults(defaults=DEFAULTS):
     """Put every entry's default into the store's table, where it is not
     already written down (the hand-written defaults keep their spelling)."""
-    for entry in entries():
+    for entry in tuple(entries()) + STORED_ONLY:
         if entry.kind == 'scheme' or not entry.key:
             continue
         defaults.setdefault((entry.section, entry.key), encode(entry, entry.default))

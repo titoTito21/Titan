@@ -28,6 +28,26 @@ ASSISTANT_TIMEOUT = 90.0
 READ_ALOUD_LIMIT = 240
 
 
+#: **Commands the reader underneath answers in its own way.** Empty in
+#: NVDA. Titan Access fills it at start (`engine._own_commands`): "status"
+#: there is the reader's own state rather than "is Titan connected",
+#: positioned speech is its virtual screen, the trackpad is its own - so
+#: the Titan menu and the palette, which run commands by name, do what
+#: this reader means instead of refusing with "this reader has not got
+#: that". ``{name: callable}``.
+OWN = {}
+
+
+def find(name):
+    """The callable a command name means in this reader, or None."""
+    name = str(name or '')
+    own = OWN.get(name)
+    if callable(own):
+        return own
+    found = globals().get(name)
+    return found if callable(found) and not name.startswith('_') else None
+
+
 def _work(function):
     """Run ``function`` off NVDA's main thread and never raise into wx."""
     def run():
@@ -1546,7 +1566,7 @@ def run_command(name):
     would swallow the first thing the user pressed in whatever it opened.
     """
     from . import palette
-    function = globals().get(str(name or ''))
+    function = find(name)
     palette.stop()
     if not callable(function):
         return False, 'there is no command called %r' % name

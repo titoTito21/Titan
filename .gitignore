@@ -159,3 +159,8 @@ sfx/windows 9x theme/
 
 # The built NVDA add-on: a zip of nvda-addon/addon, rebuilt by build.py.
 *.nvda-addon
+
+# Titan Access carries its own OCR libraries and model files (installed
+# by titan_access/local_model.install) - hundreds of MB, not source.
+data/components/titan access/lib/python/
+data/components/titan access/lib/ocr_models/

@@ -83,6 +83,7 @@ SHARED = (
     # general setting.
     'perProgram.py',
     # Finding the control that DOES a thing, by what is written on it.
+    'fieldWriter.py',
     'findControl.py',
     # What a control offers and the two things any control allows.
     'windowsAndActions.py',
@@ -168,6 +169,12 @@ SHARED = (
     'spokenShortcuts.py',
     # Any window, as a virtual window.
     'virtualWindow.py',
+    # The screen review (NVDA+O / Insert+O): the window read by the
+    # local recogniser and walked line by line, Enter clicking where the
+    # words are. Every caller of it was vendored (`commands.ocr_review`,
+    # `reviews`, `touchWalk`) and it was not, so in Titan Access the key
+    # and the palette entry ended on `cannot import name 'ocrReview'`.
+    'ocrReview.py',
     # A Titan widget, reviewed.
     'widgetReview.py',
     # Titan's own window: its applications, settings, buffers, statusbar.
@@ -225,7 +232,12 @@ SHARED_PACKAGES = ('readerModules',)
 #: `sfx/` (`icons.own_folders()` looks there). They used to be vendored
 #: nowhere, so Titan Access had the earcon kits and none of the icons.
 SHARED_DATA = {'sounds': os.path.join(ROOT, 'data', 'components',
-                                      'titan access', 'sfx', 'icons')}
+                                      'titan access', 'sfx', 'icons'),
+               # The native libraries the shared modules load from beside
+               # themselves (`guestNative.PLACES`: `lib/guestscreen.dll`).
+               # Titan Access had none of them, so its guest reader said
+               # "guestscreen.dll was not built" on every machine.
+               'lib': os.path.join(TARGET, 'lib')}
 
 #: Beside them in the target, and NOT copied: the shims that answer for
 #: this reader - `_` through its own catalogue, NVDA's services through

@@ -292,8 +292,16 @@ class Adapted:
 
     @property
     def location(self):
-        bounds = getattr(self.original, 'bounds', None) or (0, 0, 0, 0)
-        return _Rect(*bounds)
+        # **`bounds` is (left, top, RIGHT, BOTTOM)** - this reader's own
+        # shape - and NVDA's `location` is (left, top, WIDTH, HEIGHT).
+        # Handed over as it was, every width and height the shared modules
+        # read was a coordinate: a row's middle was clicked in the wrong
+        # place, the screen layout and the corner keys measured the wrong
+        # rectangles, and a window whose only rows are its title bar was
+        # judged by where it happened to open on the screen.
+        left, top, right, bottom = (getattr(self.original, 'bounds', None)
+                                    or (0, 0, 0, 0))
+        return _Rect(left, top, max(0, right - left), max(0, bottom - top))
 
     @property
     def indexInParent(self):
@@ -511,12 +519,36 @@ class Hooks:
         return '+'.join(parts)
 
     def send_key(self, name):
+        # The reader's own hook marks what it injects and lets it through;
+        # a key sent with the `keyboard` library carries no mark, and the
+        # hook would hear it again - in a walked field, as the user typing.
+        try:
+            from titan_access import keyboard_hook
+            if keyboard_hook.send_combo(self._key_name(name)
+                                        .replace('page up', 'pageup')
+                                        .replace('page down', 'pagedown')):
+                return True
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             import keyboard
             keyboard.send(self._key_name(name))
             return True
         except Exception:                            # noqa: BLE001
             return False
+
+    # -- a walked edit field and the real control (titan_access.toolkits) #
+    def field_mode(self, obj):
+        from titan_access import toolkits
+        return toolkits.mode(original_of(obj))
+
+    def set_text(self, obj, text, method):
+        from titan_access import toolkits
+        return toolkits.set_text(original_of(obj), text, method)
+
+    def read_text(self, obj):
+        from titan_access import toolkits
+        return toolkits.read_text(original_of(obj))
 
     def type_text(self, text):
         try:

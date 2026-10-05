@@ -311,12 +311,20 @@ class OcrAssistTests(unittest.TestCase):
         # Whether AI OCR is AVAILABLE is the user's settings and a key, which
         # on the machine running this may be anything; the question here is
         # what a reading becomes, so availability is answered yes.
+        # And the LOCAL model is asked first: on a machine that has it
+        # (rapidocr on the Linux Python here) it photographs the real screen
+        # for a window that does not exist and answers whatever is on it.
+        # This test is about an AI reading becoming nodes, so that tier
+        # answers nothing.
         had = ocr_assist.unavailable_reason
+        had_local = ocr_assist.local_nodes
         ocr_assist.unavailable_reason = lambda settings=None: ""
+        ocr_assist.local_nodes = lambda hwnd, node_cls: []
         try:
             nodes = ocr_assist.build_nodes(7, VNode)
         finally:
             ocr_assist.unavailable_reason = had
+            ocr_assist.local_nodes = had_local
             ocr_assist.forget(7)
         names = [n.name for n in nodes]
         self.assertIn("Install", names)
@@ -601,6 +609,173 @@ class GroupAnnouncementTests(unittest.TestCase):
             self.assertFalse(_is_web_content(
                 types.SimpleNamespace(framework_id=framework)), framework)
 
+
+
+class TheDocumentIsWalkedLikeAVirtualWindow(unittest.TestCase):
+    """The hybrid: a page keeps its quick navigation and gains the virtual
+    window's layouts, corners and switches, and Enter or an arrow on a
+    field hands the keys to the page until Escape."""
+
+    def setUp(self):
+        # The words are Polish whatever this machine's Titan is set to.
+        from titan_access import localization
+        kept = localization.get_language()
+        localization.set_language('pl')
+        self.addCleanup(lambda: localization.set_language(kept))
+
+    def _page(self, layout="linear", **settings):
+        nodes = [
+            VNode(name="Home", role="link", rect=(5, 5, 60, 20),
+                  landmark="navigation", landmark_start=True),
+            VNode(name="News", role="link", rect=(65, 5, 120, 20),
+                  landmark="navigation"),
+            VNode(name="Headline", role="heading", level=1, rect=(5, 60, 190, 90),
+                  landmark="main", landmark_start=True),
+            VNode(name="Some text here", role="text", rect=(5, 100, 190, 120),
+                  landmark="main"),
+            VNode(name="Name", role="edit", value="Anna", rect=(5, 130, 90, 150),
+                  landmark="main"),
+            VNode(name="Footer note", role="text", rect=(0, 500, 200, 520)),
+        ]
+        handler, engine = make_handler(nodes=nodes)
+        handler._scan = False
+        handler._foreground_is_browser = lambda: True
+        handler._layout = lambda: layout
+        handler._walk_switch = lambda name, default=True: bool(settings.get(name, False))
+        engine.settings.get_bool = lambda section, key, default: settings.get(key, default)
+        handler._scroll_later = lambda node: None
+        self.beeps = []
+        import titan_access.browse_mode as bm
+        # A web document needs the UIA tier to exist; the test runner may
+        # have none, and these tests never touch it.
+        had_uia = bm._UIA
+        bm._UIA = had_uia or True
+        self.addCleanup(lambda: setattr(bm, "_UIA", had_uia))
+        from titan_access.portable import palette
+        self._had_beep = palette._beep
+        palette._beep = lambda at, count: self.beeps.append((at, count))
+        self.addCleanup(lambda: setattr(palette, "_beep", self._had_beep))
+        self.bm = bm
+        return handler, engine
+
+    def _key(self, handler, vk, name, shift=False):
+        return handler.handle_key(vk, name, False, False, shift)
+
+    def test_the_screen_layout_follows_the_page_geometry(self):
+        from titan_access.browse_mode import _VK_DOWN, _VK_RIGHT, _VK_LEFT, _VK_UP
+        handler, engine = self._page("screen")
+        handler._index = 0
+        self.assertTrue(self._key(handler, _VK_RIGHT, "right"))
+        self.assertEqual(handler._index, 1)                 # News, beside Home
+        self.assertTrue(self._key(handler, _VK_DOWN, "down"))
+        self.assertEqual(handler._index, 2)                 # Headline, below
+        self.assertTrue(self._key(handler, _VK_UP, "up"))
+        self.assertIn(handler._index, (0, 1))
+        handler._index = 0
+        self.assertTrue(self._key(handler, _VK_LEFT, "left"))
+        self.assertEqual(handler._index, 0)                 # nothing beside: the edge
+        self.assertIn("edge", str(engine.sounds[-1]).lower() + "edge")
+
+    def test_the_interaction_layout_walks_regions_entries_words_and_characters(self):
+        from titan_access.browse_mode import _VK_DOWN, _VK_RIGHT, _VK_UP
+        handler, engine = self._page("interact")
+        handler._index = 0
+        self.assertTrue(self._key(handler, _VK_RIGHT, "right"))
+        self.assertEqual(handler._index, 1)                 # News: a sibling
+        self.assertTrue(self._key(handler, _VK_RIGHT, "right"))
+        self.assertEqual(handler._index, 1)                 # the region's end
+        handler._index = 3                                  # Some text here
+        self.assertTrue(self._key(handler, _VK_DOWN, "down"))
+        self.assertEqual(handler._depth, "word")
+        said = " ".join(str(seg[0]) for seg in engine.segments[-1])
+        self.assertIn("Some text here", said)
+        self.assertIn("Some", said.split()[-1] + " Some")
+        self.assertTrue(self._key(handler, _VK_RIGHT, "right"))
+        self.assertEqual(engine.spoken[-1], "text")
+        self.assertTrue(self._key(handler, _VK_DOWN, "down"))
+        self.assertEqual(handler._depth, "char")
+        self.assertTrue(self._key(handler, _VK_UP, "up"))
+        self.assertEqual(handler._depth, "word")
+        self.assertTrue(self._key(handler, _VK_UP, "up"))
+        self.assertEqual(handler._depth, "node")
+        self.assertTrue(self._key(handler, _VK_UP, "up"))
+        self.assertEqual(handler._depth, "region")
+        self.assertEqual(handler._index, 2)                 # main's first entry
+        self.assertTrue(self._key(handler, _VK_RIGHT, "right"))
+        self.assertEqual(handler._index, 5)                 # the region after main
+        self.assertTrue(self._key(handler, _VK_DOWN, "down"))
+        self.assertEqual(handler._depth, "node")
+
+    def test_the_numpad_corners_and_layout_keys_are_the_documents(self):
+        handler, engine = self._page("linear")
+        from titan_access.portable import virtualWindow
+        had = virtualWindow.layout_cycle
+        virtualWindow.layout_cycle = lambda delta: (True, "Screen layout")
+        self.addCleanup(lambda: setattr(virtualWindow, "layout_cycle", had))
+        handler._index = 3
+        self.assertTrue(handler.handle_numpad("numpad7"))
+        self.assertEqual(handler._index, 0)                 # Home: top left
+        self.assertTrue(handler.handle_numpad("numpad3"))
+        self.assertEqual(handler._index, 5)                 # Footer: bottom right
+        self.assertTrue(handler.handle_numpad("numpad6"))
+        self.assertEqual(engine.spoken[-1], "Screen layout")
+        self.assertTrue(handler.handle_numpad("numpad8"))
+        self.assertEqual(handler._index, 4)
+        self.assertFalse(handler.handle_numpad("numpad0"))
+
+    def test_enter_on_a_field_is_forms_mode_and_escape_is_the_way_back(self):
+        import titan_access.virtual_buffer as vb
+        focused = []
+        had_focus, had_activate = vb.focus_node, vb.activate
+        vb.focus_node = lambda node: focused.append(node.name)
+        vb.activate = lambda node: focused.append("activated " + node.name) or True
+        self.addCleanup(lambda: (setattr(vb, "focus_node", had_focus),
+                                 setattr(vb, "activate", had_activate)))
+        handler, engine = self._page(FormsModeOnEnter=True)
+        handler._index = 4                                  # the edit field
+        self.assertTrue(self._key(handler, 0x0D, "enter"))
+        self.assertEqual(focused, ["Name"])
+        self.assertTrue(handler.pass_through)
+        self.assertEqual(engine.spoken[-1], "Tryb formularza")
+        # The keys are the page's now - an arrow is not consumed...
+        self.assertFalse(self._key(handler, 0x28, "down"))
+        # ...and Escape comes back to the document.
+        self.assertTrue(self._key(handler, 0x1B, "escape"))
+        self.assertFalse(handler.pass_through)
+        self.assertEqual(engine.spoken[-1], "Tryb przeglądania")
+        # On a link Enter still presses.
+        handler._index = 0
+        self.assertTrue(self._key(handler, 0x0D, "enter"))
+        self.assertEqual(focused[-1], "activated Home")
+        self.assertFalse(handler.pass_through)
+
+    def test_with_the_setting_off_enter_only_presses_the_field(self):
+        import titan_access.virtual_buffer as vb
+        pressed = []
+        had = vb.activate
+        vb.activate = lambda node: pressed.append(node.name) or True
+        self.addCleanup(lambda: setattr(vb, "activate", had))
+        handler, engine = self._page(FormsModeOnEnter=False)
+        handler._index = 4
+        self.assertTrue(self._key(handler, 0x0D, "enter"))
+        self.assertEqual(pressed, ["Name"])
+        self.assertFalse(handler.pass_through)
+
+    def test_the_walked_lists_switches_reach_the_document(self):
+        from titan_access.browse_mode import _VK_DOWN
+        handler, engine = self._page(walkWrap=True, walkRowBeep=True,
+                                     SayDocumentPosition=True)
+        handler._index = 5
+        self.assertTrue(self._key(handler, _VK_DOWN, "down"))
+        self.assertEqual(handler._index, 0)                 # wrapped round
+        self.assertEqual(self.beeps[-1], (0, 6))            # the row's tone
+        said = [str(seg[0]) for seg in engine.segments[-1]]
+        self.assertIn("1 z 6", said)
+        handler2, engine2 = self._page()
+        handler2._index = 5
+        self.assertTrue(self._key(handler2, _VK_DOWN, "down"))
+        self.assertEqual(handler2._index, 5)                # no wrap: the end
+        self.assertEqual(self.beeps, [])                    # no tone without the switch
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

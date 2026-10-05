@@ -77,12 +77,8 @@ def windows():
     navigation walks - so a window that is here is one the reader can
     already reach, and there is no second idea of what a window is.
     """
-    try:
-        import api
-        desktop = api.getDesktopObject()
-        children = list(desktop.children or [])
-    except Exception:                                # noqa: BLE001
-        return []
+    from . import readerApi
+    children = readerApi.top_windows()
     found = []
     for obj in children:
         name = _text(getattr(obj, 'name', ''))
@@ -105,11 +101,8 @@ def windows():
 
 
 def foreground():
-    try:
-        import api
-        return api.getForegroundObject()
-    except Exception:                                # noqa: BLE001
-        return None
+    from . import readerApi
+    return readerApi.foreground()
 
 
 # --------------------------------------------------------------------------- #
@@ -209,11 +202,9 @@ def review(obj):
     """Put NVDA's own review cursor on it, for a control that cannot take
     the keyboard at all - which is most of what is interesting in a window
     somebody is examining."""
-    try:
-        import api
-        api.setNavigatorObject(obj)
+    from . import readerApi
+    if readerApi.navigate_to(obj):
         # Translators: said when the review cursor is moved to a control.
         return True, _('The review cursor is there.')
-    except Exception as error:                       # noqa: BLE001
-        return False, _('The review cursor could not be moved there: '
-                        '{why}').format(why=error)
+    return False, _('The review cursor could not be moved there: '
+                    '{why}').format(why=_('the reader would not take it'))

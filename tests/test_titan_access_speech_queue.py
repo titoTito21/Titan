@@ -194,6 +194,42 @@ class QueuedSpeechTests(unittest.TestCase):
         self.assertFalse(sp.is_speaking)
 
 
+class ALongTextStartsAfterItsFirstSentence(unittest.TestCase):
+    """A paragraph rendered whole was 88 ms (eSpeak) and 161 ms (SAPI) of
+    silence before its first word; it is spoken a sentence group at a
+    time, the first sentence alone, and an interrupt cuts the rest."""
+
+    PARAGRAPH = ' '.join('Sentence number %d is here and it says a few '
+                         'words.' % n for n in range(12))
+
+    def test_the_first_sentence_is_rendered_alone(self):
+        from titan_access import speech_adapter as sa
+        chunks = sa._speech_chunks(self.PARAGRAPH)
+        self.assertGreater(len(chunks), 2)
+        self.assertEqual(chunks[0], 'Sentence number 0 is here and it says '
+                                    'a few words.')
+        self.assertEqual(' '.join(chunks), self.PARAGRAPH)
+        self.assertEqual(sa._speech_chunks('Zapisz'), ['Zapisz'])
+
+    def test_each_chunk_is_played_in_turn(self):
+        engine = ConcatEngine(duration=0.02)
+        sp = make_adapter(engine)
+        sp.speak(self.PARAGRAPH)
+        self.assertTrue(sp.wait_for_queue(timeout=10.0))
+        self.assertGreater(len(engine.concat_calls), 2)
+        self.assertEqual(' '.join(engine.texts), self.PARAGRAPH)
+
+    def test_an_interrupt_cuts_the_rest(self):
+        engine = ConcatEngine(duration=0.3)
+        sp = make_adapter(engine)
+        sp.speak(self.PARAGRAPH)
+        time.sleep(0.1)
+        sp.speak('stop', interrupt=True)
+        self.assertTrue(sp.wait_for_queue(timeout=10.0))
+        self.assertEqual(engine.texts[-1], 'stop')
+        self.assertLess(len(engine.texts), 4)
+
+
 class ConcatEngineAgnosticTests(unittest.TestCase):
     """``StereoSpeech.speak_concat`` must not be SAPI-only any more."""
 
@@ -493,6 +529,37 @@ class APartOfAnAnnouncementMayComeFromAnotherSynthesizer(unittest.TestCase):
         finally:
             sa._current = was
         self.assertIn(('engine', 'smp'), self.engine.calls)
+
+
+class TheOwnVoiceIsOnlyASynthesizerThisPlatformOffers(unittest.TestCase):
+    """The store's default synthesizer is SAPI5, and a Linux Titan refuses
+    it every time the reader's own voice is put back after a borrowed
+    part. A name the engine does not list is not set; an engine that
+    cannot say what it offers is believed."""
+
+    def test_an_unoffered_synthesizer_is_not_set(self):
+        engine = VoiceEngine()
+        engine.get_available_engines = lambda: ['espeak', 'spd', 'dectalk']
+        engine.engine = 'espeak_dll'
+        adapter = _voice_adapter(engine, _Settings(synth='SAPI5', voice=''))
+        adapter._apply_own_voice()
+        self.assertNotIn(('engine', 'SAPI5'), engine.calls)
+        self.assertEqual(engine.engine, 'espeak_dll')
+
+    def test_an_offered_one_is(self):
+        engine = VoiceEngine()
+        engine.get_available_engines = lambda: ['espeak', 'dectalk']
+        adapter = _voice_adapter(engine, _Settings(synth='dectalk', voice=''))
+        adapter._apply_own_voice()
+        self.assertIn(('engine', 'dectalk'), engine.calls)
+
+    def test_an_engine_that_cannot_say_is_believed(self):
+        from titan_access import speech_adapter as sa
+        self.assertTrue(sa._engine_offered(VoiceEngine(), 'SAPI5'))
+        engine = VoiceEngine()
+        engine.get_available_engines = lambda: [{'id': 'sapi5_32'}]
+        self.assertTrue(sa._engine_offered(engine, 'SAPI5'))
+        self.assertFalse(sa._engine_offered(engine, 'dectalk'))
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

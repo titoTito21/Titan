@@ -193,6 +193,73 @@ else:
     _kernel32 = None
 
 
+# --------------------------------------------------------------------------- #
+# Keys the reader presses itself - marked, so this hook lets them through
+# --------------------------------------------------------------------------- #
+_SEND_NAMES = {
+    'ctrl': 0x11, 'control': 0x11, 'shift': 0x10, 'alt': 0x12, 'win': 0x5B,
+    'windows': 0x5B, 'enter': 0x0D, 'return': 0x0D, 'escape': 0x1B,
+    'tab': 0x09, 'space': 0x20, 'backspace': 0x08, 'back': 0x08,
+    'delete': 0x2E, 'insert': 0x2D, 'home': 0x24, 'end': 0x23,
+    'pageup': 0x21, 'pagedown': 0x22, 'left': 0x25, 'up': 0x26,
+    'right': 0x27, 'down': 0x28, 'leftarrow': 0x25, 'uparrow': 0x26,
+    'rightarrow': 0x27, 'downarrow': 0x28,
+}
+#: The keys that exist twice on a keyboard: the extended flag tells the
+#: real arrow from the NumPad's.
+_SEND_EXTENDED = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E,
+                  0x5B}
+
+
+def _vk_of(name):
+    name = str(name or '').strip().lower()
+    if name in _SEND_NAMES:
+        return _SEND_NAMES[name]
+    if len(name) == 1 and (name.isalpha() or name.isdigit()):
+        return ord(name.upper())
+    if name.startswith('f') and name[1:].isdigit():
+        return 0x6F + int(name[1:])
+    return 0
+
+
+def _inject(vk, up=False):
+    flags = KEYEVENTF_KEYUP if up else 0
+    if vk in _SEND_EXTENDED:
+        flags |= 0x01                # KEYEVENTF_EXTENDEDKEY
+    _user32.keybd_event(int(vk), 0, flags, _INJECT_SENTINEL)
+
+
+def pass_key(vk):
+    """Press and release one key, carrying the sentinel, so the program
+    gets it and this reader does not hear it again. The modifiers the
+    user is HOLDING stay held, so the key arrives exactly as they pressed
+    it - AltGr and Shift included."""
+    try:
+        _inject(int(vk))
+        _inject(int(vk), up=True)
+        return True
+    except Exception as e:
+        log(f"[TitanAccess] keyboard_hook: pass key error: {e}")
+        return False
+
+
+def send_combo(combo):
+    """Press a named combination ('ctrl+end', 'shift+home', 'a') as the
+    reader's own key - marked, so this hook lets it through."""
+    vks = [_vk_of(part) for part in str(combo or '').split('+') if part]
+    if not vks or not all(vks):
+        return False
+    try:
+        for vk in vks:
+            _inject(vk)
+        for vk in reversed(vks):
+            _inject(vk, up=True)
+        return True
+    except Exception as e:
+        log(f"[TitanAccess] keyboard_hook: send error: {e}")
+        return False
+
+
 class KeyboardHook:
     """Installs and services the global low-level keyboard hook."""
 
@@ -388,6 +455,9 @@ class KeyboardHook:
         # "used", so releasing the modifier is not treated as a lone tap.
         if self._reader_mod and is_down:
             self._mod_used = True
+        # Any other key while Shift is held: that Shift was not a lone tap.
+        if is_down and vk not in _SHIFT_KEYS:
+            self._shift_alone = False
 
         if vk in _CTRL_KEYS:
             self._ctrl = is_down
@@ -411,9 +481,21 @@ class KeyboardHook:
                 self._modifier_pressed('alt')
             return False
         if vk in _SHIFT_KEYS:
+            if is_down and not self._shift:
+                # A fresh Shift press may be a lone tap - which pauses or
+                # resumes speech, as in NVDA - unless another key is
+                # pressed while it is held (a capital, a shortcut).
+                self._shift_alone = not (self._ctrl or self._alt or
+                                         self._reader_mod)
             self._shift = is_down
             if is_down:
                 self._modifier_pressed('shift')
+            elif getattr(self, '_shift_alone', False):
+                self._shift_alone = False
+                try:
+                    self.engine.on_pause_speech_key()
+                except Exception as e:
+                    log(f"[TitanAccess] keyboard_hook: pause error: {e}")
             return False
         if vk in _WIN_KEYS:
             if is_down:
@@ -439,6 +521,8 @@ class KeyboardHook:
                 if self.engine.on_modifier_gesture(vk, name, self._ctrl,
                                                    self._alt, self._shift,
                                                    with_modifier=True):
+                    if self._alt:
+                        self._mask_alt()
                     return True
             except Exception as e:
                 log(f"[TitanAccess] keyboard_hook: modifier gesture error: {e}")
@@ -608,6 +692,25 @@ class KeyboardHook:
         except Exception as e:
             log(f"[TitanAccess] keyboard_hook: caps tap error: {e}")
 
+    #: An unassigned virtual key: pressed between Alt going down and up,
+    #: it tells Windows the Alt was a chord, not a tap.
+    VK_MENU_MASK = 0xE8
+
+    def _mask_alt(self):
+        """Insert+Alt+letter must not open the program's menu bar.
+
+        The letter was swallowed, so the program saw Alt go down and come
+        up with nothing in between - which Windows reads as a tap of Alt and
+        answers by activating the menu bar. One press of an unassigned key
+        in between makes it a chord (NVDA and AutoHotkey do the same). The
+        injected key carries the sentinel, so this hook ignores it."""
+        try:
+            _user32.keybd_event(self.VK_MENU_MASK, 0, 0, _INJECT_SENTINEL)
+            _user32.keybd_event(self.VK_MENU_MASK, 0, KEYEVENTF_KEYUP,
+                                _INJECT_SENTINEL)
+        except Exception as e:
+            log(f"[TitanAccess] keyboard_hook: alt mask error: {e}")
+
     def _numlock_on(self):
         try:
             return bool(self._user32.GetKeyState(VK_NUMLOCK) & 0x0001)
@@ -732,7 +835,23 @@ class KeyboardHook:
             except Exception:
                 pass
 
-    def _vk_to_char(self, vk, scan):
+    def char_for(self, vk, shift=False, altgr=False):
+        """The character this key types in the foreground window's layout
+        with Shift and AltGr as given, or None - what a walked edit field
+        inserts. AltGr matters: on a Polish keyboard it is how ą, ę, ł are
+        typed, and a field that cannot take them cannot be written in."""
+        try:
+            scan = int(self._user32.MapVirtualKeyW(int(vk), 0))
+        except Exception:
+            scan = 0
+        keep = self._shift
+        self._shift = bool(shift)
+        try:
+            return self._vk_to_char(vk, scan, altgr=altgr)
+        finally:
+            self._shift = keep
+
+    def _vk_to_char(self, vk, scan, altgr=False):
         """Translate vk + current modifier/layout state to a unicode char.
 
         Uses ``ToUnicodeEx`` against the foreground window's keyboard layout so
@@ -746,6 +865,11 @@ class KeyboardHook:
         state = (ctypes.c_ubyte * 256)()
         if self._shift:
             state[VK_SHIFT] = 0x80
+        if altgr:
+            state[0x11] = 0x80          # VK_CONTROL
+            state[0x12] = 0x80          # VK_MENU
+            state[0xA2] = 0x80          # left Control (what AltGr sends)
+            state[VK_RMENU] = 0x80
         try:
             if u.GetKeyState(VK_CAPITAL) & 0x0001:
                 state[VK_CAPITAL] = 0x01

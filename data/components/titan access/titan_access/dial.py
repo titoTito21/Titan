@@ -5,10 +5,13 @@ Python port of the C# ``InputGestures/DialManager.cs``. A rotary control toggled
 with NumPad Minus: NumPad 4/6 cycle the category, NumPad 2/8 change the value /
 navigate within it. Categories are filtered by the user's Dial settings.
 
-Categories that adjust speech (Speed / Volume / Voice / Synthesizer) drive the
-**live Titan TTS** through the engine's speech adapter -- i.e. the dial is the
-sanctioned way to change Titan TTS from the reader (unlike startup, which never
-imposes anything). Navigation categories (Characters / Words / Important places)
+Categories that adjust speech (Speed / Volume / Speech system / Synthesizer /
+Voice) change the READER's own speech settings and apply them. The speech
+system, synthesizer and voice are the three levels of `speech_systems` - the
+same ones the speech system dialog (Insert+Ctrl+S), the settings page and the
+walked settings offer, external NVDA add-on synthesizers included. The dial
+used to cycle Titan's flat engine list on the live engine without saving,
+which with an external synthesizer chosen changed nothing at all. Navigation categories (Characters / Words / Important places)
 delegate to the matching subsystem.
 """
 
@@ -21,13 +24,14 @@ WORDS = "words"
 BUTTONS = "buttons"
 HEADINGS = "headings"
 VOICE = "voice"
+SPEECH_SYSTEM = "speechSystem"
 SPEED = "speed"
 VOLUME = "volume"
 SYNTHESIZER = "synthesizer"
 IMPORTANT_PLACES = "importantPlaces"
 
-_ALL = [CHARACTERS, WORDS, BUTTONS, HEADINGS, VOICE, SPEED, VOLUME,
-        SYNTHESIZER, IMPORTANT_PLACES]
+_ALL = [CHARACTERS, WORDS, BUTTONS, HEADINGS, SPEED, VOLUME,
+        SPEECH_SYSTEM, SYNTHESIZER, VOICE, IMPORTANT_PLACES]
 
 # Category id -> (settings key, locale name key)
 _CAT_META = {
@@ -36,6 +40,7 @@ _CAT_META = {
     BUTTONS: ("DialButtons", "dial.cat.buttons"),
     HEADINGS: ("DialHeadings", "dial.cat.headings"),
     VOICE: ("DialVoice", "dial.cat.voice"),
+    SPEECH_SYSTEM: ("DialSpeechSystem", "dial.cat.speechSystem"),
     SPEED: ("DialSpeed", "dial.cat.speed"),
     VOLUME: ("DialVolume", "dial.cat.volume"),
     SYNTHESIZER: ("DialSynthesizer", "dial.cat.synthesizer"),
@@ -118,10 +123,12 @@ class DialManager:
             return self._change_speed(nxt)
         if cat == VOLUME:
             return self._change_volume(nxt)
-        if cat == VOICE:
-            return self._change_voice(nxt)
+        if cat == SPEECH_SYSTEM:
+            return self._step_speech('system', nxt)
         if cat == SYNTHESIZER:
-            return self._change_engine(nxt)
+            return self._step_speech('synth', nxt)
+        if cat == VOICE:
+            return self._step_speech('voice', nxt)
         if cat == CHARACTERS and self.engine.editable is not None:
             # `Navigation/PhoneticInDial`: a letter reached through the dial
             # is said phonetically (or not) as THIS setting says, whatever
@@ -159,13 +166,27 @@ class DialManager:
     # ------------------------------------------------------------------ #
     # Speech-adjusting categories -> live Titan TTS
     # ------------------------------------------------------------------ #
+    def _apply(self):
+        """The reader's own speech, whichever system it speaks with."""
+        apply_all = getattr(self.engine, 'apply_settings', None)
+        if callable(apply_all):
+            try:
+                apply_all('dial')
+                return
+            except Exception as e:
+                print(f"[TitanAccess] dial apply: {e}")
+        if self.engine.speech is not None:
+            try:
+                self.engine.speech.apply_settings()
+            except Exception:
+                pass
+
     def _change_speed(self, nxt):
         s = self.engine.settings
         rate = max(-10, min(10, s.rate + (1 if nxt else -1)))
         s.rate = rate
         s.save()
-        if self.engine.speech is not None:
-            self.engine.speech.set_rate(rate)
+        self._apply()
         percent = (rate + 10) * 5
         self.engine.speak(L("dial.speed", percent), interrupt=True)
         return True
@@ -175,32 +196,21 @@ class DialManager:
         vol = max(0, min(100, s.volume + (10 if nxt else -10)))
         s.volume = vol
         s.save()
-        if self.engine.speech is not None:
-            self.engine.speech.set_volume(vol)
+        self._apply()
         self.engine.speak(L("dial.volume", vol), interrupt=True)
         return True
 
-    def _change_voice(self, nxt):
-        sp = self.engine.speech
-        voices = sp.get_voices() if sp is not None else []
-        if not voices:
-            self.engine.speak(L("dial.noVoices"), interrupt=True)
+    def _step_speech(self, level, nxt):
+        from titan_access import speech_systems
+        try:
+            said = speech_systems.step(self.engine.settings, level,
+                                       forward=nxt, reader=self.engine)
+        except Exception as e:
+            print(f"[TitanAccess] dial {level}: {e}")
+            said = ''
+        if not said:
+            key = "dial.noVoices" if level == 'voice' else "dial.nothingHere"
+            self.engine.speak(L(key), interrupt=True)
             return True
-        self._voice_index = (self._voice_index + (1 if nxt else -1)) % len(voices)
-        v = voices[self._voice_index]
-        name = v.get("display_name") or v.get("name") or v.get("id") if isinstance(v, dict) else str(v)
-        sp.set_voice(self._voice_index)
-        self.engine.speak(str(name).split("(")[0].strip(), interrupt=True)
-        return True
-
-    def _change_engine(self, nxt):
-        sp = self.engine.speech
-        engines = sp.get_engines() if sp is not None else []
-        if not engines:
-            self.engine.speak(L("dial.noCategories"), interrupt=True)
-            return True
-        self._engine_index = (self._engine_index + (1 if nxt else -1)) % len(engines)
-        eng = str(engines[self._engine_index])
-        sp.set_engine(eng)
-        self.engine.speak(eng, interrupt=True)
+        self.engine.speak(str(said), interrupt=True)
         return True

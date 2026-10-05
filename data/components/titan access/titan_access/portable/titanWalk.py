@@ -41,6 +41,20 @@ _LOCK = threading.RLock()
 _counted = {'opened': 0, 'pages': 0, 'ran': 0, 'failed': 0, 'why': ''}
 
 
+
+def _real_word(kind, name, fallback):
+    """The word the reader says for a REAL control: ``kind`` is 'role' or
+    'state', ``name`` NVDA's enum name. A walked list must name a control
+    exactly as the reader names it in a real window; ``fallback`` is only
+    for a reader that has no word for it."""
+    try:
+        from . import elements
+        word = (elements.role_word(name) if kind == 'role'
+                else elements.state_word(name))
+    except Exception:                                # noqa: BLE001
+        word = ''
+    return word or fallback
+
 def report():
     with _LOCK:
         return dict(_counted)
@@ -383,9 +397,18 @@ def _switched_on(name, unless=True):
         return unless
 
 
+#: What Titan's settings window BUILDS for each kind of setting
+#: (`src/settings/ui_model.py`), as NVDA's role - so a row is named with
+#: the word the reader says for that very control in the real window.
+_SETTING_ROLES = {'bool': 'CHECKBOX', 'choice': 'COMBOBOX', 'list': 'LIST',
+                  'number': 'SPINBUTTON', 'text': 'EDITABLETEXT',
+                  'secret': 'PASSWORDEDIT', 'command': 'BUTTON',
+                  'info': 'STATICTEXT', 'multi': 'LIST'}
+
+
 def _what_a_setting_is(kind):
-    """What a control IS, in the one word a row has room for."""
-    return {
+    """What a control IS - the reader's own word for the real one."""
+    fallback = {
         # Translators: what a settings control is - a check box.
         'bool': _('tick box'),
         # Translators: what a settings control is - one of several answers.
@@ -406,6 +429,8 @@ def _what_a_setting_is(kind):
         'multi': _('tick list'),
         # Translators: what a settings control is, when Titan has not said.
     }.get(str(kind or ''), _('setting'))
+    role = _SETTING_ROLES.get(str(kind or ''))
+    return _real_word('role', role, fallback) if role else fallback
 
 
 def _setting_name(item):
@@ -684,7 +709,8 @@ def _mark_tick(row, ticked):
     """What a row of a tick list says about itself."""
     # Translators: a row of a tick list that is ticked.
     # Translators: a row of a tick list that is not ticked.
-    row['role'] = _('ticked') if ticked else _('not ticked')
+    row['role'] = _real_word('state', 'CHECKED' if ticked else 'UNCHECKED',
+                             _('ticked') if ticked else _('not ticked'))
     row['icon'] = 'on' if ticked else 'off'
 
 

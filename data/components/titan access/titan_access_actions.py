@@ -391,6 +391,183 @@ def action_refresh():
 
 
 # --------------------------------------------------------------------------- #
+# The reader's own OCR - nothing of NVDA, the add-on or Titan's AI
+# --------------------------------------------------------------------------- #
+def action_read_text(window=0, engine="auto"):
+    """Read a window's text off its picture, with this reader's own
+    recognisers: Windows' built-in OCR or the local model carried in the
+    component's own folder. Nothing leaves the machine."""
+    from titan_access import local_model, windows_ocr
+    hwnd = int(window or 0) or _foreground()
+    engine = str(engine or "auto").strip().lower()
+    found = None
+    if engine in ("auto", "windows"):
+        found = windows_ocr.read_window(hwnd)
+        if not found.get("ok") and engine == "auto":
+            found = None
+    if found is None:
+        found = local_model.read_window(hwnd)
+    if not found.get("ok"):
+        return fails(found.get("text") or "Nothing could be read.")
+    lines = []
+    for one in found.get("lines") or []:
+        if isinstance(one, list):
+            lines.append(" ".join(w.get("text", "") for w in one))
+        else:
+            lines.append(str(one.get("text") or ""))
+    lines = [line for line in lines if line.strip()]
+    if not lines:
+        return "The window was read and holds no text."
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# The user's own scripts (accessibility/scripts/*.tas, Titan Script)
+# --------------------------------------------------------------------------- #
+def _scripts():
+    from titan_access import ta_scripts
+    return ta_scripts
+
+
+def action_list_scripts():
+    """The user's Titan Access scripts and when each one runs."""
+    ta = _scripts()
+    found = ta.load()
+    if not found:
+        return "There are no scripts. Put .tas files in %s." % ta.folder()
+    lines = []
+    for one in found:
+        when = ", ".join(
+            ('key ' + t['spec']) if t['kind'] == 'key' else t['kind']
+            for t in one['triggers']) or "never"
+        line = "%s: %s" % (one['name'], when)
+        if one['problems']:
+            line += " - does not run: " + "; ".join(one['problems'])
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def action_run_script(name):
+    """Run one of the user's scripts now."""
+    ta = _scripts()
+    ta.load()
+    script = ta.by_name(name)
+    if script is None:
+        return fails("There is no script called '%s'." % name)
+    ok, why = ta.run(script)
+    return ("Running %s." % script['name']) if ok else fails(why)
+
+
+def action_check_script(name):
+    """Check one script without running it: its triggers and its Titan
+    Script."""
+    ta = _scripts()
+    ta.load()
+    script = ta.by_name(name)
+    if script is None:
+        return fails("There is no script called '%s'." % name)
+    with open(script['path'], 'r', encoding='utf-8-sig') as handle:
+        problems = ta.check(handle.read())
+    return "No problems." if not problems else "\n".join(problems)
+
+
+def action_reload_scripts():
+    """Read the scripts folder again and rebind the scripts' keys."""
+    ta = _scripts()
+    engine = _engine(require_running=True)
+    found = ta.bind(engine) if engine is not None else ta.load()
+    return "%d scripts loaded from %s." % (len(found), ta.folder())
+
+
+def action_scripts_folder():
+    """Where the user's scripts live."""
+    return _scripts().folder()
+
+
+# --------------------------------------------------------------------------- #
+# NVDA add-ons installed in Titan Access (titan_access.nvda_host)
+# --------------------------------------------------------------------------- #
+def action_nvda_addons():
+    """The NVDA add-ons installed in Titan Access."""
+    from titan_access import nvda_host
+    found = nvda_host.installed()
+    if not found:
+        return ("No NVDA add-ons are installed in Titan Access (%s)."
+                % nvda_host.folder())
+    lines = []
+    for one in found:
+        lines.append("%s %s - %s; %s; %s" % (
+            one['name'], one['version'], one['summary'],
+            ", ".join(one['kinds']) or "data",
+            "running" if one['enabled'] else "switched off"))
+    errors = nvda_host.report().get('errors') or {}
+    if errors:
+        lines.append("Problems: " + "; ".join(
+            "%s: %s" % (key, value) for key, value in errors.items()))
+    return "\n".join(lines)
+
+
+def action_install_nvda_addon(path):
+    """Install a .nvda-addon file (or an add-on folder) into Titan Access."""
+    from titan_access import nvda_host
+    ok, said = nvda_host.install(path)
+    if not ok:
+        return fails(said)
+    if nvda_host.is_loaded():
+        nvda_host.reload()
+    return "%s installed in Titan Access." % said
+
+
+def action_set_nvda_addon(name, enabled=True):
+    """Switch an NVDA add-on on or off in Titan Access."""
+    from titan_access import nvda_host
+    if not nvda_host.set_enabled(name, _bool(enabled)):
+        return fails("There is no NVDA add-on called '%s'." % name)
+    if nvda_host.is_loaded():
+        nvda_host.reload()
+    return "%s is %s." % (name, "on" if _bool(enabled) else "off")
+
+
+def action_migrate_nvda_addons():
+    """Copy NVDA's own add-ons into Titan Access."""
+    from titan_access import nvda_host
+    done = nvda_host.migrate()
+    if nvda_host.is_loaded():
+        nvda_host.reload()
+    if not done:
+        return "NVDA has no add-ons to migrate."
+    return "\n".join("%s: %s" % (name, "migrated" if ok else why)
+                     for name, ok, why in done)
+
+
+def action_external_synthesizers():
+    """The synthesizers the NVDA add-ons bring (external synthesis)."""
+    from titan_access import nvda_host
+    found = nvda_host.synthesizers()
+    if not found:
+        return "No NVDA add-on brings a synthesizer."
+    return "\n".join("nvda:%s - %s (%s)%s" % (
+        one['name'], one['description'], one['addon'],
+        " - does not load: " + one['error'] if one['error'] else "")
+        for one in found)
+
+
+def action_ocr_status():
+    """Which of this reader's own recognisers can read here."""
+    from titan_access import local_model, windows_ocr
+    ok, why = windows_ocr.available()
+    model = local_model.report()
+    parts = ["Windows OCR: " + ("ready, language %s"
+                                % (windows_ocr.report().get("language")
+                                   or "?") if ok else "not here (%s)" % why)]
+    if model.get("installed"):
+        parts.append("Local model: installed in %s" % model.get("libraries"))
+    else:
+        parts.append("Local model: not installed (%s)" % model.get("why"))
+    return ". ".join(parts) + "."
+
+
+# --------------------------------------------------------------------------- #
 # Speaking
 # --------------------------------------------------------------------------- #
 def action_say(text, interrupt=True):
@@ -756,6 +933,75 @@ TITAN_ACTIONS = [
      'summary': "Read the window in front again, from scratch.",
      'timeout': 90,
      'run': action_refresh},
+
+    {'name': 'read_text',
+     'summary': "Read a window's text off its picture with the reader's own "
+                "OCR (Windows' built-in recogniser or the local model).",
+     'params': {
+         'window': _WINDOW_PARAM,
+         'engine': {'type': 'string', 'enum': ['auto', 'windows', 'model'],
+                    'description': "Which recogniser; auto tries Windows' "
+                                   "first."},
+     },
+     'needs_gui': False,
+     'timeout': 120,
+     'run': action_read_text},
+    {'name': 'nvda_addons',
+     'summary': "The NVDA add-ons installed in Titan Access.",
+     'needs_gui': False,
+     'run': action_nvda_addons},
+    {'name': 'install_nvda_addon',
+     'summary': "Install a .nvda-addon file into Titan Access.",
+     'params': {'path': {'type': 'string', 'required': True,
+                         'description': "The .nvda-addon file or folder."}},
+     'risk': 'confirm',
+     'needs_gui': False,
+     'run': action_install_nvda_addon},
+    {'name': 'set_nvda_addon',
+     'summary': "Switch an NVDA add-on on or off in Titan Access.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The add-on's name."},
+                'enabled': {'type': 'boolean',
+                            'description': "On (true) or off (false)."}},
+     'needs_gui': False,
+     'run': action_set_nvda_addon},
+    {'name': 'migrate_nvda_addons',
+     'summary': "Copy NVDA's own add-ons into Titan Access.",
+     'needs_gui': False,
+     'run': action_migrate_nvda_addons},
+    {'name': 'external_synthesizers',
+     'summary': "The synthesizers NVDA add-ons bring to Titan Access.",
+     'needs_gui': False,
+     'run': action_external_synthesizers},
+    {'name': 'list_scripts',
+     'summary': "The user's Titan Access scripts and when each one runs.",
+     'needs_gui': False,
+     'run': action_list_scripts},
+    {'name': 'run_script',
+     'summary': "Run one of the user's Titan Access scripts now.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The script's name, without .tas."}},
+     'needs_gui': False,
+     'run': action_run_script},
+    {'name': 'check_script',
+     'summary': "Check a Titan Access script without running it.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The script's name, without .tas."}},
+     'needs_gui': False,
+     'run': action_check_script},
+    {'name': 'reload_scripts',
+     'summary': "Read the scripts folder again and rebind their keys.",
+     'needs_gui': False,
+     'run': action_reload_scripts},
+    {'name': 'scripts_folder',
+     'summary': "Where the user's Titan Access scripts live.",
+     'needs_gui': False,
+     'run': action_scripts_folder},
+    {'name': 'ocr_status',
+     'summary': "Which of the reader's own recognisers can read here.",
+     'needs_gui': False,
+     'timeout': 60,
+     'run': action_ocr_status},
 
     # -- speaking ------------------------------------------------------- #
     {'name': 'say',

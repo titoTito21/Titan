@@ -35,6 +35,20 @@ _held = {'menu': None, 'builder': None}
 _counted = {'opened': 0, 'levels': 0, 'ran': 0}
 
 
+
+def _real_word(kind, name, fallback):
+    """The word the reader says for a REAL control: ``kind`` is 'role' or
+    'state', ``name`` NVDA's enum name. A walked list must name a control
+    exactly as the reader names it in a real window; ``fallback`` is only
+    for a reader that has no word for it."""
+    try:
+        from . import elements
+        word = (elements.role_word(name) if kind == 'role'
+                else elements.state_word(name))
+    except Exception:                                # noqa: BLE001
+        word = ''
+    return word or fallback
+
 def report():
     with _LOCK:
         found = dict(_counted)
@@ -172,7 +186,9 @@ def _said_as(item):
     if item.get('checkable'):
         # Translators: a switch on the walked Titan menu that is on.
         # Translators: a switch on the walked Titan menu that is off.
-        return '%s: %s' % (label, _('on') if item.get('ticked') else _('off'))
+        return '%s: %s' % (label, _real_word(
+            'state', 'CHECKED' if item.get('ticked') else 'UNCHECKED',
+            _('on') if item.get('ticked') else _('off')))
     if not item.get('enabled'):
         # Translators: an entry on the walked menu that cannot be used.
         return '%s (%s)' % (label, _('not available'))

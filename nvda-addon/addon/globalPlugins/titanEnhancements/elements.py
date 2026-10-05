@@ -83,6 +83,38 @@ def _state(name):
     return getattr(state, name, None)
 
 
+def role_word(name):
+    """The word this reader says for a REAL control of NVDA's role
+    ``name`` ('EDITABLETEXT', 'CHECKBOX'...), or ''.
+
+    Every walked list that describes a control it did not get from the
+    screen - a described Titan application, a settings row, a menu item -
+    asks this rather than keeping a word of its own, so a control is
+    named the same in a walked list as in a real window."""
+    types = compat.controlTypes
+    role = getattr(getattr(types, 'Role', None), str(name or ''), None) \
+        if types is not None else None
+    return context.role_name(role) if role is not None else ''
+
+
+def state_word(name):
+    """The word for NVDA's state ``name`` ('CHECKED', 'UNCHECKED'...), as
+    it is said for a real control, or ''."""
+    name = str(name or '')
+    if name == 'UNCHECKED' and _state('UNCHECKED') is None:
+        # NVDA has no UNCHECKED state: a check box that is not checked is
+        # said with CHECKED's NEGATIVE word, as NVDA says it itself.
+        checked = _state('CHECKED')
+        word = getattr(checked, 'negativeDisplayString', '') \
+            if checked is not None else ''
+        return str(word or '')
+    state = _state(name)
+    if state is None:
+        return ''
+    words = [w for w in context.state_names([state]) if w]
+    return words[0] if words else ''
+
+
 def _role_is(obj, *names):
     for name in names:
         types = compat.controlTypes

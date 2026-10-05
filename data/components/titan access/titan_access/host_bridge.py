@@ -34,6 +34,26 @@ def _engine():
     return None
 
 
+def _titan_words_wanted(eng) -> bool:
+    """Whether Titan's own wording may stand in for the reader's.
+
+    ``General/TitanAnnouncements`` (Insert+Alt+N, "Titan's own
+    announcements"): off, the reader reads Titan's controls itself - the
+    same switch the NVDA add-on has, with the same meaning. Titan is
+    still told the reader took the call, so it does not speak the words
+    a second time through another voice."""
+    try:
+        return bool(eng.settings.get_bool("General", "TitanAnnouncements",
+                                          True))
+    except Exception:
+        try:
+            value = str(eng.settings.get("General", "TitanAnnouncements",
+                                         "true")).lower()
+            return value not in ("false", "0", "no", "off")
+        except Exception:
+            return True
+
+
 def is_active() -> bool:
     """True when Titan Access is the running screen reader."""
     return _engine() is not None
@@ -46,6 +66,8 @@ def announce(text, interrupt=True, pitch=0) -> bool:
     eng = _engine()
     if eng is None:
         return False
+    if not _titan_words_wanted(eng):
+        return True
     try:
         eng.announce_override(text, interrupt=interrupt, pitch_offset=pitch)
         return True
@@ -61,6 +83,8 @@ def announce_segments(segments, interrupt=True) -> bool:
     eng = _engine()
     if eng is None:
         return False
+    if not _titan_words_wanted(eng):
+        return True
     try:
         eng.announce_segments(segments, interrupt=interrupt)
         return True
@@ -88,6 +112,8 @@ def state_suffix(text) -> bool:
     eng = _engine()
     if eng is None:
         return False
+    if not _titan_words_wanted(eng):
+        return True
     try:
         eng.set_state_suffix(text)
         return True
@@ -106,6 +132,8 @@ def dialog_kind(kind) -> bool:
     eng = _engine()
     if eng is None:
         return False
+    if not _titan_words_wanted(eng):
+        return True
     try:
         eng.set_dialog_kind(kind)
         return True
@@ -120,6 +148,8 @@ def role_label(text) -> bool:
     eng = _engine()
     if eng is None:
         return False
+    if not _titan_words_wanted(eng):
+        return True
     try:
         eng.set_role_label(text)
         return True

@@ -191,7 +191,9 @@ class TitanAccessObjectsWearNvdasShape(unittest.TestCase):
         self.assertEqual({s.name for s in a.states}, {'UNAVAILABLE', 'HASPOPUP'})
         self.assertEqual(a.windowClassName, 'Button')
         self.assertEqual(a.UIAAutomationId, 'btnSave')
-        self.assertEqual(tuple(a.location), (1, 2, 3, 4))
+        # Bounds are (left, top, RIGHT, BOTTOM); NVDA's location is
+        # (left, top, WIDTH, HEIGHT) - the shared modules measure with it.
+        self.assertEqual(tuple(a.location), (1, 2, 2, 2))
         self.assertEqual(self._adapt(role='listitem').role.name, 'LISTITEM')
         self.assertEqual(self._adapt(role='menu').role.name, 'POPUPMENU')
 

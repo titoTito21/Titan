@@ -95,8 +95,8 @@ def note(text, kind='', obj=None):
            'program': '', 'anchor': None, 'where': ''}
     try:
         if obj is None:
-            import api
-            obj = api.getFocusObject()
+            from . import readerApi
+            obj = readerApi.focus()
         row['program'] = anchors.program_of(obj)
         row['anchor'] = anchors.anchor_for(obj)
         row['where'] = anchors.describe(obj)
@@ -180,16 +180,14 @@ def go(row):
         return True, _('{what}').format(what=row.get('where') or '')
     except Exception:                                # noqa: BLE001
         pass
-    try:
-        import api
-        api.setNavigatorObject(obj)
+    from . import readerApi
+    if readerApi.navigate_to(obj):
         # Translators: said when the review cursor goes back to what said a
         # line, because the control cannot take the keyboard.
         return True, _('{what}, review cursor').format(
             what=row.get('where') or '')
-    except Exception:                                # noqa: BLE001
-        # Translators: said when what said a line cannot be reached.
-        return False, _('It could not be reached')
+    # Translators: said when what said a line cannot be reached.
+    return False, _('It could not be reached')
 
 
 def as_text(rows=None):

@@ -206,6 +206,90 @@ def _show_on_gui_thread(engine):
                   (lambda _evt, name=action: _after_menu(engine, name)), item)
     menu.AppendSubMenu(windows, L("readerMenu.windows"))
 
+    # **NVDA add-ons, installed in Titan Access** (`nvda_host`): the
+    # manager, installing one from a file, bringing NVDA's own over, and
+    # whatever the add-ons put in NVDA's Tools menu.
+    addons = wx.Menu()
+
+    def _manage(_evt):
+        def run():
+            from .nvda_host import manager
+            manager.show()
+        wx.CallAfter(run)
+
+    def _install(_evt):
+        def run():
+            from . import nvda_host
+            with wx.FileDialog(None, L("nvdaHost.manager.install"),
+                               wildcard="NVDA add-on (*.nvda-addon)|"
+                                        "*.nvda-addon",
+                               style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) \
+                    as chooser:
+                if chooser.ShowModal() != wx.ID_OK:
+                    return
+                path = chooser.GetPath()
+            ok, said = nvda_host.install(path)
+            if ok:
+                nvda_host.reload()
+                engine.speak(L("nvdaHost.manager.installed").format(
+                    name=said))
+            else:
+                engine.speak(said)
+        wx.CallAfter(run)
+
+    def _migrate(_evt):
+        from . import nvda_host
+        done = nvda_host.migrate()
+        nvda_host.reload()
+        engine.speak(L("nvdaHost.migrate.done").format(
+            count=len([one for one in done if one[1]])))
+
+    for key, handler in (("readerMenu.nvdaManage", _manage),
+                         ("readerMenu.nvdaInstall", _install),
+                         ("readerMenu.nvdaMigrate", _migrate)):
+        item = addons.Append(wx.ID_ANY, L(key))
+        menu.Bind(wx.EVT_MENU, handler, item)
+    try:
+        from . import nvda_host
+        tools = nvda_host.menu_items()
+    except Exception:
+        tools = []
+    if tools:
+        addons.AppendSeparator()
+        for _where, label, run in tools:
+            item = addons.Append(wx.ID_ANY, label)
+            menu.Bind(wx.EVT_MENU, (lambda _evt, run=run: run()), item)
+    menu.AppendSubMenu(addons, L("readerMenu.nvdaAddons"))
+
+    # **The user's own scripts** (`ta_scripts`): where they are, and
+    # reading them again after a change.
+    scripts = wx.Menu()
+
+    def _scripts_folder(_evt):
+        from . import ta_scripts
+        where = ta_scripts.folder()
+        try:
+            import os
+            import subprocess
+            import sys as _s
+            if _s.platform.startswith("win"):
+                os.startfile(where)
+            else:
+                subprocess.Popen(["xdg-open", where])
+        except Exception:
+            engine.speak(where)
+
+    def _scripts_reload(_evt):
+        from . import ta_scripts
+        found = ta_scripts.bind(engine)
+        engine.speak(L("scripts.reloaded").format(count=len(found)))
+
+    for key, handler in (("readerMenu.scriptsFolder", _scripts_folder),
+                         ("readerMenu.scriptsReload", _scripts_reload)):
+        item = scripts.Append(wx.ID_ANY, L(key))
+        menu.Bind(wx.EVT_MENU, handler, item)
+    menu.AppendSubMenu(scripts, L("readerMenu.scripts"))
+
     bridge_item = menu.Append(wx.ID_ANY, L("readerMenu.testNvdaBridge"))
     menu.Bind(wx.EVT_MENU, lambda _evt: _test_nvda_bridge(engine), bridge_item)
 

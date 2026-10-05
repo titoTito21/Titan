@@ -95,6 +95,13 @@ def _try(import_callable, label):
         return None
 
 
+
+#: Keys a walked edit field acts on by NAME - never as a character.
+_FIELD_KEYS = frozenset({
+    'left', 'right', 'up', 'down', 'home', 'end', 'pageup', 'pagedown',
+    'backspace', 'delete', 'enter', 'return', 'numpadenter', 'tab',
+    'escape', 'space', 'insert'})
+
 class TitanAccessEngine:
     """Central screen-reader orchestrator (singleton via :data:`instance`)."""
 
@@ -651,6 +658,25 @@ class TitanAccessEngine:
                 self._register_default_gestures()
             except Exception as e:
                 log(f"[TitanAccess] gesture registration error: {e}")
+        # The user's own scripts (`accessibility/scripts/*.tas`, Titan
+        # Script): their keys go in front of the reader's own.
+        try:
+            from . import ta_scripts
+            found = ta_scripts.bind(self)
+            log(f"[TitanAccess] scripts: {len(found)} loaded")
+        except Exception as e:
+            log(f"[TitanAccess] scripts error: {e}")
+        # NVDA add-ons installed in Titan Access (`nvda_host`): their
+        # global plugins start now, the first time the user is asked
+        # whether to bring NVDA's own add-ons over.
+        try:
+            from . import nvda_host
+            if nvda_host.installed():
+                plugins = nvda_host.load(self)
+                log(f"[TitanAccess] NVDA add-ons: {len(plugins)} plugins")
+            nvda_host.ask_about_migration()
+        except Exception as e:
+            log(f"[TitanAccess] NVDA add-ons error: {e}")
         self._start_shared_watchers()
         try:
             from . import jab
@@ -699,6 +725,7 @@ class TitanAccessEngine:
             virtualWindow.document_rows = self._document_rows
         except Exception as e:
             log(f"[TitanAccess] document rows hook: {e}")
+        self._own_commands()
         # The IAccessible2 proxy, so a call into Chrome or Firefox can be
         # marshalled - from the registry where NVDA or Firefox put one, or
         # registered for this process from a DLL already on the machine.
@@ -762,6 +789,21 @@ class TitanAccessEngine:
             hwnd = 0
         if not hwnd:
             return None
+        # **Only for the window it was ASKED about.** Browse mode is about
+        # the window in front; a virtual window opened over another one -
+        # or a walk asked for from a script - must not be handed the page
+        # of a browser that happens to be the foreground.
+        try:
+            asked = int(getattr(window, 'windowHandle', 0) or 0)
+        except (TypeError, ValueError):
+            asked = 0
+        if asked and asked != hwnd:
+            try:
+                root = int(ctypes.windll.user32.GetAncestor(asked, 2) or 0)
+            except Exception:
+                root = asked
+            if root != hwnd:
+                return None
         doc = getattr(self.browse, '_doc', None)
         if doc is None or getattr(doc, 'hwnd', 0) != hwnd or not doc.nodes:
             try:
@@ -1124,6 +1166,15 @@ class TitanAccessEngine:
                 speech.apply_settings()
             except Exception as e:
                 log(f"[TitanAccess] apply settings: speech: {e}")
+        try:
+            # The voices of the synthesizer in use, read now on a thread of
+            # their own: the TPad, the ring and the walked settings name
+            # the voice out of them and must never wait for a synthesizer.
+            from titan_access import speech_systems
+            _sys, synth, _voice = speech_systems.current(self.settings)
+            speech_systems.prefetch_voices(synth)
+        except Exception as e:                       # noqa: BLE001
+            log(f"[TitanAccess] apply settings: voices: {e}")
         mouse = getattr(self, 'mouse', None)
         if mouse is not None:
             try:
@@ -1568,6 +1619,18 @@ class TitanAccessEngine:
         """UIA focus listener. Marshalled onto our thread by the provider."""
         if obj is None:
             return
+        self._scripts_follow_focus(obj)
+        # An NVDA add-on's `event_gainFocus` comes first, as in NVDA: one
+        # that does not call `nextHandler` has taken the event, and the
+        # reader says nothing of its own.
+        try:
+            from . import nvda_host
+            if nvda_host.is_loaded() and \
+                    not nvda_host.fire_event('gainFocus', obj):
+                self.current_object = obj
+                return
+        except Exception as e:
+            log(f"[TitanAccess] NVDA add-on focus: {e}")
         # Swallow focus on our own popup-menu host frame (Insert+C). Without this
         # the empty hosting window is announced as "panel" / "window" right before
         # the menu opens. The popup's menu and menu items live in a different
@@ -1763,6 +1826,25 @@ class TitanAccessEngine:
         # background reader thread instead (latest-keystroke wins).
         self.submit_read(_do)
 
+    def on_pause_speech_key(self):
+        """Shift alone: pause the speech, or go on with it (NVDA's key).
+        Called on the keyboard-hook thread; a setting can switch it off."""
+        try:
+            from .settings_store import get_settings
+            if not get_settings().get_bool('Keyboard', 'ShiftPausesSpeech',
+                                           True):
+                return False
+        except Exception:
+            pass
+        speech = self.speech
+        if speech is None or not hasattr(speech, 'toggle_pause'):
+            return False
+        try:
+            return bool(speech.toggle_pause())
+        except Exception as e:
+            log(f"[TitanAccess] pause speech: {e}")
+            return False
+
     def on_stop_speech_key(self):
         """Ctrl / Tab pressed: silence current speech immediately.
 
@@ -1825,6 +1907,22 @@ class TitanAccessEngine:
             if play_cursor:
                 self._play_element_cue(obj, for_navigation)
             return
+        # **The user's own control rules** (`ta_scripts`, a JAWS-style
+        # reclass, label or announcement): the control is READ as they
+        # say, while `current_object` stays the real one every action acts
+        # on.
+        try:
+            from . import ta_scripts
+            if ta_scripts.scripts():
+                obj, scripted = ta_scripts.adjust(obj)
+                if scripted is None or scripted:
+                    if play_cursor:
+                        self._play_element_cue(obj, for_navigation)
+                    if scripted:
+                        self.speak(scripted, interrupt=not for_navigation)
+                    return
+        except Exception as e:
+            log(f"[TitanAccess] script rules: {e}")
         if play_cursor:
             self._play_element_cue(obj, for_navigation)
             self._auditory_icon(obj)
@@ -2065,6 +2163,24 @@ class TitanAccessEngine:
     # ==================================================================== #
     # Keyboard callbacks (invoked by KeyboardHook)
     # ==================================================================== #
+    def _nvda_addon_key(self, key_name, ctrl, alt, shift, reader, vk=0):
+        """A key an NVDA add-on bound a script to. True when one ran."""
+        try:
+            from . import nvda_host
+            if not nvda_host.is_loaded() or not nvda_host.gestures():
+                return False
+            identifier = nvda_host.identifier_of(key_name, ctrl, alt, shift,
+                                                 reader)
+            from . import keyboard_hook
+
+            def send(vk=vk):
+                keyboard_hook.pass_key(vk)
+            return nvda_host.run_gesture(identifier, self.current_object,
+                                         send=send if vk else None)
+        except Exception as e:
+            log(f"[TitanAccess] NVDA add-on key: {e}")
+            return False
+
     def on_modifier_gesture(self, vk, key_name, ctrl, alt, shift,
                             with_modifier=False) -> bool:
         """A key with the reader modifier held, or a bare NumPad key.
@@ -2096,6 +2212,11 @@ class TitanAccessEngine:
             if self.dial.enabled and key_name in ("numpad4", "numpad6",
                                                   "numpad8", "numpad2"):
                 return self.dial.handle_key(key_name)
+        # An NVDA add-on's script on NVDA+key comes before the reader's own
+        # command, as a global plugin comes before NVDA's global commands.
+        if with_modifier and self._nvda_addon_key(key_name, ctrl, alt,
+                                                  shift, True):
+            return True
         if self.gestures is None:
             return False
         try:
@@ -2175,6 +2296,15 @@ class TitanAccessEngine:
         except Exception:                            # noqa: BLE001
             return 0
 
+    @staticmethod
+    def _typing_in_a_walked_field():
+        try:
+            from .portable import virtualWindow
+            return bool(virtualWindow.reviewing()
+                        and virtualWindow.typing_mode())
+        except Exception:                            # noqa: BLE001
+            return False
+
     def _walked_key(self, vk, key_name, ctrl, alt, shift) -> bool:
         """The ported walkers get their keys here. ``True`` when one took it.
 
@@ -2188,7 +2318,9 @@ class TitanAccessEngine:
         a cursor in a list already in hand, never a round trip.
         """
         name = str(key_name or '').lower()
-        if alt:
+        if alt and not (ctrl and self._typing_in_a_walked_field()):
+            # Alt is the program's menus - except that AltGr IS Ctrl+Alt,
+            # and in a walked edit field it is how ą, ę, ł and ż are typed.
             return False
         # **The smart OCR cursor over a drawn window** (`portable/smart.py`):
         # Tab and the up/down arrows walk the controls that were read,
@@ -2276,6 +2408,57 @@ class TitanAccessEngine:
                 return True
         except Exception:                            # noqa: BLE001
             pass
+        # **The screen review (Insert+O)**: the window read by the
+        # recogniser, walked line by line - the add-on's own keys, which it
+        # borrows from NVDA there and which come through here in this
+        # reader.
+        try:
+            from .portable import ocrReview
+            if ocrReview.reviewing():
+                said = ''
+                if name in ('up', 'numpad8'):
+                    ocrReview.move_line(-1)
+                elif name in ('down', 'numpad2'):
+                    ocrReview.move_line(1)
+                elif name == 'left':
+                    ocrReview.move_word(-1)
+                elif name == 'right':
+                    ocrReview.move_word(1)
+                elif name == 'pageup':
+                    ocrReview.move_page(-1)
+                elif name == 'pagedown':
+                    ocrReview.move_page(1)
+                elif name == 'home':
+                    ocrReview.move_end(False)
+                elif name == 'end':
+                    ocrReview.move_end(True)
+                elif name == 'numpad7':
+                    ocrReview.move_corner(-1, -1)
+                elif name == 'numpad9':
+                    ocrReview.move_corner(1, -1)
+                elif name == 'numpad1':
+                    ocrReview.move_corner(-1, 1)
+                elif name == 'numpad3':
+                    ocrReview.move_corner(1, 1)
+                elif name == 'numpad4':
+                    ocrReview.layout_cycle(-1)
+                elif name == 'numpad6':
+                    ocrReview.layout_cycle(1)
+                elif name in ('return', 'enter', 'numpad5'):
+                    _ok, said = ocrReview.click(double=bool(shift))
+                elif name == 'f5':
+                    threading.Thread(
+                        target=lambda: self._say(str(ocrReview.refresh()[1])),
+                        name='TitanAccessScreenReview', daemon=True).start()
+                elif name == 'escape':
+                    _on, said = ocrReview.stop()
+                else:
+                    return False
+                if said:
+                    self._say(str(said))
+                return True
+        except Exception as error:                   # noqa: BLE001
+            log(f"[TitanAccess] screen review key: {error}")
         try:
             from .portable import virtualWindow
         except Exception:                            # noqa: BLE001
@@ -2292,13 +2475,33 @@ class TitanAccessEngine:
                 # Everything else is the field's: the letters, the space,
                 # the arrows, Backspace. `type_key` hands back anything
                 # the field does not want.
-                held = []
-                if ctrl:
-                    held.append('ctrl')
-                if shift:
-                    held.append('shift')
-                whole = '+'.join(held + [name])
-                _ok, said = virtualWindow.type_key(whole, lambda: None)
+                # **The real key goes on to the real control** when the
+                # field is written with keys (`toolkits`: Tk, a web page,
+                # a console) - marked, so this hook lets it through - and
+                # a key that TYPES something is given to the copy as the
+                # character it types in the user's own layout, AltGr
+                # included: on a Polish keyboard that is how ą is typed.
+                from titan_access import keyboard_hook
+                send = (lambda vk=vk: keyboard_hook.pass_key(vk))
+                altgr = bool(ctrl and alt)
+                character = None
+                if (not ctrl or altgr) and name not in _FIELD_KEYS \
+                        and self.keyboard is not None:
+                    try:
+                        character = self.keyboard.char_for(vk, shift=shift,
+                                                           altgr=altgr)
+                    except Exception:                # noqa: BLE001
+                        character = None
+                if character:
+                    _ok, said = virtualWindow.type_character(character, send)
+                else:
+                    held = []
+                    if ctrl:
+                        held.append('ctrl')
+                    if shift:
+                        held.append('shift')
+                    whole = '+'.join(held + [name])
+                    _ok, said = virtualWindow.type_key(whole, send)
                 if said:
                     self._say(str(said))
                 return True
@@ -2379,7 +2582,36 @@ class TitanAccessEngine:
         layout, exactly as in the NVDA add-on. Answers False at once when
         no walker is up, so object navigation is untouched otherwise.
         """
-        return self._walked_key(vk, key_name, False, False, shift)
+        if self._walked_key(vk, key_name, False, False, shift):
+            return True
+        # **A document is walked like a virtual window too**: in a web page
+        # or scan mode the corners, the layout and 8/2/5 are the document's.
+        try:
+            if self.browse is not None and self.browse.is_active:
+                return bool(self.browse.handle_numpad(key_name, shift))
+        except Exception as error:                   # noqa: BLE001
+            log(f"[TitanAccess] document numpad: {error}")
+        return False
+
+    def _scripts_follow_focus(self, obj):
+        """The user's scripts hear the focus, and the window changing."""
+        try:
+            from . import ta_scripts
+            if not ta_scripts.scripts():
+                return
+            window = 0
+            try:
+                hwnd = int(getattr(obj, 'hwnd', 0) or 0)
+                window = int(ctypes.windll.user32.GetAncestor(hwnd, 2) or 0) \
+                    if hwnd and _sys.platform.startswith("win") else hwnd
+            except Exception:
+                window = 0
+            if window and window != getattr(self, '_script_window', 0):
+                self._script_window = window
+                ta_scripts.on_window(obj, self)
+            ta_scripts.on_focus(obj, self)
+        except Exception as e:
+            log(f"[TitanAccess] scripts focus: {e}")
 
     def on_plain_key(self, vk, key_name, ctrl, alt, shift) -> bool:
         # A guest's screen: a navigation key is the guest's, and what it
@@ -2389,7 +2621,9 @@ class TitanAccessEngine:
             if guest.following() and str(key_name or '').lower() in (
                     'up', 'down', 'left', 'right', 'home', 'end', 'tab',
                     'return', 'enter', 'pageup', 'pagedown'):
-                threading.Timer(0.15, lambda: guest.after_key()).start()
+                said_key = str(key_name or '').lower()
+                threading.Timer(0.15, lambda: guest.after_key(
+                    key=said_key)).start()
         except Exception:
             pass
         # **Space on a check box is a change worth hearing.** Nothing
@@ -2406,6 +2640,16 @@ class TitanAccessEngine:
                 return True
         except Exception:                            # noqa: BLE001
             pass
+        # A user's script bound to a key without the reader modifier.
+        try:
+            from . import ta_scripts
+            if ta_scripts.scripts() and ta_scripts.plain_key(
+                    key_name, ctrl, alt, shift, self):
+                return True
+        except Exception:                            # noqa: BLE001
+            pass
+        if self._nvda_addon_key(key_name, ctrl, alt, shift, False, vk):
+            return True
         # Browse mode quick-nav / arrows take precedence when active.
         try:
             if self.browse is not None and self.browse.is_active:
@@ -2659,6 +2903,27 @@ class TitanAccessEngine:
         g.register("findInDocument", "control+f", self.action_find_in_document)
         # Insert+F: the formatting at the caret - font, size, bold, italic.
         g.register("reportFormatting", "f", self.action_report_formatting)
+        # **Insert+Ctrl+S: what the reader speaks WITH** - the speech
+        # system (Titan's own voice, Titan TTS, SAPI 5, eSpeak, speech-
+        # dispatcher, say), the synthesizer in it and its voice, in a
+        # dialog of three lists (`speech_system_dialog`).
+        g.register("speechSystem", "control+s", self.action_speech_system)
+
+        # **The NVDA add-on's keys, here too.** Every command the add-on
+        # has on NVDA+key is the same shared function (`portable/
+        # commands`), so it is registered on Insert+the same key and run
+        # the way the palette runs it. Only keys this reader already uses
+        # for something else are left out (Insert+M is the mouse here,
+        # Insert+R / Shift+R / Shift+W are this reader's own procedures
+        # and watcher, Windows+T is not a key the hook carries).
+        for action_id, spec, command in self.SHARED_KEYS:
+            g.register(action_id, spec,
+                       (lambda name: (lambda *a: self._run_shared(name)))(
+                           command))
+        # The add-on's spellings of keys this reader already had.
+        g.register("markHere", "shift+m", self.action_mark_here)
+        g.register("titanWindow", "shift+i", self.action_titan_window)
+        g.register("speechScheme", "alt+s", self.action_speech_scheme)
 
         # (Ctrl+Alt+C/W/L/P review shortcuts removed: on a Polish keyboard
         # Ctrl+Alt == AltGr, so they collided with typing diacritics. Caret
@@ -3011,13 +3276,118 @@ class TitanAccessEngine:
                 keys.append(text)
         return ', '.join(keys)
 
+    #: ``(action id, key spec, shared command)`` - the NVDA add-on's keys,
+    #: with Insert where NVDA has its own modifier.
+    SHARED_KEYS = (
+        ("titanStatus", "alt+t", "status"),
+        ("titanMacros", "alt+m", "macros"),
+        ("titanActions", "alt+a", "actions"),
+        ("ocrRead", "alt+o", "ocr_read"),
+        ("ocrAsk", "alt+q", "ocr_ask"),
+        ("ocrOverlay", "alt+shift+o", "ocr_overlay"),
+        ("assistant", "alt+i", "assistant"),
+        ("assistantAct", "alt+shift+i", "assistant_act"),
+        ("readLocally", "shift+o", "read_locally"),
+        ("screenReview", "o", "ocr_review"),
+        ("windowsAndActions", "control+w", "windows_and_actions"),
+        ("journal", "shift+h", "read_journal"),
+        ("findControl", "control+shift+f", "find_control"),
+        ("watchedAreas", "control+shift+w", "watched_areas"),
+        ("titanApplications", "shift+a", "titan_applications"),
+        ("whereAmI", "alt+w", "where_am_i"),
+        ("voiceClasses", "alt+c", "voice_classes"),
+        ("labelControl", "alt+l", "label_control"),
+        ("describeControl", "alt+g", "describe_control"),
+        ("surface", "alt+u", "watch_surface"),
+        ("draftModule", "alt+d", "draft_module"),
+        ("togglePosition", "alt+p", "toggle_position"),
+        ("toggleAnnouncements", "alt+n", "toggle_announcements"),
+    )
+
     #: Palette commands this reader answers ITSELF rather than through the
     #: shared `commands` module - because what they mean here is genuinely
-    #: different, not because the shared one is missing.
+    #: different, not because the shared one is missing. `status` is "is
+    #: Titan there" in NVDA; here the reader IS inside Titan, so it says
+    #: what the reader is running on. Positioned speech is this reader's
+    #: virtual screen. "Titan's own announcements" is this reader's
+    #: `General/TitanAnnouncements`, read by `host_bridge`.
     MINE = {
-        'status': 'action_read_window_title',
-        'read_locally': 'action_toggle_virtual_window',
+        'status': 'action_reader_status',
+        'toggle_position': 'action_toggle_virtual_screen',
+        'toggle_announcements': 'action_toggle_titan_announcements',
+        'assistant_act': 'action_assistant_act',
+        'speech_system': 'action_speech_system',
     }
+
+    def _own_commands(self):
+        """Tell the shared commands what this reader means by the ones it
+        answers itself, so the Titan menu and the palette - which run
+        commands by name - do the same thing as this reader's keys."""
+        try:
+            from .portable import commands
+            commands.OWN.clear()
+            for name, method in self.MINE.items():
+                commands.OWN[name] = getattr(self, method)
+            commands.OWN['toggle_trackpad'] = self.action_toggle_trackpad
+            commands.OWN['speech_system'] = self.action_speech_system
+        except Exception as e:                       # noqa: BLE001
+            log(f"[TitanAccess] own commands: {e}")
+
+    def _run_shared(self, name):
+        """A shared command on its own key - the same path as the palette."""
+        self._palette_run(name)
+        return True
+
+    def action_assistant_act(self, *_args):
+        from .portable import commands
+        commands.assistant(act=True)
+        return True
+
+    def action_reader_status(self, *_args):
+        """Insert+Alt+T: what the reader is, what it speaks with, whether
+        Titan's words stand in for its own."""
+        try:
+            from . import speech_systems
+            system, synth, voice = speech_systems.current(self.settings)
+            labels = dict(speech_systems.systems())
+            parts = [L("status.reader"),
+                     L("status.speaksWith", labels.get(system, system))]
+            if synth:
+                parts.append(L("status.synth",
+                               synth[4:] if synth.startswith("spd:") else synth))
+            if voice:
+                parts.append(L("status.voice", voice))
+        except Exception as error:                   # noqa: BLE001
+            parts = [L("status.reader"), str(error)]
+        parts.append(L("status.virtualScreenOn") if self.settings.virtual_screen
+                     else L("status.virtualScreenOff"))
+        parts.append(L("status.titanWordsOn")
+                     if self.settings.get_bool("General", "TitanAnnouncements",
+                                               True)
+                     else L("status.titanWordsOff"))
+        self._say(" ".join(parts))
+        return True
+
+    def action_toggle_titan_announcements(self, *_args):
+        """Insert+Alt+N: Titan's own wording for its controls, or this
+        reader's own reading of them (`General/TitanAnnouncements`)."""
+        now = self.settings.get_bool("General", "TitanAnnouncements", True)
+        self.settings.set_bool("General", "TitanAnnouncements", not now)
+        self.settings.save()
+        self._say(L("titanWords.off") if now else L("titanWords.on"))
+        return True
+
+    def action_speech_system(self, *_args):
+        """Insert+Ctrl+S: the speech system, synthesizer and voice."""
+        try:
+            from . import speech_system_dialog
+            ok, said = speech_system_dialog.open_dialog(self)
+        except Exception as error:                   # noqa: BLE001
+            self._say("%s: %s" % (L("speechSystem.title"), error))
+            return False
+        if said:
+            self._say(str(said))
+        return True
 
     def _palette_run(self, command):
         """Run a palette command HERE.
@@ -3296,9 +3666,13 @@ class TitanAccessEngine:
         return True
 
     def action_find_in_document(self, *_args):
-        """Insert+Ctrl+F: text to find in the document, from the cursor on."""
+        """Insert+Ctrl+F: text to find in the document, from the cursor on.
+
+        Outside a document it is the NVDA add-on's NVDA+Ctrl+F - find a
+        control in this window by its name or by what is written on it -
+        rather than "there is no document"."""
         if self.browse is None or not self.browse.is_active:
-            self._say(L("browse.noDocument"))
+            self._run_shared("find_control")
             return True
         try:
             self.browse.ask_find()

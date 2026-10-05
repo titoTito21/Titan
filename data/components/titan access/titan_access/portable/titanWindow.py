@@ -41,6 +41,20 @@ _ = i18n.install(globals())
 STARTABLE = ('applications', 'games', 'cling', 'im', 'menu')
 
 
+
+def _real_word(kind, name, fallback):
+    """The word the reader says for a REAL control: ``kind`` is 'role' or
+    'state', ``name`` NVDA's enum name. A walked list must name a control
+    exactly as the reader names it in a real window; ``fallback`` is only
+    for a reader that has no word for it."""
+    try:
+        from . import elements
+        word = (elements.role_word(name) if kind == 'role'
+                else elements.state_word(name))
+    except Exception:                                # noqa: BLE001
+        word = ''
+    return word or fallback
+
 def _label_of(row, *names):
     for name in names:
         said = str(row.get(name) or '').strip()
@@ -53,7 +67,10 @@ def build():
     """The dialog class, or None when there is no wx."""
     try:
         import wx
-        from gui import guiHelper
+        from . import wxkit
+        # NVDA's helper inside NVDA, the plain-wx one in Titan Access -
+        # `from gui import guiHelper` made this window NVDA-only.
+        guiHelper = wxkit.helper()
     except Exception:                                # noqa: BLE001
         return None
 
@@ -128,7 +145,8 @@ def build():
         # -------------------------------------------------------- starting
         def _start_page(self):
             import wx
-            from gui import guiHelper
+            from . import wxkit
+            guiHelper = wxkit.helper()
             page = wx.Panel(self.book)
             # Translators: a page of the Titan window.
             self.book.AddPage(page, _('Start'))
@@ -295,7 +313,8 @@ def build():
         # -------------------------------------------------------- settings
         def _settings_page(self):
             import wx
-            from gui import guiHelper
+            from . import wxkit
+            guiHelper = wxkit.helper()
             page = wx.Panel(self.book)
             # Translators: a page of the Titan window.
             self.book.AddPage(page, _("Titan's settings"))
@@ -484,7 +503,8 @@ def build():
         # ---------------------------------------------------- what arrived
         def _arrived_page(self):
             import wx
-            from gui import guiHelper
+            from . import wxkit
+            guiHelper = wxkit.helper()
             page = wx.Panel(self.book)
             # Translators: a page of the Titan window.
             self.book.AddPage(page, _('What arrived'))
@@ -584,7 +604,8 @@ def build():
         # --------------------------------------------------------- widgets
         def _widgets_page(self):
             import wx
-            from gui import guiHelper
+            from . import wxkit
+            guiHelper = wxkit.helper()
             page = wx.Panel(self.book)
             # Translators: a page of the Titan window.
             self.book.AddPage(page, _('Widgets'))
@@ -669,7 +690,8 @@ def build():
         # ---------------------------------------------------------- status
         def _status_page(self):
             import wx
-            from gui import guiHelper
+            from . import wxkit
+            guiHelper = wxkit.helper()
             page = wx.Panel(self.book)
             # Translators: a page of the Titan window.
             self.book.AddPage(page, _('Status bar'))
@@ -720,8 +742,10 @@ def _setting_line(item):
     kind = str(item.get('kind') or '')
     if kind == 'bool':
         # Translators: a setting that is on. / Translators: one that is off.
-        return '%s: %s' % (label, _('on') if _truthy(item.get('value'))
-                           else _('off'))
+        on = _truthy(item.get('value'))
+        return '%s: %s' % (label, _real_word(
+            'state', 'CHECKED' if on else 'UNCHECKED',
+            _('on') if on else _('off')))
     if kind == 'command':
         return label
     if kind == 'secret':
@@ -750,10 +774,10 @@ def show(parent=None):
     if window is None:
         return False
     try:
-        import gui
         import wx
+        from . import wxkit
         if parent is None:
-            parent = gui.mainFrame
+            parent = wxkit.frame()
 
         def open_it():
             window(parent).Show()

@@ -52,10 +52,13 @@ import threading
 _LOCK = threading.RLock()
 
 _state = {'hwnd': 0, 'over': 0, 'up': False, 'title': '', 'wanted': None,
-          'frame': None, 'panel': None}
+          'frame': None, 'panel': None, 'lent': False}
 
 _counted = {'shown': 0, 'taken': 0, 'refused': 0, 'retaken': 0,
             'hidden': 0, 'given_back': 0, 'lost': 0}
+
+#: How long a host stepping aside for a typed field is waited for.
+LEND_WAIT = 0.4
 
 #: How long after a deactivation the host asks what to do about it. The
 #: focus event that says WHY it happened (a dialog opened, the user left)
@@ -242,11 +245,97 @@ def hide():
         was = _state['up']
         _state['up'] = False
         _state['wanted'] = None
+        _state['lent'] = False
     if not was or not available():
         return False
     import wx
     wx.CallAfter(_hide_on_gui)
     return True
+
+
+def lend():
+    """Step aside for a while: the list stays up, but the KEYBOARD goes to
+    the window underneath and is not taken back until :func:`reclaim`.
+
+    A walked edit field written with the user's own keys (a Tkinter entry,
+    a web page, a console) needs the real control to have the keyboard;
+    a host that took the foreground back the moment the program activated
+    would put every passed-on key into itself."""
+    with _LOCK:
+        if not _state['up'] or _state['lent']:
+            return False
+        _state['lent'] = True
+    if not available():
+        return True
+    import wx
+    # **Done before this returns**: the very next thing the caller does is
+    # pass a key on, and a key sent while the host still has the
+    # foreground goes into the host. On the GUI thread (NVDA's scripts
+    # run there) it is done at once; from any other thread (Titan Access's
+    # keyboard hook) it is queued and waited for, briefly.
+    try:
+        if wx.IsMainThread():
+            _lend_on_gui()
+            return True
+    except Exception:                                # noqa: BLE001
+        pass
+    wx.CallAfter(_lend_on_gui)
+    mine = hwnd()
+    import time
+    deadline = time.time() + LEND_WAIT
+    while time.time() < deadline:
+        now = _raw_foreground()
+        if now and now != mine:
+            break
+        time.sleep(0.02)
+    return True
+
+
+def reclaim():
+    """The field is left: the list holds the keyboard again."""
+    with _LOCK:
+        was = _state['lent']
+        _state['lent'] = False
+        wanted_up = _state['up']
+    if not was or not wanted_up or not available():
+        return False
+    import wx
+    wx.CallAfter(_reclaim_on_gui)
+    return True
+
+
+def lent():
+    with _LOCK:
+        return bool(_state['lent'])
+
+
+def _lend_on_gui():
+    with _LOCK:
+        frame = _state['frame']
+        back_to = int(_state['over'] or 0)
+        still = _state['lent']
+    if not still or frame is None:
+        return
+    try:
+        if frame.IsShown():
+            frame.Hide()
+        if back_to and _exists(back_to):
+            _take(back_to)
+    except Exception:                                # noqa: BLE001
+        pass
+
+
+def _reclaim_on_gui():
+    with _LOCK:
+        frame = _state['frame']
+        if _state['lent'] or not _state['up']:
+            return
+    try:
+        if frame is not None and not frame.IsShown():
+            frame.Show()
+    except Exception:                                # noqa: BLE001
+        pass
+    _retake_on_gui()
 
 
 def destroy():
@@ -437,7 +526,8 @@ def _after_lost():
         wanted = _state['wanted']
         back_to = int(_state['over'] or 0)
         mine = int(_state['hwnd'] or 0)
-    if not wanted_up:
+        lent_out = _state['lent']
+    if not wanted_up or lent_out:
         return
     still = False
     if wanted is not None:

@@ -71,11 +71,8 @@ def tier_names():
 def controls(window=None):
     """``[{'label', 'obj', 'words'}]`` - what is in this window."""
     if window is None:
-        try:
-            import api
-            window = api.getForegroundObject()
-        except Exception:                            # noqa: BLE001
-            return []
+        from . import readerApi
+        window = readerApi.foreground()
     if window is None:
         return []
     from . import windowsAndActions as wa
@@ -132,8 +129,8 @@ def by_screen(question, hwnd=0):
     try:
         from . import localOcr
         if not hwnd:
-            import api
-            hwnd = int(getattr(api.getForegroundObject(), 'windowHandle', 0)
+            from . import readerApi
+            hwnd = int(getattr(readerApi.foreground(), 'windowHandle', 0)
                        or 0)
         reading = localOcr.read_window(hwnd) if hwnd else None
     except Exception:                                # noqa: BLE001
@@ -241,12 +238,10 @@ def go(row):
         return True, _text(row.get('label'))
     except Exception:                                # noqa: BLE001
         pass
-    try:
-        import api
-        api.setNavigatorObject(obj)
+    from . import readerApi
+    if readerApi.navigate_to(obj):
         # Translators: said when the review cursor goes to a match.
         return True, _('{what}, review cursor').format(
             what=_text(row.get('label')))
-    except Exception:                                # noqa: BLE001
-        # Translators: said when a match cannot be reached.
-        return False, _('That cannot be reached')
+    # Translators: said when a match cannot be reached.
+    return False, _('That cannot be reached')

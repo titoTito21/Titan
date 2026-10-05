@@ -91,12 +91,22 @@ class AnEngineSaysWhichPlatformsItRunsOn(unittest.TestCase):
         self.assertFalse(_engine_runs_here(other))
 
     def test_the_windows_binary_engines_say_so(self):
+        """The bridges that run under Wine (DECtalk, Eloquence, SMP,
+        Festival - measured, they answer READY and return PCM) list every
+        platform; Milena (never writes its output under Wine), Supertonic
+        (a Windows numpy) and BeSTspeech (a C# bridge built with csc.exe)
+        stay Windows-only."""
         import configparser
+        wine = {'DECTalk', 'eloquence', 'SMP', 'festival'}
         for folder in ('bestspeech', 'DECTalk', 'eloquence', 'milena', 'SMP', 'supertonic', 'festival'):
             parser = configparser.ConfigParser()
             parser.read(os.path.join(ROOT, 'data', 'titantts engines', folder, '__engine__.TCE'),
                         encoding='utf-8')
-            self.assertEqual(parser.get('engine', 'platforms', fallback=''), 'windows', folder)
+            platforms = [p.strip() for p in parser.get('engine', 'platforms', fallback='').split(',')]
+            if folder in wine:
+                self.assertEqual(platforms, ['windows', 'linux', 'macos'], folder)
+            else:
+                self.assertEqual(platforms, ['windows'], folder)
 
 
 class AForeignCompiledFileIsNotLoaded(unittest.TestCase):

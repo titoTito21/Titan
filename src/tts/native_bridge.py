@@ -79,10 +79,61 @@ def popen_kwargs():
         return {'creationflags': getattr(__import__('subprocess'), 'CREATE_NO_WINDOW', 0)}
     env = dict(os.environ)
     env.setdefault('WINEDEBUG', '-all')
+    # No Mono and no Gecko: a bridge is a console program, and a fresh
+    # prefix's first boot otherwise puts up the "install Wine Mono?" dialog
+    # and waits on it for ever (measured: `wineboot --init` never returned
+    # under WSLg; with the two disabled it is done in 21 s).
+    env.setdefault('WINEDLLOVERRIDES', 'mscoree=d;mshtml=d')
     env.setdefault('WINEPREFIX', os.path.join(
         os.environ.get('XDG_DATA_HOME', os.path.expanduser('~/.local/share')),
         'titan', 'wine'))
+    # **The prefix's folder has to exist before wine is started.** Wine
+    # makes a prefix on first use, but not its PARENT: on an account that
+    # has never run Titan, `~/.local/share/titan` is not there, wine answers
+    # "chdir to ...: No such file or directory" and every bridge - DECtalk,
+    # Eloquence, SMP, Festival - reports "failed to initialize". Measured
+    # with a fresh HOME under WSLg; the machine it was written on had the
+    # folder from an earlier session, which is why it was never seen.
+    _ensure_prefix(env)
     return {'env': env}
+
+
+_prefix_ready = set()
+
+
+def _ensure_prefix(env):
+    """The Wine prefix, made and booted ONCE before the first bridge.
+
+    A prefix that does not exist yet is built by wine's first run, which
+    takes several seconds - longer than a bridge waits for READY - so on a
+    fresh account the first engine asked for failed, every engine started
+    in that same moment failed with it, and the second attempt worked.
+    Measured under WSLg with a fresh HOME: four bridges "did not send READY
+    in time", then "DECtalk ready" on the next start. `wineboot --init`
+    here is synchronous (about 20 s, once per account) and runs once per
+    prefix per process; a prefix that already has a `system.reg` is left
+    alone.
+    """
+    prefix = env.get('WINEPREFIX') or ''
+    if not prefix or prefix in _prefix_ready:
+        return
+    try:
+        os.makedirs(prefix, exist_ok=True)
+    except OSError:
+        return
+    if os.path.isfile(os.path.join(prefix, 'system.reg')):
+        _prefix_ready.add(prefix)
+        return
+    wine = wine_path()
+    if wine is None:
+        return
+    try:
+        import subprocess
+        subprocess.run([wine, 'wineboot', '--init'], env=env, timeout=180,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as error:                       # noqa: BLE001
+        print(f"[native_bridge] wineboot: {error}")
+    _prefix_ready.add(prefix)
 
 
 def why_unavailable(exe_path):
