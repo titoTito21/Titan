@@ -1,0 +1,457 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Titan Antivirus 1.0\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "The ClamAV engine is not installed."
+msgstr "Silnik ClamAV nie jest zainstalowany."
+
+msgid "The virus signatures have not been downloaded yet. Update the signatures first."
+msgstr "Sygnatury wirusów nie zostały jeszcze pobrane. Najpierw zaktualizuj sygnatury."
+
+msgid "The ClamAV scanning service stopped while starting."
+msgstr "Usługa skanowania ClamAV zatrzymała się podczas uruchamiania."
+
+msgid "The ClamAV scanning service did not start in time."
+msgstr "Usługa skanowania ClamAV nie uruchomiła się na czas."
+
+msgid "The ClamAV scanning service closed the connection."
+msgstr "Usługa skanowania ClamAV zamknęła połączenie."
+
+msgid "The signatures could not be updated. Check the internet connection."
+msgstr "Nie udało się zaktualizować sygnatur. Sprawdź połączenie z internetem."
+
+msgid "The list of ClamAV releases could not be read."
+msgstr "Nie udało się odczytać listy wydań ClamAV."
+
+msgid "No ClamAV build for Windows was found."
+msgstr "Nie znaleziono wersji ClamAV dla Windows."
+
+msgid "ClamAV could not be downloaded."
+msgstr "Nie udało się pobrać ClamAV."
+
+msgid "The downloaded ClamAV did not match its checksum and was thrown away."
+msgstr "Pobrany ClamAV nie zgadzał się z sumą kontrolną i został usunięty."
+
+msgid "The downloaded ClamAV archive is damaged."
+msgstr "Pobrane archiwum ClamAV jest uszkodzone."
+
+msgid "Install ClamAV with your system's package manager (clamav, clamav-daemon, clamav-freshclam)."
+msgstr "Zainstaluj ClamAV menedżerem pakietów systemu (clamav, clamav-daemon, clamav-freshclam)."
+
+msgid "Microsoft Defender is not available on this computer."
+msgstr "Microsoft Defender nie jest dostępny na tym komputerze."
+
+msgid "Cancelled."
+msgstr "Anulowano."
+
+msgid "Detected"
+msgstr "Wykryto"
+
+msgid "Quarantined"
+msgstr "W kwarantannie"
+
+msgid "Deleted"
+msgstr "Usunięto"
+
+msgid "Ignored"
+msgstr "Zignorowano"
+
+msgid "Excluded"
+msgstr "Wykluczono"
+
+msgid "Action failed"
+msgstr "Działanie nieudane"
+
+msgid "Microsoft Defender"
+msgstr "Microsoft Defender"
+
+msgid "Titan Antivirus - threat found"
+msgstr "Titan Antivirus - wykryto zagrożenie"
+
+msgid "&Quarantine"
+msgstr "&Kwarantanna"
+
+msgid "&Delete"
+msgstr "&Usuń"
+
+msgid "&Ignore"
+msgstr "&Zignoruj"
+
+msgid "Threat found: {threat}\n\nFile: {path}"
+msgstr "Wykryto zagrożenie: {threat}\n\nPlik: {path}"
+
+msgid "Download progress"
+msgstr "Postęp pobierania"
+
+msgid "&Cancel"
+msgstr "&Anuluj"
+
+msgid "Cancelling..."
+msgstr "Anulowanie..."
+
+msgid "&Close"
+msgstr "&Zamknij"
+
+msgid "Threats"
+msgstr "Zagrożenia"
+
+msgid "Engine"
+msgstr "Silnik"
+
+msgid "Background protection"
+msgstr "Ochrona w tle"
+
+msgid "Scheduled scan &folders:"
+msgstr "&Foldery skanowania zaplanowanego:"
+
+msgid "Exclusions"
+msgstr "Wykluczenia"
+
+msgid "&Never scan:"
+msgstr "&Nigdy nie skanuj:"
+
+msgid "Quarantined files"
+msgstr "Pliki w kwarantannie"
+
+msgid "Finished scans"
+msgstr "Zakończone skanowania"
+
+msgid "Scan progress"
+msgstr "Postęp skanowania"
+
+msgid "Scan results"
+msgstr "Wyniki skanowania"
+
+msgid "&Quick scan\tF5"
+msgstr "&Szybkie skanowanie\tF5"
+
+msgid "F&ull scan"
+msgstr "&Pełne skanowanie"
+
+msgid "Scan a &file...\tCtrl+O"
+msgstr "Skanuj &plik...\tCtrl+O"
+
+msgid "Scan a f&older...\tCtrl+Shift+O"
+msgstr "Skanuj &folder...\tCtrl+Shift+O"
+
+msgid "Scan a folder with Microsoft &Defender..."
+msgstr "Skanuj folder programem Microsoft &Defender..."
+
+msgid "&Cancel scan"
+msgstr "&Anuluj skanowanie"
+
+msgid "E&xit"
+msgstr "&Wyjdź"
+
+msgid "&Scan"
+msgstr "&Skanowanie"
+
+msgid "&Update signatures\tCtrl+U"
+msgstr "&Aktualizuj sygnatury\tCtrl+U"
+
+msgid "Engine &status\tCtrl+I"
+msgstr "&Stan silnika\tCtrl+I"
+
+msgid "&Engine"
+msgstr "S&ilnik"
+
+msgid "&Quarantine...\tCtrl+Q"
+msgstr "&Kwarantanna...\tCtrl+Q"
+
+msgid "Scan &history...\tCtrl+H"
+msgstr "&Historia skanowania...\tCtrl+H"
+
+msgid "&Settings...\tCtrl+P"
+msgstr "&Ustawienia...\tCtrl+P"
+
+msgid "&Tools"
+msgstr "&Narzędzia"
+
+msgid "The virus signatures have not been downloaded yet."
+msgstr "Sygnatury wirusów nie zostały jeszcze pobrane."
+
+msgid "today"
+msgstr "dzisiaj"
+
+msgid "loaded"
+msgstr "załadowana"
+
+msgid "not loaded"
+msgstr "niezaładowana"
+
+msgid "Engine status"
+msgstr "Stan silnika"
+
+msgid "The ClamAV engine is not installed yet. Download it now from the official ClamAV releases, and then the virus signatures (about 300 MB)?"
+msgstr "Silnik ClamAV nie jest jeszcze zainstalowany. Pobrać go teraz z oficjalnych wydań ClamAV, a następnie sygnatury wirusów (około 300 MB)?"
+
+msgid "The virus signatures have not been downloaded yet. Download them now (about 300 MB)?"
+msgstr "Sygnatury wirusów nie zostały jeszcze pobrane. Pobrać je teraz (około 300 MB)?"
+
+msgid "Counting files..."
+msgstr "Liczenie plików..."
+
+msgid "Starting the scanning engine. Loading the signatures takes a while..."
+msgstr "Uruchamianie silnika skanowania. Ładowanie sygnatur chwilę trwa..."
+
+msgid "Scanning..."
+msgstr "Skanowanie..."
+
+msgid "Titan Antivirus - threats found"
+msgstr "Titan Antivirus - wykryto zagrożenia"
+
+msgid "&Quarantine all"
+msgstr "&Wszystkie do kwarantanny"
+
+msgid "&Review in the list"
+msgstr "&Przejrzyj na liście"
+
+msgid "Open the &containing folder"
+msgstr "&Otwórz folder zawierający"
+
+msgid "Scheduled scan started."
+msgstr "Rozpoczęto zaplanowane skanowanie."
+
+msgid "Error: {error}"
+msgstr "Błąd: {error}"
+
+msgid "Preparing the ClamAV engine"
+msgstr "Przygotowanie silnika ClamAV"
+
+msgid "Starting..."
+msgstr "Uruchamianie..."
+
+msgid "&Details:"
+msgstr "&Szczegóły:"
+
+msgid "Downloading the virus signatures. The first time this is about 300 MB and takes several minutes."
+msgstr "Pobieranie sygnatur wirusów. Za pierwszym razem to około 300 MB i kilka minut."
+
+msgid "The signatures are up to date."
+msgstr "Sygnatury są aktualne."
+
+msgid "Titan Antivirus settings"
+msgstr "Ustawienia Titan Antivirus"
+
+msgid "Keep the &scanning service loaded between scans (faster, uses about 1 GB of memory)"
+msgstr "Trzymaj &usługę skanowania załadowaną między skanowaniami (szybciej, zajmuje około 1 GB pamięci)"
+
+msgid "Scan inside &archives"
+msgstr "Skanuj wnętrze &archiwów"
+
+msgid "&Update the signatures when Titan Antivirus starts, if they are older than a day"
+msgstr "&Aktualizuj sygnatury przy starcie Titan Antivirus, jeśli są starsze niż dzień"
+
+msgid "&Watch the Downloads folder and scan every new file"
+msgstr "&Obserwuj folder Pobrane i skanuj każdy nowy plik"
+
+msgid "Run a scheduled scan &every day"
+msgstr "Uruchamiaj zaplanowane skanowanie &codziennie"
+
+msgid "Add folder..."
+msgstr "Dodaj folder..."
+
+msgid "Add file..."
+msgstr "Dodaj plik..."
+
+msgid "Remove"
+msgstr "Usuń"
+
+msgid "Quarantine"
+msgstr "Kwarantanna"
+
+msgid "&Restore"
+msgstr "&Przywróć"
+
+msgid "&Delete permanently"
+msgstr "&Usuń na stałe"
+
+msgid "Scan history"
+msgstr "Historia skanowania"
+
+msgid "&Quick scan"
+msgstr "&Szybkie skanowanie"
+
+msgid "Scan a &folder..."
+msgstr "Skanuj &folder..."
+
+msgid "&Update signatures"
+msgstr "&Aktualizuj sygnatury"
+
+msgid "yesterday"
+msgstr "wczoraj"
+
+msgid "ClamAV ready. Signatures updated {when}. Scanning service {service}."
+msgstr "ClamAV gotowy. Sygnatury zaktualizowane {when}. Usługa skanowania {service}."
+
+msgid "Quick scan"
+msgstr "Szybkie skanowanie"
+
+msgid "Full scan"
+msgstr "Pełne skanowanie"
+
+msgid "Never scan this file (&exclude)"
+msgstr "Nigdy nie skanuj tego pliku (&wyklucz)"
+
+msgid "Titan Antivirus keeps protecting in the background."
+msgstr "Titan Antivirus nadal chroni w tle."
+
+msgid "Scheduled scan"
+msgstr "Zaplanowane skanowanie"
+
+msgid "Downloading the ClamAV engine..."
+msgstr "Pobieranie silnika ClamAV..."
+
+msgid "The ClamAV engine is installed."
+msgstr "Silnik ClamAV jest zainstalowany."
+
+msgid "&When a threat is found:"
+msgstr "&Gdy wykryto zagrożenie:"
+
+msgid "Ask what to do"
+msgstr "Zapytaj, co zrobić"
+
+msgid "Quarantine automatically"
+msgstr "Automatycznie do kwarantanny"
+
+msgid "Delete automatically"
+msgstr "Automatycznie usuń"
+
+msgid "Only report"
+msgstr "Tylko zgłoś"
+
+msgid "Stop the scanning service after this many &idle minutes (0 = never):"
+msgstr "Zatrzymaj usługę skanowania po tylu minutach &bezczynności (0 = nigdy):"
+
+msgid "&Largest file to scan, in megabytes:"
+msgstr "&Największy skanowany plik, w megabajtach:"
+
+msgid "Scheduled scan &time (hours:minutes):"
+msgstr "&Godzina skanowania zaplanowanego (godziny:minuty):"
+
+msgid "Scheduled scan &covers:"
+msgstr "&Zakres skanowania zaplanowanego:"
+
+msgid "Quick scan (Downloads, Desktop, Documents, temporary files)"
+msgstr "Szybkie skanowanie (Pobrane, Pulpit, Dokumenty, pliki tymczasowe)"
+
+msgid "Full scan (every fixed drive)"
+msgstr "Pełne skanowanie (wszystkie dyski stałe)"
+
+msgid "The folders below"
+msgstr "Foldery poniżej"
+
+msgid "Background protection runs while Titan's shell is on, or while Titan Antivirus is open."
+msgstr "Ochrona w tle działa, gdy włączona jest powłoka Titana albo gdy Titan Antivirus jest otwarty."
+
+msgid "Choose a folder"
+msgstr "Wybierz folder"
+
+msgid "Choose a file"
+msgstr "Wybierz plik"
+
+msgid "Write the time as hours:minutes, for example 12:30."
+msgstr "Wpisz godzinę jako godziny:minuty, na przykład 12:30."
+
+msgid "Name"
+msgstr "Nazwa"
+
+msgid "Threat"
+msgstr "Zagrożenie"
+
+msgid "Original location"
+msgstr "Pierwotna lokalizacja"
+
+msgid "Date"
+msgstr "Data"
+
+msgid "The file could not be restored."
+msgstr "Nie udało się przywrócić pliku."
+
+msgid "Scanned"
+msgstr "Skanowane"
+
+msgid "Files"
+msgstr "Pliki"
+
+msgid "&Threats found:"
+msgstr "&Wykryte zagrożenia:"
+
+msgid "File"
+msgstr "Plik"
+
+msgid "Status"
+msgstr "Stan"
+
+msgid "Location"
+msgstr "Lokalizacja"
+
+msgid "Choose a folder to scan"
+msgstr "Wybierz folder do skanowania"
+
+msgid "Choose files to scan"
+msgstr "Wybierz pliki do skanowania"
+
+msgid "The scan will start when the current one finishes."
+msgstr "Skanowanie zacznie się po zakończeniu bieżącego."
+
+msgid "Scanned {done} of {total} files"
+msgstr "Przeskanowano {done} z {total} plików"
+
+msgid "{count} threats were found. Quarantine all of them now?"
+msgstr "Wykryte zagrożenia: {count}. Przenieść wszystkie do kwarantanny?"
+
+msgid "A scan is running. Stop it and close?"
+msgstr "Trwa skanowanie. Przerwać je i zamknąć?"
+
+msgid "Delete {name} permanently?"
+msgstr "Usunąć {name} na stałe?"
+
+msgid "Restore {name}? It was detected as {threat}."
+msgstr "Przywrócić {name}? Wykryto w nim {threat}."
+
+msgid "Restored to {path}"
+msgstr "Przywrócono do {path}"
+
+msgid "{days} days ago"
+msgstr "{days} dni temu"
+
+msgid "{count} items"
+msgstr "Elementy: {count}"
+
+msgid "Scanning {what} with {engine}"
+msgstr "Skanowanie {what}, silnik {engine}"
+
+msgid "Scan cancelled after {files} files. Threats: {threats}."
+msgstr "Skanowanie przerwane po {files} plikach. Zagrożenia: {threats}."
+
+msgid "{errors} files could not be read, {skipped} were too large."
+msgstr "Nieczytelne pliki: {errors}, zbyt duże: {skipped}."
+
+msgid "Scan finished: {files} files, {threats} threats found."
+msgstr "Skanowanie zakończone. Pliki: {files}, wykryte zagrożenia: {threats}."
+
+msgid "Scan finished: {files} files, no threats found."
+msgstr "Skanowanie zakończone. Pliki: {files}, nie wykryto zagrożeń."
+
+msgid "{count} files could not be quarantined."
+msgstr "Pliki, których nie udało się przenieść do kwarantanny: {count}."
+
+msgid "Titan Antivirus is not installed."
+msgstr "Titan Antivirus nie jest zainstalowany."
+
+msgid "Scan with antivirus:"
+msgstr "Skanuj przy pomocy antywirusa:"
+
+msgid "Scan this folder with Titan Antivirus"
+msgstr "Skanuj ten folder programem Titan Antivirus"
+
+msgid "Titan Antivirus could not be started."
+msgstr "Nie udało się uruchomić Titan Antivirus."
+
+msgid "Open Titan Antivirus"
+msgstr "Otwórz Titan Antivirus"

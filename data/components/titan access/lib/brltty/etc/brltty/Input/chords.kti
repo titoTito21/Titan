@@ -1,0 +1,150 @@
+###############################################################################
+# BRLTTY - A background process providing access to the console screen (when in
+#          text mode) for a blind person using a refreshable braille display.
+#
+# Copyright (C) 1995-2026 by The BRLTTY Developers.
+#
+# BRLTTY comes with ABSOLUTELY NO WARRANTY.
+#
+# This is free software, placed under the terms of the
+# GNU Lesser General Public License, as published by the Free Software
+# Foundation; either version 2.1 of the License, or (at your option) any
+# later version. Please see the file LICENSE-LGPL for details.
+#
+# Web Page: http://brltty.app/
+#
+# This software is maintained by Dave Mielke <dave@mielke.cc>.
+###############################################################################
+
+include chords-global.kti
+
+assign toggleOff \{dot7}
+assign toggleOn \{dot8}
+
+beginVariables
+assign toggleKeys \{chord}\{b}
+assign toggleCommand SKPBLNKWINS
+include toggle.kti
+endVariables
+
+beginVariables
+assign toggleKeys \{chord}\{c}
+assign toggleCommand CSRVIS
+include toggle.kti
+endVariables
+
+beginVariables
+assign toggleKeys \{chord}\{d}
+assign toggleCommand DISPMD
+include toggle.kti
+endVariables
+
+beginVariables
+assign toggleKeys \{chord}\{f}
+assign toggleCommand FREEZE
+include toggle.kti
+endVariables
+
+beginVariables
+assign toggleKeys \{chord}\{g}
+assign toggleCommand CONTRACTED
+include toggle.kti
+endVariables
+
+bind \{chord}\{h} HELP
+
+beginVariables
+assign toggleKeys \{chord}\{i}
+assign toggleCommand SKPIDLNS
+include toggle.kti
+endVariables
+
+bind \{chord}\{l} LEARN
+
+bind \{chord}\{p} PREFMENU
+bind \{chord}\{p}+\{toggleOff} PREFLOAD
+bind \{chord}\{p}+\{toggleOn} PREFSAVE
+bind \{chord}\{p}+\{toggleOff}+\{toggleOn} PREFRESET
+
+beginVariables
+assign toggleKeys \{chord}\{r}
+assign toggleCommand AUTOREPEAT
+include toggle.kti
+endVariables
+
+bind \{chord}\{s} INFO
+
+beginVariables
+assign toggleKeys \{chord}\{t}
+assign toggleCommand CSRTRK
+include toggle.kti
+endVariables
+
+beginVariables
+assign toggleKeys \{chord}\{u}
+assign toggleCommand ATTRVIS
+include toggle.kti
+endVariables
+
+bind \{chord}\{v} CSRJMP_VERT
+bind \{chord}\{v}+\{toggleOff} SWITCHVT_PREV
+bind \{chord}\{v}+\{toggleOn} SWITCHVT_NEXT
+
+beginVariables
+assign toggleKeys \{chord}\{w}
+assign toggleCommand SLIDEWIN
+include toggle.kti
+endVariables
+
+bind \{chord}\{x} PASTE:PASTE_ALTMODE
+bind \{chord}\{x}+\{toggleOff} CLIP_RESTORE:CLIP_CLEAR
+bind \{chord}\{x}+\{toggleOn} CLIP_SAVE:CLIP_SHOW
+
+bind \{chord}\{dot2}+\{dot3}+\{dot5} COMPBRL6+on
+bind \{chord}\{dot2}+\{dot3}+\{dot6} COMPBRL6+off
+
+bind \{chord}\{dot1}+\{dot3}+\{toggleOff} BRLKBD+off
+bind \{chord}\{dot1}+\{dot3}+\{toggleOn} BRLKBD+on
+
+bind \{chord}\{dot4}+\{dot6}+\{toggleOff} BRLUCDOTS+off
+bind \{chord}\{dot4}+\{dot6}+\{toggleOn} BRLUCDOTS+on
+
+bind \{chord}\{dot3} KEY_CURSOR_LEFT
+bind \{chord}\{dot6} KEY_CURSOR_RIGHT
+bind \{chord}\{dot2} KEY_HOME
+bind \{chord}\{dot5} KEY_END
+bind \{chord}\{dot1} KEY_CURSOR_UP
+bind \{chord}\{dot4} KEY_CURSOR_DOWN
+
+bind \{chord}\{dot2}+\{dot3} KEY_PAGE_UP
+bind \{chord}\{dot5}+\{dot6} KEY_PAGE_DOWN
+bind \{chord}\{dot4}+\{dot5} KEY_TAB
+
+bind \{chord}\{dot2}+\{dot5}+\{dot6} KEY_DELETE
+bind \{chord}\{dot2}+\{dot6} KEY_ESCAPE
+bind \{chord}\{dot3}+\{dot5} KEY_INSERT
+
+bind \{chord}\{dot1}+\{dot8} GUI
+bind \{chord}\{dot4}+\{dot8} SHIFT
+bind \{chord}\{dot2}+\{dot8} META
+bind \{chord}\{dot5}+\{dot8} ALTGR
+bind \{chord}\{dot3}+\{dot8} CONTROL
+bind \{chord}\{dot6}+\{dot8} UPPER
+bind \{chord}\{dot7}+\{dot8} UNSTICK
+
+ifNotVar noUnchorded
+assignDefault commandDot7 KEY_BACKSPACE
+assignDefault commandDot8 KEY_ENTER
+
+bind \{dot7} \{commandDot7}
+bind \{dot8} \{commandDot8}
+
+bind \{chord}\{dot7} PASSDOTS+dot7
+bind \{chord}\{dot8} PASSDOTS+dot8
+
+include menu.kti
+endIf
+
+ifPlatform android
+include chords-android.kti
+endif

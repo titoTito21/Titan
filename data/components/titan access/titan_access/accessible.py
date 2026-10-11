@@ -37,7 +37,9 @@ from titan_access.contracts import (
     STATE_SELECTED, STATE_CHECKED, STATE_UNCHECKED, STATE_PARTIAL, STATE_EXPANDED,
     STATE_COLLAPSED, STATE_PRESSED, STATE_UNAVAILABLE, STATE_READONLY,
     STATE_REQUIRED, STATE_PROTECTED, STATE_BUSY, STATE_HASPOPUP,
+    STATE_MULTILINE,
 )
+from titan_access import edit_fields
 
 # Pitches for the three-part announcement. Mirror the engine constants; kept
 # local on purpose to avoid importing the engine (circular import).
@@ -113,7 +115,7 @@ _SCHEME_NAMES = {
     'selected': 'SELECTED', 'expanded': 'EXPANDED', 'collapsed': 'COLLAPSED',
     'pressed': 'PRESSED', 'unavailable': 'UNAVAILABLE', 'readonly': 'READONLY',
     'required': 'REQUIRED', 'protected': 'PROTECTED', 'busy': 'BUSY',
-    'haspopup': 'HASPOPUP',
+    'haspopup': 'HASPOPUP', 'multiline': 'MULTILINE',
 }
 
 
@@ -228,10 +230,17 @@ def _pitch(tag, default):
         return default
 
 
-def _state_segment(obj: AccessibleObject) -> str:
-    """Comma-joined localized state labels (focus is implied, so omitted)."""
+def _state_segment(obj: AccessibleObject, field=None) -> str:
+    """Comma-joined localized state labels (focus is implied, so omitted).
+
+    *field* is `edit_fields.shape` for a text field: its states (several
+    lines, or read only) come first, and the read-only state the provider
+    reported is not said a second time."""
+    first = list(field[1]) if field else []
     present = _through_the_sound_scheme(
-        [s for s in _STATE_ORDER if obj.has(s)])
+        first + [s for s in _STATE_ORDER
+                 if obj.has(s) and s not in first
+                 and not (field and s in (STATE_READONLY, STATE_MULTILINE))])
     parts = [state_label(s) for s in present]
     # A check box that is neither checked nor indeterminate carries no state from
     # the provider, so its state would be silent. Announce it explicitly as
@@ -365,6 +374,13 @@ def describe(obj: Optional[AccessibleObject], settings,
     want_position = settings.get_bool("Verbosity", "AnnounceListPosition", True)
     want_level = settings.get_bool("Navigation", "AnnounceHierarchyLevel", True)
 
+    # What a text field is: "Pole edycji" (pause) "wieloliniowe", or
+    # "Tekst" (pause) "tylko do odczytu" (`edit_fields`).
+    try:
+        field = edit_fields.shape(obj)
+    except Exception:                                # noqa: BLE001
+        field = None
+
     # 1) Name (+ value) at the neutral pitch.
     name = _name_segment(obj)
     if not name:
@@ -389,13 +405,13 @@ def describe(obj: Optional[AccessibleObject], settings,
                        settings.get_bool("Navigation",
                                          "AnnounceControlTypesNavigation", True))
         if (want_type or type_forced) and _role_class_enabled(obj.role, settings):
-            role_text = role_label(obj.role)
+            role_text = role_label(field[0] if field else obj.role)
             if role_text:
                 built['kind'].append((role_text, 'kind', ROLE_PITCH))
 
     # 3) States at a higher pitch.
     if want_state:
-        state_text = _state_segment(obj)
+        state_text = _state_segment(obj, field)
         if state_text:
             built['state'].append((state_text, 'state', STATE_PITCH))
 

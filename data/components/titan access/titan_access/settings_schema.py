@@ -12,8 +12,9 @@ hand-written copies, and a test could only check that their keys met.
 An entry: ``Entry(section, key, kind, label, help, default, extra)``
     section  the INI section the value is kept in
     key      the INI key
-    kind     'bool' | 'choice' | 'range' | 'text' | 'scheme'
-             | 'speech_system' | 'synthesizer' | 'voices' | 'braille_table'
+    kind     'bool' | 'choice' | 'range' | 'text' | 'hotkey' | 'scheme'
+             | 'speech_system' | 'synthesizer' | 'voices' | 'variants'
+             | 'braille_table'
     label    the locale key of the control's label
     help     the locale key of one sentence saying what it does
     default  the default, as Python (bool / int / str)
@@ -41,6 +42,7 @@ SEC_SYMBOLS = 'Symbols'
 SEC_KEYBOARD = 'Keyboard'
 SEC_MOUSE = 'Mouse'
 SEC_BROWSE = 'Browse'
+SEC_UWP = 'UWP'
 
 #: The vocabulary of the new choices, by INI value.
 PUNCTUATION_LEVELS = ('none', 'some', 'most', 'all')
@@ -65,6 +67,17 @@ def _echoes():
     return [(value, 'settings.echo.' + name) for value, name in zip(
         KeyboardEchoSetting.ALL, ('none', 'characters', 'words',
                                   'charactersAndWords'))]
+
+
+def _braille_displays():
+    from titan_access import brltty_host
+    return [(code, 'settings.braille.display.' + code)
+            for code in brltty_host.DISPLAYS]
+
+
+def _braille_ports():
+    from titan_access import brltty_host
+    return [(port, 'settings.braille.port.' + port) for port in brltty_host.PORTS]
 
 
 def _named(prefix, values):
@@ -95,12 +108,21 @@ SECTIONS = (
         _e('Speech', 'Synthesizer', 'synthesizer', 'settings.speech.engine',
            'SAPI5'),
         _e('Speech', 'Voice', 'voices', 'settings.speech.voice', ''),
+        # The voice's variant, where the synthesizer has one (Cerence:
+        # compact, embedded-pro, embedded-high). '' is the synthesizer's
+        # own choice. Read and written through `speech_systems` too.
+        _e('Speech', 'Variant', 'variants', 'settings.speech.variant', ''),
         _e('Speech', 'Rate', 'range', 'settings.speech.rate', 0, (-10, 10, 1)),
         _e('Speech', 'Pitch', 'range', 'settings.speech.pitch', 0, (-10, 10, 1)),
         _e('Speech', 'Volume', 'range', 'settings.speech.volume', 100, (0, 100, 5)),
     )),
     ('general', 'settings.section.general', (
         _e('General', 'Enabled', 'bool', 'settings.general.enable', False),
+        # The shortcut that turns the reader on and off from anywhere -
+        # a hotkey field: Enter in the walked settings, then the
+        # combination itself (`hotkeys`).
+        _e('General', 'ToggleHotkey', 'hotkey', 'settings.general.toggleHotkey',
+           'ctrl+shift+t'),
         _e('General', 'MuteOutsideTCE', 'bool', 'settings.general.muteOutsideTce', False),
         _e('General', 'StartupAnnouncement', 'choice',
            'settings.general.startupAnnouncement',
@@ -110,6 +132,8 @@ SECTIONS = (
            ScreenReaderModifier.INSERT_AND_CAPSLOCK, _modifiers),
         _e('General', 'WelcomeMessage', 'text', 'settings.general.welcomeMessage',
            'Czytnik ekranu uruchomiony'),
+        # The welcome window (`welcome_screen`) shown as the reader starts.
+        _e('General', 'ShowWelcome', 'bool', 'settings.general.showWelcome', True),
         _e('General', 'SpeakHints', 'bool', 'settings.general.speakHints', True),
         _e('General', 'VirtualScreen', 'bool', 'settings.general.virtualScreen', False),
         _e('General', 'TitanAnnouncements', 'bool',
@@ -180,8 +204,6 @@ SECTIONS = (
         _e(SEC_BROWSE, 'FocusModeOnCaretMove', 'bool',
            'settings.browse.focusModeOnCaretMove', False),
         _e(SEC_BROWSE, 'QuickNavKeys', 'bool', 'settings.browse.quickNavKeys', True),
-        _e(SEC_BROWSE, 'SayAllOnPageLoad', 'bool', 'settings.browse.sayAllOnPageLoad', False),
-        _e(SEC_BROWSE, 'SayAllRate', 'range', 'settings.browse.sayAllRate', 0, (-10, 10, 1)),
         _e(SEC_BROWSE, 'ReportLinks', 'bool', 'settings.browse.reportLinks', True),
         _e(SEC_BROWSE, 'ReportHeadings', 'bool', 'settings.browse.reportHeadings', True),
         _e(SEC_BROWSE, 'ReportLists', 'bool', 'settings.browse.reportLists', True),
@@ -192,6 +214,34 @@ SECTIONS = (
         _e(SEC_BROWSE, 'SayDocumentPosition', 'bool',
            'settings.browse.sayDocumentPosition', False),
     )),
+    # **Browsing the web** - what happens when a page arrives and how its
+    # regions are crossed. Kept in the Browse INI section (the keys are the
+    # ones browse_mode has always read); shown as a category of its own.
+    ('web', 'settings.section.web', (
+        _e(SEC_BROWSE, 'SayAllOnPageLoad', 'bool', 'settings.browse.sayAllOnPageLoad', False),
+        _e(SEC_BROWSE, 'PageSummary', 'bool', 'settings.browse.pageSummary', True),
+        _e(SEC_BROWSE, 'LandmarkStartEnd', 'bool',
+           'settings.browse.landmarkStartEnd', True),
+        _e(SEC_BROWSE, 'SayAllRate', 'range', 'settings.browse.sayAllRate', 0, (-10, 10, 1)),
+    )),
+    # **UWP and WinUI apps** (uwp.py, virtual_lists.py, live_lists.py).
+    ('uwp', 'settings.section.uwp', (
+        _e(SEC_UWP, 'Glyphs', 'choice', 'settings.uwp.glyphs', 'word',
+           _named('settings.uwp.glyphs', ('word', 'strip', 'off'))),
+        _e(SEC_UWP, 'NameIconControls', 'bool', 'settings.uwp.nameIconControls', True),
+        _e(SEC_UWP, 'VirtualLists', 'bool', 'settings.uwp.virtualLists', True),
+        _e('Reader', 'liveLists', 'bool', 'settings.reader.liveLists', True),
+    )),
+    # **Titan's own shell** (titan_shell.py): the taskbar, the desktop,
+    # the Start menu and the file browser, read off the shell itself.
+    ('titanShell', 'settings.section.titanShell', (
+        _e('TitanShell', 'Semantics', 'bool', 'settings.titanShell.semantics', True),
+        _e('TitanShell', 'GroupNames', 'bool', 'settings.titanShell.groupNames', True),
+        _e('TitanShell', 'Positions', 'bool', 'settings.titanShell.positions', True),
+        _e('TitanShell', 'WindowEvents', 'choice', 'settings.titanShell.windowEvents',
+           'background', _named('settings.titanShell.windowEvents',
+                                ('none', 'background', 'all'))),
+    )),
     ('dial', 'settings.section.dial', tuple(
         _e('Dial', key, 'bool', 'settings.dial.' + label, True)
         for key, label in (
@@ -200,6 +250,7 @@ SECTIONS = (
             ('DialVolume', 'volume'), ('DialSpeed', 'speed'),
             ('DialSpeechSystem', 'speechSystem'),
             ('DialSynthesizer', 'synthesizer'), ('DialVoice', 'voice'),
+            ('DialVariant', 'variant'),
             ('DialImportantPlaces', 'importantPlaces')))),
     ('mouse', 'settings.section.mouse', (
         _e(SEC_MOUSE, 'TrackMouse', 'bool', 'settings.mouse.trackMouse', False),
@@ -251,6 +302,10 @@ SECTIONS = (
     ('braille', 'settings.section.braille', (
         _e('Braille', 'Enabled', 'bool', 'settings.braille.enabled', False),
         _e('Braille', 'Table', 'braille_table', 'settings.braille.table', ''),
+        _e('Braille', 'Display', 'choice', 'settings.braille.display', 'none',
+           _braille_displays),
+        _e('Braille', 'Port', 'choice', 'settings.braille.port', 'auto',
+           _braille_ports),
         _e('Braille', 'Viewer', 'bool', 'settings.braille.viewer', True),
     )),
     ('textEditing', 'settings.section.textEditing', (
@@ -265,12 +320,13 @@ SECTIONS = (
 #: INI the C# reader wrote.
 #: The sections a profile may override. The switch that turns the reader
 #: on is global by nature; everything else may differ per program.
-NEVER_IN_A_PROFILE = {('General', 'Enabled')}
+NEVER_IN_A_PROFILE = {('General', 'Enabled'), ('General', 'ToggleHotkey')}
 
 #: What the settings ring (Insert+Ctrl+arrows) steps through, in order.
 RING = (
     ('Speech', 'Rate'), ('Speech', 'Pitch'), ('Speech', 'Volume'),
     ('Speech', 'OwnVoice'), ('Speech', 'Synthesizer'), ('Speech', 'Voice'),
+    ('Speech', 'Variant'),
     ('__scheme__', ''),
     (SEC_SYMBOLS, 'PunctuationLevel'), ('TextEditing', 'KeyboardEcho'),
     (SEC_MOUSE, 'TrackMouse'),

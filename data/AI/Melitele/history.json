@@ -613,5 +613,40 @@
     "role": "assistant",
     "content": "Zmieniłam prędkość eSpeak na **20%** w konfiguracji NVDA i wysłałam skrót przeładowania (**NVDA + Ctrl + R**). \n\nJeśli syntezator nie zmienił jeszcze tempa, naciśnij na klawiaturze **NVDA + Ctrl + R**, aby natychmiast wczytać nową konfigurację.",
     "timestamp": 1788870958.0259724
+  },
+  {
+    "role": "user",
+    "content": "odtwórz włatcy móch - piure słonia czy jakoś tak",
+    "timestamp": 1791626941.6636727
+  },
+  {
+    "role": "assistant",
+    "content": "Odtwarzam odcinek **Włatcy Móch – Lekcja 38: „Piure dla słonia”** w odtwarzaczu Titana. Miłego seansu!",
+    "timestamp": 1791626973.7965527
+  },
+  {
+    "role": "user",
+    "content": "jaką mam wersję windows 11. 25h2 czy jaką?",
+    "timestamp": 1791702839.2056084
+  },
+  {
+    "role": "assistant",
+    "content": "Masz wersję **Windows 11 25H2** (dokładnie kompilacja **26200.9550**).",
+    "timestamp": 1791702865.094496
+  },
+  {
+    "role": "user",
+    "content": "a co potrafisz z TItan antivirus?",
+    "timestamp": 1791702869.244735
+  },
+  {
+    "role": "assistant",
+    "content": "**Titan Antivirus (`tAntivirus`)** to wbudowany w środowisko Titana, w pełni udźwiękowiony skaner bezpieczeństwa zaprojektowany od podstaw z myślą o dostępności.\n\nOto co potrafi i jak jest zbudowany:\n\n---\n\n### 1. Dwa silniki skanowania\n* **Główny silnik – ClamAV:**\n  * Własna usługa skanująca (`clamd`) z automatycznym pobieraniem silnika i aktualizacją baz sygnatur wirusów przez internet.\n* **Druga opinia – Microsoft Defender:**\n  * Potrafi wykorzystać systemowy skaner Defendera (`MpCmdRun.exe`) z trybem raportowania (`-DisableRemediation`). Defender tylko wykrywa zagrożenie, a pełną kontrolę nad tym, co z nim zrobić (kwarantanna, usunięcie), ma interfejs Titana.\n\n---\n\n### 2. Tryby ochrony i skanowania\n* **Skanowanie na żądanie:** skanowanie pojedynczych plików, wybranych folderów lub całych dysków.\n* **Integracja z powłoką i menedżerem plików (tFM):** uruchamianie skanowania bezpośrednio z menu kontekstowego plików.\n* **Strażnik w tle (`av_guard`):**\n  * **Monitor pobrań (Downloads watcher):** automatyczne sprawdzanie nowo ściąganych plików w tle.\n  * Zaplanowane skanowania okresowe.\n\n---\n\n### 3. Kwarantanna i obsługa zagrożeń\n* Bezpieczne izolowanie podejrzanych plików w kwarantannie (`av_quarantine`).\n* Możliwość przeglądania kwarantanny, przywracania fałszywych alarmów lub trwałego usuwania plików.\n* Okna dialogowe ostrzeżeń zapowiadane czytnikowi natychmiast z odpowiednią rangą ostrzeżenia.\n\n---\n\n### 4. Wzorcowa dostępność dla czytników ekranu\n* **Tabela wyników:** prawdziwa lista w trybie raportu z kolumnami (Plik, Zagrożenie, Status, Ścieżka), gdzie czytnik ekranu (Titan Access, NVDA) od razu wie, jaki rodzaj zagrożenia wykryto.\n* **Pasek postępu:** generuje dźwięki tonowe (progress tones) słyszalne w czytniku podczas skanowania.\n* **Inteligentny pasek stanu:** działa jako region na żywo (live region), ale aktualizuje się co kilka sekund, dzięki czemu czytnik nie jest zalewany nazwami tysięcy sprawdzanych plików.\n* **Dźwięki i mowa:** specjalne efekty dźwiękowe informujące o rozpoczęciu, zakończeniu skanowania i wykryciu wirusa.\n\n---\n\n### Co mogę z nim zrobić jako asystent?\nMogę na Twoje polecenie uruchomić Titan Antivirus (`launch_tce_item('tAntivirus')`), zlecić przeskanowanie pobranego pliku lub folderu oraz sprawdzić stan ochrony!",
+    "timestamp": 1791702971.7487695
+  },
+  {
+    "role": "user",
+    "content": "a jakie są akcje?, Aha, i sprawdź stan ochrony",
+    "timestamp": 1791702979.7729836
   }
 ]

@@ -36,6 +36,21 @@ that, and both are easy to break:
    instead of claiming to be active, and keeps trying — so closing the other
    reader hands the bridge over without restarting Titan.
 
+3. **The hidden NVDA window.** Tolk - what most audio games ship, in both
+   bitnesses - calls `FindWindowW(L"wxWindowClassNR", L"NVDA")` BEFORE it asks
+   the controller anything, and reports "no screen reader" when the window is
+   not there. Real NVDA has it (its wx main frame); this helper now keeps a
+   hidden top-level window of that class and title on a thread of its own
+   while it owns the endpoint (`TitanAccessHelper_hasNvdaWindow`). Measured on
+   Shank's 32-bit `Tolk.dll`: `reader=(none)` and not one call without it,
+   `NVDA` and speech with it. A bare client DLL (accessible_output3, the
+   probes) never needed the window, which is why the probes passed while the
+   games did not.
+4. **The endpoint stays ours across a restart.** RPC cannot give a protseq
+   endpoint back, so a reader stopped and started again in the same process
+   is answered `RPC_S_DUPLICATE_ENDPOINT` by itself; the helper remembers it
+   registered the name and treats that as owning it.
+
 `nvda_probe32.exe` / `nvda_probe64.exe` are what make this checkable rather than
 believable: each binds to the endpoint and calls it exactly as an application
 does. The reader runs them from **Screen reader menu (Insert+C) → Test the NVDA
@@ -75,6 +90,8 @@ for the DLL, so no copy step is required.
 * `titan_access_helper.c` — RPC registration + manager routines + exports
   (`start`, `stop`, `lastClientPid`, `callCount`, `ownsEndpoint`,
   `retryEndpoint`, `endpoint`).
+* Tests: `tests/test_titan_access_nvda_controller.py` (the real DLL, both
+  probes, the window, braille routing, a restart; skips while NVDA runs).
 * `nvda_probe.c` — the client probe, built for both bitnesses.
 * `build.bat` — MIDL + CL build for all three binaries.
 * generated at build time: `nvdaController.h`, `nvdaController_s.c`,

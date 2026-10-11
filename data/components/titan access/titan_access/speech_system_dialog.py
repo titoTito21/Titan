@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Insert+Ctrl+S: choose what the reader speaks with.
 
-A real dialog of three real lists - the speech system, the synthesizer in
-it, the voice of that synthesizer - with Test, OK and Cancel. Native
+A real dialog of real lists - the speech system, the synthesizer in it,
+the voice of that synthesizer and, where it has them, the voice's variant
+(Cerence's compact / embedded-pro / embedded-high) - with Test, OK and
+Cancel. Native
 controls, so the reader reads them like any other dialog and a second
 reader (NVDA, Orca) would too. The model behind it is `speech_systems`.
 
@@ -61,8 +63,8 @@ def _show(engine):
 
 def _take(window):
     try:
-        from .portable import hostWindow
-        hostWindow._take(int(window.GetHandle() or 0))
+        from . import foreground
+        foreground.take(int(window.GetHandle() or 0))
     except Exception:                                # noqa: BLE001
         pass
 
@@ -96,13 +98,19 @@ class SpeechSystemDialog(_Base):
         self._systems = []
         self._synths = []
         self._voices = []
+        self._variants = []
         self._token = 0
+        self._variant_token = 0
         self._wanted = speech_systems.current(self.settings)
+        self._wanted_variant = speech_systems.current_variant(self.settings)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.systems = self._list(sizer, L('speechSystem.label.system'))
         self.synths = self._list(sizer, L('speechSystem.label.synth'))
         self.voices = self._list(sizer, L('speechSystem.label.voice'))
+        # **The fourth level, only where a synthesizer has it**: Cerence
+        # installs a voice as compact, embedded-pro or embedded-high.
+        self.variants = self._list(sizer, L('speechSystem.label.variant'))
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         self.test = wx.Button(self, label=L('speechSystem.test'))
         ok = wx.Button(self, wx.ID_OK, L('speechSystem.ok'))
@@ -111,13 +119,14 @@ class SpeechSystemDialog(_Base):
             buttons.Add(button, 0, wx.ALL, 4)
         sizer.Add(buttons, 0, wx.ALIGN_RIGHT | wx.ALL, 4)
         self.SetSizer(sizer)
-        self.SetSize((520, 560))
+        self.SetSize((520, 680))
         ok.SetDefault()
         self.SetEscapeId(wx.ID_CANCEL)
 
         self.systems.Bind(wx.EVT_LISTBOX, lambda e: self._system_chosen())
         self.synths.Bind(wx.EVT_LISTBOX, lambda e: self._synth_chosen())
-        for box in (self.systems, self.synths, self.voices):
+        self.voices.Bind(wx.EVT_LISTBOX, lambda e: self._voice_chosen())
+        for box in (self.systems, self.synths, self.voices, self.variants):
             box.Bind(wx.EVT_LISTBOX_DCLICK, lambda e: self._ok())
         self.test.Bind(wx.EVT_BUTTON, lambda e: self._test())
         ok.Bind(wx.EVT_BUTTON, lambda e: self._ok())
@@ -175,6 +184,10 @@ class SpeechSystemDialog(_Base):
         at = self.voices.GetSelection()
         return self._voices[at][0] if 0 <= at < len(self._voices) else ''
 
+    def _variant(self):
+        at = self.variants.GetSelection()
+        return self._variants[at][0] if 0 <= at < len(self._variants) else ''
+
     def _system_chosen(self):
         system = self._system()
         self._synths = speech_systems.synthesizers(system)
@@ -194,6 +207,7 @@ class SpeechSystemDialog(_Base):
         if system == speech_systems.SYSTEM_TITAN or not synth:
             self.voices.Set([L('speechSystem.voice.titan')])
             self.voices.Enable(False)
+            self._no_variants()
             return
         self.voices.Enable(True)
         self.voices.Set([L('speechSystem.reading')])
@@ -212,13 +226,61 @@ class SpeechSystemDialog(_Base):
             self._voices = list(found)
             if not self._voices:
                 self.voices.Set([L('speechSystem.noVoices')])
+                self._no_variants()
                 return
             self.voices.Set([label for _id, label in self._voices])
             ids = [one for one, _label in self._voices]
             self.voices.SetSelection(ids.index(wanted) if wanted in ids
                                      else 0)
+            self._voice_chosen()
         except RuntimeError:
             # The dialog closed while the voices were being read.
+            pass
+
+    def _no_variants(self):
+        self._variants = []
+        self._variant_token += 1
+        self.variants.Set([L('speechSystem.noVariants')])
+        self.variants.Enable(False)
+
+    def _voice_chosen(self):
+        synth, voice = self._synth(), self._voice()
+        if not synth.startswith('nvda:') or not voice:
+            self._no_variants()
+            return
+        self._variant_token += 1
+        token = self._variant_token
+        self.variants.Enable(True)
+        self.variants.Set([L('speechSystem.reading')])
+        wanted = self._wanted_variant if (synth, voice) == \
+            (self._wanted[1], self._wanted[2]) else ''
+
+        def work():
+            found = speech_systems.variants(synth, voice)
+            _wx.CallAfter(self._variants_arrived, token, found, wanted)
+        threading.Thread(target=work, name='TitanAccessVariants',
+                         daemon=True).start()
+
+    def _variants_arrived(self, token, found, wanted):
+        if token != self._variant_token:
+            return
+        try:
+            self._variants = list(found)
+            if not self._variants:
+                self._no_variants()
+                return
+            self.variants.Enable(True)
+            self.variants.Set([label for _id, label in self._variants])
+            ids = [one for one, _label in self._variants]
+            if wanted in ids:
+                self.variants.SetSelection(ids.index(wanted))
+            else:
+                # Nothing chosen yet: the one the synthesizer is using.
+                from .nvda_host import external
+                now = external.variant(self._synth())
+                self.variants.SetSelection(ids.index(now) if now in ids
+                                           else 0)
+        except RuntimeError:
             pass
 
     # ------------------------------------------------------------------ #
@@ -230,7 +292,8 @@ class SpeechSystemDialog(_Base):
             if system == speech_systems.SYSTEM_TITAN:
                 speech_adapter.speak(sample)
                 return
-            profile = speech_systems.profile_of(self._synth(), self._voice())
+            profile = speech_systems.profile_of(self._synth(), self._voice(),
+                                                self._variant())
             if not speech_adapter.speak_with(profile, sample):
                 speech_adapter.speak(sample)
         except Exception as error:                   # noqa: BLE001
@@ -242,7 +305,8 @@ class SpeechSystemDialog(_Base):
             return
         voice = self._voice()
         said = speech_systems.choose(self.settings, system, self._synth(),
-                                     voice, engine=self.engine)
+                                     voice, engine=self.engine,
+                                     variant=self._variant())
         self._close()
         try:
             from . import speech_adapter
@@ -253,6 +317,7 @@ class SpeechSystemDialog(_Base):
     def _close(self):
         _open['dialog'] = None
         self._token += 1
+        self._variant_token += 1
         try:
             self.Destroy()
         except Exception:                            # noqa: BLE001

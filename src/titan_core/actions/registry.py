@@ -27,7 +27,8 @@ from src.titan_core.actions.kinds import (
     ACTIONABLE_KINDS, default_transport, discover_kind, kind_label,
 )
 from src.titan_core.actions.manifest import (
-    AddonActions, parse_manifest, read_manifest, slug,
+    AddonActions, MAX_DESCRIPTION, clean_text, parse_manifest, read_manifest,
+    slug,
 )
 
 _CACHE_TTL = 30.0
@@ -159,6 +160,11 @@ def _merge_python_declared(addon):
     for owner in inproc.candidate_owners(addon):
         if not hasattr(owner, 'TITAN_ACTIONS'):
             continue
+        # What the add-on IS, for the AI's listing - the Python twin of a
+        # manifest's "description". A manifest that says one keeps it.
+        about = getattr(owner, 'TITAN_DESCRIPTION', '')
+        if about and isinstance(about, str) and not addon.description:
+            addon.description = clean_text(about, MAX_DESCRIPTION)
         for action in inproc.actions_from_module(owner, addon):
             if action.name in existing:
                 # The JSON wins on description, but a live callable is better

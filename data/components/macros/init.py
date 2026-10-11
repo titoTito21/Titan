@@ -6483,7 +6483,19 @@ One statement per line. # starts a comment.
   moment there is nothing left to say. A macro that was already right costs
   nothing at all - nothing is asked of a model, and nothing is changed. A
   correction is never saved without being asked for, and one that comes back
-  worse than the original is thrown away."""
+  worse than the original is thrown away.
+
+  THE SCREEN READER - a macro reaches Titan Access like any add-on
+  (titan_access.read_screen, titan_access.click_element, titan_access.say,
+  titan_access.read_aloud what="focus"...). The other way round, a Titan
+  Access READER SCRIPT (.tas, in the reader's own scripts folder) is this
+  language plus the reader's own lines: triggers on a key, the focus, a
+  window, a program's notification, a time or an interval; short
+  statements (beep, read focus, jump heading, press "Save", pass...); and
+  control rules that change how one kind of control is read. Its full
+  reference is the action titan_access.script_language, read out of the
+  reader itself; titan_access.write_script saves one checked. A reader
+  script can run any macro with macros.run_macro name="..."."""
 
 
 # The same reference in Polish. A document this size is kept as a second text
@@ -6697,7 +6709,19 @@ Jedna instrukcja na linię. # zaczyna komentarz.
   kończąc w chwili, gdy nie ma już nic do powiedzenia. Makro, które od początku
   było dobre, nie kosztuje nic - nic nie jest wysyłane do modelu i nic się nie
   zmienia. Poprawka nigdy nie zapisuje się bez pytania, a taka, która wypada
-  gorzej niż oryginał, jest odrzucana."""
+  gorzej niż oryginał, jest odrzucana.
+
+  CZYTNIK EKRANU - makro sięga do Titan Access jak do każdego dodatku
+  (titan_access.read_screen, titan_access.click_element, titan_access.say,
+  titan_access.read_aloud what="focus"...). W drugą stronę: SKRYPT CZYTNIKA
+  (.tas, w folderze skryptów czytnika) to ten sam język plus własne linie
+  czytnika: wyzwalacze na klawisz, fokus, okno, powiadomienie programu,
+  godzinę albo odstęp czasu; krótkie instrukcje (beep, read focus, jump
+  heading, press "Zapisz", pass...); oraz reguły kontrolek, które zmieniają
+  sposób czytania jednego rodzaju kontrolki. Pełną dokumentację podaje akcja
+  titan_access.script_language, odczytana z samego czytnika;
+  titan_access.write_script zapisuje skrypt po sprawdzeniu. Skrypt czytnika
+  może uruchomić dowolne makro przez macros.run_macro name="..."."""
 
 
 def _macro_language_text(language=''):

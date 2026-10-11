@@ -204,5 +204,197 @@ class ControlRulesLikeJawsScripts(unittest.TestCase):
         self.assertEqual(problems, [])
 
 
+class TheConditionsSayMoreThanIs(unittest.TestCase):
+
+    def test_every_operator(self):
+        found = ta_scripts._conditions(
+            'name != "a" title not contains "Draft" name starts with "Nowy" '
+            'id matches "^Btn\\d+$"')
+        self.assertEqual(found, [('name', 'not', 'a'),
+                                 ('title', 'not contains', 'draft'),
+                                 ('name', 'starts', 'nowy'),
+                                 ('id', 'matches', '^Btn\\d+$')])
+
+    def test_they_are_tested(self):
+        values = {'name': 'Nowy plik', 'id': 'Btn12', 'title': 'Poczta'}
+        conditions = ta_scripts._conditions(
+            'name starts with "nowy" id matches "^btn\\d+$" '
+            'title not contains "szkic" name != "x"')
+        self.assertTrue(ta_scripts._matches(conditions, values))
+        self.assertFalse(ta_scripts._matches(
+            ta_scripts._conditions('title not contains "poczta"'), values))
+
+    def test_a_broken_pattern_matches_nothing(self):
+        self.assertFalse(ta_scripts._test('matches', 'abc', '(['))
+
+
+class TheReadersOwnStatements(unittest.TestCase):
+
+    def test_each_becomes_one_titan_script_line(self):
+        cases = {
+            'beep 880 40': 'titan_access.beep frequency=880 duration=40',
+            '  read focus': '  titan_access.read_aloud what="focus"',
+            'jump previous heading':
+                'titan_access.go_to kind="heading" backward=true',
+            'press "Zapisz"': 'titan_access.click_element text="Zapisz"',
+            'setting "rate" = 60':
+                'titan_access.set_setting name="rate" value="60"',
+            'pass': 'titan_access.pass_key key="{{key}}"',
+            'command "sayAll"': 'titan_access.run_command name="sayAll"',
+            'silence': 'titan_access.stop_speech',
+        }
+        for said, meant in cases.items():
+            self.assertEqual(ta_scripts.translate(said, 1), (meant, ''), said)
+
+    def test_titan_script_is_left_alone(self):
+        for line in ('say "x"', 'read the screen aloud', 'set a = 1'):
+            self.assertEqual(ta_scripts.translate(line, 1), (None, ''))
+
+    def test_line_numbers_stay_the_files(self):
+        _t, body, _p = ta_scripts.parse('when reader starts\nsay "a"\nbeep 440')
+        self.assertTrue(body.splitlines()[2].startswith('titan_access.beep'))
+
+    def test_a_script_of_statements_checks_clean(self):
+        problems = ta_scripts.check(
+            'when key "ctrl+shift+f12"\nbeep 880 40\nread focus\n'
+            'jump heading\npress "Zapisz"\nsetting "rate" = 60\n'
+            'label "{{name}}"\ncommand "sayAll"\nif name is empty\n'
+            '    pass\nend\n')
+        self.assertEqual(problems, [])
+
+    def test_every_statement_is_documented_and_declared(self):
+        names = ta_scripts.own_actions()
+        text = ta_scripts.language_text('en')
+        for _pattern, template, what in ta_scripts.STATEMENTS:
+            self.assertIn(what, text)
+        for line in ('beep 1 1', 'cue "x"', 'braille "x"', 'press "x"',
+                     'jump link', 'read focus', 'scan on', 'setting "x" = 1',
+                     'label "x"', 'pass', 'silence', 'command "x"',
+                     'script "x"'):
+            said, _why = ta_scripts.translate(line, 1)
+            action = said.strip().split()[0].split('.')[1]
+            self.assertIn(action, names, line)
+
+
+class TimedAndNotifiedScripts(unittest.TestCase):
+
+    def setUp(self):
+        self.ran = []
+        self.keep = ta_scripts.run
+        ta_scripts.run = lambda script, **kw: self.ran.append(
+            (script['name'], kw.get('extra')))
+
+    def tearDown(self):
+        ta_scripts.run = self.keep
+        for name in os.listdir(ta_scripts.folder()):
+            if name.startswith('timed') or name.startswith('noted'):
+                os.remove(os.path.join(ta_scripts.folder(), name))
+        ta_scripts.load()
+        ta_scripts.stop_clock()
+
+    def _write(self, name, text):
+        with open(os.path.join(ta_scripts.folder(), name), 'w',
+                  encoding='utf-8') as handle:
+            handle.write(text)
+        ta_scripts.load()
+
+    def test_every_runs_on_its_interval(self):
+        self._write('timed.tas', 'when every 30s\nsay "tick"\n')
+        start = 1000000.0
+        ta_scripts.tick(start)                      # schedules
+        ta_scripts.tick(start + 10)
+        self.assertEqual(self.ran, [])
+        ta_scripts.tick(start + 31)
+        self.assertEqual([n for n, _e in self.ran], ['timed'])
+
+    def test_time_runs_once_a_day(self):
+        self._write('timed2.tas', 'when time "07:30"\nsay "rano"\n')
+        at = time.mktime((2026, 10, 6, 7, 30, 5, 0, 0, -1))
+        ta_scripts.tick(at)
+        ta_scripts.tick(at + 20)
+        self.assertEqual([n for n, _e in self.ran], ['timed2'])
+
+    def test_bad_times_are_named(self):
+        for line in ('when every 1s', 'when every soon', 'when time "25:00"'):
+            _t, _b, problems = ta_scripts.parse(line)
+            self.assertTrue(problems and 'line 1' in problems[0], line)
+
+    def test_a_notification_runs_with_its_text(self):
+        self._write('noted.tas',
+                    'when notification text contains "bateria"\n'
+                    'say "{{text}}"\n')
+        self.assertEqual(ta_scripts.on_notification('Słaba bateria', 'x'), 1)
+        self.assertEqual(self.ran, [('noted', {'text': 'Słaba bateria'})])
+        self.assertEqual(ta_scripts.on_notification('Pobrano', 'x'), 0)
+
+
+class MoreVariablesAndRuleChanges(unittest.TestCase):
+
+    def test_the_place_in_the_list_and_the_states(self):
+        class Row(Obj):
+            role = 'listitem'
+            states = {'selected'}
+            pos_in_set = 3
+            size_of_set = 9
+            level = 0
+            bounds = (10, 20, 30, 40)
+        more = ta_scripts._more_about(Row())
+        self.assertEqual((more['index'], more['count']), ('3', '9'))
+        self.assertIn('3', more['position'])
+        self.assertIn('9', more['position'])
+        self.assertTrue(more['states'])
+        self.assertEqual((more['x'], more['y']), ('20', '30'))
+
+    def test_prefix_suffix_and_sound(self):
+        path = os.path.join(ta_scripts.folder(), 'rulesmore.tas')
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write('control role="button" name starts with "zap" '
+                         'prefix "[" suffix "]" sound "edge"\n')
+        ta_scripts.load()
+        played = []
+
+        class Player(Spoken):
+            def play(self, name, obj=None):
+                played.append(name)
+        keep = ta_scripts._state.get('engine')
+        ta_scripts._state['engine'] = Player()
+        try:
+            changed, say = ta_scripts.adjust(Obj())
+        finally:
+            ta_scripts._state['engine'] = keep
+            os.remove(path)
+            ta_scripts.load()
+        self.assertEqual(changed.name, '[Zapisz]')
+        self.assertEqual(say, '')
+        self.assertEqual(played, ['edge'])
+
+
+class TheReferenceIsTheReaders(unittest.TestCase):
+
+    def test_the_readme_follows_the_language(self):
+        path = os.path.join(ta_scripts.folder(), 'README.txt')
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write('Titan Access scripts\n====================\nold\n')
+        ta_scripts.load()
+        with open(path, encoding='utf-8') as handle:
+            text = handle.read()
+        self.assertIn('when notification', text)
+
+    def test_a_readme_the_user_wrote_is_theirs(self):
+        path = os.path.join(ta_scripts.folder(), 'README.txt')
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write('My own notes\n')
+        ta_scripts.load()
+        with open(path, encoding='utf-8') as handle:
+            self.assertEqual(handle.read(), 'My own notes\n')
+        os.remove(path)
+
+    def test_polish(self):
+        text = ta_scripts.language_text('pl')
+        self.assertIn('Skrypty Titan Access', text)
+        self.assertIn('pass - przepuść do programu', text)
+        self.assertIn('when every 5m', text)        # the syntax is not translated
+
+
 if __name__ == '__main__':
     unittest.main()

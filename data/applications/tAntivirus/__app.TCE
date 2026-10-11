@@ -1,0 +1,5 @@
+name_pl="Titan Antivirus"
+name_en="Titan Antivirus"
+description="Antivirus scanner built on the ClamAV engine"
+openfile="main.py"
+shortname="tantivirus"

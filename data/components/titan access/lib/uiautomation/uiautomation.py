@@ -62,7 +62,14 @@ class _AutomationClient:
         for retry in range(tryCount):
             try:
                 self.UIAutomationCore = comtypes.client.GetModule("UIAutomationCore.dll")
-                self.IUIAutomation = comtypes.client.CreateObject("{ff48dba4-60ef-4201-aa87-54103eef594e}", interface=self.UIAutomationCore.IUIAutomation)
+                # Titan Access: CUIAutomation8 first (Windows 8+). It is the same
+                # UI Automation, and the only client that answers IUIAutomation2
+                # (connection/transaction timeouts - a suspended UWP app held
+                # every call 20 s) and IUIAutomation5 (notifications).
+                try:
+                    self.IUIAutomation = comtypes.client.CreateObject("{e22ad333-b25f-460c-83d0-0581107395c9}", interface=self.UIAutomationCore.IUIAutomation)
+                except Exception:
+                    self.IUIAutomation = comtypes.client.CreateObject("{ff48dba4-60ef-4201-aa87-54103eef594e}", interface=self.UIAutomationCore.IUIAutomation)
                 self.ViewWalker = self.IUIAutomation.RawViewWalker
                 #self.ViewWalker = self.IUIAutomation.ControlViewWalker
                 break

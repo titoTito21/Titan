@@ -61,13 +61,25 @@ def _open_settings_category(launcher):
     try:
         if settings_frame is not None and hasattr(settings_frame, "open_at_category"):
             settings_frame.open_at_category(category)
+            _to_front(settings_frame)
             return
         # Fallback: just show whatever settings window we can reach.
         if settings_frame is not None:
             settings_frame.Show(True)
             settings_frame.Raise()
+            _to_front(settings_frame)
     except Exception as e:  # pragma: no cover - host dependent
         print(f"[TitanAccess] open settings category error: {e}")
+
+
+def _to_front(window):
+    """A window that was already open is RAISED, not made: the watcher sees
+    nothing new, and Windows refuses Raise from behind another program."""
+    try:
+        from . import foreground
+        wx.CallLater(120, lambda: foreground.take(int(window.GetHandle() or 0)))
+    except Exception:
+        pass
 
 
 def _restore_launcher(launcher):
@@ -318,6 +330,16 @@ def _show_on_gui_thread(engine):
         host.SetFocus()
     except Exception:
         pass
+    # **Raise is refused** when another program has the foreground, which
+    # is when this menu is wanted: the popup then opened behind it and took
+    # no key until the user Alt+Tabbed to it. Taken the way the walked lists
+    # take the keyboard; and whatever an item opens comes to the front too.
+    try:
+        from . import foreground
+        foreground.take(int(host.GetHandle() or 0))
+        foreground.expect(seconds=60)
+    except Exception:
+        pass
 
     # Stop the reader from announcing the empty host window ("panel") while the
     # menu is up; the menu items themselves (a separate menu window) still read.
@@ -332,6 +354,13 @@ def _show_on_gui_thread(engine):
         print(f"[TitanAccess] reader menu popup error: {e}")
     finally:
         _set_menu_host(engine, 0)
+        try:
+            # The menu was open for as long as the user liked; what the
+            # chosen item opens is watched for a few seconds from NOW.
+            from . import foreground
+            foreground.expect(replace=True)
+        except Exception:
+            pass
         try:
             menu.Destroy()
         except Exception:

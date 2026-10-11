@@ -54,6 +54,10 @@ class AppModuleBase:
         """Called when the application loses the foreground."""
         self._activated = False
 
+    def stop(self):
+        """The reader is being switched off: end every thread and watch
+        this module started. Default: nothing to end."""
+
     def customize_object(self, obj):
         """Mutate and return ``obj`` before it is announced.
 

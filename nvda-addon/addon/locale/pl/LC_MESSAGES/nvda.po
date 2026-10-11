@@ -1031,6 +1031,10 @@ msgid "What this is"
 msgstr "Co to jest"
 
 #. Translators: a control in the voice class manager.
+msgid "Speech s&ystem"
+msgstr "S&ystem mowy"
+
+#. Translators: a control in the voice class manager.
 #: classManager.py:160
 msgid "&Synthesizer"
 msgstr "&Syntezator"

@@ -16811,5 +16811,83 @@ class APaletteRowSaysARealKey(unittest.TestCase):
         self.assertNotIn("'label': '%s (%s)' % (text, key), 'role': ''", engine)
 
 
+class InsideTceOnlyTitanAccessSpeaks(unittest.TestCase):
+    """Titan Access with "Mute outside TCE" reads TCE alone and leaves the
+    rest of the machine to NVDA; NVDA then sleeps in exactly TCE's
+    processes (`tceSleep`), and wakes them when that ends."""
+
+    class _Module(object):
+        def __init__(self):
+            self.sleepMode = False
+
+    class _Handler(object):
+        def __init__(self):
+            self.modules = {}
+
+        def getAppModuleFromProcessID(self, pid):
+            return self.modules.setdefault(
+                pid, InsideTceOnlyTitanAccessSpeaks._Module())
+
+    def setUp(self):
+        from titanEnhancements import tceSleep
+        self.tceSleep = tceSleep
+        tceSleep._slept.clear()
+        tceSleep._woken_by_user.clear()
+        tceSleep._state['pids'] = frozenset()
+        self.handler = self._Handler()
+
+    def _policy(self, alone, pids):
+        return self.tceSleep._parse(json.dumps(
+            {'reads_tce_alone': alone, 'tce_pids': pids}))
+
+    def test_tce_sleeps_and_wakes(self):
+        self.tceSleep.apply(self._policy(True, [100, 101]), self.handler)
+        self.assertTrue(self.handler.modules[100].sleepMode)
+        self.assertTrue(self.handler.modules[101].sleepMode)
+        self.tceSleep.apply(self._policy(False, [100, 101]), self.handler)
+        self.assertFalse(self.handler.modules[100].sleepMode)
+        self.assertFalse(self.handler.modules[101].sleepMode)
+
+    def test_nvdas_own_process_never_sleeps(self):
+        policy = self._policy(True, [os.getpid(), 100])
+        self.tceSleep.apply(policy, self.handler)
+        self.assertNotIn(os.getpid(), self.handler.modules)
+
+    def test_what_the_user_put_to_sleep_is_not_woken(self):
+        module = self.handler.getAppModuleFromProcessID(100)
+        module.sleepMode = True
+        self.tceSleep.apply(self._policy(True, [100]), self.handler)
+        self.tceSleep.wake_all()
+        self.assertTrue(module.sleepMode)
+
+    def test_what_the_user_woke_stays_awake(self):
+        self.tceSleep.apply(self._policy(True, [100]), self.handler)
+        self.handler.modules[100].sleepMode = False      # NVDA+shift+s
+        self.tceSleep.apply(self._policy(True, [100]), self.handler)
+        self.assertFalse(self.handler.modules[100].sleepMode)
+
+    def test_a_window_between_two_polls_is_put_to_sleep(self):
+        self.tceSleep.apply(self._policy(True, [100]), self.handler)
+        module = self._Module()
+        obj = types.SimpleNamespace(processID=100, appModule=module)
+        self.tceSleep._slept.pop(100, None)
+        self.assertTrue(self.tceSleep.sleep_now(obj))
+        self.assertTrue(module.sleepMode)
+        other = types.SimpleNamespace(processID=200, appModule=self._Module())
+        self.assertFalse(self.tceSleep.sleep_now(other))
+
+    def test_an_answer_nobody_can_read_sleeps_nothing(self):
+        self.assertIsNone(self.tceSleep._parse('not json'))
+        self.assertEqual(self.tceSleep.wanted_pids(None), frozenset())
+
+    def test_the_plugin_hands_the_first_event_to_it(self):
+        import titanEnhancements
+        with open(titanEnhancements.__file__, encoding='utf-8') as f:
+            source = f.read()
+        self.assertIn('tceSleep.start()', source)
+        self.assertIn('tceSleep.stop()', source)
+        self.assertEqual(source.count('if tceSleep.sleep_now(obj):'), 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

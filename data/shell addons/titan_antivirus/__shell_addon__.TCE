@@ -1,0 +1,9 @@
+[shell addon]
+name = Scan with antivirus
+name_pl = Skanuj przy pomocy antywirusa
+description = Adds "Scan with antivirus:" to the menus of files, folders and desktop icons, with Titan Antivirus (ClamAV) and Microsoft Defender, and starts Titan Antivirus' background protection with the shell.
+description_pl = Dodaje "Skanuj przy pomocy antywirusa:" do menu plików, folderów i ikon pulpitu, z Titan Antivirus (ClamAV) i Microsoft Defender, oraz uruchamia ochronę w tle Titan Antivirus razem z powłoką.
+author = TCE Team
+version = 1.0
+status = 0
+surfaces = shell, start_menu, explorer, desktop

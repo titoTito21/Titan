@@ -326,9 +326,13 @@ class _Settings(object):
             return default
 
 
-def _voice_adapter(engine, settings):
+def _voice_adapter(engine, settings, own=True):
+    """An adapter speaking with ``engine`` - the reader's OWN voice (its
+    private engine) unless ``own`` is False, when ``engine`` is Titan's
+    shared one."""
     adapter = make_adapter(engine)
     adapter._settings = settings
+    adapter._own = own
     return adapter
 
 
@@ -560,6 +564,149 @@ class TheOwnVoiceIsOnlyASynthesizerThisPlatformOffers(unittest.TestCase):
         engine.get_available_engines = lambda: [{'id': 'sapi5_32'}]
         self.assertTrue(sa._engine_offered(engine, 'SAPI5'))
         self.assertFalse(sa._engine_offered(engine, 'dectalk'))
+
+
+class AClassVoiceIsAVoiceOfTheReadersSynthesizer(unittest.TestCase):
+    """Reported as "the voice class manager does not set voices". A class
+    naming a voice and no synthesizer means a voice of the synthesizer the
+    reader speaks with; that voice was dropped under an external (NVDA
+    add-on) reader, a part's voice went to Titan's engine instead, and
+    a borrowed voice under Titan's shared engine was put on - and the
+    reader's settings put back onto - the engine Titan's own applications
+    speak through."""
+
+    def _settle(self, adapter, engine):
+        for _ in range(200):
+            if not adapter.pending_count() and not engine.is_speaking:
+                break
+            time.sleep(0.01)
+        time.sleep(0.05)
+
+    def test_a_voice_alone_goes_to_the_external_reader_with_the_voice(self):
+        engine = VoiceEngine()
+        adapter = _voice_adapter(engine, _Settings())
+        adapter._external_synth = lambda: 'nvda:rhvoice'
+        said = []
+        adapter._speak_external = lambda synth, item, profile=None: \
+            said.append((synth, item.plain_text, dict(profile or {})))
+        adapter.speak('Nowa wiadomość', voice={'voice': 'Natan'})
+        self._settle(adapter, engine)
+        self.assertEqual(said, [('nvda:rhvoice', 'Nowa wiadomość',
+                                 {'synth': 'nvda:rhvoice', 'voice': 'Natan'})])
+        self.assertEqual(engine.spoken, [])
+
+    def test_parts_go_each_to_their_own_synthesizer(self):
+        engine = VoiceEngine()
+        adapter = _voice_adapter(engine, _Settings())
+        adapter._external_synth = lambda: 'nvda:rhvoice'
+        said = []
+        adapter._speak_external = lambda synth, item, profile=None: \
+            said.append((synth, item.plain_text,
+                         (profile or {}).get('voice')))
+        adapter.speak_segments([
+            ('Zapisz', 0),
+            ('przycisk', -4, 0.0, 0, 0, {'voice': 'Anna'}),
+            ('zaznaczony', 4, 0.0, 0, 0, {'synth': 'smp', 'voice': 'pl'})])
+        self._settle(adapter, engine)
+        self.assertEqual([one[:2] for one in said],
+                         [('nvda:rhvoice', 'Zapisz'),
+                          ('nvda:rhvoice', 'przycisk')])
+        self.assertEqual(said[1][2], 'Anna')
+        self.assertIn('zaznaczony', ' '.join(engine.spoken))
+        self.assertIn(('engine', 'smp'), engine.calls)
+
+    def test_titans_shared_engine_is_never_borrowed(self):
+        from titan_access import speech_adapter as sa
+        shared, private = VoiceEngine(), VoiceEngine()
+        private.engine = 'espeak'
+        adapter = _voice_adapter(shared, _Settings(), own=False)
+        adapter._voice_engine = lambda profile: private
+        adapter.speak('Uwaga', voice={'voice': 'Microsoft Adam'})
+        self._settle(adapter, shared)
+        time.sleep(0.1)
+        self.assertEqual(shared.calls, [])
+        # The private engine was put on the shared one's synthesizer first,
+        # so the voice the manager listed is the voice found.
+        self.assertIn(('engine', 'sapi5'), private.calls)
+        self.assertIn(('voice', 1), private.calls)
+
+    def test_the_same_engine_is_not_switched_to_itself(self):
+        engine = VoiceEngine()
+        adapter = _voice_adapter(engine, _Settings())
+        adapter._borrow_voice({'synth': 'sapi5', 'voice': 'Microsoft Adam'})
+        self.assertNotIn(('engine', 'sapi5'), engine.calls)
+        self.assertIn(('voice', 1), engine.calls)
+
+    def test_a_speech_dispatcher_module_is_split(self):
+        engine = VoiceEngine()
+        engine.engine = 'spd'
+        engine.spd_module = 'espeak-ng'
+        adapter = _voice_adapter(engine, _Settings())
+        self.assertEqual(adapter.reader_synth(), 'spd:espeak-ng')
+        self.assertEqual(adapter._resolve({'voice': 'x'}),
+                         {'voice': 'x', 'synth': 'spd',
+                          'spd_module': 'espeak-ng'})
+        self.assertEqual(adapter._resolve({'synth': 'spd:rhvoice'}),
+                         {'synth': 'spd', 'spd_module': 'rhvoice'})
+
+
+class TheClassManagerListsTheReadersSpeechSystems(unittest.TestCase):
+    """The class manager in Titan Access asked Titan's engine list alone:
+    no voices for "the one the reader is using", no variants, no NVDA
+    add-on synthesizers and no speech system. It asks `speech_systems`
+    now, the model the speech system dialog uses."""
+
+    def setUp(self):
+        from titan_access import speech_systems as ss
+        from titan_access.portable import classManager
+        self.ss, self.speaking = ss, classManager.speaking
+        self.saved = {name: getattr(ss, name) for name in
+                      ('systems', 'synthesizers', 'voices', 'variants',
+                       'current')}
+        ss.systems = lambda engine=None: [
+            ('titan', 'Titan'), ('titantts', 'Titan TTS'),
+            ('sapi5', 'SAPI 5'), ('nvda', 'NVDA')]
+        ss.synthesizers = lambda system, engine=None: {
+            'titantts': [('smp', 'SMP')], 'sapi5': [('sapi5', 'SAPI 5')],
+            'nvda': [('nvda:rhvoice', 'RHVoice')]}.get(system, [])
+        ss.voices = lambda synth, engine=None, fresh=False: {
+            'nvda:rhvoice': [('Natan', 'Natan'), ('Anna', 'Anna')],
+            'smp': [('pl', 'Polish')]}.get(synth, [])
+        ss.variants = lambda synth, voice='', fresh=False: (
+            [('hi', 'High')] if synth == 'nvda:rhvoice' and voice else [])
+        ss.current = lambda settings: ('nvda', 'nvda:rhvoice', 'Natan')
+        self.reader = self.speaking.reader_synth
+        self.speaking.reader_synth = staticmethod(lambda: 'nvda:rhvoice')
+
+    def tearDown(self):
+        for name, value in self.saved.items():
+            setattr(self.ss, name, value)
+        self.speaking.reader_synth = self.reader
+
+    def test_titans_own_voice_is_not_a_system_for_a_class(self):
+        self.assertEqual([key for key, _l in self.speaking.systems()],
+                         ['titantts', 'sapi5', 'nvda'])
+
+    def test_synthesizers_are_per_system_or_all(self):
+        self.assertEqual(self.speaking.synthesizers('nvda'),
+                         [('nvda:rhvoice', 'RHVoice')])
+        self.assertEqual([key for key, _l in self.speaking.synthesizers()],
+                         ['smp', 'sapi5', 'nvda:rhvoice'])
+        self.assertEqual(self.speaking.system_of('nvda:rhvoice'), 'nvda')
+        self.assertEqual(self.speaking.system_of('smp'), 'titantts')
+
+    def test_the_readers_own_synthesizer_has_its_voices(self):
+        self.assertEqual([key for key, _l in self.speaking.voices_of('')],
+                         ['Natan', 'Anna'])
+        self.assertEqual(self.speaking.voices_of('smp'), [('pl', 'Polish')])
+
+    def test_a_voice_has_its_variants(self):
+        self.assertEqual(self.speaking.variants_of('', 'Anna'),
+                         [('hi', 'High')])
+        self.assertEqual(self.speaking.variants_of('', ''),
+                         [('hi', 'High')])
+        self.assertEqual(self.speaking.variants_of('smp', 'pl'), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

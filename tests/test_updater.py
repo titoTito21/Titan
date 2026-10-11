@@ -675,5 +675,24 @@ class WhatWentWrongIsSaid(unittest.TestCase):
         self.assertIn('nowhere.7z', instance.failure_reason)
 
 
+class TheStartupCheckIsAMethod(unittest.TestCase):
+    """`exit_after_update` was once pasted INSIDE the class, which made
+    `check_and_update` a nested function after `os._exit` - unreachable -
+    and every startup answered AttributeError instead of checking."""
+
+    def test_check_and_update_is_a_method_of_the_updater(self):
+        import ast
+        path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), 'src', 'system', 'updater.py')
+        with open(path, encoding='utf-8') as f:
+            tree = ast.parse(f.read())
+        cls = [n for n in tree.body
+               if isinstance(n, ast.ClassDef) and n.name == 'Updater'][0]
+        methods = {n.name for n in cls.body if isinstance(n, ast.FunctionDef)}
+        self.assertIn('check_and_update', methods)
+        top = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+        self.assertIn('exit_after_update', top)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

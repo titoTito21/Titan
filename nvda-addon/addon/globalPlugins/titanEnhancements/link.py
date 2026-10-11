@@ -348,6 +348,8 @@ def diagnostics(**_):
     # A class set to another synthesizer and a count that never moves is
     # the fault this answers, seen from outside.
     ask('said_elsewhere', lambda: dict(interject._by_synth))
+    from . import tceSleep
+    ask('tce_sleep', tceSleep.report)
     ask('cancel_followed', lambda: speaking._cancel_was is not None)
     ask('our_drivers', lambda: sorted(speaking._drivers))
     ask('drivers_refused', speaking.refused)

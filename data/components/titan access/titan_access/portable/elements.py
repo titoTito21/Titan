@@ -12,7 +12,7 @@ the states of a row and for one utterance out of pitched parts, failed on
 This is the shim beside the shared modules (like ``i18n``, ``compat`` and
 ``link``): the same names, answered out of this reader's own tables. A
 state is looked up in Titan Access's own catalogue; a sequence is the
-words of the parts, which ``compat.speech`` says as one line; and the
+parts, which ``compat.speech`` says with the reader's pause between them; and the
 tones are the ones ``accessible.describe`` uses, so a row read through
 the virtual window sounds like the same row read on the focus path.
 """
@@ -193,21 +193,66 @@ def describe(obj):
     return out
 
 
+class Sequence(list):
+    """The words of the parts, one string per part - and the parts as
+    the reader speaks them, in :attr:`segments`.
+
+    It is still a list of strings, so a caller that only wants the words
+    (`windowKind` joins them) reads it as it always did; `compat.speech`
+    sees :attr:`segments` and says the parts as the reader says a control:
+    each at its own tone, with the reader's own pause between them -
+    "OK" (pause) "przycisk", never "OK, przycisk".
+    """
+    segments = ()
+
+
+#: The tone of a part by its class, where the class says none of its own
+#: - the three `accessible.describe` uses for a real control.
+_DEFAULT_PITCH = {'kind': ROLE_PITCH, 'state': STATE_PITCH,
+                  'detail': DETAIL_PITCH}
+
+
+def _segment(text, tag):
+    """One part as `accessible.describe` makes one - its class's pitch,
+    rate, volume and voice."""
+    if isinstance(tag, (int, float)) and not isinstance(tag, bool):
+        return (text, int(tag))
+    if isinstance(tag, dict):
+        # A whole profile (the class manager's sample): its own pitch.
+        try:
+            return (text, int(tag.get('pitch') or 0))
+        except (TypeError, ValueError):
+            return (text, NAME_PITCH)
+    tag = str(tag or 'name')
+    try:
+        from .. import accessible
+        return tuple(accessible._part(text, tag,
+                                      _DEFAULT_PITCH.get(tag, NAME_PITCH)))
+    except Exception:                                # noqa: BLE001
+        return (text, _DEFAULT_PITCH.get(tag, NAME_PITCH))
+
+
 def sequence(segments):
-    """The parts as one utterance. There are no speech commands here, so
-    it is the words joined - and `compat.speech.speak` says a list of
-    strings as one line, nothing dropped."""
+    """The parts as one utterance of separate parts (:class:`Sequence`)."""
     if not segments:
         return []
-    words = []
+    words = Sequence()
+    parts = []
     for seg in segments:
+        tag = 'name'
         try:
-            text = _text(seg[0])
+            text = _text(seg[0]) if not isinstance(seg, str) else _text(seg)
+            if not isinstance(seg, str) and len(seg) > 1:
+                tag = seg[1]
         except Exception:                            # noqa: BLE001
             text = _text(seg)
         if text:
             words.append(text)
-    return [', '.join(words)] if words else []
+            parts.append(_segment(text, tag))
+    if not words:
+        return []
+    words.segments = tuple(parts)
+    return words
 
 
 def can_pitch():

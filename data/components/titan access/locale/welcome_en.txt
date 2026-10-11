@@ -1,0 +1,14 @@
+Titan Access is a screen reader for the Titan environment and for the Windows or Linux operating system.
+Here are the most important Titan Access keyboard shortcuts:
+Insert+C - open the screen reader menu
+Insert+Shift+Space - open the command palette. In the palette, as in the virtual window,
+ the arrow keys move by lines or by characters
+NumPad 1, 7, 3, 9 move to the matching corner of the window, the palette or the message
+NumPad 4 and 6 change how the virtual window is presented
+NumPad 5 or Enter clicks the object; pressing it twice double-clicks
+Insert+Shift+T - the Titan menu (the menu of add-ons for the Titan Access screen reader)
+Insert+I - Titan's alternative interface in the screen reader
+NumPad Minus turns the TPad on and off; in a terminal it turns screen review on and off
+
+Note!
+Titan Access stops working when the TCE environment is closed.

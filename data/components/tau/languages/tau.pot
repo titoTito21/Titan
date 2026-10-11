@@ -1,0 +1,25 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "The alternative updater works on Windows only."
+msgstr ""
+
+msgid "The alternative updater updates a compiled Titan only; this one runs from source."
+msgstr ""
+
+msgid "updater.bat is missing from the component's folder."
+msgstr ""
+
+msgid "Titan alternative updater"
+msgstr ""
+
+msgid "The alternative updater could not be started."
+msgstr ""
+
+msgid "It looks like there was an update error. Do you want to use the alternative updater?"
+msgstr ""
+
+msgid "Run alternative updater"
+msgstr ""
+

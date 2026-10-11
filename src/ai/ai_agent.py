@@ -359,8 +359,8 @@ DEFAULT_SYSTEM = (
     "'Accept'. If click_element reports the control is disabled, do NOT keep "
     "clicking - scroll further or tick what is missing. If an area ignores the "
     "wheel, scroll with method='keys' (Page Down) or drag its scrollbar thumb "
-    "with drag_mouse. Besides controlling the "
-    "computer, you have Titan-native tools: read and change Titan's settings, "
+    "with drag_mouse. "
+    "Besides controlling the computer, you have Titan-native tools: read and change Titan's settings, "
     "list and run components and their actions, list and launch any Titan add-on "
     "(applications, games, Titan IM modules and more), and send a private message "
     "to someone on Titan-Net, Telegram, WhatsApp or Messenger. For WhatsApp and "
@@ -396,6 +396,17 @@ DEFAULT_SYSTEM = (
     "further tool calls. If you cannot proceed, say why.")
 
 
+def default_system():
+    """The agent's prompt, with what Titan Access is NOW read out of the
+    reader - written into the prompt it went stale with every release."""
+    try:
+        from src.ai import action_tools
+        note = action_tools.titan_access_note()
+    except Exception:                                # noqa: BLE001
+        note = ''
+    return DEFAULT_SYSTEM + ((" " + note) if note else '')
+
+
 def run_agent(goal, tools, *, provider=None, model=None, system=None,
               on_text=None, on_tool_start=None, on_tool_result=None,
               on_text_delta=None, goal_audio=None,
@@ -422,7 +433,7 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
         raise RuntimeError(f"No API key configured for provider '{provider}'")
     if not model:
         model = ai_provider.resolve_latest_model(provider, api_key)
-    system = system or DEFAULT_SYSTEM
+    system = system or default_system()
     step_fn = _STEP_FUNCS.get(provider)
     if step_fn is None:
         raise RuntimeError(f"Agent does not support provider '{provider}'")

@@ -6,6 +6,7 @@ rem  installed one, from OUTSIDE Titan. It needs nothing but Windows and
 rem  the installation itself: no 7-Zip, and it may be run from anywhere.
 rem
 rem      updater.bat [installation folder] [/y] [/tar] [/interpreter]
+rem                  [/wait] [/restart]
 rem
 rem  The folder is where Titan is installed - C:\Titan\titan_data unless
 rem  another one is given. The program package is always applied; the
@@ -13,7 +14,14 @@ rem  Python interpreter package too when the server's version ends in "i"
 rem  (or with /interpreter).
 rem
 rem  /y answers every question with yes. /tar unpacks with Windows' own
-rem  tar.exe even when a 7-Zip is available.
+rem  tar.exe even when a 7-Zip is available. /wait gives a Titan that is
+rem  closing itself up to 60 seconds to go before it is asked to close.
+rem  /restart starts Titan again after a successful update, /y or not.
+rem
+rem  This file is the "Titan alternative updater" component's
+rem  (data\components\tau). The component runs a COPY of it from %TEMP%:
+rem  the archive it unpacks contains this very file, and cmd.exe reads a
+rem  batch file as it goes.
 rem
 rem  Unpacking needs no extra program. A 7-Zip is used when there is one -
 rem  the installation's own data\bin\7z.exe (copied to %TEMP% first, since
@@ -37,8 +45,10 @@ set "YES="
 set "FORCE_TAR="
 set "WANT_INTERPRETER="
 set "INSTALL="
+set "WAIT_FOR_TITAN="
+set "RESTART="
 for %%A in (%*) do (
-    if /i "%%~A"=="/y" (set "YES=1") else if /i "%%~A"=="-y" (set "YES=1") else if /i "%%~A"=="--yes" (set "YES=1") else if /i "%%~A"=="/tar" (set "FORCE_TAR=1") else if /i "%%~A"=="/interpreter" (set "WANT_INTERPRETER=1") else if not defined INSTALL set "INSTALL=%%~A"
+    if /i "%%~A"=="/y" (set "YES=1") else if /i "%%~A"=="-y" (set "YES=1") else if /i "%%~A"=="--yes" (set "YES=1") else if /i "%%~A"=="/tar" (set "FORCE_TAR=1") else if /i "%%~A"=="/interpreter" (set "WANT_INTERPRETER=1") else if /i "%%~A"=="/wait" (set "WAIT_FOR_TITAN=1") else if /i "%%~A"=="/restart" (set "RESTART=1") else if not defined INSTALL set "INSTALL=%%~A"
 )
 
 if not defined INSTALL set "INSTALL=C:\Titan\titan_data"
@@ -72,6 +82,17 @@ if not defined DL (
 )
 
 rem ----------------------------------------------------------- Titan must be closed
+if not defined WAIT_FOR_TITAN goto :titan_check
+call :say "Waiting for Titan to close ..."
+set /a WAITED=0
+:wait_loop
+tasklist /FI "IMAGENAME eq Titan.exe" 2>nul | find /i "Titan.exe" >nul
+if errorlevel 1 goto :titan_check
+if %WAITED% GEQ 60 goto :titan_check
+timeout /T 1 /NOBREAK >nul
+set /a WAITED+=1
+goto :wait_loop
+:titan_check
 tasklist /FI "IMAGENAME eq Titan.exe" 2>nul | find /i "Titan.exe" >nul
 if not errorlevel 1 (
     call :say "Titan is running. It has to be closed for the update."
@@ -210,7 +231,9 @@ del /q "%WORK%\titan.interpreter.7z" 2>nul
 
 echo.
 call :say "Update to version %REMOTE% complete."
-if not defined YES (
+if defined RESTART (
+    start "" "%INSTALL%\Titan.exe"
+) else if not defined YES (
     choice /C YN /M "Start Titan now"
     if not errorlevel 2 start "" "%INSTALL%\Titan.exe"
 )
@@ -263,7 +286,13 @@ exit /b 0
 
 :fail
 echo.
-echo The update was not applied. Details: %LOG%
-echo ==== failed >> "%LOG%"
+if defined LOG (
+    echo The update was not applied. Details: %LOG%
+    echo ==== failed >> "%LOG%"
+) else echo The update was not applied.
+if defined RESTART (
+    if exist "%INSTALL%\Titan.exe" start "" "%INSTALL%\Titan.exe"
+    pause
+)
 endlocal
 exit /b 1

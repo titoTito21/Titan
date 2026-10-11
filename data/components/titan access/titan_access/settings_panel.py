@@ -151,6 +151,57 @@ def _text_row(parent, box_sizer, label):
     return txt
 
 
+def _hotkey_row(parent, box_sizer, label):
+    """A hotkey field: the combination pressed in it is what it holds,
+    as in Windows' own hotkey control - Tab and Shift+Tab still leave it,
+    Backspace alone puts the default back."""
+    box_sizer.Add(wx.StaticText(parent, label=label), 0, wx.LEFT | wx.TOP, 4)
+    txt = wx.TextCtrl(parent, style=wx.TE_PROCESS_ENTER)
+    txt._hotkey = ''
+
+    def show(written):
+        from titan_access import hotkeys
+        txt._hotkey = hotkeys.normalize(written) or hotkeys.DEFAULT
+        txt.ChangeValue(hotkeys.spoken(txt._hotkey))
+        txt.SetInsertionPointEnd()
+
+    def on_key(event):
+        from titan_access import hotkeys
+        code = event.GetKeyCode()
+        mods = (event.ControlDown(), event.AltDown(), event.ShiftDown())
+        if code in (wx.WXK_SHIFT, wx.WXK_CONTROL, wx.WXK_ALT,
+                    wx.WXK_WINDOWS_LEFT, wx.WXK_WINDOWS_RIGHT,
+                    wx.WXK_WINDOWS_MENU):
+            return
+        if code == wx.WXK_TAB and not mods[0] and not mods[1]:
+            event.Skip()
+            return
+        if code == wx.WXK_BACK and not any(mods):
+            show(hotkeys.DEFAULT)
+            return
+        written = hotkeys.from_event(code, *mods)
+        if written:
+            show(written)
+        else:
+            wx.Bell()
+
+    def focus(on):
+        def handler(event):
+            from titan_access import hotkeys
+            hotkeys.field_focused = on
+            event.Skip()
+        return handler
+
+    txt.Bind(wx.EVT_KEY_DOWN, on_key)
+    txt.Bind(wx.EVT_CHAR, lambda _evt: None)
+    # The shortcut in force must not fire while it is being typed here.
+    txt.Bind(wx.EVT_SET_FOCUS, focus(True))
+    txt.Bind(wx.EVT_KILL_FOCUS, focus(False))
+    txt.show_hotkey = show
+    box_sizer.Add(txt, 0, wx.EXPAND | wx.ALL, 4)
+    return txt
+
+
 def _announce_labels():
     return [
         L("settings.announce.none"),
@@ -293,6 +344,14 @@ def _build_speech(panel, scroller, s):
     panel.voice_choice = panel.cmb_voice
     panel._voice_ids = []
     panel._voice_ticket = [0]
+    # The fourth level, offered only where the synthesizer has variants
+    # (Cerence: compact, embedded-pro, embedded-high).
+    panel.cmb_variant = _choice_row(scroller, sp,
+                                    L("settings.speech.variant"), [])
+    panel._variant_ids = []
+    panel._variant_ticket = [0]
+    panel._keep_variant = ''
+    panel.cmb_variant.Enable(False)
     panel.spn_rate = _spin_row(scroller, sp, L("settings.speech.rate"), -10, 10)
     panel.spn_pitch = _spin_row(scroller, sp, L("settings.speech.pitch"), -10, 10)
     panel.spn_volume = _spin_row(scroller, sp, L("settings.speech.volume"), 0, 100)
@@ -302,15 +361,20 @@ def _build_speech(panel, scroller, s):
 
     def _synth_chosen(_evt):
         _fill_voices(panel, keep='')
+
+    def _voice_chosen(_evt):
+        _fill_variants(panel, keep='')
     for ctrl, key in ((panel.cmb_system, 'OwnVoice'),
                       (panel.cmb_synth, 'Synthesizer'),
-                      (panel.cmb_voice, 'Voice')):
+                      (panel.cmb_voice, 'Voice'),
+                      (panel.cmb_variant, 'Variant')):
         try:
             ctrl.SetToolTip(L('settings.help.Speech.%s' % key))
         except Exception:
             pass
     panel.cmb_system.Bind(wx.EVT_CHOICE, _system_chosen)
     panel.cmb_synth.Bind(wx.EVT_CHOICE, _synth_chosen)
+    panel.cmb_voice.Bind(wx.EVT_CHOICE, _voice_chosen)
 
 
 def _picked(choice, ids):
@@ -354,6 +418,7 @@ def _fill_voices(panel, keep=''):
     panel._voice_ids = []
     if not synth:
         panel.cmb_voice.Enable(False)
+        _fill_variants(panel, keep='')
         return
     panel.cmb_voice.Append(L("settings.speech.loadingVoices"))
     panel.cmb_voice.SetSelection(0)
@@ -378,10 +443,56 @@ def _fill_voices(panel, keep=''):
                 elif panel._voice_ids:
                     panel.cmb_voice.SetSelection(0)
                 panel.cmb_voice.Enable(bool(panel._voice_ids))
+                _fill_variants(panel, keep=getattr(panel, '_keep_variant',
+                                                   '') or '')
+                panel._keep_variant = ''
             except RuntimeError:
                 pass                                 # the page has gone
         wx.CallAfter(put)
     threading.Thread(target=read, name='TitanAccessVoices',
+                     daemon=True).start()
+
+
+def _fill_variants(panel, keep=''):
+    """The variants of the chosen voice, on a worker like the voices.
+    A synthesizer without variants leaves the row disabled and empty."""
+    if getattr(panel, 'cmb_variant', None) is None:
+        return
+    from titan_access import speech_systems as _sys
+    synth = _chosen_synth(panel)
+    voice = _picked(panel.cmb_voice, panel._voice_ids)
+    panel._variant_ticket[0] += 1
+    ticket = panel._variant_ticket[0]
+    panel.cmb_variant.Clear()
+    panel._variant_ids = []
+    if not synth.startswith('nvda:') or not voice:
+        panel.cmb_variant.Enable(False)
+        return
+
+    def read():
+        try:
+            rows = _sys.variants(synth, voice)
+        except Exception:                            # noqa: BLE001
+            rows = []
+
+        def put():
+            try:
+                if ticket != panel._variant_ticket[0] or not panel:
+                    return
+                panel.cmb_variant.Clear()
+                panel._variant_ids = [key for key, _label in rows]
+                for _key, label in rows:
+                    panel.cmb_variant.Append(label)
+                if keep in panel._variant_ids:
+                    panel.cmb_variant.SetSelection(
+                        panel._variant_ids.index(keep))
+                elif panel._variant_ids:
+                    panel.cmb_variant.SetSelection(0)
+                panel.cmb_variant.Enable(bool(panel._variant_ids))
+            except RuntimeError:
+                pass
+        wx.CallAfter(put)
+    threading.Thread(target=read, name='TitanAccessVariants',
                      daemon=True).start()
 
 
@@ -429,6 +540,8 @@ def _build_generic(panel, scroller, s, sid):
             ctrl = _spin_row(scroller, box, label, low, high)
         elif entry.kind == 'text':
             ctrl = _text_row(scroller, box, label)
+        elif entry.kind == 'hotkey':
+            ctrl = _hotkey_row(scroller, box, label)
         else:
             continue
         help_text = L(entry.help)
@@ -532,6 +645,7 @@ def load_panel(panel):
         panel.cmb_system.SetSelection(keys.index(system) if system in keys
                                       else 0)
         panel._keep_voice = voice
+        panel._keep_variant = _sys.current_variant(st)
         _fill_synths(panel, keep=synth)
         panel.spn_rate.SetValue(st.get_int(SEC_SPEECH, "Rate", 0))
         panel.spn_pitch.SetValue(st.get_int(SEC_SPEECH, "Pitch", 0))
@@ -547,6 +661,8 @@ def load_panel(panel):
                 ctrl.SetValue(st.get_int(section, key, int(entry.default)))
             elif entry.kind == 'text':
                 ctrl.SetValue(str(st.get(section, key, entry.default) or ''))
+            elif entry.kind == 'hotkey':
+                ctrl.show_hotkey(str(st.get(section, key, entry.default) or ''))
             elif entry.kind == 'braille_table':
                 tables = getattr(panel, '_braille_tables', [''])
                 chosen = str(st.get(section, key, '') or '')
@@ -587,8 +703,15 @@ def save_panel(panel):
             # The voices had not arrived: the voice already chosen stays.
             now = _sys.current(st)
             voice = now[2] if (now[0], now[1]) == (system, synth) else ''
+        variant = _picked(panel.cmb_variant, panel._variant_ids) \
+            if getattr(panel, 'cmb_variant', None) is not None else ''
+        if not getattr(panel, '_variant_ids', None):
+            now = _sys.current(st)
+            variant = _sys.current_variant(st) \
+                if now == (system, synth, voice) else ''
         for (section, key), value in _sys.settings_for(system, synth,
-                                                        voice).items():
+                                                        voice,
+                                                        variant).items():
             if isinstance(value, bool):
                 st.set_bool(section, key, value)
             else:
@@ -607,6 +730,10 @@ def save_panel(panel):
                 st.set_int(section, key, ctrl.GetValue())
             elif entry.kind == 'text':
                 st.set(section, key, ctrl.GetValue())
+            elif entry.kind == 'hotkey':
+                from titan_access import hotkeys
+                if st.get(section, key, entry.default) != ctrl._hotkey:
+                    st.set(section, key, ctrl._hotkey)
             elif entry.kind == 'braille_table':
                 tables = getattr(panel, '_braille_tables', [''])
                 at = ctrl.GetSelection()
@@ -630,6 +757,11 @@ def save_panel(panel):
             pass
 
     st.save()
+    try:
+        from titan_access import hotkeys
+        hotkeys.changed()
+    except Exception:
+        pass
     _apply_live(st)
     print("[TitanAccess] settings saved")
 

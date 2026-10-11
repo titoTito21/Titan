@@ -244,7 +244,7 @@ SHARED_DATA = {'sounds': os.path.join(ROOT, 'data', 'components',
 #: its own, and Titan directly rather than over a pipe, because Titan
 #: Access is not on the other side of anything.
 SHIMS = ('__init__.py', 'i18n.py', 'compat.py', 'link.py',
-         'elements.py', 'configSpec.py')
+         'elements.py', 'configSpec.py', 'voices.py')
 
 
 def _pairs():

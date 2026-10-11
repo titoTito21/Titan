@@ -118,7 +118,21 @@ class TerminalModule(AppModuleBase):
             self._set_review(False, announce=False)
         super().on_lose_focus(obj)
 
+    def stop(self):
+        """The reader is off: the output poller ends, review ends. It ran
+        for the life of the process and went on reading new output aloud
+        after the reader had been switched off."""
+        self._active = False
+        self._review = False
+        self._poll_stop.set()
+        self._wake.set()
+        thread, self._poll_thread = self._poll_thread, None
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+
     def _ensure_poller(self):
+        if not getattr(self.engine, "running", True):
+            return
         if self._poll_thread is not None and self._poll_thread.is_alive():
             return
         self._poll_stop.clear()
@@ -323,7 +337,8 @@ class TerminalModule(AppModuleBase):
         element = None
         last_hwnd = 0
         try:
-            while not self._poll_stop.is_set():
+            while not self._poll_stop.is_set() and \
+                    getattr(self.engine, "running", True):
                 # Wait up to ~150 ms, or wake immediately on a review toggle.
                 self._wake.wait(0.15)
                 self._wake.clear()

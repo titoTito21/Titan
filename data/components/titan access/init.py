@@ -3,7 +3,7 @@
 
 Lifecycle for the TCE component loader plus a standalone ``python init.py`` mode.
 
-- Registers a global ``Ctrl+Shift+Alt+T`` hotkey that toggles the screen reader
+- Registers a global hotkey (General/ToggleHotkey, ``Ctrl+Shift+T`` by default) that toggles the screen reader
   on and off. The hotkey listener runs whether or not the reader is active, so
   it can also be used to turn the reader on.
 - Registers the "Titan Access Screen Reader" settings category (a 1:1 port of
@@ -59,7 +59,7 @@ def stop_reader():
 
 
 def toggle_reader():
-    """Turn the screen reader on if off, or off if on (Ctrl+Shift+Alt+T).
+    """Turn the screen reader on if off, or off if on (General/ToggleHotkey, Ctrl+Shift+T by default).
 
     Persists the resulting state to General/Enabled, same as the settings
     checkbox, so a restart of Titan respects whatever the hotkey last left it
@@ -89,51 +89,82 @@ def toggle_reader():
 
 
 # =========================================================================== #
-# Global hotkey listener (Ctrl+Shift+Alt+T) — own thread + message pump
+# Global hotkey listener (General/ToggleHotkey) — own thread + message pump
 # =========================================================================== #
 class _HotkeyListener(threading.Thread):
-    """Registers Ctrl+Shift+Alt+T via RegisterHotKey and pumps its messages."""
+    """Registers the reader's shortcut (General/ToggleHotkey, Ctrl+Shift+T
+    by default) via RegisterHotKey and pumps its messages. Told when the
+    shortcut changes (`hotkeys.on_change`) and registers the new one on
+    its own thread - a hot key belongs to the thread that registered it."""
 
     HOTKEY_ID = 0xA11
-    MOD_ALT = 0x0001
-    MOD_CONTROL = 0x0002
-    MOD_SHIFT = 0x0004
     MOD_NOREPEAT = 0x4000
     WM_HOTKEY = 0x0312
-    VK_T = 0x54
+    WM_APP_REREGISTER = 0x8000 + 0x11
 
     def __init__(self, callback):
         super().__init__(daemon=True, name="TitanAccessHotkey")
         self._callback = callback
         self._thread_id = 0
         self._stop = threading.Event()
+        self._registered = False
+
+    def _register(self, user32):
+        from titan_access import hotkeys
+        if self._registered:
+            user32.UnregisterHotKey(None, self.HOTKEY_ID)
+            self._registered = False
+        written = hotkeys.current()
+        found = hotkeys.parse(written) or hotkeys.parse(hotkeys.DEFAULT)
+        mods, vk = found
+        if user32.RegisterHotKey(None, self.HOTKEY_ID,
+                                 mods | self.MOD_NOREPEAT, vk):
+            self._registered = True
+            print(f"[TitanAccess] hotkey {written} registered")
+        else:
+            print(f"[TitanAccess] failed to register the {written} hotkey "
+                  "(another program has it)")
+
+    def reregister(self):
+        import ctypes
+        if self._thread_id:
+            try:
+                ctypes.windll.user32.PostThreadMessageW(
+                    self._thread_id, self.WM_APP_REREGISTER, 0, 0)
+            except Exception:
+                pass
 
     def run(self):
         import ctypes
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         self._thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
-        mods = self.MOD_CONTROL | self.MOD_SHIFT | self.MOD_ALT | self.MOD_NOREPEAT
-        if not user32.RegisterHotKey(None, self.HOTKEY_ID, mods, self.VK_T):
-            print("[TitanAccess] failed to register Ctrl+Shift+Alt+T hotkey")
-            return
-        print("[TitanAccess] hotkey Ctrl+Shift+Alt+T registered")
+        self._register(user32)
         msg = wt.MSG()
         try:
             while not self._stop.is_set():
                 r = user32.GetMessageW(ctypes.byref(msg), 0, 0, 0)
                 if r == 0 or r == -1:
                     break
+                if msg.message == self.WM_APP_REREGISTER:
+                    try:
+                        self._register(user32)
+                    except Exception as e:
+                        print(f"[TitanAccess] hotkey re-register error: {e}")
+                    continue
                 if msg.message == self.WM_HOTKEY and msg.wParam == self.HOTKEY_ID:
                     try:
-                        self._callback()
+                        from titan_access import hotkeys
+                        if not hotkeys.field_focused:
+                            self._callback()
                     except Exception as e:
                         print(f"[TitanAccess] hotkey callback error: {e}")
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
         finally:
             try:
-                user32.UnregisterHotKey(None, self.HOTKEY_ID)
+                if self._registered:
+                    user32.UnregisterHotKey(None, self.HOTKEY_ID)
             except Exception:
                 pass
 
@@ -158,6 +189,16 @@ def _start_hotkey():
     if _hotkey_listener is None:
         _hotkey_listener = _HotkeyListener(toggle_reader)
         _hotkey_listener.start()
+        try:
+            from titan_access import hotkeys
+            hotkeys.on_change(_reregister_hotkey)
+        except Exception as e:
+            print(f"[TitanAccess] hotkey change hook: {e}")
+
+
+def _reregister_hotkey():
+    if _hotkey_listener is not None:
+        _hotkey_listener.reregister()
 
 
 def _stop_hotkey():
@@ -184,7 +225,7 @@ def initialize(app=None):
                 start_reader()
         except Exception as e:
             print(f"[TitanAccess] auto-start check failed: {e}")
-        print("[TitanAccess] ready (press Ctrl+Shift+Alt+T to toggle the reader)")
+        print("[TitanAccess] ready (press the reader shortcut, Ctrl+Shift+T by default, to toggle the reader)")
     except Exception as e:
         print(f"[TitanAccess] initialize error: {e}")
         import traceback
@@ -219,7 +260,7 @@ def _standalone():
     import time
     print("=" * 60)
     print("Titan Access Screen Reader — standalone")
-    print("Ctrl+Shift+Alt+T toggles. Ctrl+C to quit.")
+    print("The reader shortcut (Ctrl+Shift+T by default) toggles. Ctrl+C to quit.")
     print("=" * 60)
     _start_hotkey()
     start_reader()
@@ -249,9 +290,14 @@ try:
     import titan_access_actions as _actions
     _actions.bind(sys.modules[__name__])
     TITAN_ACTIONS = _actions.TITAN_ACTIONS
+    TITAN_DESCRIPTION = _actions.TITAN_DESCRIPTION
+    # What Titan's AI is told about the reader, read out of it per prompt.
+    TITAN_AI_BRIEFING = _actions.TITAN_AI_BRIEFING
 except Exception as _e:                 # actions unavailable, component is not
     print(f"[TitanAccess] actions unavailable: {_e}")
     TITAN_ACTIONS = []
+    TITAN_DESCRIPTION = ''
+    TITAN_AI_BRIEFING = None
 
 
 if __name__ == "__main__":

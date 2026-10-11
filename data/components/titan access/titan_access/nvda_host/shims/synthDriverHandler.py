@@ -91,14 +91,24 @@ class SynthDriver(Driver):
     def _get_language(self):
         return None
 
+    # **Kept, as NVDA keeps them.** NVDA's own base class remembers the
+    # lists in ``_availableVoices`` / ``_availableVariants`` and a driver
+    # throws one away by deleting it - Cerence does exactly that when its
+    # voice changes, because each voice has its own variants (compact,
+    # embedded-pro, embedded-high). Asked afresh every time, the walked
+    # settings and the dialog paid a database listing per row.
     def _get_availableVoices(self):
-        return self._getAvailableVoices()
+        if not hasattr(self, '_availableVoices'):
+            self._availableVoices = self._getAvailableVoices()
+        return self._availableVoices
 
     def _getAvailableVoices(self):
         return OrderedDict()
 
     def _get_availableVariants(self):
-        return self._getAvailableVariants()
+        if not hasattr(self, '_availableVariants'):
+            self._availableVariants = self._getAvailableVariants()
+        return self._availableVariants
 
     def _getAvailableVariants(self):
         return OrderedDict()

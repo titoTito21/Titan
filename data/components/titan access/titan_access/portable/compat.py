@@ -57,30 +57,65 @@ class _Speech(object):
         return self.speakText(text)
 
     def speak(self, sequence, **_kw):
-        """NVDA's ``speech.speak(sequence)``: the words of a sequence, said.
+        """NVDA's ``speech.speak(sequence)``: the parts of a sequence, said.
 
-        A sequence is strings with speech commands between them (a pitch,
-        a rate, a break); the smart OCR cursor hands one over. The commands
-        are what this adapter cannot carry, so the strings are said as one
-        line and nothing is dropped - every word, no tone.
+        A sequence `elements.sequence` built carries its parts
+        (``segments``) and they are spoken as the reader speaks a control:
+        each at its own tone, with the reader's own pause between them. Any
+        other sequence - strings with NVDA speech commands between them,
+        which the smart OCR cursor hands over - has its strings said as
+        separate parts too: **a pause, not a comma**. "OK, przycisk" read
+        as one line was a sentence; "OK" (pause) "przycisk" is a control.
         """
         if isinstance(sequence, str):
             return self.speakText(sequence)
-        words = []
-        try:
-            for item in sequence or ():
-                if isinstance(item, str) and item.strip():
-                    words.append(item.strip())
-        except TypeError:
+        segments = list(getattr(sequence, 'segments', ()) or ())
+        if not segments:
+            try:
+                segments = [(item.strip(), 0) for item in sequence or ()
+                            if isinstance(item, str) and item.strip()]
+            except TypeError:
+                return False
+        if not segments:
             return False
-        if not words:
-            return False
-        return self.speakText(', '.join(words))
+        if len(segments) == 1:
+            return self.speakText(segments[0][0])
+        return self.speak_parts(segments)
 
-    def speakText(self, text, **_kw):
+    def speak_parts(self, segments):
+        """``[(text, pitch, ...)]`` as ONE announcement of separate parts.
+
+        It interrupts, as a row read on an arrow must - unless a message
+        was asked for a moment ago in the same breath (a list's title said
+        just before its first row), which it must not cut off.
+        """
         try:
             from .. import speech_adapter
-            speech_adapter.speak(str(text or ''))
+            adapter = speech_adapter._current
+            if adapter is None:
+                return False
+            import time
+            interrupt = time.monotonic() - _Ui.last_message > _Ui.BREATH_S
+            gap = 0
+            try:
+                from . import speechSchemes
+                gap = int(speechSchemes.active_pause() or 0)
+            except Exception:                        # noqa: BLE001
+                gap = 0
+            if interrupt:
+                adapter.speak_segments(segments, gap_ms=gap)
+            else:
+                adapter._enqueue(speech_adapter._Utterance(
+                    segments=[tuple(s) for s in segments if s and s[0]],
+                    gap_ms=gap), interrupt=False)
+            return True
+        except Exception:                            # noqa: BLE001
+            return False
+
+    def speakText(self, text, interrupt=True, **_kw):
+        try:
+            from .. import speech_adapter
+            speech_adapter.speak(str(text or ''), interrupt=interrupt)
             return True
         except Exception:                            # noqa: BLE001
             return False
@@ -117,8 +152,19 @@ class _Speech(object):
 class _Ui(object):
     """NVDA's ``ui.message``: say one thing, now."""
 
+    #: When the last message was asked for (`time.monotonic`), and how
+    #: long after it a list's parts follow it rather than cut it off.
+    last_message = 0.0
+    BREATH_S = 0.3
+
     def message(self, text):
-        return _Speech().speakText(text)
+        # Two messages in one breath (a list's title, then "Message") are
+        # said one after the other; the second used to cut the first off.
+        import time
+        now = time.monotonic()
+        interrupt = now - _Ui.last_message > _Ui.BREATH_S
+        _Ui.last_message = now
+        return _Speech().speakText(text, interrupt=interrupt)
 
     def browseableMessage(self, text, title=None, isHtml=False):
         return _Speech().speakText(text)

@@ -11,12 +11,17 @@ reader runs it:
     when key "ctrl+shift+f12"              any key without the modifier
     when focus program="notepad" role="edit"
     when window program="explorer" title contains "Downloads"
+    when notification text contains "battery"
+    when every 5m / when time "07:30"
     when reader starts
 
-and with what it knows at that moment handed in as variables:
-``{{name}}``, ``{{role}}``, ``{{value}}``, ``{{description}}`` of the
-control in focus, ``{{window}}`` (its title), ``{{program}}`` (the process,
-without ``.exe``) and ``{{key}}`` (what was pressed).
+with the reader's own short statements (``beep``, ``read focus``,
+``jump heading``, ``press "Save"``, ``pass``, ``setting "rate" = 60``...),
+each one line of Titan Script calling a Titan Access action, and with
+JAWS-like control rules. What it knows at that moment is handed in as
+variables (:data:`VARIABLES`). The whole language is :func:`language_text`,
+built from the tables in this module, so the README beside the scripts
+and what Titan's AI is told cannot fall behind the reader.
 
 `say` in a TA script is the READER speaking - its voice, its queue - and
 every Titan Access action is there to call (`titan_access.read_focused`,
@@ -39,9 +44,13 @@ _LOCK = threading.RLock()
 
 EXTENSION = '.tas'
 
+#: The shortest repeat a `when every` may ask for: a script is run on a
+#: thread of its own and a second is plenty of reader time to give away.
+MIN_EVERY = 2
+
 #: The reader's own triggers - the lines Titan Script itself does not know.
-_TRIGGER = re.compile(r'^\s*when\s+(key|focus|window|reader)\b(.*)$',
-                      re.IGNORECASE)
+_TRIGGER = re.compile(r'^\s*when\s+(key|focus|window|reader|every|time|'
+                      r'notification)\b(.*)$', re.IGNORECASE)
 #: `for program "name"` - the script is about ONE program, the way a JAWS
 #: script file is: its triggers and its rules apply only while that
 #: program is in front.
@@ -51,9 +60,55 @@ _FOR = re.compile(r'^\s*for\s+program\s+"([^"]+)"\s*$', re.IGNORECASE)
 #: control is read.
 _CONTROL = re.compile(r'^\s*control\b(.*)$', re.IGNORECASE)
 #: The changes a rule can make, after its selectors.
-_CHANGE = re.compile(r'\b(as)\s+(\w+)|\b(name|describe|say)\s+"([^"]*)"'
-                     r'|\b(silent)\b', re.IGNORECASE)
-_ARG = re.compile(r'(\w+)\s*(contains)?\s*=?\s*"([^"]*)"', re.IGNORECASE)
+_CHANGE = re.compile(r'\b(as)\s+(\w+)|\b(name|describe|say|prefix|suffix|'
+                     r'sound)\s+"([^"]*)"|\b(silent)\b', re.IGNORECASE)
+#: One condition: `name="x"`, `name != "x"`, `title contains "x"`,
+#: `name not contains "x"`, `name starts "x"`, `id matches "^btn\d+"`.
+_ARG = re.compile(r'(\w+)\s*(?:(not\s+)?(contains|matches|starts)'
+                  r'(?:\s+with)?\s*=?|(!=|=)?)\s*"([^"]*)"', re.IGNORECASE)
+
+
+def _conditions(text):
+    """``[(name, op, value)]``. ``op`` is False for "is", True for
+    "contains" (the two shapes every older caller knows), or a word:
+    'not', 'not contains', 'starts', 'not starts', 'matches',
+    'not matches'. A pattern keeps its case; everything else is
+    compared in lower case."""
+    found = []
+    for name, negate, word, equals, value in _ARG.findall(str(text or '')):
+        word = word.lower()
+        if equals == '!=':
+            op = 'not'
+        elif not word:
+            op = False
+        elif word == 'contains' and not negate:
+            op = True
+        else:
+            op = ('not ' if negate else '') + word
+        value = value.strip()
+        if 'matches' not in str(op):
+            value = value.lower()
+        found.append((name.lower(), op, value))
+    return found
+
+
+def _test(op, have, wanted):
+    """Whether ``have`` passes one condition."""
+    have = str(have or '').lower()
+    negate = isinstance(op, str) and op.startswith('not')
+    word = op.replace('not', '').strip() if isinstance(op, str) else op
+    if word is True or word == 'contains':
+        result = wanted in have
+    elif word == 'starts':
+        result = have.startswith(wanted)
+    elif word == 'matches':
+        try:
+            result = re.search(wanted, have, re.IGNORECASE) is not None
+        except re.error:
+            result = False
+    else:
+        result = have == wanted
+    return not result if negate else result
 
 _state = {'scripts': [], 'loaded_from': '', 'runs': 0, 'failed': 0,
           'last': '', 'errors': {}, 'engine': None, 'bound': []}
@@ -91,37 +146,365 @@ if name is empty
     stop
 end
 say "{{name}}, {{role}}, in {{program}}"
+if position is not empty
+    say "{{position}}"
+end
+
+# Reader statements and control rules - see README.txt beside this file:
+#   beep 880 40          read focus          jump heading
+#   press "Save"         pass                setting "rate" = 60
+#   control class="TCustomGrid" as list
 '''
 
-README = '''Titan Access scripts
-====================
+#: Variables every script is handed, and what each holds.
+VARIABLES = (
+    ('name', 'the name of the control in focus'),
+    ('role', 'its type, in your language ("przycisk")'),
+    ('role_key', 'its type as the reader names it ("button")'),
+    ('value', "what it holds (a field's text, a slider's value)"),
+    ('description', 'its description'),
+    ('states', 'its states, in your language ("zaznaczone")'),
+    ('position', 'its place in its list ("3 z 9")'),
+    ('index', 'that place as a number'),
+    ('count', 'how many there are'),
+    ('level', "a heading's or tree item's level"),
+    ('class', 'its window class'),
+    ('id', 'its automation id'),
+    ('link', "a link's address"),
+    ('x', 'the middle of it on the screen, across'),
+    ('y', 'the middle of it on the screen, down'),
+    ('window', 'the title of the window in front (also {{title}})'),
+    ('program', 'the program in front, without .exe'),
+    ('key', 'the key that started the script'),
+    ('spoken', 'the last thing the reader said'),
+    ('text', 'what a notification said (when notification)'),
+)
 
-Every .tas file in this folder is a reader script, written in Titan Script
-(the language of Titan's macros - see the Macro Manager's Titan Script tab).
+#: The trigger lines, one per kind.
+TRIGGERS = (
+    ('when key "insert+j"', "the reader modifier and a key; the script "
+                            "goes in front of the reader's own binding"),
+    ('when key "ctrl+shift+f12"', "any key without the modifier - the key is "
+                                  "then the script's (pass gives it back)"),
+    ('when focus role="edit" program="notepad"', 'the focus lands on a '
+                                                  'control that matches'),
+    ('when window title contains "Downloads"', 'a new window comes to the '
+                                               'front'),
+    ('when notification text contains "battery"', 'a program says something '
+                                                  'without moving the focus'),
+    ('when every 5m', 'over and over: s, m or h, at least %d seconds'
+                      % MIN_EVERY),
+    ('when time "07:30"', 'once a day at that time'),
+    ('when reader starts', 'once, when the reader starts'),
+)
 
-Put one or more trigger lines at the top:
+#: What a condition may say.
+CONDITIONS = (
+    ('name="Save"', 'is exactly (case does not matter)'),
+    ('name != "Save"', 'is not'),
+    ('title contains "Mail"', 'has it somewhere'),
+    ('title not contains "Draft"', 'does not have it'),
+    ('name starts with "New"', 'begins with it'),
+    ('id matches "^btn\\d+$"', 'a regular expression'),
+)
 
-    when key "insert+j"           with the reader modifier
-    when key "ctrl+shift+f12"     any other key (the key is then the script's)
-    when focus program="notepad" role="edit"
-    when window program="explorer" title contains "Downloads"
-    when reader starts
+#: What a control rule may change.
+RULE_CHANGES = (
+    ('as list', 'read it as another type of control'),
+    ('name "Send"', 'give it a name ({{variables}} work)'),
+    ('describe "..."', 'give it a description'),
+    ('prefix "..." / suffix "..."', 'add words before or after its name'),
+    ('say "{{name}}, {{value}}"', 'say exactly this instead of the reading'),
+    ('sound "edge"', "play one of the reader's sounds when it is focused"),
+    ('silent', 'say nothing at all about it'),
+)
 
-Variables: {{name}} {{role}} {{value}} {{description}} {{window}}
-{{program}} {{key}}. "say" speaks in the reader's own voice.
 
-Reload the scripts with the action titan_access.reload_scripts, or by
-restarting the reader.
-'''
+#: The reference in Polish: every sentence of the English one, by its
+#: English text, so a line added to a table and not here is still shown -
+#: in English - rather than lost.
+_PL = {
+    "Titan Access scripts (.tas)": "Skrypty Titan Access (.tas)",
+    "A .tas file in the scripts folder is a reader script. It is Titan "
+    "Script - the language of Titan's macros, every statement and every "
+    "Titan action by name (see the Macro Manager's Titan Script tab, or the "
+    "action macros.macro_language) - plus the lines below, which only the "
+    "reader understands.":
+        "Plik .tas w folderze skryptów to skrypt czytnika. Jest napisany w "
+        "Titan Script - języku makr Titana, z każdą jego instrukcją i każdą "
+        "akcją Titana po nazwie (zobacz kartę Titan Script w Menedżerze "
+        "makr albo akcję macros.macro_language) - oraz liniami opisanymi "
+        "niżej, które rozumie tylko czytnik.",
+    "When it runs (one or more lines, anywhere in the file):":
+        "Kiedy się uruchamia (jedna lub więcej linii, w dowolnym miejscu "
+        "pliku):",
+    "the reader modifier and a key; the script goes in front of the "
+    "reader's own binding":
+        "klawisz czytnika i klawisz; skrypt ma pierwszeństwo przed własnym "
+        "skrótem czytnika",
+    "any key without the modifier - the key is then the script's (pass "
+    "gives it back)":
+        "dowolny klawisz bez klawisza czytnika - klawisz należy wtedy do "
+        "skryptu (pass oddaje go programowi)",
+    "the focus lands on a control that matches":
+        "fokus trafia na pasującą kontrolkę",
+    "a new window comes to the front": "na wierzch wychodzi nowe okno",
+    "a program says something without moving the focus":
+        "program coś ogłasza bez przesuwania fokusu",
+    "once, when the reader starts": "raz, gdy czytnik startuje",
+    "once a day at that time": "raz dziennie o tej godzinie",
+    "  for program \"notepad\"   - everything in the file is about that "
+    "program only, the way a JAWS script file is.":
+        "  for program \"notepad\"   - cały plik dotyczy tylko tego programu, "
+        "jak plik skryptów JAWS.",
+    "Conditions (on when focus / window / notification, and in control "
+    "rules):":
+        "Warunki (w when focus / window / notification i w regułach "
+        "kontrolek):",
+    "is exactly (case does not matter)":
+        "jest dokładnie (wielkość liter bez znaczenia)",
+    "is not": "nie jest",
+    "has it somewhere": "zawiera",
+    "does not have it": "nie zawiera",
+    "begins with it": "zaczyna się od",
+    "a regular expression": "wyrażenie regularne",
+    "Variables, written {{name}}:": "Zmienne, zapisywane jako {{nazwa}}:",
+    "the name of the control in focus": "nazwa kontrolki z fokusem",
+    'its type, in your language ("przycisk")':
+        'jej typ, w Twoim języku ("przycisk")',
+    'its type as the reader names it ("button")':
+        'jej typ tak, jak nazywa go czytnik ("button")',
+    "what it holds (a field's text, a slider's value)":
+        "jej zawartość (tekst pola, wartość suwaka)",
+    "its description": "jej opis",
+    'its states, in your language ("zaznaczone")':
+        'jej stany, w Twoim języku ("zaznaczone")',
+    'its place in its list ("3 z 9")': 'jej miejsce na liście ("3 z 9")',
+    "that place as a number": "to miejsce jako liczba",
+    "how many there are": "ile ich jest",
+    "a heading's or tree item's level": "poziom nagłówka lub gałęzi drzewa",
+    "its window class": "klasa jej okna",
+    "its automation id": "jej identyfikator automatyzacji",
+    "a link's address": "adres łącza",
+    "the middle of it on the screen, across":
+        "jej środek na ekranie, w poziomie",
+    "the middle of it on the screen, down": "jej środek na ekranie, w pionie",
+    "the title of the window in front (also {{title}})":
+        "tytuł okna na wierzchu (także {{title}})",
+    "the program in front, without .exe": "program na wierzchu, bez .exe",
+    "the key that started the script": "klawisz, który uruchomił skrypt",
+    "the last thing the reader said": "ostatnia wypowiedź czytnika",
+    "what a notification said (when notification)":
+        "treść powiadomienia (when notification)",
+    "The reader's own statements (each is one Titan Access action, so a "
+    "script may also call the action itself):":
+        "Własne instrukcje czytnika (każda to jedna akcja Titan Access, "
+        "więc skrypt może też wywołać samą akcję):",
+    "`say` speaks in the reader's own voice. A script runs on a thread of "
+    "its own, so a dialog or a `wait` never holds the reader.":
+        "`say` mówi głosem czytnika. Skrypt działa we własnym wątku, więc "
+        "okno dialogowe ani `wait` nigdy nie wstrzymują czytnika.",
+    "Control rules - how one kind of control is READ, without running "
+    "anything:":
+        "Reguły kontrolek - jak CZYTAĆ jeden rodzaj kontrolki, bez "
+        "uruchamiania czegokolwiek:",
+    "What a rule may change:": "Co reguła może zmienić:",
+    "read it as another type of control": "czytaj ją jako inny typ kontrolki",
+    "give it a name ({{variables}} work)": "nadaj jej nazwę (działają "
+                                           "{{zmienne}})",
+    "give it a description": "nadaj jej opis",
+    "add words before or after its name": "dodaj słowa przed nazwą lub po "
+                                          "niej",
+    "say exactly this instead of the reading":
+        "mów dokładnie to zamiast zwykłego odczytu",
+    "play one of the reader's sounds when it is focused":
+        "zagraj jeden z dźwięków czytnika, gdy dostaje fokus",
+    "say nothing at all about it": "nie mów o niej nic",
+    "Actions: titan_access.list_scripts, write_script, read_script, "
+    "delete_script, check_script, run_script, reload_scripts, "
+    "script_language. Reload after editing a file by hand, or restart the "
+    "reader.":
+        "Akcje: titan_access.list_scripts, write_script, read_script, "
+        "delete_script, check_script, run_script, reload_scripts, "
+        "script_language. Po ręcznej edycji pliku przeładuj skrypty albo "
+        "uruchom czytnik ponownie.",
+    "beep 880 40 - a tone: frequency in Hz, length in ms":
+        "beep 880 40 - ton: częstotliwość w Hz, długość w ms",
+    "cue \"edge\" - one of the reader's own sounds, by name":
+        "cue \"edge\" - jeden z dźwięków czytnika, po nazwie",
+    "braille \"text\" - show text on the braille display":
+        "braille \"tekst\" - pokaż tekst na monitorze brajlowskim",
+    "press \"Save\" - press a control of the window in front by its name":
+        "press \"Zapisz\" - naciśnij kontrolkę okna na wierzchu po nazwie",
+    "jump heading / jump previous link - quick navigation in a document":
+        "jump heading / jump previous link - szybka nawigacja w dokumencie",
+    "read focus | title | value | last | screen | position | selection | "
+    "status | time | date - say it in the reader's voice":
+        "read focus | title | value | last | screen | position | selection "
+        "| status | time | date - powiedz to głosem czytnika",
+    "scan on | off | toggle - scan mode":
+        "scan on | off | toggle - tryb skanowania",
+    "setting \"rate\" = 60 - change a reader setting (as list_settings "
+    "names it)":
+        "setting \"rate\" = 60 - zmień ustawienie czytnika (nazwa jak w "
+        "list_settings)",
+    "label \"Send\" - give the control in focus a name of its own (\"\" "
+    "takes it away)":
+        "label \"Wyślij\" - nadaj kontrolce z fokusem własną nazwę (\"\" ją "
+        "usuwa)",
+    "pass - let the key that started the script reach the program too":
+        "pass - przepuść do programu klawisz, który uruchomił skrypt",
+    "silence - stop the reader speaking": "silence - ucisz czytnik",
+    "command \"sayAll\" - run one of the reader's own commands, as its key "
+    "would (list_shortcuts names them)":
+        "command \"sayAll\" - wykonaj polecenie czytnika tak jak jego "
+        "skrót (nazwy podaje list_shortcuts)",
+    "script \"other\" - run another of your reader scripts":
+        "script \"inny\" - uruchom inny Twój skrypt czytnika",
+}
+
+
+def _pl_every(text):
+    import re as _re
+    found = _re.match(r'over and over: s, m or h, at least (\d+) seconds$',
+                      text)
+    if found:
+        return ('wielokrotnie: s, m albo h, co najmniej %s sekundy'
+                % found.group(1))
+    return None
+
+
+def _in_polish(text):
+    if text in _PL:
+        return _PL[text]
+    return _pl_every(text) or text
+
+
+def _language():
+    try:
+        from titan_access import localization
+        code = getattr(localization, 'current_language', None)
+        code = code() if callable(code) else code
+        if code:
+            return str(code).lower()
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        from src.settings.settings import get_setting
+        return str(get_setting('language', 'pl') or 'pl').lower()
+    except Exception:                                # noqa: BLE001
+        return 'en'
+
+
+def language_text(language=''):
+    """The whole Titan Access script language - built from the tables
+    above and from :data:`STATEMENTS`, so it can never describe a
+    statement the reader no longer has or miss one it has gained.
+    ``language`` 'en' or 'pl'; Titan's own when left out. What Titan's AI
+    is given is the English one."""
+    wanted = str(language or _language()).lower()
+    text = _language_lines()
+    if not wanted.startswith('pl'):
+        return text
+    out = []
+    for line in text.split("\n"):
+        if line in _PL:
+            out.append(_PL[line])
+        elif line.startswith("  ") and "  " in line.strip():
+            head, _gap, tail = line.strip().partition("  ")
+            width = len(line) - len(line.lstrip()) + len(head)
+            rest = line[width:]
+            pad = len(rest) - len(rest.lstrip())
+            out.append(line[:width] + " " * pad + _in_polish(rest.strip()))
+        elif line.startswith("  ") and " - " in line:
+            out.append("  " + _in_polish(line.strip()))
+        elif set(line) == {"="}:
+            out.append("=" * len(_in_polish("Titan Access scripts (.tas)")))
+        else:
+            out.append(_in_polish(line))
+    return "\n".join(out)
+
+
+def _language_lines():
+    out = ["Titan Access scripts (.tas)",
+           "===========================",
+           "",
+           "A .tas file in the scripts folder is a reader script. It is "
+           "Titan Script - the language of Titan's macros, every statement "
+           "and every Titan action by name (see the Macro Manager's Titan "
+           "Script tab, or the action macros.macro_language) - plus the "
+           "lines below, which only the reader understands.",
+           "",
+           "When it runs (one or more lines, anywhere in the file):"]
+    out += ["  %-46s %s" % pair for pair in TRIGGERS]
+    out += ["",
+            '  for program "notepad"   - everything in the file is about '
+            "that program only, the way a JAWS script file is.",
+            "",
+            "Conditions (on when focus / window / notification, and in "
+            "control rules):"]
+    out += ["  %-30s %s" % pair for pair in CONDITIONS]
+    out += ["", "Variables, written {{name}}:"]
+    out += ["  %-12s %s" % pair for pair in VARIABLES]
+    out += ["", "The reader's own statements (each is one Titan Access "
+                "action, so a script may also call the action itself):"]
+    out += ["  " + what for _pattern, _template, what in STATEMENTS]
+    out += ["",
+            "`say` speaks in the reader's own voice. A script runs on a "
+            "thread of its own, so a dialog or a `wait` never holds the "
+            "reader.",
+            "",
+            "Control rules - how one kind of control is READ, without "
+            "running anything:",
+            '  control class="TCustomGrid" as list',
+            '  control id="btnSend" name "Send"',
+            '  control role="image" name contains "spacer" silent',
+            "What a rule may change:"]
+    out += ["  %-30s %s" % pair for pair in RULE_CHANGES]
+    out += ["",
+            "Actions: titan_access.list_scripts, write_script, read_script, "
+            "delete_script, check_script, run_script, reload_scripts, "
+            "script_language. Reload after editing a file by hand, or "
+            "restart the reader.",
+            ""]
+    return "\n".join(out)
+
+
+#: The first line of the README this reader writes; a README that no
+#: longer begins with it is the user's own and is left alone.
+README_HEAD = 'Titan Access scripts (.tas)'
 
 
 def _write_example(where):
-    for name, text in (('example' + EXTENSION, EXAMPLE),
-                       ('README.txt', README)):
-        path = os.path.join(where, name)
-        if not os.path.exists(path):
-            with open(path, 'w', encoding='utf-8') as handle:
-                handle.write(text)
+    path = os.path.join(where, 'example' + EXTENSION)
+    if not os.path.exists(path):
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(EXAMPLE)
+    write_readme(where)
+
+
+def write_readme(where=None):
+    """The README beside the scripts is the language reference, written
+    again whenever the reader's language has grown - unless the user has
+    made it their own. The README of an older reader (its first line
+    "Titan Access scripts" alone) is ours too."""
+    where = where or folder()
+    path = os.path.join(where, 'README.txt')
+    text = language_text()
+    try:
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as handle:
+                have = handle.read()
+            ours = have.startswith(README_HEAD) or \
+                have.startswith(_PL[README_HEAD]) or \
+                have.startswith('Titan Access scripts\n====')
+            if have == text or not ours:
+                return False
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(text)
+        return True
+    except OSError:
+        return False
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +559,10 @@ def parse(text):
             continue
         found = _TRIGGER.match(raw)
         if not found:
-            lines.append(raw)
+            said, why = translate(raw, number)
+            if why:
+                problems.append(why)
+            lines.append(raw if said is None else said)
             continue
         lines.append('')
         kind, rest = found.group(1).lower(), found.group(2).strip()
@@ -193,17 +579,119 @@ def parse(text):
                 problems.append('line %d: the reader trigger is '
                                 '"when reader starts"' % number)
                 continue
+        elif kind == 'every':
+            seconds = _seconds(rest)
+            if seconds is None:
+                problems.append('line %d: "when every" wants a time, like '
+                                'when every 30s, 5m or 1h (at least %ds)'
+                                % (number, MIN_EVERY))
+                continue
+            trigger['seconds'] = seconds
+        elif kind == 'time':
+            at = re.match(r'"?(\d{1,2}):(\d{2})"?\s*$', rest)
+            if not at or int(at.group(1)) > 23 or int(at.group(2)) > 59:
+                problems.append('line %d: "when time" wants an hour, like '
+                                'when time "07:30"' % number)
+                continue
+            trigger['at'] = '%02d:%02d' % (int(at.group(1)), int(at.group(2)))
         else:
-            conditions = []
-            for name, contains, value in _ARG.findall(rest):
-                conditions.append((name.lower(), bool(contains),
-                                   value.strip().lower()))
-            trigger['conditions'] = conditions
+            trigger['conditions'] = _conditions(rest)
         triggers.append(trigger)
     for one in triggers + rules:
         one['program'] = program
     PARSED_RULES[0] = rules
     return triggers, '\n'.join(lines), problems
+
+
+# --------------------------------------------------------------------------- #
+# The reader's own statements - short words for what a reader script does
+# all the time, each one line of Titan Script calling a Titan Access action
+# --------------------------------------------------------------------------- #
+_Q = r'("(?:[^"\\]|\\.)*")'
+#: ``(pattern, template, what it means)``. A template is the Titan Script
+#: line the statement becomes, so the Macro Manager's checker, its error
+#: messages and its line numbers apply to it unchanged.
+STATEMENTS = (
+    (r'beep\s+(\d+)(?:\s+(\d+))?',
+     lambda m: 'titan_access.beep frequency=%s duration=%s'
+               % (m.group(1), m.group(2) or '60'),
+     'beep 880 40 - a tone: frequency in Hz, length in ms'),
+    (r'cue\s+' + _Q,
+     lambda m: 'titan_access.play_cue name=' + m.group(1),
+     'cue "edge" - one of the reader\'s own sounds, by name'),
+    (r'braille\s+' + _Q,
+     lambda m: 'titan_access.braille text=' + m.group(1),
+     'braille "text" - show text on the braille display'),
+    (r'press\s+' + _Q,
+     lambda m: 'titan_access.click_element text=' + m.group(1),
+     'press "Save" - press a control of the window in front by its name'),
+    (r'jump\s+(?:(next|previous)\s+)?(\w+)',
+     lambda m: 'titan_access.go_to kind="%s" backward=%s'
+               % (m.group(2).lower(),
+                  'true' if (m.group(1) or '').lower() == 'previous'
+                  else 'false'),
+     'jump heading / jump previous link - quick navigation in a document'),
+    (r'read\s+(focus|title|value|last|screen|position|selection|status|'
+     r'time|date)',
+     lambda m: 'titan_access.read_aloud what="%s"' % m.group(1).lower(),
+     'read focus | title | value | last | screen | position | selection | '
+     'status | time | date - say it in the reader\'s voice'),
+    (r'scan\s+(on|off|toggle)',
+     lambda m: 'titan_access.scan_mode state="%s"' % m.group(1).lower(),
+     'scan on | off | toggle - scan mode'),
+    (r'setting\s+' + _Q + r'\s*=\s*(' + _Q[1:-1] + r'|\S+)',
+     lambda m: 'titan_access.set_setting name=%s value=%s' % (
+         m.group(1), m.group(2) if m.group(2).startswith('"')
+         else '"%s"' % m.group(2)),
+     'setting "rate" = 60 - change a reader setting (as list_settings '
+     'names it)'),
+    (r'label\s+' + _Q,
+     lambda m: 'titan_access.label_control label=' + m.group(1),
+     'label "Send" - give the control in focus a name of its own ("" '
+     'takes it away)'),
+    (r'pass',
+     lambda m: 'titan_access.pass_key key="{{key}}"',
+     'pass - let the key that started the script reach the program too'),
+    (r'silence',
+     lambda m: 'titan_access.stop_speech',
+     'silence - stop the reader speaking'),
+    (r'command\s+' + _Q,
+     lambda m: 'titan_access.run_command name=' + m.group(1),
+     'command "sayAll" - run one of the reader\'s own commands, as its key '
+     'would (list_shortcuts names them)'),
+    (r'script\s+' + _Q,
+     lambda m: 'titan_access.run_script name=' + m.group(1),
+     'script "other" - run another of your reader scripts'),
+)
+_COMPILED = [(re.compile(r'^(\s*)' + pattern + r'\s*$', re.IGNORECASE),
+              template) for pattern, template, _what in STATEMENTS]
+
+
+def translate(raw, number=0):
+    """``(line, problem)``: a reader statement as the Titan Script line it
+    stands for, or ``(None, '')`` when the line is not one."""
+    for pattern, template in _COMPILED:
+        found = pattern.match(raw)
+        if found:
+            try:
+                inner = re.match(pattern.pattern[len(r'^(\s*)'):],
+                                 raw.strip(), re.IGNORECASE)
+                return found.group(1) + template(inner), ''
+            except Exception as error:               # noqa: BLE001
+                return None, 'line %d: %s' % (number, error)
+    return None, ''
+
+
+def _seconds(text):
+    found = re.match(r'"?\s*(\d+(?:\.\d+)?)\s*(s|sec|second|seconds|m|min|'
+                     r'minute|minutes|h|hour|hours)?\s*"?\s*$',
+                     str(text or '').strip(), re.IGNORECASE)
+    if not found:
+        return None
+    value = float(found.group(1))
+    unit = (found.group(2) or 's').lower()[0]
+    value *= {'s': 1, 'm': 60, 'h': 3600}[unit]
+    return value if value >= MIN_EVERY else None
 
 
 #: The rules of the script `parse` read last (a side door, so `parse`'s
@@ -224,11 +712,11 @@ def _rule(number, rest):
     changes = list(_CHANGE.finditer(rest))
     if not changes:
         return None, ('line %d: a control rule says what to change - '
-                      'as <role>, name "...", describe "...", say "..." or '
-                      'silent' % number)
+                      'as <role>, name "...", describe "...", say "...", '
+                      'prefix "...", suffix "...", sound "..." or silent'
+                      % number)
     selectors_text = rest[:changes[0].start()]
-    selectors = [(name.lower(), bool(contains), value.strip().lower())
-                 for name, contains, value in _ARG.findall(selectors_text)]
+    selectors = _conditions(selectors_text)
     if not selectors:
         return None, ('line %d: a control rule says WHICH controls - '
                       'class="...", id="...", name="..." or role="..."'
@@ -259,7 +747,8 @@ def check(text):
     macros = _macros()
     if macros is not None:
         try:
-            problems.extend(macros.check_tcs(body))
+            problems.extend(one for one in macros.check_tcs(body)
+                            if not _own_action_unknown(one))
         except Exception as error:                   # noqa: BLE001
             problems.append('Titan Script could not check it: %s' % error)
     else:
@@ -268,10 +757,39 @@ def check(text):
     return problems
 
 
+_OWN_UNKNOWN = re.compile(r"'titan_access' has no action '(\w+)'")
+
+
+def own_actions():
+    """The names of this reader's own actions, read from its declaration."""
+    try:
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        module = sys.modules.get('titan_access_actions')
+        if module is None:
+            spec = importlib.util.spec_from_file_location(
+                'titan_access_actions',
+                os.path.join(here, 'titan_access_actions.py'))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            sys.modules['titan_access_actions'] = module
+        return {str(one['name']) for one in module.TITAN_ACTIONS}
+    except Exception:                                # noqa: BLE001
+        return set()
+
+
+def _own_action_unknown(problem):
+    """A problem that only says Titan does not (yet) list one of this
+    reader's own actions - which happens when the action registry was
+    built before the reader declared them, or outside Titan."""
+    found = _OWN_UNKNOWN.search(str(problem))
+    return bool(found) and found.group(1) in own_actions()
+
+
 def load():
     """Read every script in the folder. ``[script]``, each a dict with its
     name, path, triggers, body and problems."""
     where = folder()
+    write_readme(where)
     found = []
     try:
         names = sorted(os.listdir(where))
@@ -327,8 +845,63 @@ def _context(engine, obj=None, key=''):
         found['role_key'] = str(role or '')
         found['class'] = str(getattr(obj, 'class_name', '') or '')
         found['id'] = str(getattr(obj, 'automation_id', '') or '')
+        found.update(_more_about(obj))
     found['window'], found['program'] = _window_and_program()
+    found['title'] = found['window']
+    found['spoken'] = _last_spoken()
     return found
+
+
+def _more_about(obj):
+    """The variables beyond the name and the role: states, the place in
+    its list, the level, where it is on the screen."""
+    more = {'states': '', 'position': '', 'index': '', 'count': '',
+            'level': '', 'x': '', 'y': '', 'link': ''}
+    states = sorted(str(one) for one in (getattr(obj, 'states', None) or ()))
+    if states:
+        try:
+            from titan_access import localization
+            words = [localization.state_label(one) or one for one in states]
+        except Exception:                            # noqa: BLE001
+            words = states
+        more['states'] = ', '.join(words)
+        more['states_key'] = ' '.join(states)
+    index = int(getattr(obj, 'pos_in_set', 0) or 0)
+    count = int(getattr(obj, 'size_of_set', 0) or 0)
+    if index:
+        more['index'] = str(index)
+    if count:
+        more['count'] = str(count)
+    if index and count:
+        try:
+            from titan_access.localization import L
+            more['position'] = L('element.positionOf', index, count)
+            if more['position'] == 'element.positionOf':
+                raise KeyError
+        except Exception:                            # noqa: BLE001
+            more['position'] = '%d / %d' % (index, count)
+    level = int(getattr(obj, 'level', 0) or 0)
+    if level:
+        more['level'] = str(level)
+    bounds = getattr(obj, 'bounds', None)
+    try:
+        left, top, right, bottom = bounds
+        if right > left and bottom > top:
+            more['x'] = str(int((left + right) / 2))
+            more['y'] = str(int((top + bottom) / 2))
+    except Exception:                                # noqa: BLE001
+        pass
+    more['link'] = str(getattr(obj, 'parameter', '') or '')
+    return more
+
+
+def _last_spoken():
+    try:
+        from titan_access import speech_adapter
+        said = speech_adapter.spoken()
+        return str(said[-1]) if said else ''
+    except Exception:                                # noqa: BLE001
+        return ''
 
 
 def _window_and_program():
@@ -355,6 +928,11 @@ def _foreground_process():
         pid = wintypes.DWORD(0)
         user32.GetWindowThreadProcessId(user32.GetForegroundWindow(),
                                         ctypes.byref(pid))
+        try:
+            from titan_access import uwp
+            pid = wintypes.DWORD(uwp.foreground_pid() or pid.value)
+        except Exception:                            # noqa: BLE001
+            pass
         kernel32 = ctypes.windll.kernel32
         handle = kernel32.OpenProcess(0x1000, False, pid.value)
         if not handle:
@@ -382,8 +960,10 @@ def _reader_voice(engine):
     return speak
 
 
-def run(script, obj=None, key='', engine=None, wait=False):
-    """Run one script on a thread of its own. ``(started, why)``."""
+def run(script, obj=None, key='', engine=None, wait=False, extra=None):
+    """Run one script on a thread of its own. ``(started, why)``.
+    ``extra`` are variables beyond what the moment says (a notification's
+    ``text``)."""
     engine = engine or _state.get('engine')
     macros = _macros()
     if macros is None:
@@ -391,6 +971,7 @@ def run(script, obj=None, key='', engine=None, wait=False):
     if script.get('problems'):
         return False, '; '.join(script['problems'])
     variables = _context(engine, obj, key)
+    variables.update(extra or {})
 
     def work():
         try:
@@ -429,16 +1010,14 @@ def by_name(name):
 # Triggers - asked by the engine
 # --------------------------------------------------------------------------- #
 def _matches(conditions, values):
-    for name, contains, wanted in conditions:
+    for name, op, wanted in conditions:
         have = str(values.get(name, values.get(name + '_key', '')) or '')
-        have = have.lower()
-        if contains:
-            if wanted not in have:
-                return False
-        elif have != wanted and not (name == 'role' and wanted
-                                      == str(values.get('role_key', '')
-                                             ).lower()):
-            return False
+        if _test(op, have, wanted):
+            continue
+        # A role may be named in the user's language or by its key.
+        if name == 'role' and _test(op, values.get('role_key', ''), wanted):
+            continue
+        return False
     return True
 
 
@@ -470,6 +1049,100 @@ def _on_event(kind, obj, engine):
 def _in_program(one, values):
     wanted = one.get('program') or ''
     return not wanted or str(values.get('program', '')).lower() == wanted
+
+
+def on_notification(text, program='', engine=None):
+    """A program said something without moving the focus (a UI Automation
+    notification or a live region): run every `when notification` script
+    whose conditions match. ``{{text}}`` is what it said."""
+    candidates = [(script, trigger) for script in scripts()
+                  for trigger in script['triggers']
+                  if trigger['kind'] == 'notification'
+                  and not script['problems']]
+    if not candidates:
+        return 0
+    engine = engine or _state.get('engine')
+    values = {'text': str(text or ''), 'program': str(program or '')}
+    if not values['program']:
+        values['program'] = _foreground_process()
+    started = 0
+    for script, trigger in candidates:
+        if _in_program(trigger, values) and \
+                _matches(trigger.get('conditions') or [], values):
+            run(script, engine=engine, extra={'text': values['text']})
+            started += 1
+    return started
+
+
+# --------------------------------------------------------------------------- #
+# `when every` and `when time` - one slow thread, only while a script asks
+# --------------------------------------------------------------------------- #
+_clock = {'thread': None, 'generation': 0, 'due': {}, 'fired': {}}
+
+
+def _timed():
+    return [(script, trigger) for script in scripts()
+            for trigger in script['triggers']
+            if trigger['kind'] in ('every', 'time') and not script['problems']]
+
+
+def _start_clock():
+    with _LOCK:
+        _clock['generation'] += 1
+        generation = _clock['generation']
+        _clock['due'] = {}
+        if not _timed():
+            _clock['thread'] = None
+            return False
+        thread = threading.Thread(target=_tick_loop, args=(generation,),
+                                  daemon=True, name='TitanAccessScriptClock')
+        _clock['thread'] = thread
+    thread.start()
+    return True
+
+
+def _tick_loop(generation):
+    import time as _time
+    while True:
+        with _LOCK:
+            if _clock['generation'] != generation:
+                return
+        tick(_time.time())
+        _time.sleep(1.0)
+
+
+def tick(now):
+    """Run whatever is due at ``now`` (seconds since the epoch). Called by
+    the clock thread once a second; a test calls it with a time of its own."""
+    import time as _time
+    started = 0
+    for script, trigger in _timed():
+        if not _in_program(trigger, {'program': _foreground_process()
+                                     if trigger.get('program') else ''}):
+            continue
+        key = (script['name'], trigger['line'])
+        if trigger['kind'] == 'every':
+            with _LOCK:
+                due = _clock['due'].setdefault(key, now + trigger['seconds'])
+                if now < due:
+                    continue
+                _clock['due'][key] = now + trigger['seconds']
+        else:
+            stamp = _time.strftime('%H:%M', _time.localtime(now))
+            day = _time.strftime('%Y-%m-%d', _time.localtime(now))
+            with _LOCK:
+                if stamp != trigger['at'] or _clock['fired'].get(key) == day:
+                    continue
+                _clock['fired'][key] = day
+        run(script, engine=_state.get('engine'))
+        started += 1
+    return started
+
+
+def stop_clock():
+    with _LOCK:
+        _clock['generation'] += 1
+        _clock['thread'] = None
 
 
 def plain_key(name, ctrl, alt, shift, engine=None):
@@ -558,6 +1231,7 @@ def bind(engine):
         if any(trigger['kind'] == 'reader' for trigger in script['triggers']) \
                 and not script['problems']:
             run(script, engine=engine)
+    _start_clock()
     return found
 
 
@@ -594,15 +1268,12 @@ def _fall_through(key):
 def _rule_matches(rule, values):
     if not _in_program(rule, values):
         return False
-    for name, contains, wanted in rule['selectors']:
+    for name, op, wanted in rule['selectors']:
         if name == 'role':
-            have = str(values.get('role_key', '')).lower()
+            have = values.get('role_key', '')
         else:
-            have = str(values.get(name, '') or '').lower()
-        if contains:
-            if wanted not in have:
-                return False
-        elif have != wanted:
+            have = values.get(name, '')
+        if not _test(op, have, wanted):
             return False
     return True
 
@@ -635,6 +1306,12 @@ def adjust(obj):
             changed.role = rule['as']
         if 'name' in rule:
             changed.name = _fill(rule['name'], values)
+        if 'prefix' in rule or 'suffix' in rule:
+            changed.name = (_fill(rule.get('prefix', ''), values)
+                            + str(getattr(changed, 'name', '') or '')
+                            + _fill(rule.get('suffix', ''), values))
+        if rule.get('sound'):
+            _cue(rule['sound'], obj)
         if 'describe' in rule:
             changed.description = _fill(rule['describe'], values)
         if rule.get('silent'):
@@ -644,6 +1321,18 @@ def adjust(obj):
         with _LOCK:
             _state['adjusted'] = _state.get('adjusted', 0) + 1
     return (changed if changed is not None else obj), say
+
+
+def _cue(name, obj=None):
+    """One of the reader's own sounds, where the control is."""
+    engine = _state.get('engine')
+    try:
+        if engine is not None and hasattr(engine, 'play'):
+            engine.play(str(name), obj)
+            with _LOCK:
+                _state['cues'] = _state.get('cues', 0) + 1
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 def _fill(template, values):
@@ -656,6 +1345,7 @@ def report():
     with _LOCK:
         found = {key: value for key, value in _state.items()
                  if key not in ('engine', 'scripts')}
+        found['clock'] = _clock['thread'] is not None
         found['scripts'] = [{'name': one['name'],
                              'triggers': [t['kind'] for t in one['triggers']],
                              'rules': len(one.get('rules', [])),

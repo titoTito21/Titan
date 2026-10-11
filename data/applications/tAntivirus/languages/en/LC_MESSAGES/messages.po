@@ -1,0 +1,457 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Titan Antivirus 1.0\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "The ClamAV engine is not installed."
+msgstr ""
+
+msgid "The virus signatures have not been downloaded yet. Update the signatures first."
+msgstr ""
+
+msgid "The ClamAV scanning service stopped while starting."
+msgstr ""
+
+msgid "The ClamAV scanning service did not start in time."
+msgstr ""
+
+msgid "The ClamAV scanning service closed the connection."
+msgstr ""
+
+msgid "The signatures could not be updated. Check the internet connection."
+msgstr ""
+
+msgid "The list of ClamAV releases could not be read."
+msgstr ""
+
+msgid "No ClamAV build for Windows was found."
+msgstr ""
+
+msgid "ClamAV could not be downloaded."
+msgstr ""
+
+msgid "The downloaded ClamAV did not match its checksum and was thrown away."
+msgstr ""
+
+msgid "The downloaded ClamAV archive is damaged."
+msgstr ""
+
+msgid "Install ClamAV with your system's package manager (clamav, clamav-daemon, clamav-freshclam)."
+msgstr ""
+
+msgid "Microsoft Defender is not available on this computer."
+msgstr ""
+
+msgid "Cancelled."
+msgstr ""
+
+msgid "Detected"
+msgstr ""
+
+msgid "Quarantined"
+msgstr ""
+
+msgid "Deleted"
+msgstr ""
+
+msgid "Ignored"
+msgstr ""
+
+msgid "Excluded"
+msgstr ""
+
+msgid "Action failed"
+msgstr ""
+
+msgid "Microsoft Defender"
+msgstr ""
+
+msgid "Titan Antivirus - threat found"
+msgstr ""
+
+msgid "&Quarantine"
+msgstr ""
+
+msgid "&Delete"
+msgstr ""
+
+msgid "&Ignore"
+msgstr ""
+
+msgid "Threat found: {threat}\n\nFile: {path}"
+msgstr ""
+
+msgid "Download progress"
+msgstr ""
+
+msgid "&Cancel"
+msgstr ""
+
+msgid "Cancelling..."
+msgstr ""
+
+msgid "&Close"
+msgstr ""
+
+msgid "Threats"
+msgstr ""
+
+msgid "Engine"
+msgstr ""
+
+msgid "Background protection"
+msgstr ""
+
+msgid "Scheduled scan &folders:"
+msgstr ""
+
+msgid "Exclusions"
+msgstr ""
+
+msgid "&Never scan:"
+msgstr ""
+
+msgid "Quarantined files"
+msgstr ""
+
+msgid "Finished scans"
+msgstr ""
+
+msgid "Scan progress"
+msgstr ""
+
+msgid "Scan results"
+msgstr ""
+
+msgid "&Quick scan\tF5"
+msgstr ""
+
+msgid "F&ull scan"
+msgstr ""
+
+msgid "Scan a &file...\tCtrl+O"
+msgstr ""
+
+msgid "Scan a f&older...\tCtrl+Shift+O"
+msgstr ""
+
+msgid "Scan a folder with Microsoft &Defender..."
+msgstr ""
+
+msgid "&Cancel scan"
+msgstr ""
+
+msgid "E&xit"
+msgstr ""
+
+msgid "&Scan"
+msgstr ""
+
+msgid "&Update signatures\tCtrl+U"
+msgstr ""
+
+msgid "Engine &status\tCtrl+I"
+msgstr ""
+
+msgid "&Engine"
+msgstr ""
+
+msgid "&Quarantine...\tCtrl+Q"
+msgstr ""
+
+msgid "Scan &history...\tCtrl+H"
+msgstr ""
+
+msgid "&Settings...\tCtrl+P"
+msgstr ""
+
+msgid "&Tools"
+msgstr ""
+
+msgid "The virus signatures have not been downloaded yet."
+msgstr ""
+
+msgid "today"
+msgstr ""
+
+msgid "loaded"
+msgstr ""
+
+msgid "not loaded"
+msgstr ""
+
+msgid "Engine status"
+msgstr ""
+
+msgid "The ClamAV engine is not installed yet. Download it now from the official ClamAV releases, and then the virus signatures (about 300 MB)?"
+msgstr ""
+
+msgid "The virus signatures have not been downloaded yet. Download them now (about 300 MB)?"
+msgstr ""
+
+msgid "Counting files..."
+msgstr ""
+
+msgid "Starting the scanning engine. Loading the signatures takes a while..."
+msgstr ""
+
+msgid "Scanning..."
+msgstr ""
+
+msgid "Titan Antivirus - threats found"
+msgstr ""
+
+msgid "&Quarantine all"
+msgstr ""
+
+msgid "&Review in the list"
+msgstr ""
+
+msgid "Open the &containing folder"
+msgstr ""
+
+msgid "Scheduled scan started."
+msgstr ""
+
+msgid "Error: {error}"
+msgstr ""
+
+msgid "Preparing the ClamAV engine"
+msgstr ""
+
+msgid "Starting..."
+msgstr ""
+
+msgid "&Details:"
+msgstr ""
+
+msgid "Downloading the virus signatures. The first time this is about 300 MB and takes several minutes."
+msgstr ""
+
+msgid "The signatures are up to date."
+msgstr ""
+
+msgid "Titan Antivirus settings"
+msgstr ""
+
+msgid "Keep the &scanning service loaded between scans (faster, uses about 1 GB of memory)"
+msgstr ""
+
+msgid "Scan inside &archives"
+msgstr ""
+
+msgid "&Update the signatures when Titan Antivirus starts, if they are older than a day"
+msgstr ""
+
+msgid "&Watch the Downloads folder and scan every new file"
+msgstr ""
+
+msgid "Run a scheduled scan &every day"
+msgstr ""
+
+msgid "Add folder..."
+msgstr ""
+
+msgid "Add file..."
+msgstr ""
+
+msgid "Remove"
+msgstr ""
+
+msgid "Quarantine"
+msgstr ""
+
+msgid "&Restore"
+msgstr ""
+
+msgid "&Delete permanently"
+msgstr ""
+
+msgid "Scan history"
+msgstr ""
+
+msgid "&Quick scan"
+msgstr ""
+
+msgid "Scan a &folder..."
+msgstr ""
+
+msgid "&Update signatures"
+msgstr ""
+
+msgid "yesterday"
+msgstr ""
+
+msgid "ClamAV ready. Signatures updated {when}. Scanning service {service}."
+msgstr ""
+
+msgid "Quick scan"
+msgstr ""
+
+msgid "Full scan"
+msgstr ""
+
+msgid "Never scan this file (&exclude)"
+msgstr ""
+
+msgid "Titan Antivirus keeps protecting in the background."
+msgstr ""
+
+msgid "Scheduled scan"
+msgstr ""
+
+msgid "Downloading the ClamAV engine..."
+msgstr ""
+
+msgid "The ClamAV engine is installed."
+msgstr ""
+
+msgid "&When a threat is found:"
+msgstr ""
+
+msgid "Ask what to do"
+msgstr ""
+
+msgid "Quarantine automatically"
+msgstr ""
+
+msgid "Delete automatically"
+msgstr ""
+
+msgid "Only report"
+msgstr ""
+
+msgid "Stop the scanning service after this many &idle minutes (0 = never):"
+msgstr ""
+
+msgid "&Largest file to scan, in megabytes:"
+msgstr ""
+
+msgid "Scheduled scan &time (hours:minutes):"
+msgstr ""
+
+msgid "Scheduled scan &covers:"
+msgstr ""
+
+msgid "Quick scan (Downloads, Desktop, Documents, temporary files)"
+msgstr ""
+
+msgid "Full scan (every fixed drive)"
+msgstr ""
+
+msgid "The folders below"
+msgstr ""
+
+msgid "Background protection runs while Titan's shell is on, or while Titan Antivirus is open."
+msgstr ""
+
+msgid "Choose a folder"
+msgstr ""
+
+msgid "Choose a file"
+msgstr ""
+
+msgid "Write the time as hours:minutes, for example 12:30."
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "Threat"
+msgstr ""
+
+msgid "Original location"
+msgstr ""
+
+msgid "Date"
+msgstr ""
+
+msgid "The file could not be restored."
+msgstr ""
+
+msgid "Scanned"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "&Threats found:"
+msgstr ""
+
+msgid "File"
+msgstr ""
+
+msgid "Status"
+msgstr ""
+
+msgid "Location"
+msgstr ""
+
+msgid "Choose a folder to scan"
+msgstr ""
+
+msgid "Choose files to scan"
+msgstr ""
+
+msgid "The scan will start when the current one finishes."
+msgstr ""
+
+msgid "Scanned {done} of {total} files"
+msgstr ""
+
+msgid "{count} threats were found. Quarantine all of them now?"
+msgstr ""
+
+msgid "A scan is running. Stop it and close?"
+msgstr ""
+
+msgid "Delete {name} permanently?"
+msgstr ""
+
+msgid "Restore {name}? It was detected as {threat}."
+msgstr ""
+
+msgid "Restored to {path}"
+msgstr ""
+
+msgid "{days} days ago"
+msgstr ""
+
+msgid "{count} items"
+msgstr ""
+
+msgid "Scanning {what} with {engine}"
+msgstr ""
+
+msgid "Scan cancelled after {files} files. Threats: {threats}."
+msgstr ""
+
+msgid "{errors} files could not be read, {skipped} were too large."
+msgstr ""
+
+msgid "Scan finished: {files} files, {threats} threats found."
+msgstr ""
+
+msgid "Scan finished: {files} files, no threats found."
+msgstr ""
+
+msgid "{count} files could not be quarantined."
+msgstr ""
+
+msgid "Titan Antivirus is not installed."
+msgstr ""
+
+msgid "Scan with antivirus:"
+msgstr ""
+
+msgid "Scan this folder with Titan Antivirus"
+msgstr ""
+
+msgid "Titan Antivirus could not be started."
+msgstr ""
+
+msgid "Open Titan Antivirus"
+msgstr ""

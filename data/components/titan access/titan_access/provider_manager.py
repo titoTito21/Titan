@@ -36,6 +36,9 @@ _MSAA_DEBOUNCE = 0.12
 # silent: UIA owns this app and an MSAA snapshot (native=None) must never replace
 # the live current object. MSAA only speaks for genuinely UIA-less windows.
 _UIA_QUIET = 0.6
+# Up to this long after a UIA focus event, an MSAA one is the same focus
+# change arriving late unless the user did something in between.
+_UIA_LATE = 3.0
 
 
 class ProviderManager:
@@ -180,9 +183,18 @@ class ProviderManager:
         def _do():
             time.sleep(_MSAA_DEBOUNCE)
             with self._lock:
-                uia_recent = (time.time() - self._last_uia_time) < _UIA_QUIET
+                since_uia = time.time() - self._last_uia_time
+                uia_recent = since_uia < _UIA_QUIET
             if uia_recent:
                 return
+            # Later than that, but with nothing done by the user since UIA
+            # spoke: the same focus change arriving late through MSAA (the
+            # taskbar's, about a second after its button - read twice). Its
+            # name and rectangle need not match UIA's, so they are not asked.
+            if since_uia < _UIA_LATE:
+                from titan_access import user_input
+                if not user_input.acted_since(self._last_uia_time):
+                    return
             if self._claim(obj):
                 self._emit(obj)
         threading.Thread(target=_do, daemon=True).start()

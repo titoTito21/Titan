@@ -1,0 +1,61 @@
+###############################################################################
+# BRLTTY - A background process providing access to the console screen (when in
+#          text mode) for a blind person using a refreshable braille display.
+#
+# Copyright (C) 1995-2026 by The BRLTTY Developers.
+#
+# BRLTTY comes with ABSOLUTELY NO WARRANTY.
+#
+# This is free software, placed under the terms of the
+# GNU Lesser General Public License, as published by the Free Software
+# Foundation; either version 2.1 of the License, or (at your option) any
+# later version. Please see the file LICENSE-LGPL for details.
+#
+# Web Page: http://brltty.app/
+#
+# This software is maintained by Dave Mielke <dave@mielke.cc>.
+###############################################################################
+
+assign prefix \{chord}\{dot7}+\{dot8}
+bind \{prefix}+\{dot1}+\{dot2}+\{dot3}+\{dot4}+\{dot5}+\{dot6} GUI_BRL_ACTIONS
+
+bind \{prefix}+\{a} TXTSEL_ALL
+bind \{prefix}+\{dot4} TXTSEL_CLEAR
+bind \{prefix}+\{c} HOST_COPY
+bind \{prefix}+\{v} HOST_PASTE
+bind \{prefix}+\{x} HOST_CUT
+
+bind \{prefix}+\{b} GUI_BACK
+bind \{prefix}+\{h} GUI_HOME
+bind \{prefix}+\{i} INDICATORS
+bind \{prefix}+\{m} GUI_APP_MENU
+bind \{prefix}+\{n} GUI_APP_ALERTS
+bind \{prefix}+\{o} GUI_DEV_OPTIONS
+bind \{prefix}+\{r} GUI_APP_LIST
+bind \{prefix}+\{s} GUI_DEV_SETTINGS
+bind \{prefix}+\{t} GUI_TITLE
+
+bind \{prefix}+\{dot3}+\{dot6} GUI_AREA_ACTV
+bind \{prefix}+\{dot3} GUI_AREA_PREV
+bind \{prefix}+\{dot6} GUI_AREA_NEXT
+
+bind \{prefix}+\{dot2} GUI_ITEM_PREV
+bind \{prefix}+\{dot5} GUI_ITEM_NEXT
+
+bind \{prefix}+\{dot2}+\{dot3} GUI_ITEM_FRST
+bind \{prefix}+\{dot5}+\{dot6} GUI_ITEM_LAST
+
+bind \{prefix}+\{dot2}+\{dot5} CONTEXT+chrome
+context chrome Web Page Structural Navigation
+bind \{dot7}+\{dot8} CONTEXT+default
+
+superimpose meta
+map \{dot1} DOT1
+map \{dot2} DOT2
+map \{dot3} DOT3
+map \{dot4} DOT4
+map \{dot5} DOT5
+map \{dot6} DOT6
+map \{dot7} DOT7
+map \{dot8} DOT8
+

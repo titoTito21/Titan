@@ -259,6 +259,18 @@ class ESpeakDLL:
 
                     self.dll = ctypes.CDLL(dll_path)
                     print(f"[eSpeak DLL] Loaded: {dll_path}")
+                    # A library that is NOT the bundled one (Linux's own
+                    # libespeak-ng) is given its OWN data - NULL, its
+                    # compiled-in path. The bundled data is a newer eSpeak:
+                    # its phoneme files need not match an older library,
+                    # and libespeak-ng 1.50 lists at most 300 voice files
+                    # while the bundle has 323, so the list stopped before
+                    # zlw/pl and there was no Polish voice at all.
+                    bundled = os.path.isabs(dll_path) and \
+                        os.path.normcase(os.path.dirname(dll_path)) == \
+                        os.path.normcase(bundled_dir)
+                    if not bundled and not IS_WINDOWS:
+                        self.data_path = None
                     self._setup_functions()
                     self._initialize()
                     return

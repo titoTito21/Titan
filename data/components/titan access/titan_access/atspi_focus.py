@@ -139,6 +139,10 @@ def states_of(Atspi, acc, role):
         out.add(C.STATE_UNAVAILABLE)
     if role in (C.ROLE_EDIT, C.ROLE_DOCUMENT) and not has(S.EDITABLE):
         out.add(C.STATE_READONLY)
+    multi = getattr(S, 'MULTI_LINE', None)
+    if multi is not None and role in (C.ROLE_EDIT, C.ROLE_DOCUMENT) \
+            and has(multi):
+        out.add(C.STATE_MULTILINE)
     if has(S.REQUIRED):
         out.add(C.STATE_REQUIRED)
     if has(S.PRESSED):

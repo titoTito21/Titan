@@ -1,0 +1,184 @@
+###############################################################################
+# BRLTTY - A background process providing access to the console screen (when in
+#          text mode) for a blind person using a refreshable braille display.
+#
+# Copyright (C) 2008-2026 by The BRLTTY Developers.
+#
+# BRLTTY comes with ABSOLUTELY NO WARRANTY.
+#
+# This is free software, placed under the terms of the
+# GNU Lesser General Public License, as published by the Free Software
+# Foundation; either version 2.1 of the License, or (at your option) any
+# later version. Please see the file LICENSE-LGPL for details.
+#
+# Web Page: http://brltty.app/
+#
+# This software is maintained by Dave Mielke <dave@mielke.cc>.
+###############################################################################
+
+# BRLTTY Text Table - Arabic (generic)
+#
+# This text table was converted from LibLouis's ar-ar-comp8 table.
+# Maintainer: Dave Mielke <Dave@Mielke.cc>
+# Advisor: Ikrami Ahmad <Ikrami@blind.gov.qa>
+
+char	\x21	( 23 5   )	# ⠖ ! [EXCLAMATION MARK]
+char	\x22	( 23 56  )	# ⠶ " [QUOTATION MARK]
+char	\x23	(  3456  )	# ⠼ # [NUMBER SIGN]
+char	\x24	(12 4 6 8)	# ⢫ $ [DOLLAR SIGN]
+char	\x25	(1  4 6 8)	# ⢩ % [PERCENT SIGN]
+char	\x26	(1234 67 )	# ⡯ & [AMPERSAND]
+char	\x27	(  3   7 )	# ⡄ ' [APOSTROPHE]
+char	\x28	( 23  67 )	# ⡦ ( [LEFT PARENTHESIS]
+char	\x29	(  3 56 8)	# ⢴ ) [RIGHT PARENTHESIS]
+char	\x2A	(  3 5  8)	# ⢔ * [ASTERISK]
+char	\x2B	( 23 5  8)	# ⢖ + [PLUS SIGN]
+char	\x2C	( 2    7 )	# ⡂ , [COMMA]
+char	\x2D	(  3  6  )	# ⠤ - [HYPHEN-MINUS]
+char	\x2E	( 2  56  )	# ⠲ . [FULL STOP]
+char	\x2F	(  34   8)	# ⢌ / [SOLIDUS]
+char	\x3A	( 2  5 7 )	# ⡒ : [COLON]
+char	\x3B	(    5678)	# ⣰ ; [SEMICOLON]
+char	\x3C	( 2 4 6 8)	# ⢪ < [LESS-THAN SIGN]
+char	\x3D	( 23 5678)	# ⣶ = [EQUALS SIGN]
+char	\x3E	(1 3 5  8)	# ⢕ > [GREATER-THAN SIGN]
+char	\x3F	( 23  678)	# ⣦ ? [QUESTION MARK]
+char	\x40	(   4  7 )	# ⡈ @ [COMMERCIAL AT]
+char	\x5B	(123 567 )	# ⡷ [ [LEFT SQUARE BRACKET]
+char	\x5C	(  34  7 )	# ⡌ \ [REVERSE SOLIDUS]
+char	\x5D	( 23456 8)	# ⢾ ] [RIGHT SQUARE BRACKET]
+char	\x5E	( 234 6 8)	# ⢮ ^ [CIRCUMFLEX ACCENT]
+char	\x5F	(   4567 )	# ⡸ _ [LOW LINE]
+char	\x60	(     6 8)	# ⢠ ` [GRAVE ACCENT]
+char	\x7B	( 23 567 )	# ⡶ { [LEFT CURLY BRACKET]
+char	\x7C	(12  56 8)	# ⢳ | [VERTICAL LINE]
+char	\x7D	( 23 56 8)	# ⢶ } [RIGHT CURLY BRACKET]
+char	\x7E	(  345  8)	# ⢜ ~ [TILDE]
+
+char	\xA2	(12 4 67 )	# ⡫ ¢ [CENT SIGN]
+char	\xA7	( 234   8)	# ⢎ § [SECTION SIGN]
+char	\xA9	(1234 6 8)	# ⢯ © [COPYRIGHT SIGN]
+char	\xAB	(1234567 )	# ⡿ « [LEFT-POINTING DOUBLE ANGLE QUOTATION MARK]
+char	\xAE	(123 5  8)	# ⢗ ® [REGISTERED SIGN]
+char	\xB0	(12345  8)	# ⢟ ° [DEGREE SIGN]
+char	\xB5	(1 34   8)	# ⢍ µ [MICRO SIGN]
+char	\xB6	(1234   8)	# ⢏ ¶ [PILCROW SIGN]
+char	\xBB	(123456 8)	# ⢿ » [RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK]
+glyph	\xBF	( 23  678)	# ⣦ ¿ [INVERTED QUESTION MARK]
+char	\xD7	( 23  6 8)	# ⢦ × [MULTIPLICATION SIGN]
+char	\xF7	( 2  56 8)	# ⢲ ÷ [DIVISION SIGN]
+
+char	\u060C	(    5 7 )	# ⡐ ، [ARABIC COMMA]
+char	\u061B	(    567 )	# ⡰ ؛ [ARABIC SEMICOLON]
+char	\u061F	( 23  6  )	# ⠦ ؟ [ARABIC QUESTION MARK]
+char	\u0621	(  3     )	# ⠄ ء [ARABIC LETTER HAMZA]
+char	\u0622	(  345   )	# ⠜ آ [ARABIC LETTER ALEF WITH MADDA ABOVE]
+char	\u0623	(  34    )	# ⠌ أ [ARABIC LETTER ALEF WITH HAMZA ABOVE]
+char	\u0624	(12  56  )	# ⠳ ؤ [ARABIC LETTER WAW WITH HAMZA ABOVE]
+char	\u0625	(   4 6  )	# ⠨ إ [ARABIC LETTER ALEF WITH HAMZA BELOW]
+char	\u0626	(1 3456  )	# ⠽ ئ [ARABIC LETTER YEH WITH HAMZA ABOVE]
+char	\u0627	(1       )	# ⠁ ا [ARABIC LETTER ALEF]
+char	\u0628	(12      )	# ⠃ ب [ARABIC LETTER BEH]
+char	\u0629	(1    6  )	# ⠡ ة [ARABIC LETTER TEH MARBUTA]
+char	\u062A	( 2345   )	# ⠞ ت [ARABIC LETTER TEH]
+char	\u062B	(1  456  )	# ⠹ ث [ARABIC LETTER THEH]
+char	\u062C	( 2 45   )	# ⠚ ج [ARABIC LETTER JEEM]
+char	\u062D	(1   56  )	# ⠱ ح [ARABIC LETTER HAH]
+char	\u062E	(1 34 6  )	# ⠭ خ [ARABIC LETTER KHAH]
+char	\u062F	(1  45   )	# ⠙ د [ARABIC LETTER DAL]
+char	\u0630	( 234 6  )	# ⠮ ذ [ARABIC LETTER THAL]
+char	\u0631	(123 5   )	# ⠗ ر [ARABIC LETTER REH]
+char	\u0632	(1 3 56  )	# ⠵ ز [ARABIC LETTER ZAIN]
+char	\u0633	( 234    )	# ⠎ س [ARABIC LETTER SEEN]
+char	\u0634	(1  4 6  )	# ⠩ ش [ARABIC LETTER SHEEN]
+char	\u0635	(1234 6  )	# ⠯ ص [ARABIC LETTER SAD]
+char	\u0636	(12 4 6  )	# ⠫ ض [ARABIC LETTER DAD]
+char	\u0637	( 23456  )	# ⠾ ط [ARABIC LETTER TAH]
+char	\u0638	(123456  )	# ⠿ ظ [ARABIC LETTER ZAH]
+char	\u0639	(123 56  )	# ⠷ ع [ARABIC LETTER AIN]
+char	\u063A	(12   6  )	# ⠣ غ [ARABIC LETTER GHAIN]
+char	\u0641	(12 4    )	# ⠋ ف [ARABIC LETTER FEH]
+char	\u0642	(12345   )	# ⠟ ق [ARABIC LETTER QAF]
+char	\u0643	(1 3     )	# ⠅ ك [ARABIC LETTER KAF]
+char	\u0644	(123     )	# ⠇ ل [ARABIC LETTER LAM]
+char	\u0645	(1 34    )	# ⠍ م [ARABIC LETTER MEEM]
+char	\u0646	(1 345   )	# ⠝ ن [ARABIC LETTER NOON]
+char	\u0647	(12  5   )	# ⠓ ه [ARABIC LETTER HEH]
+char	\u0648	( 2 456  )	# ⠺ و [ARABIC LETTER WAW]
+char	\u0649	(1 3 5   )	# ⠕ ى [ARABIC LETTER ALEF MAKSURA]
+char	\u064A	( 2 4    )	# ⠊ ي [ARABIC LETTER YEH]
+char	\u064B	( 23     )	# ⠆ ً [ARABIC FATHATAN]
+char	\u064C	( 2   6  )	# ⠢ ٌ [ARABIC DAMMATAN]
+char	\u064D	(  3 5   )	# ⠔ ٍ [ARABIC KASRATAN]
+char	\u064E	( 2      )	# ⠂ َ [ARABIC FATHA]
+char	\u064F	(1 3  6  )	# ⠥ ُ [ARABIC DAMMA]
+char	\u0650	(1   5   )	# ⠑ ِ [ARABIC KASRA]
+char	\u0651	(     6  )	# ⠠ ّ [ARABIC SHADDA]
+char	\u0652	( 2  5   )	# ⠒ ْ [ARABIC SUKUN]
+char	\u067E	(1234    )	# ⠏ پ [ARABIC LETTER PEH]
+char	\u0686	(1  4    )	# ⠉ چ [ARABIC LETTER TCHEH]
+glyph	\u0698	(1 3 56  )	# ⠵ ژ [ARABIC LETTER JEH]
+char	\u06A4	(123  6 8)	# ⢧ ڤ [ARABIC LETTER VEH]
+char	\u06AF	(12 45   )	# ⠛ گ [ARABIC LETTER GAF]
+glyph	\u06D4	( 2  56  )	# ⠲ ۔ [ARABIC FULL STOP]
+char	\u2026	( 2  5678)	# ⣲ … [HORIZONTAL ELLIPSIS]
+char	\u2212	(  3  6 8)	# ⢤ − [MINUS SIGN]
+char	\uFEFC	(123  6  )	# ⠧ ﻼ [ARABIC LIGATURE LAM WITH ALEF FINAL FORM]
+
+# The English letters must be defined after the Arabic ones so that
+# typing on a braille keyboard will yield the Arabic ones.
+include ltr-latin.tti
+
+# The English digits are their corresponding letters with dot 8 added.
+include num-dot8.tti
+alias	\u0660	0	# ٠ [ARABIC-INDIC DIGIT ZERO]
+alias	\u0661	1	# ١ [ARABIC-INDIC DIGIT ONE]
+alias	\u0662	2	# ٢ [ARABIC-INDIC DIGIT TWO]
+alias	\u0663	3	# ٣ [ARABIC-INDIC DIGIT THREE]
+alias	\u0664	4	# ٤ [ARABIC-INDIC DIGIT FOUR]
+alias	\u0665	5	# ٥ [ARABIC-INDIC DIGIT FIVE]
+alias	\u0666	6	# ٦ [ARABIC-INDIC DIGIT SIX]
+alias	\u0667	7	# ٧ [ARABIC-INDIC DIGIT SEVEN]
+alias	\u0668	8	# ٨ [ARABIC-INDIC DIGIT EIGHT]
+alias	\u0669	9	# ٩ [ARABIC-INDIC DIGIT NINE]
+
+alias	\xAD	-	# ­ [SOFT HYPHEN]
+alias	\u2010	-	# ‐ [HYPHEN]
+alias	\u2011	-	# ‑ [NON-BREAKING HYPHEN]
+
+alias	\u2018	"	# ‘ [LEFT SINGLE QUOTATION MARK]
+alias	\u2019	"	# ’ [RIGHT SINGLE QUOTATION MARK]
+alias	\u201C	"	# “ [LEFT DOUBLE QUOTATION MARK]
+alias	\u201D	"	# ” [RIGHT DOUBLE QUOTATION MARK]
+alias	\u201E	"	# „ [DOUBLE LOW-9 QUOTATION MARK]
+alias	\u201F	"	# ‟ [DOUBLE HIGH-REVERSED-9 QUOTATION MARK]
+
+# English letters can be typed by adding both dots 7 and 8.
+input	a	(1     78)
+input	b	(12    78)
+input	c	(1  4  78)
+input	d	(1  45 78)
+input	e	(1   5 78)
+input	f	(12 4  78)
+input	g	(12 45 78)
+input	h	(12  5 78)
+input	i	( 2 4  78)
+input	j	( 2 45 78)
+input	k	(1 3   78)
+input	l	(123   78)
+input	m	(1 34  78)
+input	n	(1 345 78)
+input	o	(1 3 5 78)
+input	p	(1234  78)
+input	q	(12345 78)
+input	r	(123 5 78)
+input	s	( 234  78)
+input	t	( 2345 78)
+input	u	(1 3  678)
+input	v	(123  678)
+input	w	( 2 45678)
+input	x	(1 34 678)
+input	y	(1 345678)
+input	z	(1 3 5678)
+
+include common.tti

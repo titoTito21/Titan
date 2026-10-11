@@ -592,7 +592,10 @@ class TheSharedModulesFindWhatTheyImport(unittest.TestCase):
 
     def test_the_two_shims_answer(self):
         from titan_access.portable import elements, configSpec
-        self.assertEqual(elements.sequence([('a', 0), ('b', -4)]), ['a, b'])
+        # Separate parts, said with the reader's pause - never "a, b".
+        made = elements.sequence([('a', 0), ('b', -4)])
+        self.assertEqual(made, ['a', 'b'])
+        self.assertEqual([seg[1] for seg in made.segments], [0, -4])
         self.assertFalse(elements.can_pitch())
         self.assertIn('windowsSemantics', configSpec.read())
         self.assertEqual(elements._states_of(

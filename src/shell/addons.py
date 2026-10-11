@@ -664,6 +664,25 @@ def add_to_menu(menu, entries, bind_to=None, separator=True):
     binder = bind_to if bind_to is not None else menu
     added = 0
     for entry in entries:
+        children = entry.get('children')
+        if children is not None:
+            # A branch is a real submenu: a reader says "submenu" and
+            # counts it, and Right opens it, with none of that written here.
+            # An empty branch is left out rather than offered as a dead end.
+            submenu = wx.Menu()
+            for child in children:
+                if isinstance(child, dict):
+                    child.setdefault('addon', entry.get('addon'))
+            if add_to_menu(submenu, [child for child in children
+                                     if isinstance(child, dict)],
+                           bind_to=binder, separator=False):
+                menu.AppendSubMenu(submenu, str(entry.get('label', '')))
+                added += 1
+            else:
+                submenu.Destroy()
+            continue
+        if not callable(entry.get('action')):
+            continue
         item = menu.Append(wx.ID_ANY, str(entry.get('label', '')))
         action = entry.get('action')
         name = f"{entry.get('addon')}.{entry.get('id')}"

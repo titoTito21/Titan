@@ -192,6 +192,7 @@ class Supervisor(object):
             engine_module.TitanAccessEngine.instance = None
         self.stop()
         fresh = engine_module.get_engine()
+        fresh.is_restart = True                      # no welcome window
         fresh.start()
         try:
             from titan_access.localization import L

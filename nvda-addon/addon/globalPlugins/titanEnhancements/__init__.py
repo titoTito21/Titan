@@ -39,6 +39,7 @@ from . import dialog_kind
 from . import layers
 from . import shared      # noqa: F401
 from . import windowKind
+from . import tceSleep
 from . import dialogs
 from . import earcons
 from . import focus
@@ -229,6 +230,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             except Exception:                        # noqa: BLE001
                 pass
             link.start()
+            # Inside TCE only Titan Access speaks, when it reads TCE alone
+            # ("Mute outside TCE"): NVDA sleeps in those processes.
+            try:
+                tceSleep.start()
+            except Exception:                        # noqa: BLE001
+                pass
             # The two things a sighted person gets without looking at
             # anything: the hourglass, and a window whose taskbar button is
             # flashing. Both are cheap and both stand down with a reason
@@ -271,6 +278,10 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         would outlive the add-on that did it.
         """
         self._watching.set()
+        try:
+            tceSleep.stop()
+        except Exception:                            # noqa: BLE001
+            pass
         try:
             if getattr(self, '_shortcut_decider', False):
                 import inputCore
@@ -436,6 +447,12 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         cursor, braille, the object cache - still happens: the report is
         made with speech muted rather than skipped.
         """
+        # **TCE read by Titan Access alone** (`tceSleep`): the first event
+        # of a TCE window that appeared between two polls puts its process
+        # to sleep and goes no further, so NVDA does not read it once
+        # before falling silent.
+        if tceSleep.sleep_now(obj):
+            return
         self._keep_keys_right()
         # **The window a walked list holds the keyboard with says
         # nothing.** The palette, a message and the virtual window each
@@ -576,6 +593,8 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         anything at all. Asking either per control is what made the region
         layer announce "dialog" in front of every button.
         """
+        if tceSleep.sleep_now(obj):
+            return
         if hostWindow.is_host_object(obj):
             # A walked list's own window in front is not somewhere the
             # user has arrived (see `event_gainFocus`).

@@ -57,6 +57,9 @@ from src.shell.a11y import (SOUND_NAVIGATE, edge_cue, name_control,
                             shell_setting, shell_sound)
 from src.titan_core.translation import _
 
+#: Marks the add-ons' entries inside a `_popup` list.
+_ADDON_ENTRIES = object()
+
 try:
     from src.accessibility.messages import announce_shell_location
 except Exception:                                        # pragma: no cover
@@ -1905,16 +1908,20 @@ class ExplorerFrame(wx.Frame):
                                        self, where, selection)
         if not entries:
             return []
-        popup = [(None, None)]
-        for entry in entries:
-            popup.append((str(entry.get('label', '')), entry.get('action')))
-        return popup
+        # Handed over as they are: `_popup` puts them on the menu through
+        # `shell_addons.add_to_menu`, which is what knows a branch
+        # (`children`) is a submenu and a broken action is not wx's problem.
+        return [(None, None), (_ADDON_ENTRIES, entries)]
 
     def _popup(self, entries):
         menu = wx.Menu()
         for label, handler in entries:
             if label is None:
                 menu.AppendSeparator()
+                continue
+            if label is _ADDON_ENTRIES:
+                shell_addons.add_to_menu(menu, handler, bind_to=self,
+                                         separator=False)
                 continue
             item = menu.Append(wx.ID_ANY, label)
             self.Bind(wx.EVT_MENU, lambda event, call=handler: call(), item)

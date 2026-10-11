@@ -566,17 +566,55 @@ def unload():
         modules = list(_state['app_modules'].values())
         _state['app_modules'] = {}
         synth, _state['synth'] = _state['synth'], None
+        running = list(_state.get('running', {}).values())
+        _state['running'] = __import__('collections').OrderedDict()
         _state['loaded'] = False
     for one in plugins + [m for m in modules if m is not None]:
         try:
             one.terminate()
         except BaseException:                        # noqa: BLE001
             pass
-    if synth is not None:
+    seen = set()
+    for one in ([synth] if synth is not None else []) + running:
+        if id(one) in seen:
+            continue
+        seen.add(id(one))
         try:
-            synth.terminate()
+            one.terminate()
         except BaseException:                        # noqa: BLE001
             pass
+    _cancel_addon_timers()
+
+
+def _cancel_addon_timers():
+    """Every `threading.Timer` an add-on started and did not cancel in its
+    `terminate` - stopped. Measured: two `SignedWebUpdater._automaticCheck`
+    timers (a day long, an add-on's own update check) were still waiting
+    after the reader had been switched off. In NVDA they die with NVDA;
+    here they would live as long as Titan does. Only a timer whose
+    function's code is inside the add-ons folder is touched."""
+    try:
+        root = os.path.normcase(os.path.abspath(folder()))
+    except Exception:                                # noqa: BLE001
+        return 0
+    cancelled = 0
+    for thread in threading.enumerate():
+        if not isinstance(thread, threading.Timer):
+            continue
+        function = getattr(thread, 'function', None)
+        code = getattr(getattr(function, '__func__', function), '__code__', None)
+        where = getattr(code, 'co_filename', '') or ''
+        try:
+            inside = os.path.normcase(os.path.abspath(where)).startswith(root)
+        except Exception:                            # noqa: BLE001
+            inside = False
+        if inside:
+            try:
+                thread.cancel()
+                cancelled += 1
+            except Exception:                        # noqa: BLE001
+                pass
+    return cancelled
 
 
 def reload():
@@ -788,11 +826,90 @@ def synthesizers():
     return list(found)
 
 
+#: One at a time is made: two threads asking for the same synthesizer at
+#: the same moment (the speech pump and the voice list, measured in a
+#: user's log: two "Using RHVoice" in one second) made TWO instances, and
+#: the one that lost was terminated under whoever held it.
+_CREATING = threading.RLock()
+
+#: How many synthesizers are kept running at once. Asking the voices of
+#: another synthesizer used to TERMINATE the one the reader speaks with,
+#: and the next word made it again - RHVoice was started nineteen times in
+#: one session. The reader's own and the one being looked at stay.
+KEEP_RUNNING = 3
+
+
 def synth_instance(name):
     """The running instance of one synthesizer, started on first use."""
+    from collections import OrderedDict
     with _LOCK:
-        if _state['synth'] is not None and _state['synth_name'] == name:
-            return _state['synth']
+        running = _state.setdefault('running', OrderedDict())
+        if name in running:
+            running.move_to_end(name)
+            _state['synth'], _state['synth_name'] = running[name], name
+            return running[name]
+    with _CREATING:
+        with _LOCK:
+            running = _state['running']
+            if name in running:
+                running.move_to_end(name)
+                return running[name]
+        instance, real_name = _make_synth(name)
+        from .shims import synthDriverHandler
+        retired = []
+        with _LOCK:
+            running = _state['running']
+            running[name] = instance
+            if real_name and real_name != name:
+                running[real_name] = instance
+            _state['synth'] = instance
+            _state['synth_name'] = name
+            while len(set(map(id, running.values()))) > KEEP_RUNNING:
+                old_name, old = running.popitem(last=False)
+                if old is not instance and \
+                        all(old is not kept for kept in running.values()):
+                    retired.append(old)
+        synthDriverHandler._current[0] = instance
+    for old in retired:
+        try:
+            old.terminate()
+        except BaseException:                        # noqa: BLE001
+            pass
+    return instance
+
+
+def retire_synth(name):
+    """Stop one running synthesizer and forget it, so the next word makes
+    it again - what is done with a synthesizer that has stopped answering
+    (`external._stalled`)."""
+    with _LOCK:
+        running = _state.get('running') or {}
+        found = running.get(name)
+        if found is None:
+            return False
+        for key in [key for key, one in running.items() if one is found]:
+            del running[key]
+        if _state['synth'] is found:
+            _state['synth'], _state['synth_name'] = None, ''
+    try:
+        from . import external
+        external._warmed.discard('nvda:%s' % name)
+    except Exception:                                # noqa: BLE001
+        pass
+
+    def end():
+        try:
+            found.terminate()
+        except BaseException:                        # noqa: BLE001
+            pass
+    # Terminating a wedged synthesizer may itself hang: never on the
+    # reader's thread.
+    threading.Thread(target=end, name='TitanAccessRetireSynth',
+                     daemon=True).start()
+    return True
+
+
+def _make_synth(name):
     for one in synthesizers():
         if one['name'] == name or one['module'] == name:
             module, why = _import('synthDrivers', one['module'])
@@ -813,18 +930,7 @@ def synth_instance(name):
                 external._warmed.discard('nvda:%s' % one['name'])
             except Exception:                        # noqa: BLE001
                 pass
-            from .shims import synthDriverHandler
-            with _LOCK:
-                previous = _state['synth']
-                _state['synth'] = instance
-                _state['synth_name'] = name
-            synthDriverHandler._current[0] = instance
-            if previous is not None:
-                try:
-                    previous.terminate()
-                except BaseException:                # noqa: BLE001
-                    pass
-            return instance
+            return instance, one['name']
     raise RuntimeError('there is no synthesizer called %s' % name)
 
 

@@ -63,8 +63,16 @@ def drained():
 QUIET = 300
 
 #: What is kept of the silence cut at either end, so a word is not
-#: clipped on its first or last sample.
-KEEP_MS = 10
+#: clipped on its first or last sample. A soft consonant (s, f, h) starts
+#: and ends below `QUIET`, and ten milliseconds of margin was heard as the
+#: word being cut - RHVoice's "przycięcia".
+KEEP_MS = 25
+
+#: How long the playing may hold at an index waiting for its callback
+#: (`WavePlayer._open`). The callback is the synthesizer's own and quick;
+#: past this the audio goes on, so a callback that hangs costs a moment
+#: and never the voice.
+HOLD_AT_MARK_S = 0.15
 
 #: At most this much is cut in front of an utterance. A voice set so
 #: quiet that its speech is below `QUIET` would otherwise be cut away
@@ -101,6 +109,11 @@ def _quiet_tail(data, frame):
 _mute = [0]
 _trimming = [True]
 
+#: A pause owed in front of the next utterance: ``(ms, since)``. The
+#: silence put in front of its first sound is what is left of ``ms`` after
+#: the time the synthesizer itself took to begin (`begin_utterance`).
+_lead = [None]
+
 
 class muted(object):
     """While inside, nothing fed reaches a sound device (the callbacks
@@ -117,13 +130,20 @@ class muted(object):
         return False
 
 
-def begin_utterance(trim=True):
+def begin_utterance(trim=True, pause_ms=0):
     """A new utterance is about to be fed: each player cuts the silence
     in front of its first sound (unless ``trim`` is False - a voice turned
-    so far down that its speech could be taken for silence)."""
+    so far down that its speech could be taken for silence).
+
+    ``pause_ms``: this utterance follows another after that long a pause
+    (the next part of an announcement said on its own). Whatever of it the
+    synthesizer has not already spent getting started is put in front of
+    its first sound - so the pause is the pause, however slow or quick the
+    synthesizer is to begin."""
     with _LOCK:
         players = list(_players)
         _trimming[0] = bool(trim)
+        _lead[0] = (int(pause_ms), time.time()) if pause_ms else None
     for player in players:
         player._trim_head = bool(trim)
         player._head_cut = 0
@@ -197,6 +217,7 @@ class WavePlayer(object):
         self._closed = False
         self._trim_head = False
         self._head_cut = 0
+        self._holding = 0.0           # when the playing stopped at a mark
         with _LOCK:
             _players.append(self)
 
@@ -215,22 +236,41 @@ class WavePlayer(object):
         def callback(outdata, frames, timing, status):
             wanted = frames * frame
             with self._lock:
-                if self._paused:
+                holding = self._holding and \
+                    time.time() - self._holding < HOLD_AT_MARK_S
+                if self._paused or holding:
                     chunk = b''
                 else:
-                    chunk = bytes(self._buffer[:wanted])
+                    self._holding = 0.0
+                    # **The playing stops AT an index**, not after the block
+                    # that contains it. A synthesizer that learns where its
+                    # audio has got to from these callbacks (RHVoice) puts
+                    # the pause between two parts from inside one: handed a
+                    # whole block, the device had already started the next
+                    # part when the silence went in, and the pause was heard
+                    # as the next word cut in two. The rest of the block is
+                    # silence, and the playing holds until the callbacks
+                    # have run (`_release`).
+                    limit = wanted
+                    if self._marks:
+                        ahead = self._marks[0][0] - self._consumed
+                        if 0 <= ahead < limit:
+                            limit = ahead - ahead % frame
+                    chunk = bytes(self._buffer[:limit])
                     del self._buffer[:len(chunk)]
                     self._consumed += len(chunk)
                 due = [mark for mark in self._marks
                        if mark[0] <= self._consumed]
                 self._marks = [mark for mark in self._marks
                                if mark[0] > self._consumed]
+                if due:
+                    self._holding = time.time()
                 self._lock.notify_all()
             outdata[:len(chunk)] = chunk
             if len(chunk) < wanted:
                 outdata[len(chunk):] = b'\x00' * (wanted - len(chunk))
             if due:
-                threading.Thread(target=_all_safely,
+                threading.Thread(target=self._run_marks,
                                  args=([done for _end, done in due],),
                                  daemon=True).start()
 
@@ -249,6 +289,14 @@ class WavePlayer(object):
             return True
         self._stream = None
         return False
+
+    def _run_marks(self, callbacks):
+        try:
+            _all_safely(callbacks)
+        finally:
+            with self._lock:
+                self._holding = 0.0
+                self._lock.notify_all()
 
     # -- NVDA's interface ---------------------------------------------- #
     def feed(self, data, size=None, onDone=None):
@@ -278,6 +326,20 @@ class WavePlayer(object):
                     if cut < room else 0
                 data = bytes(data[max(0, cut - keep):])
                 self._trim_head = False
+        if data:
+            with _LOCK:
+                lead, _lead[0] = _lead[0], None
+            if lead is not None:
+                frame = max(1, self.channels * self.bitsPerSample // 8)
+                # The margin kept at the end of the last part and at the
+                # start of this one are part of the pause already.
+                owed = lead[0] - (time.time() - lead[1]) * 1000.0 - \
+                    2 * KEEP_MS
+                count = int(self.samplesPerSec * max(0.0, owed) / 1000) \
+                    * frame
+                if count > 0:
+                    data = (b'\x80' if self.bitsPerSample == 8 else
+                            b'\x00') * count + bytes(data)
         with self._lock:
             if data:
                 self._buffer.extend(data)
@@ -339,7 +401,11 @@ class WavePlayer(object):
             if self.bitsPerSample == 16 and self._buffer and _trimming[0]:
                 cut = min(_quiet_head(self._buffer, frame), int(
                     self.samplesPerSec * MAX_HEAD_MS / 1000) * frame)
-                if cut and cut < len(self._buffer):
+                # The margin a soft first consonant needs, as at the head
+                # of an utterance - cut to the first loud sample, the next
+                # part began mid-consonant.
+                cut -= int(self.samplesPerSec * KEEP_MS / 1000) * frame
+                if cut > 0 and cut < len(self._buffer):
                     del self._buffer[:cut]
                     self._consumed += cut
             self._buffer[0:0] = silence
@@ -349,7 +415,16 @@ class WavePlayer(object):
                 self._consumed = self._fed
 
     def idle(self):
-        """Block until everything fed has been played."""
+        """Block until everything fed has been played.
+
+        A synthesizer calls this once it has fed the whole utterance, so
+        the silence it ended the utterance with is cut first, as at an
+        index reported as the audio is made. RHVoice reports its indexes
+        only as they are PLAYED, so this is the one moment its padding can
+        be cut: left in, every pause between two parts was the pause asked
+        for plus RHVoice's own sentence-final silence (measured on Natan:
+        375 ms for 250)."""
+        self.trim_tail()
         deadline = time.time() + 120
         with self._lock:
             while (self._buffer or self._marks) and not self._closed \
@@ -362,6 +437,7 @@ class WavePlayer(object):
         with self._lock:
             self._buffer.clear()
             self._marks = []
+            self._holding = 0.0
             self._consumed = self._fed
             self._lock.notify_all()
 

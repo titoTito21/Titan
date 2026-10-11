@@ -443,6 +443,40 @@ class SpeechAdapter(object):
             except Exception:
                 pass
 
+    def shutdown(self):
+        """**Off means off**: the reader has been switched off, so nothing
+        of its voice may go on running in Titan's process.
+
+        What is stopped: the queue and the pump thread, and - when the
+        reader had a voice of its own - its PRIVATE engine with everything
+        that engine started: its SAPI worker (and the 32-bit cscript bridge
+        behind it) and the Titan TTS bridges (DECtalk, Eloquence, SMP,
+        Festival are each an .exe with a console of its own). Measured
+        before this: four bridge processes, four conhosts, the SAPI worker
+        and the pump were all still running after the reader said it was
+        off.
+
+        The bridges are shut only when nothing else speaks through them:
+        the engine registry is shared, and when Titan's own speech has an
+        engine of its own those processes are Titan's, not the reader's.
+        """
+        self._closed = True
+        try:
+            self.stop()
+        except Exception:                            # noqa: BLE001
+            pass
+        self._wake.set()
+        pump = self._pump_thread
+        if pump is not None and pump.is_alive() and \
+                pump is not threading.current_thread():
+            pump.join(timeout=2.0)
+        self._pump_thread = None
+        if not getattr(self, '_own', False):
+            return
+        engine, self._engine = self._engine, None
+        self._mode = self._MODE_PRINT
+        release_private_engine(engine)
+
     # ------------------------------------------------------------------ #
     # Queue + pump
     # ------------------------------------------------------------------ #
@@ -517,7 +551,7 @@ class SpeechAdapter(object):
         skipped. An interrupting call empties the queue and bumps the
         generation, which this loop notices at once.
         """
-        while True:
+        while not getattr(self, '_closed', False):
             item = self._next_utterance()
             if item is None:
                 self._wake.wait(timeout=30.0)
@@ -544,20 +578,99 @@ class SpeechAdapter(object):
         if self._superseded(item):
             # Interrupted between being taken off the queue and being spoken.
             return
+        # **Parts with voices of their own** are spoken group by group,
+        # each on the synthesizer its class asks for - which may be an
+        # NVDA add-on synthesizer as well as one of Titan's engines.
+        if item.segments and any(
+                profile is not None
+                for profile, _parts in self._groups(item.segments)):
+            self._speak_groups(item)
+            return
+        # **A borrowed voice is resolved against the reader's own
+        # synthesizer first**: a class that names a voice and no
+        # synthesizer means a voice of the one the reader speaks with.
+        # Without that, a class voice under an external reader went to
+        # Titan's engine (or was dropped), and a class voice of an NVDA
+        # add-on synthesizer was a `set_engine('nvda:...')` the engine
+        # refused, so the sample came out in the wrong voice.
+        profile = self._resolve(item.voice) if item.voice else None
+        borrowed_external = _external_profile(profile)
+        if borrowed_external:
+            self._speak_external(borrowed_external, item, profile)
+            return
         external = self._external_synth()
-        if external:
+        if external and not profile:
             self._speak_external(external, item)
             return
         if self._mode != self._MODE_TCE or self._engine is None:
             print(f"[TitanAccess] (speech) {item.plain_text}")
             return
-        eng = self._engine
-        borrowed = self._borrow_voice(item.voice)
+        if not profile:
+            self._render(item, self._engine)
+            return
+        eng = self._voice_engine(profile)
+        borrowed = self._borrow_on(eng, profile)
         try:
             self._render(item, eng)
         finally:
             if borrowed:
-                self._give_voice_back()
+                self._give_voice_back_on(eng)
+
+    def reader_synth(self):
+        """The synthesizer the reader speaks with now, in the spelling
+        `speech_systems` lists it under ('nvda:x', 'spd:module', an engine
+        id), or '' when it cannot be said."""
+        external = self._external_synth()
+        if external:
+            return external
+        engine = self._engine
+        name = str(getattr(engine, "engine", "") or "") if engine else ""
+        if name == "spd":
+            return "spd:%s" % str(getattr(engine, "spd_module", "") or "")
+        return name
+
+    def _resolve(self, profile):
+        """A class's voice profile with its synthesizer filled in: the
+        reader's own where it names none, and speech-dispatcher's
+        ``spd:<module>`` split into the engine and its module."""
+        profile = dict(profile or {})
+        synth = str(profile.get("synth") or "").strip()
+        if not synth:
+            synth = self.reader_synth()
+        if synth.startswith("spd:"):
+            profile.setdefault("spd_module", synth[4:])
+            synth = "spd"
+        if synth:
+            profile["synth"] = synth
+        else:
+            profile.pop("synth", None)
+        return profile
+
+    def _speak_groups(self, item):
+        """The parts of one announcement, each group on its own
+        synthesizer, in order; an interrupt between groups cuts the rest."""
+        import copy
+        own_external = self._external_synth()
+        for profile, parts in self._groups(item.segments):
+            if self._superseded(item):
+                return
+            piece = copy.copy(item)
+            piece.segments = list(parts)
+            resolved = self._resolve(profile) if profile else None
+            target = _external_profile(resolved) if resolved else own_external
+            try:
+                if target:
+                    self._speak_external(target, piece, resolved)
+                elif self._mode == self._MODE_TCE and \
+                        self._engine is not None:
+                    if resolved:
+                        self._render_group(piece, piece.segments, resolved)
+                    else:
+                        self._render(piece, self._engine)
+                else:
+                    print(f"[TitanAccess] (speech) {piece.plain_text}")
+            except Exception as e:                   # noqa: BLE001
+                print(f"[TitanAccess] voice group: {e}")
 
     # ------------------------------------------------------------------ #
     # External synthesis - an NVDA add-on's synthesizer (`nvda_host`)
@@ -569,39 +682,109 @@ class SpeechAdapter(object):
         wanted = str(self._settings.get("Speech", "Synthesizer", "") or "")
         return wanted if wanted.startswith("nvda:") else ""
 
-    def _speak_external(self, synth_id, item):
+    def _speak_external(self, synth_id, item, profile=None):
+        restore = None
         try:
             from .nvda_host import external
+            # The reader's own synthesizer is told its voice before its first
+            # word: speech that starts before the settings are applied (the
+            # start-up announcement) made the instance on its default voice.
+            if synth_id not in external._wanted and \
+                    synth_id == self._external_synth():
+                self._apply_external(synth_id, warm=False)
+            if profile:
+                restore = self._lend_external(synth_id, profile)
             if item.segments:
                 parts = [(seg[0], seg[1] if len(seg) > 1 else 0)
                          for seg in item.segments]
             else:
                 parts = [(item.text, item.pitch)]
             self._mark_speaking(item.plain_text)
-            external.speak_parts(synth_id, parts,
+            stalled_before = external.report().get('stalled', 0)
+            said = external.speak_parts(synth_id, parts,
                                  cancelled=lambda: self._superseded(item),
                                  gap_ms=max(self._SEGMENT_GAP_MS,
                                             int(item.gap_ms or 0))
                                  if item.segments else 0,
                                  paused=lambda: self.paused)
+            if not said and not self._superseded(item) and \
+                    external.report().get('stalled', 0) > stalled_before:
+                # **The words are not lost with the synthesizer.** One that
+                # stopped answering is started again for the next word;
+                # this one is said in Titan's own voice, so the reader is
+                # never silent while that happens.
+                self._say_in_titans_voice(item)
         except Exception as e:
             print(f"[TitanAccess] external synthesis: {e}")
             print(f"[TitanAccess] (speech) {item.plain_text}")
+            self._say_in_titans_voice(item)
+        finally:
+            if restore is not None:
+                restore()
 
-    def _apply_external(self, synth_id):
-        """The reader's voice and levels, on the external synthesizer."""
+    def _say_in_titans_voice(self, item):
+        engine = self._engine
+        if engine is None or self._mode != self._MODE_TCE:
+            return
+        try:
+            self._render(item, engine)
+        except Exception as e:                       # noqa: BLE001
+            print(f"[TitanAccess] fallback voice: {e}")
+
+    def _lend_external(self, synth_id, profile):
+        """Put a borrowed voice and variant on an external synthesizer for
+        one utterance; answers what puts the reader's own back."""
+        from .nvda_host import external
+        voice = str(profile.get("voice") or "")
+        variant = str(profile.get("variant") or "")
+        if voice:
+            external.set_voice(synth_id, voice)
+        if variant:
+            external.set_variant(synth_id, variant)
+        # **The class's rate and volume ride on the reader's own levels**,
+        # as they do on Titan's engines (`_borrow_voice`); the pitch is
+        # per part and goes with the parts.
+        st = self._settings
+        try:
+            rate = st.get_int("Speech", "Rate", 0) + int(
+                profile.get("rate") or 0)
+            volume = st.get_int("Speech", "Volume", 100) + 5 * int(
+                profile.get("volume") or 0)
+            external.set_levels(
+                synth_id, rate=50 + max(-10, min(10, rate)) * 5,
+                pitch=50 + int(st.get_int("Speech", "Pitch", 0)) * 5,
+                volume=max(0, min(100, volume)))
+        except Exception as e:                       # noqa: BLE001
+            print(f"[TitanAccess] class levels: {e}")
+        own = self._external_synth()
+
+        def back():
+            if own == synth_id:
+                self._apply_external(synth_id, warm=False)
+        return back
+
+    def _apply_external(self, synth_id, warm=True):
+        """The reader's voice, variant and levels, on the external
+        synthesizer."""
         st = self._settings
         try:
             from .nvda_host import external
             voice = str(st.get("Speech", "Voice", "") or "")
             if voice:
                 external.set_voice(synth_id, voice)
+            # **The variant after the voice**: it belongs to the voice
+            # (Cerence's compact / embedded-pro / embedded-high), and a
+            # voice put on afterwards would load its own default over it.
+            variant = str(st.get("Speech", "Variant", "") or "")
+            if variant:
+                external.set_variant(synth_id, variant)
             rate = st.get_int("Speech", "Rate", 0)
             pitch = st.get_int("Speech", "Pitch", 0)
             volume = st.get_int("Speech", "Volume", 100)
             external.set_levels(synth_id, rate=50 + int(rate) * 5,
                                 pitch=50 + int(pitch) * 5, volume=volume)
-            external.warm(synth_id)
+            if warm:
+                external.warm(synth_id)
         except Exception as e:
             print(f"[TitanAccess] external synthesis settings: {e}")
 
@@ -616,12 +799,25 @@ class SpeechAdapter(object):
         changed = False
         try:
             synth = str(profile.get("synth") or "").strip()
+            if synth.startswith("spd:"):
+                profile = dict(profile)
+                profile.setdefault("spd_module", synth[4:])
+                synth = "spd"
+            # **Only switched when it is another engine**: switching an
+            # engine to itself reloads it, and a class that names the
+            # synthesizer the reader already speaks with wants its voice,
+            # not a reload per part.
             if synth and hasattr(engine, "set_engine"):
-                engine.set_engine(_SYNTH_TO_ENGINE.get(synth.lower(), synth))
-                changed = True
+                target = _SYNTH_TO_ENGINE.get(synth.lower(), synth)
+                if str(getattr(engine, "engine", "") or "").lower() != \
+                        target.lower():
+                    engine.set_engine(target)
+                    changed = True
             # speech-dispatcher's synthesizer is a MODULE of one engine;
             # the speech system dialog's Test hands it over this way.
-            if "spd_module" in profile and hasattr(engine, "set_spd_module"):
+            if "spd_module" in profile and hasattr(engine, "set_spd_module") \
+                    and str(getattr(engine, "spd_module", "") or "") != \
+                    str(profile.get("spd_module") or ""):
                 engine.set_spd_module(str(profile.get("spd_module") or ""))
                 changed = True
             voice = profile.get("voice")
@@ -1104,6 +1300,103 @@ def get_speech(settings):
 _current = None
 
 
+def _shut_sapi_worker(engine):
+    worker = getattr(engine, '_sapi_worker', None)
+    if worker is None:
+        return
+    try:
+        engine._sapi_worker = None
+        worker._cmd_queue.put(None)
+        thread = getattr(worker, '_thread', None)
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2.0)
+    except Exception:                                # noqa: BLE001
+        pass
+    process = getattr(worker, '_subprocess_process', None)
+    if process is not None:
+        try:
+            if process.poll() is None:
+                process.kill()
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def _titan_speaks_on_its_own(private):
+    """Whether Titan's own speech has an engine that is not the reader's -
+    in which case the shared Titan TTS bridges are Titan's to keep."""
+    try:
+        from src.titan_core import stereo_speech
+        shared = getattr(stereo_speech, '_stereo_speech_instance', None)
+        if shared is not None and shared is not private:
+            return True
+    except Exception:                                # noqa: BLE001
+        pass
+    try:
+        from src.titan_core import tce_speech
+        for name in ('_speaker', '_reader_speaker'):
+            other = getattr(tce_speech, name, None)
+            if other is not None and other is not private and \
+                    type(other).__name__ == 'StereoSpeech':
+                return True
+    except Exception:                                # noqa: BLE001
+        pass
+    return False
+
+
+def _shut_bridges():
+    """Every Titan TTS engine of the shared registry shut down, and the
+    registry forgotten so the next start loads it again."""
+    try:
+        from src.titan_core import stereo_speech
+        registry = getattr(stereo_speech, '_engine_registry', None)
+    except Exception:                                # noqa: BLE001
+        return 0
+    if registry is None:
+        return 0
+    closed = 0
+    for engine in list(getattr(registry, '_engines', {}).values()):
+        shutdown = getattr(engine, 'shutdown', None)
+        if callable(shutdown):
+            try:
+                shutdown()
+                closed += 1
+            except Exception:                        # noqa: BLE001
+                pass
+    try:
+        stereo_speech._engine_registry = None
+        from src.tts import engine_registry
+        if getattr(engine_registry, '_registry', None) is registry:
+            engine_registry._registry = None
+    except Exception:                                # noqa: BLE001
+        pass
+    return closed
+
+
+def release_private_engine(engine):
+    """The reader's private ``StereoSpeech`` taken down (see
+    :meth:`SpeechAdapter.shutdown`). Written here rather than in
+    ``tce_speech`` because a compiled Titan has that module frozen into
+    Titan.exe and this component must not need a rebuild."""
+    try:
+        from src.titan_core import tce_speech
+        if getattr(tce_speech, '_private_reader_speaker', None) is engine:
+            tce_speech._private_reader_speaker = None
+    except Exception:                                # noqa: BLE001
+        pass
+    if engine is None:
+        return
+    try:
+        engine.stop()
+    except Exception:                                # noqa: BLE001
+        pass
+    _shut_sapi_worker(engine)
+    if not _titan_speaks_on_its_own(engine):
+        closed = _shut_bridges()
+        if closed:
+            print(f"[TitanAccess] {closed} Titan TTS bridge(s) shut down "
+                  "with the reader")
+
+
 def use(adapter):
     """Remember the adapter the reader is speaking through."""
     global _current
@@ -1185,15 +1478,26 @@ def speak_in_class(text, tag, interrupt=False):
         from .portable import classes
         profile = dict(classes.voice_of(tag) or {})
         if not classes.may_name_synth(tag):
+            # A class that may not name a synthesizer still has its voice
+            # and variant OF the reader's synthesizer (`_resolve`).
             profile.pop("synth", None)
-            profile.pop("voice", None)
     except Exception:                                # noqa: BLE001
         profile = {}
     return speak(text, interrupt=interrupt,
                  pitch_offset=int(profile.get("pitch") or 0),
                  voice=profile if any(profile.get(k) for k in
-                                      ("synth", "voice", "rate", "volume"))
+                                      ("synth", "voice", "variant", "rate",
+                                       "volume"))
                  else None)
+
+
+def _external_profile(profile):
+    """The external synthesizer a voice profile names, or ''."""
+    try:
+        synth = str((profile or {}).get("synth") or "")
+    except Exception:                                # noqa: BLE001
+        return ""
+    return synth if synth.startswith("nvda:") else ""
 
 
 def speak_with(profile, text, interrupt=True):

@@ -433,6 +433,33 @@ class KeyboardHook:
         """Core routing. Returns True to swallow the key."""
         extended = bool(flags & LLKHF_EXTENDED)
 
+        # ---- 0. A shortcut being set (the walked settings' hotkey field):
+        # the combination is the answer, and reaches nobody else.
+        try:
+            from titan_access import hotkeys
+            taken = hotkeys.capture_key(vk, is_down)
+        except Exception:
+            taken = None
+        if taken is not None:
+            return taken
+
+        # ---- 0b. "Mute outside TCE": outside TCE the keyboard is the
+        # system reader's. Insert, the NumPad, Control silencing speech,
+        # the echo - none of it is Titan Access's there, or NVDA's own
+        # Insert commands would be swallowed by a reader that is keeping
+        # quiet. A reader modifier pressed inside TCE and let go outside
+        # is still taken, so its key-up does not reach a program that
+        # never saw its key-down.
+        if self._outside_tce():
+            if not is_down and self._is_reader_modifier(vk, extended) \
+                    and self._reader_mod:
+                self._reader_mod = False
+                return True
+            self._reader_mod = False
+            self._ctrl = self._alt = self._shift = self._ralt = False
+            self._word = []
+            return False
+
         # ---- 1. Modifier / toggle keys -------------------------------- #
         # The reader modifier (Insert / CapsLock per settings) is tracked here
         # and swallowed so it never reaches applications. When CapsLock is the
@@ -590,6 +617,24 @@ class KeyboardHook:
                     log(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
             return False  # never swallow caret movement
 
+        # ---- 4c. Deleting in an edit field ---------------------------- #
+        # Backspace says what it took away (Control+Backspace the word),
+        # Delete what is now under the caret. The text as it was is taken
+        # HERE, before the application has the key; the key itself is
+        # never swallowed.
+        if (self.is_in_edit_field and not self._alt and not self._reader_mod
+                and key_name in ("backspace", "delete")):
+            typed = "".join(self._word)
+            try:
+                self.engine.on_edit_delete(key_name, self._ctrl, typed)
+            except Exception as e:
+                log(f"[TitanAccess] keyboard_hook: edit delete error: {e}")
+            if key_name == "backspace" and not self._ctrl and self._word:
+                self._word.pop()
+            elif self._ctrl:
+                self._word = []
+            return False
+
         # ---- 5. Character / word echo --------------------------------- #
         # Only echo ordinary typing: no Ctrl/Alt, no reader modifier.
         if not self._ctrl and not self._alt and not self._reader_mod:
@@ -618,6 +663,16 @@ class KeyboardHook:
                 self._command_pressed('+'.join(held + [key_name]))
 
         return False
+
+    def _outside_tce(self):
+        """Whether the window in front is not TCE's while "Mute outside
+        TCE" is on (the engine's answer, cached there for 0.3 s - this is
+        asked for every key)."""
+        try:
+            muted = getattr(self.engine, "_muted_for_foreground", None)
+            return bool(muted()) if callable(muted) else False
+        except Exception:
+            return False
 
     # ==================================================================== #
     # Keys said as keys (Keyboard/SpeakCommandKeys, SpeakModifierKeys)

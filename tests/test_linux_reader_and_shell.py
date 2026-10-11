@@ -203,7 +203,7 @@ class _Roles:
 class _States:
     _order = ['INVALID', 'FOCUSED', 'CHECKABLE', 'CHECKED', 'INDETERMINATE',
               'EXPANDABLE', 'EXPANDED', 'SELECTED', 'ENABLED', 'SENSITIVE',
-              'EDITABLE', 'REQUIRED', 'PRESSED', 'BUSY', 'HAS_POPUP', 'ACTIVE',
+              'EDITABLE', 'MULTI_LINE', 'REQUIRED', 'PRESSED', 'BUSY', 'HAS_POPUP', 'ACTIVE',
               'SHOWING', 'MODAL', 'VISIBLE', 'ICONIFIED', 'FOCUSABLE', 'SELECTABLE']
 
     def __init__(self):

@@ -19,8 +19,11 @@ and the tests drive. Voices are listed WITHOUT switching the reader's
 live engine - listing by `set_engine` on the speaking engine is how a
 reader starts talking in the voice it was merely asked about.
 
+A fourth level, the **variant**, exists where a synthesizer has one:
+Cerence's compact / embedded-pro / embedded-high per voice.
+
 Choosing writes the reader's own Speech settings (``OwnVoice``,
-``Synthesizer``, ``Voice``, ``SpeechDispatcherModule``) and applies them,
+``Synthesizer``, ``Voice``, ``Variant``, ``SpeechDispatcherModule``) and applies them,
 so the choice is the same one the settings page makes - one store, one
 meaning.
 """
@@ -221,6 +224,7 @@ _voice_cache = {}
 
 def forget_voices():
     _voice_cache.clear()
+    _variant_cache.clear()
 
 
 def voices(synth, engine=None, fresh=False):
@@ -262,14 +266,57 @@ def prefetch_voices(synth):
                      daemon=True).start()
 
 
+_variant_cache = {}
+
+
+def variants(synth, voice='', fresh=False):
+    """``[(variant_id, label)]`` of one voice of one synthesizer - the
+    FOURTH level, which only some synthesizers have: Cerence installs a
+    voice as compact, embedded-pro or embedded-high and lets the quality
+    be chosen per voice; eSpeak has its variants. Empty for everything
+    without one, so the level is simply not offered there."""
+    import time
+    synth = str(synth or '')
+    if not synth.startswith('nvda:'):
+        return []
+    key = (synth, str(voice or ''))
+    kept = _variant_cache.get(key)
+    if kept is not None and not fresh and \
+            time.time() - kept[0] < VOICES_KEPT_S:
+        return list(kept[1])
+    try:
+        from .nvda_host import external
+        rows = external.variants(synth, voice or None)
+    except Exception:                                # noqa: BLE001
+        rows = []
+    _variant_cache[key] = (time.time(), list(rows))
+    return rows
+
+
+def cached_variants(synth, voice=''):
+    kept = _variant_cache.get((str(synth or ''), str(voice or '')))
+    return list(kept[1]) if kept is not None else None
+
+
+def current_variant(settings):
+    """The variant the reader is set to, '' for the synthesizer's own."""
+    try:
+        return str(settings.get('Speech', 'Variant', '') or '')
+    except Exception:                                # noqa: BLE001
+        return ''
+
+
 def _voices_now(synth, engine=None):
-    engine = engine if engine is not None else _engine()
+    # An external synthesizer is asked BEFORE Titan's engine is made: making
+    # the private engine loads every Titan TTS engine and its bridges, which
+    # is seconds the first time and nothing an NVDA synthesizer needs.
     if synth.startswith('nvda:'):
         try:
             from .nvda_host import external
             return external.voices(synth)
         except Exception:                            # noqa: BLE001
             return []
+    engine = engine if engine is not None else _engine()
     if not synth or engine is None:
         return []
     raw = []
@@ -328,17 +375,20 @@ def current(settings):
     return system, synth, voice
 
 
-def profile_of(synth, voice):
+def profile_of(synth, voice, variant=''):
     """The voice profile `speech_adapter.speak_with` borrows for a Test."""
     synth = str(synth or '')
     if not synth:
         return {}
     if synth.startswith('spd:'):
         return {'synth': 'spd', 'spd_module': synth[4:], 'voice': voice}
-    return {'synth': synth, 'voice': voice}
+    profile = {'synth': synth, 'voice': voice}
+    if variant:
+        profile['variant'] = str(variant)
+    return profile
 
 
-def settings_for(system, synth, voice):
+def settings_for(system, synth, voice, variant=''):
     """``{(section, key): value}`` - what a choice of speech system,
     synthesizer and voice is in the reader's settings. One place, so the
     dialog, the settings page, the walked settings, a profile and the TPad
@@ -350,9 +400,13 @@ def settings_for(system, synth, voice):
     engine_id, module = synth, ''
     if synth.startswith('spd:'):
         engine_id, module = 'spd', synth[4:]
+    # The variant belongs to the voice: a new voice starts on its own
+    # default ('' - whatever the synthesizer gives it) rather than on a
+    # variant name that may mean nothing to it.
     return {('Speech', 'OwnVoice'): True,
             ('Speech', 'Synthesizer'): engine_id,
             ('Speech', 'Voice'): str(voice or ''),
+            ('Speech', 'Variant'): str(variant or ''),
             ('Speech', 'SpeechDispatcherModule'): module}
 
 
@@ -375,6 +429,18 @@ def step(settings, level, forward=True, engine=None, reader=None):
     the synthesizer). Writes and applies it; answers the words to say, or
     '' when there is nothing to move to."""
     system, synth, voice = current(settings)
+    variant = current_variant(settings)
+    if level == 'variant':
+        if system == SYSTEM_TITAN or not synth:
+            return ''
+        rows = variants(synth, voice)
+        if not rows:
+            return ''
+        keys = [str(key) for key, _label in rows]
+        at = keys.index(variant) if variant in keys else -1
+        at = (at + (1 if forward else -1)) % len(keys)
+        choose(settings, system, synth, voice, reader, variant=keys[at])
+        return rows[at][1]
     if level == 'system':
         rows = systems(engine)
     elif level == 'synth':
@@ -411,13 +477,14 @@ def _set_bool(settings, key, value):
         settings.set('Speech', key, 'true' if value else 'false')
 
 
-def choose(settings, system, synth, voice, engine=None):
+def choose(settings, system, synth, voice, engine=None, variant=''):
     """Write the choice into the reader's Speech settings and apply it.
 
     ``engine`` is the running TitanAccessEngine (its ``apply_settings``
     swaps the reader onto its own engine or back onto Titan's). Answers the
     sentence to say."""
-    for (_section, key), value in settings_for(system, synth, voice).items():
+    for (_section, key), value in settings_for(system, synth, voice,
+                                               variant).items():
         if isinstance(value, bool):
             _set_bool(settings, key, value)
         else:

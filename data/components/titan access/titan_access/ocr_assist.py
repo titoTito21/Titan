@@ -349,17 +349,28 @@ def _screen_rect(shot, rect):
 # --------------------------------------------------------------------------- #
 # Labelling a control the program never named
 # --------------------------------------------------------------------------- #
-def label_for(hwnd, rect, settings=None, max_distance=220):
+def label_for(hwnd, rect, settings=None, max_distance=220,
+              cached_only=False):
     """The text that names the control occupying *rect* (screen pixels).
 
     This is the "make labels" half: a nameless button or edit field is given
     the caption printed on or beside it. Preference order matches how a sighted
     person reads a form: text INSIDE the control, then immediately to its left,
     then immediately above it. Returns '' when nothing plausible is near.
+
+    ``cached_only``: answer from a reading already in hand and never make
+    one. **The focus path must pass it.** A fresh reading is a request to
+    the user's AI provider - seconds, or as long as the network hangs - and
+    it was being made on the reader's own thread while it announced the
+    focus: measured in a user's log, the worker stuck in ``ssl.read`` until
+    the supervisor restarted the whole reader. A fresh reading belongs on a
+    thread of its own (`engine._request_ocr_label`).
     """
     if not rect or len(rect) != 4:
         return ""
     screen = _cached(int(hwnd or 0))
+    if screen is None and cached_only:
+        return ""
     if screen is None:
         screen = read_window(hwnd, settings=settings)
     if screen is None:

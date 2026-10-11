@@ -119,6 +119,13 @@ class GestureManager:
         binding handled the key (so the hook swallows it)."""
         for binding in self._bindings:
             if binding.matches(key_name, ctrl, alt, shift):
+                # Whatever this command opens is put in FRONT, with the
+                # keyboard in it - never behind the program the user is in.
+                try:
+                    from . import foreground
+                    foreground.expect()
+                except Exception:
+                    pass
                 try:
                     binding.handler()
                 except Exception as e:

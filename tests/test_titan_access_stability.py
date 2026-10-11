@@ -350,5 +350,113 @@ class TheSelectionIsReportedAsItChanges(unittest.TestCase):
                       '                                                   self._shift)', hook)
 
 
+class WhatTheReaderOpensIsInFront(unittest.TestCase):
+    """The menu and every window of the reader come to the front: the user
+    asks for one from another program and Windows refuses Raise, so it
+    opened BEHIND what they were in and they had to Alt+Tab to it."""
+
+    def setUp(self):
+        from titan_access import foreground
+        self.fg = foreground
+        self.kept = (foreground._our_windows, foreground.take,
+                     foreground._is_foreground, foreground._IS_WINDOWS,
+                     foreground.TICK)
+        self.windows = [100, 200]
+        self.taken = []
+        self.front = 0
+        foreground._IS_WINDOWS = True
+        foreground.TICK = 0.01
+        foreground._our_windows = lambda: list(self.windows)
+        foreground._is_foreground = lambda hwnd: hwnd == self.front
+
+        def take(hwnd):
+            self.taken.append(hwnd)
+            self.front = hwnd
+            return True
+        foreground.take = take
+
+    def tearDown(self):
+        fg = self.fg
+        (fg._our_windows, fg.take, fg._is_foreground, fg._IS_WINDOWS,
+         fg.TICK) = self.kept
+        with fg._LOCK:
+            fg._state['until'] = 0.0
+        deadline = time.time() + 2
+        while fg._state['thread'] is not None and time.time() < deadline:
+            time.sleep(0.01)
+
+    def _wait(self, condition):
+        deadline = time.time() + 2
+        while not condition() and time.time() < deadline:
+            time.sleep(0.01)
+
+    def test_a_new_window_is_taken_to_the_front(self):
+        self.fg.expect(seconds=1)
+        time.sleep(0.05)
+        self.windows.insert(0, 300)
+        self._wait(lambda: self.taken)
+        self.assertEqual(self.taken, [300])
+
+    def test_a_window_raised_again_is_taken_too(self):
+        self.fg.expect(seconds=1)
+        time.sleep(0.05)
+        self.windows[:] = [200, 100]
+        self._wait(lambda: self.taken)
+        self.assertEqual(self.taken, [200])
+
+    def test_nothing_new_takes_nothing(self):
+        self.fg.expect(seconds=0.2)
+        time.sleep(0.4)
+        self.assertEqual(self.taken, [])
+
+    def test_a_window_after_the_watch_is_left_where_it_is(self):
+        self.fg.expect(seconds=0.1)
+        time.sleep(0.3)
+        self.windows.insert(0, 400)
+        time.sleep(0.1)
+        self.assertEqual(self.taken, [])
+
+    def test_the_reader_s_commands_and_menu_ask_for_it(self):
+        read = lambda name: io.open(os.path.join(
+            COMPONENT, 'titan_access', name), encoding='utf-8').read()
+        self.assertIn('foreground.expect()', read('gestures.py'))
+        menu = read('reader_menu.py')
+        self.assertIn('foreground.take(', menu)
+        self.assertIn('foreground.expect(replace=True)', menu)
+        self.assertIn('foreground.take(', read('speech_system_dialog.py'))
+
+    @unittest.skipUnless(sys.platform.startswith('win'), 'Windows')
+    def test_a_real_window_behind_another_program_comes_forward(self):
+        """Live: a wx frame of this process, shown without activation
+        while the user's window is in front, is taken to the front - and
+        the user's window is given its foreground back at once."""
+        fg = self.fg
+        fg.take, fg._our_windows = self.kept[1], self.kept[0]
+        fg._is_foreground = self.kept[2]
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.GetForegroundWindow.restype = ctypes.c_void_p
+        before = int(user32.GetForegroundWindow() or 0)
+        import wx
+        app = wx.App.Get() or wx.App(False)
+        frame = wx.Frame(None, title='Titan Access foreground probe',
+                         size=(300, 200))
+        try:
+            frame.ShowWithoutActivating()
+            app.Yield(True)
+            mine = int(frame.GetHandle())
+            self.assertIn(mine, fg._our_windows())
+            took = fg.take(mine)
+            now = int(user32.GetForegroundWindow() or 0)
+        finally:
+            frame.Destroy()
+            app.Yield(True)
+            if before:
+                from titan_access.portable import hostWindow
+                hostWindow._take(before)
+        self.assertTrue(took)
+        self.assertEqual(now, mine)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=1)

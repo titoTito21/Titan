@@ -425,14 +425,68 @@ class BrowseModeHandler:
         page = L("browse.webPage")
         self.engine.play(SND_CURSOR)
         self.engine.speak(f"{title}, {page}" if title else page, interrupt=False)
-        # **A page read from its top as it arrives** (`Browse/SayAllOnPageLoad`).
-        if self._browse_setting("SayAllOnPageLoad", False):
-            def _read_it():
-                if self._ensure_document():
+        summary = self._browse_setting("PageSummary", True)
+        read = self._browse_setting("SayAllOnPageLoad", False)
+        if summary or read:
+            def _arrived():
+                if not self._ensure_document():
+                    return
+                # **What is on the page** (`Browse/PageSummary`): "12 links,
+                # 5 headings, 3 form fields" - before anything else, so the
+                # user knows what kind of page it is and which quick
+                # navigation keys will find something.
+                if summary:
+                    text = self.page_summary_text()
+                    if text:
+                        self.engine.speak(text, interrupt=False)
+                # **A page read from its top as it arrives**
+                # (`Browse/SayAllOnPageLoad`).
+                if read:
                     with self._lock:
                         self._index = 0
                     self.say_all()
-            self._dispatch(_read_it)
+            self._dispatch(_arrived)
+
+    #: What the page summary counts, in its order; each a quick-navigation
+    #: type and the plural key of its words.
+    SUMMARY_KINDS = (
+        ("browse.count.links", qn.QuickNavType.LINK),
+        ("browse.count.headings", qn.QuickNavType.HEADING),
+        ("browse.count.formFields", qn.QuickNavType.FORM_FIELD),
+        ("browse.count.landmarks", qn.QuickNavType.LANDMARK),
+        ("browse.count.tables", qn.QuickNavType.TABLE),
+        ("browse.count.lists", qn.QuickNavType.LIST),
+    )
+
+    def page_counts(self):
+        """``[(plural key, count)]`` of the document in hand - the same
+        matching the elements list and quick navigation use, so the numbers
+        agree with what H, K and the rest will find."""
+        nodes = self._nodes()
+        out = []
+        for key, qn_type in self.SUMMARY_KINDS:
+            if qn_type is None:
+                continue
+            count = sum(1 for node in nodes if self._matches(node, qn_type))
+            out.append((key, count))
+        return out
+
+    def page_summary_text(self):
+        """"On the page: 12 links, 5 headings" - kinds with none left out;
+        '' for an empty document."""
+        parts = [loc.plural(key, count) for key, count in self.page_counts()
+                 if count]
+        if not parts:
+            return ""
+        return L("browse.summary", ", ".join(parts))
+
+    def _uwp_setting(self, key, default):
+        settings = getattr(self.engine, "settings", None)
+        try:
+            return bool(settings.get_bool("UWP", key, default)) \
+                if settings is not None else default
+        except Exception:
+            return default
 
     def _browse_setting(self, key, default):
         settings = getattr(self.engine, "settings", None)
@@ -1314,6 +1368,22 @@ class BrowseModeHandler:
         if not self._ensure_document():
             return False
         nodes = self._nodes()
+        if delta in (1, -1):
+            # A virtualised list (XAML ListView: Unigram's chats, the Store)
+            # holds only the rows on the screen: at its last / first row in
+            # the document, the next batch is realised and put in here.
+            try:
+                from titan_access import virtual_lists
+                with self._lock:
+                    here = self._index
+                if self._uwp_setting("VirtualLists", True) and \
+                        virtual_lists.is_list_edge(nodes, here, delta):
+                    added = virtual_lists.extend(nodes, here, delta)
+                    if added and delta < 0:
+                        with self._lock:
+                            self._index += added
+            except Exception as e:                   # noqa: BLE001
+                print(f"[TitanAccess] virtual list: {e}")
         with self._lock:
             new = self._index + delta
         # Past the last entry round to the first, when the walked lists are
@@ -1896,7 +1966,7 @@ class BrowseModeHandler:
         # it - NVDA's behaviour, and the reason a page has no "navigation,
         # group" line standing in front of its navigation.
         landmark = self._landmark_segment(node)
-        if landmark and self._report_wanted("landmark"):
+        if landmark:
             segments.append(landmark)
         name = node.name or node.value
         if name:
@@ -1950,15 +2020,28 @@ class BrowseModeHandler:
             return True
 
     def _landmark_segment(self, node):
-        """"main landmark" the first time the cursor enters that region."""
+        """Crossing a region's edge: "main, landmark" going in, and - with
+        `Browse/LandmarkStartEnd` - "end of navigation" coming out of one,
+        so somebody arrowing down a page hears where a region stops as well
+        as where it starts. Off, a crossing says nothing (quick navigation
+        still finds the regions). `Browse/ReportLandmarks` decides whether
+        the word "landmark" is said after the region's name."""
         landmark = getattr(node, "landmark", "")
-        if landmark == self._last_landmark:
+        previous = self._last_landmark
+        if landmark == previous:
             return None
         self._last_landmark = landmark
-        if not landmark:
+        if not self._browse_setting("LandmarkStartEnd", True):
             return None
-        return (f"{landmark}, {qn.type_label(qn.QuickNavType.LANDMARK)}",
-                _ROLE_PITCH)
+        words = []
+        if previous:
+            words.append(L("browse.landmarkEnd", previous))
+        if landmark:
+            words.append(f"{landmark}, {qn.type_label(qn.QuickNavType.LANDMARK)}"
+                         if self._report_wanted("landmark") else landmark)
+        if not words:
+            return None
+        return (", ".join(words), _ROLE_PITCH)
 
     def _to_accessible(self, element):
         provider = getattr(self.engine, "provider", None)

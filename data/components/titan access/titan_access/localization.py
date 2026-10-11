@@ -120,6 +120,28 @@ def L(key, *args):
     return template
 
 
+def plural_form(n, culture=None):
+    """'one', 'few' or 'many' for ``n`` - Polish has three forms (1 łącze,
+    2 łącza, 5 łączy, 22 łącza, 12 łączy); English two (one / many)."""
+    culture = str(culture or L("common.culture") or "en").lower()
+    n = abs(int(n))
+    if n == 1:
+        return "one"
+    if culture.startswith("pl") and n % 10 in (2, 3, 4) \
+            and n % 100 not in (12, 13, 14):
+        return "few"
+    return "many"
+
+
+def plural(key, n):
+    """``key.one`` / ``key.few`` / ``key.many`` for ``n``, formatted with it;
+    a missing form falls back to ``many``."""
+    form = plural_form(n)
+    with _lock:
+        has = (key + "." + form) in _strings or (key + "." + form) in _fallback
+    return L(key + "." + (form if has else "many"), n)
+
+
 # Initialise following the TCE language (falls back to the saved/standalone one).
 try:
     set_language(detect_tce_language())
@@ -182,6 +204,12 @@ _STATE_TO_JSON = {
     "selected": "state.selected",
     "unavailable": "state.disabled",
     "readonly": "state.readonly",
+    "multiline": "state.multiline",
+    "required": "state.required",
+    "pressed": "state.pressed",
+    "busy": "state.busy",
+    "haspopup": "state.hasPopup",
+    "protected": "state.protected",
     "offscreen": "state.offscreen",
 }
 

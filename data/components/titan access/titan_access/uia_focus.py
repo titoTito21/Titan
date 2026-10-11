@@ -313,6 +313,13 @@ class UIAProvider:
                 self._uia.AddFocusChangedEventHandler(
                     self._focus_cache_request(), self._handler)
                 self._listening = True
+                try:
+                    # A suspended UWP app held every call 20 s (UIA's own
+                    # default); see uwp.limit_timeouts.
+                    from titan_access import uwp
+                    uwp.limit_all_timeouts(self._uia)
+                except Exception:
+                    pass
                 return True
             except Exception as e:
                 print(f"[TitanAccess] AddFocusChangedEventHandler failed: {e}")
@@ -427,7 +434,10 @@ class UIAProvider:
             obj.states = self._cached_states(cached, is_password)
             if obj.role == ROLE_LINK:
                 obj.parameter = obj.value
-            return obj
+            # UWP / XAML: the real program, icons as words, a name for an
+            # icon-only control (see uwp.py).
+            from titan_access import uwp
+            return uwp.finish(obj, native)
         except Exception as e:
             if os.environ.get("TITAN_ACCESS_DEBUG"):
                 print(f"[TitanAccess] cached snapshot failed: {e}")
@@ -566,6 +576,11 @@ class UIAProvider:
         elif obj.value and obj.role == ROLE_LINK:
             obj.parameter = obj.value
 
+        try:
+            from titan_access import uwp
+            uwp.finish(obj, control)
+        except Exception:
+            pass
         return obj
 
     # -- field readers ----------------------------------------------------- #

@@ -79,6 +79,69 @@ def _available_addons():
 
 
 # --------------------------------------------------------------------------- #
+# What an add-on IS, told to the AI from the add-on as it stands now
+# --------------------------------------------------------------------------- #
+#: How to use the reader, which no listing of its actions can say. What it
+#: CAN do is never written here: that is read out of the reader (below), so
+#: the AI is never told about an older Titan Access than the one installed.
+TITAN_ACCESS_GUIDANCE = (
+    "TITAN ACCESS is Titan's own screen reader, reached through the add-on "
+    "actions of 'titan_access' (titan_run_action addon='titan_access'). "
+    "Reading the screen (read_screen, list_elements, page_summary, "
+    "click_element) works even while the reader is switched off. Before "
+    "telling the user what the reader can or cannot do, ask "
+    "titan_access.about - it answers from the reader itself; never rely on "
+    "what you remember about an earlier version. To write the user a "
+    "reader script, read titan_access.script_language first and save it "
+    "with titan_access.write_script, which refuses a script with a "
+    "mistake. When the user says the reader is silent or wrong, start with "
+    "titan_access.diagnostics and last_spoken. ")
+
+
+def addon_briefing(addon_id):
+    """What an installed add-on is and can do, from the add-on itself.
+
+    An add-on that defines ``TITAN_AI_BRIEFING`` (a function answering a
+    paragraph) is asked; otherwise its description and the names of its
+    actions are used. Empty when it is not installed or the AI may not
+    drive it - telling a model about actions it cannot call invites it to
+    try."""
+    try:
+        addon = core_actions.find_addon(addon_id)
+    except Exception:                                # noqa: BLE001
+        return ''
+    if addon is None or not actions_enabled() or not allowed(addon):
+        return ''
+    try:
+        from src.titan_core.actions import inproc
+        owners = inproc.candidate_owners(addon)
+    except Exception:                                # noqa: BLE001
+        owners = []
+    for owner in owners:
+        brief = getattr(owner, 'TITAN_AI_BRIEFING', None)
+        if callable(brief):
+            try:
+                text = str(brief() or '').strip()
+            except Exception:                        # noqa: BLE001
+                text = ''
+            if text:
+                return text
+    names = ', '.join(action.name for action in addon.actions)
+    about = str(addon.description or '').strip()
+    return (about + (' ' if about else '')
+            + (f"Its actions: {names}." if names else '')).strip()
+
+
+def titan_access_note():
+    """The paragraph the agent's and the assistant's prompts carry about
+    Titan Access: how to use it, and what it is now."""
+    live = addon_briefing('titan_access')
+    if not live:
+        return ''
+    return TITAN_ACCESS_GUIDANCE + "What it is now: " + live + " "
+
+
+# --------------------------------------------------------------------------- #
 # The generic pair - always present, however many add-ons there are
 # --------------------------------------------------------------------------- #
 def titan_list_actions(addon="", kind="", **_):

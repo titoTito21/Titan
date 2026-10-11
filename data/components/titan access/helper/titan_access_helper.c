@@ -44,6 +44,12 @@ static int            g_ownsEndpoint = 0;
 /* Every served call, so a self-test can prove that the calls a client makes are
  * really arriving HERE. */
 static volatile unsigned long g_callCount = 0;
+/* Once THIS process has registered the endpoint it keeps it for life: RPC has
+ * no call that gives a protseq endpoint back, so a reader stopped and started
+ * again in the same Titan (the supervisor's restart, the Enabled switch) is
+ * answered RPC_S_DUPLICATE_ENDPOINT - by itself. Read as "somebody else owns
+ * it", that left the restarted bridge without its NVDA window for good. */
+static int            g_endpointIsOurs = 0;
 /* Set while a self-test call is in flight, so it is not spoken at the user. */
 static volatile long  g_selfTest = 0;
 
@@ -136,6 +142,90 @@ static void buildEndpoint(wchar_t* out, size_t cch)
     _snwprintf_s(out, cch, _TRUNCATE, L"NvdaCtlr.%u.%s", sessionId, deskName);
 }
 
+/* ----- the NVDA window ---------------------------------------------------- *
+ * The controller endpoint is not the only thing a client asks. Tolk - the
+ * library most audio games ship, 32-bit and 64-bit alike - first does
+ *     FindWindowW(L"wxWindowClassNR", L"NVDA")
+ * and calls nvdaController_testIfRunning only when that window exists. Real
+ * NVDA has it (its hidden wx main frame); Titan Access did not, so Tolk said
+ * "no screen reader" and never sent a single call, while the client DLL used
+ * on its own - accessible_output3, the probes - worked perfectly. Measured on
+ * Shank's own Tolk.dll: reader=(none) without the window, NVDA with it.
+ *
+ * So while this process OWNS the endpoint it keeps a hidden top-level window of
+ * that class and title. Hidden and never shown: FindWindow finds top-level
+ * windows whatever their visibility, but not message-only ones (HWND_MESSAGE),
+ * which is why it is not one. It lives on a thread of its own because a window
+ * belongs to the thread that made it and needs a message loop. */
+static HANDLE    g_winThread = NULL;
+static DWORD     g_winThreadId = 0;
+static volatile HWND g_nvdaWindow = NULL;
+static HINSTANCE g_module = NULL;
+
+static LRESULT CALLBACK nvdaWindowProc(HWND h, UINT m, WPARAM w, LPARAM l)
+{
+    if (m == WM_CLOSE) { DestroyWindow(h); return 0; }
+    if (m == WM_DESTROY) { PostQuitMessage(0); return 0; }
+    return DefWindowProcW(h, m, w, l);
+}
+
+static DWORD WINAPI nvdaWindowThread(LPVOID arg)
+{
+    WNDCLASSW wc;
+    MSG msg;
+    HANDLE ready = (HANDLE)arg;
+    HWND h;
+    memset(&wc, 0, sizeof(wc));
+    wc.lpfnWndProc = nvdaWindowProc;
+    wc.hInstance = g_module;
+    wc.lpszClassName = L"wxWindowClassNR";
+    /* A second start in the same process finds the class already there. */
+    if (!RegisterClassW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        SetEvent(ready);
+        return 1;
+    }
+    h = CreateWindowExW(WS_EX_TOOLWINDOW, L"wxWindowClassNR", L"NVDA", WS_POPUP,
+                        0, 0, 0, 0, NULL, NULL, g_module, NULL);
+    g_nvdaWindow = h;
+    SetEvent(ready);
+    if (!h) return 1;
+    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    g_nvdaWindow = NULL;
+    return 0;
+}
+
+static void showNvdaWindow(void)
+{
+    HANDLE ready;
+    if (g_winThread) return;
+    /* Real NVDA's own window is there already: do not stand beside it. */
+    if (FindWindowW(L"wxWindowClassNR", L"NVDA")) return;
+    ready = CreateEventW(NULL, TRUE, FALSE, NULL);
+    g_winThread = CreateThread(NULL, 0, nvdaWindowThread, ready, 0, &g_winThreadId);
+    if (g_winThread && ready) WaitForSingleObject(ready, 2000);
+    if (ready) CloseHandle(ready);
+}
+
+/* Never waits: this is also reached from DllMain, where waiting for a thread
+ * is a deadlock. */
+static void hideNvdaWindow(void)
+{
+    HWND h = g_nvdaWindow;
+    if (h) PostMessageW(h, WM_CLOSE, 0, 0);
+    else if (g_winThreadId) PostThreadMessageW(g_winThreadId, WM_QUIT, 0, 0);
+    if (g_winThread) CloseHandle(g_winThread);
+    g_winThread = NULL;
+    g_winThreadId = 0;
+}
+
+__declspec(dllexport) int __stdcall TitanAccessHelper_hasNvdaWindow(void)
+{
+    return g_nvdaWindow != NULL;
+}
+
 /* ----- exported lifecycle ------------------------------------------------- */
 __declspec(dllexport) int __stdcall TitanAccessHelper_start(
         TA_SpeakProc onSpeak, TA_VoidProc onCancel, TA_BrailleProc onBraille)
@@ -171,7 +261,10 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_start(
      * earlier Titan that has not exited) already owns the name. We stay
      * registered -- if that other server goes away we are ready -- but we must
      * NOT pretend to be the one applications are talking to. */
-    g_ownsEndpoint = (status == RPC_S_OK) ? 1 : 0;
+    if (status == RPC_S_OK)
+        g_endpointIsOurs = 1;
+    g_ownsEndpoint = (status == RPC_S_OK
+                      || (status == RPC_S_DUPLICATE_ENDPOINT && g_endpointIsOurs)) ? 1 : 0;
     if (status != RPC_S_OK && status != RPC_S_DUPLICATE_ENDPOINT) {
         if (psd) LocalFree(psd);
         return (int)status;
@@ -191,6 +284,8 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_start(
         return (int)status;
 
     g_running = 1;
+    if (g_ownsEndpoint)
+        showNvdaWindow();
     return 0;
 }
 
@@ -226,8 +321,11 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_retryEndpoint(void)
                                     RPC_C_PROTSEQ_MAX_REQS_DEFAULT,
                                     (RPC_WSTR)endpoint, psd);
     if (psd) LocalFree(psd);
-    if (status == RPC_S_OK)
+    if (status == RPC_S_OK) {
+        g_endpointIsOurs = 1;
         g_ownsEndpoint = 1;
+        showNvdaWindow();
+    }
     return g_ownsEndpoint;
 }
 
@@ -235,6 +333,7 @@ __declspec(dllexport) void __stdcall TitanAccessHelper_stop(void)
 {
     if (!g_running)
         return;
+    hideNvdaWindow();
     RpcServerUnregisterIf(NvdaController_v1_0_s_ifspec, NULL, 1);
     g_onSpeak = NULL;
     g_onCancel = NULL;
@@ -268,7 +367,9 @@ void  __RPC_USER midl_user_free(void* p) { free(p); }
 
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved)
 {
-    (void)h; (void)reserved;
+    (void)reserved;
+    if (reason == DLL_PROCESS_ATTACH)
+        g_module = h;
     if (reason == DLL_PROCESS_DETACH)
         TitanAccessHelper_stop();
     return TRUE;

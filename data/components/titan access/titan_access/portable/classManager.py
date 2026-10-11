@@ -38,108 +38,144 @@ from . import i18n
 try:
     from . import speaking
 except ImportError:
-    # The synthesizers, voices and variants are NVDA's own; the reader
-    # this is shared with has one voice (Titan's) and nothing to list, so
-    # those three drop-downs offer "inherit" and nothing else there.
-    def _titan_engine():
+    # The synthesizers, voices and variants are NVDA's own there; in Titan
+    # Access they are its speech systems (`speech_systems`), which have one
+    # level more - the speech system the synthesizer belongs to.
+    def _systems_model():
+        """Titan Access's own model of what it can speak with - the one
+        the speech system dialog (Insert+Ctrl+S), the settings page and
+        the TPad use - or None outside it."""
         try:
-            from src.titan_core import tce_speech
-            return tce_speech.get_private_reader_engine()
+            from .. import speech_systems
+            return speech_systems
         except Exception:                            # noqa: BLE001
             return None
 
-    def _registry():
+    def _reader_settings():
         try:
-            from src.tts.engine_registry import get_engine_registry
-            return get_engine_registry()
+            from ..settings_store import get_settings
+            return get_settings()
         except Exception:                            # noqa: BLE001
             return None
 
     class speaking:                                  # noqa: N801
-        """Titan's engines and their voices, where NVDA's are not.
+        """Titan Access's speech systems, synthesizers, voices and
+        variants, where NVDA's are not.
+
+        **The same four levels the speech system dialog has.** This used
+        to list Titan's engines alone, answer NO voices for "the one the
+        reader is using" (so a class could not be given a voice without
+        also naming a synthesizer), never ask for a variant, and leave out
+        the NVDA add-on synthesizers and speech-dispatcher's modules - so
+        a class could not be put on the synthesizer the reader actually
+        speaks with. Now it asks `speech_systems`, the one model.
 
         **Listing a synthesizer's voices must not switch the reader to
-        it.** This used to call `set_engine` on the reader's own engine to
-        ask what voices it had, so walking the synthesizer list changed
-        what the reader spoke with as you went. The voices are read off
-        the engine registry (a Titan TTS engine) or off the shared
-        speaker's own lists (SAPI, eSpeak) instead, and a voice is keyed
-        by its ID - which is what the reader's `set_voice` resolves.
+        it.** `speech_systems` reads the voices off the engine registry
+        and the speaker's own lists, never by `set_engine` on the engine
+        that is speaking.
         """
 
         @staticmethod
-        def synthesizers():
-            found = []
+        def systems():
+            model = _systems_model()
+            if model is None:
+                return []
             try:
-                from src.titan_core import tce_speech
-                ids = list(tce_speech.get_available_engines() or [])
+                # "Titan's own voice" is not a choice for a class: no
+                # synthesizer already means the one the reader is using.
+                return [(key, label) for key, label in model.systems()
+                        if key != model.SYSTEM_TITAN]
             except Exception:                        # noqa: BLE001
-                ids = []
-            registry = _registry()
-            for one in ids:
-                label = str(one)
-                try:
-                    engine = registry.get_titantts_engine(one) if registry \
-                        else None
-                    if engine is not None and getattr(engine, 'engine_name', ''):
-                        label = str(engine.engine_name)
-                except Exception:                    # noqa: BLE001
-                    pass
-                found.append((str(one), {'sapi5': 'SAPI 5', 'espeak': 'eSpeak',
-                                         'espeak_dll': 'eSpeak'}.get(
-                    str(one), label)))
-            return found
+                return []
 
         @staticmethod
-        def _raw_voices(synth):
+        def system_of(synth):
+            model = _systems_model()
             synth = str(synth or '')
-            registry = _registry()
+            if model is None or not synth:
+                return ''
+            if synth == 'spd':
+                return 'spd'
             try:
-                if registry and registry.is_titantts_engine(synth):
-                    engine = registry.get_titantts_engine(synth)
-                    return list(engine.get_voices() or []) if engine else []
+                return model.system_of(synth)
             except Exception:                        # noqa: BLE001
-                return []
-            try:
-                from src.titan_core import tce_speech
-                tce_speech._init()
-                speaker = getattr(tce_speech, '_speaker', None)
-            except Exception:                        # noqa: BLE001
-                speaker = None
-            if speaker is None:
-                return []
-            try:
-                if synth == 'sapi5':
-                    return [str(v.get('name')) + (' (32-bit)' if v.get('is_32bit')
-                                                  else '')
-                            for v in (speaker._get_all_sapi_voices() or [])]
-                if synth in ('espeak', 'espeak_dll'):
-                    return list(speaker.get_espeak_voices() or [])
-                if getattr(speaker, 'engine', '') == synth:
-                    return list(speaker.get_available_voices() or [])
-            except Exception:                        # noqa: BLE001
-                return []
-            return []
+                return ''
 
         @classmethod
-        def voices_of(cls, synth):
-            if not synth:
+        def synthesizers(cls, system=None):
+            model = _systems_model()
+            if model is None:
                 return []
-            found = []
-            for voice in cls._raw_voices(synth):
-                if isinstance(voice, dict):
-                    key = str(voice.get('id') or voice.get('name') or '')
-                    label = str(voice.get('display_name') or voice.get('name')
-                                or key)
-                else:
-                    key = label = str(voice)
-                if key:
-                    found.append((key, label))
-            return found
+            try:
+                if system is not None:
+                    if not system:
+                        return []
+                    return [(key, label) for key, label
+                            in model.synthesizers(system) if key]
+                found = []
+                for one, _label in cls.systems():
+                    found += [(key, label) for key, label
+                              in model.synthesizers(one) if key]
+                return found
+            except Exception:                        # noqa: BLE001
+                return []
 
         @staticmethod
-        def variants_of(synth, voice):
-            return []
+        def reader_synth():
+            """The synthesizer the reader speaks with now, in the
+            spelling `speech_systems` lists it under."""
+            try:
+                from .. import speech_adapter
+                adapter = speech_adapter.current()
+                ask = getattr(adapter, 'reader_synth', None)
+                if callable(ask):
+                    return str(ask() or '')
+            except Exception:                        # noqa: BLE001
+                pass
+            model, settings = _systems_model(), _reader_settings()
+            if model is None or settings is None:
+                return ''
+            try:
+                return str(model.current(settings)[1] or '')
+            except Exception:                        # noqa: BLE001
+                return ''
+
+        @classmethod
+        def voices_of(cls, synth=''):
+            model = _systems_model()
+            if model is None:
+                return []
+            synth = str(synth or '') or cls.reader_synth()
+            if not synth:
+                return []
+            try:
+                return [(str(key), str(label))
+                        for key, label in model.voices(synth) if key]
+            except Exception:                        # noqa: BLE001
+                return []
+
+        @classmethod
+        def variants_of(cls, synth='', voice=''):
+            model = _systems_model()
+            if model is None:
+                return []
+            synth = str(synth or '') or cls.reader_synth()
+            if not synth:
+                return []
+            if not voice:
+                settings = _reader_settings()
+                try:
+                    if settings is not None and \
+                            model.current(settings)[1] == synth:
+                        voice = model.current(settings)[2]
+                except Exception:                    # noqa: BLE001
+                    voice = ''
+            try:
+                return [(str(key), str(label)) for key, label
+                        in model.variants(synth, voice or '') if key]
+            except Exception:                        # noqa: BLE001
+                return []
 
         @staticmethod
         def refused():
@@ -227,6 +263,19 @@ def build():
                     wx.StaticBox(page, label=_('Which voice')),
                     wx.VERTICAL)))
             box = which.sizer.GetStaticBox()
+            # **The speech system, where the reader has more than one.**
+            # Titan Access speaks through Titan TTS, SAPI 5, eSpeak,
+            # speech-dispatcher and NVDA add-on synthesizers, and a flat
+            # list of every synthesizer of all of them is the list of 400
+            # voices with no order the speech system dialog was made to
+            # avoid. NVDA has one speech system, so it has no such control.
+            self.system = None
+            self._systems = ['']
+            if callable(getattr(speaking, 'systems', None)):
+                # Translators: a control in the voice class manager.
+                self.system = which.addLabeledControl(
+                    _('Speech s&ystem'), wx.Choice, choices=[_inherit()])
+                self.system.Bind(wx.EVT_CHOICE, self._system_chosen)
             # Translators: a control in the voice class manager.
             self.synth = which.addLabeledControl(_('&Synthesizer'), wx.Choice,
                                                  choices=[_inherit()])
@@ -291,6 +340,7 @@ def build():
             helper.addItem(buttons)
 
             page.Sizer = helper.sizer
+            self._fill_systems()
             self._fill_synths()
             self._show()
 
@@ -768,10 +818,33 @@ def build():
                 out.append('{}: {}'.format(groups.get(row['group'], ''), said))
             return out
 
-        def _fill_synths(self):
-            found = speaking.synthesizers()
+        def _fill_systems(self):
+            if self.system is None:
+                return
+            found = getattr(speaking, 'systems')()
+            self._systems = [''] + [key for key, _label in found]
+            self.system.Set([_inherit()] + [label for _k, label in found])
+
+        def _chosen_system(self):
+            if self.system is None:
+                return None
+            index = self.system.GetSelection()
+            return self._systems[index] \
+                if 0 <= index < len(self._systems) else ''
+
+        def _fill_synths(self, wanted=''):
+            if self.system is None:
+                found = speaking.synthesizers()
+            else:
+                found = speaking.synthesizers(self._chosen_system())
             self._synths = [''] + [name for name, _label in found]
             self.synth.Set([_inherit()] + [label for _n, label in found])
+            self._select(self.synth, self._synths, wanted)
+            # A speech system with exactly one synthesizer (SAPI 5, eSpeak)
+            # has nothing to choose at this level: that one is chosen.
+            if self.system is not None and self._chosen_system() and \
+                    not self._chosen_synth() and len(self._synths) == 2:
+                self.synth.SetSelection(1)
 
         def _fill_voices(self, wanted='', variant=''):
             found = speaking.voices_of(self._chosen_synth())
@@ -831,8 +904,13 @@ def build():
             # Access does; `classes.PARTS_MAY_NAME_SYNTH`).
             may_synth = whole or classes.may_name_synth((row or {}).get('id'))
             self.synth.Enable(may_synth)
-            self._select(self.synth, self._synths,
-                         voice.get('synth') if may_synth else '')
+            synth = voice.get('synth') if may_synth else ''
+            if self.system is not None:
+                self.system.Enable(may_synth)
+                self._select(self.system, self._systems,
+                             getattr(speaking, 'system_of')(synth)
+                             if synth else '')
+            self._fill_synths(synth or '')
             self._fill_voices(voice.get('voice') or '',
                               voice.get('variant') or '')
             self.note.SetLabel(self._note_for(row, whole))
@@ -879,7 +957,8 @@ def build():
                 # Translators: shown when a synthesizer will not start.
                 return _('That synthesizer would not start: {why}').format(
                     why=refused)
-            if row['id'] == 'text':
+            if row['id'] == 'text' and \
+                    not getattr(classes, 'PARTS_MAY_NAME_SYNTH', False):
                 # Translators: shown for the class that reads text.
                 return _('Reading text is NVDA\'s own: choosing a '
                          'synthesizer here puts it in NVDA\'s say all '
@@ -929,6 +1008,10 @@ def build():
         def _chosen(self, _event):
             self._show()
 
+        def _system_chosen(self, _event):
+            self._fill_synths()
+            self._synth_chosen(None)
+
         def _synth_chosen(self, _event):
             self._fill_voices()
             self.note.SetLabel(self._note_for(self._current(),
@@ -965,8 +1048,14 @@ def build():
                 # a configuration profile, at the right utterance boundary -
                 # so the answer is to put the chosen synthesizer in that
                 # profile and let NVDA do what it already does.
-                from . import sayall_profile
-                ok, note = sayall_profile.set_synth(
+                try:
+                    from . import sayall_profile
+                except ImportError:
+                    # Titan Access has no say-all profile: the class is
+                    # spoken by the reader itself, in its own voice.
+                    sayall_profile = None
+                ok, note = (True, '') if sayall_profile is None else \
+                    sayall_profile.set_synth(
                     profile.get('synth', ''), profile.get('voice', ''),
                     profile.get('variant', ''))
                 said = note if note else said

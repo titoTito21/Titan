@@ -78,7 +78,9 @@ from speech.commands import IndexCommand, PitchCommand, BreakCommand
 class SynthDriver(SynthDriver):
     name = "fakeSynth"
     description = "Fake synthesizer"
-    supportedSettings = (SynthDriver.VoiceSetting(), SynthDriver.RateSetting())
+    supportedSettings = (SynthDriver.VoiceSetting(),
+                         SynthDriver.VariantSetting(),
+                         SynthDriver.RateSetting())
     supportedCommands = {IndexCommand, PitchCommand, BreakCommand}
     supportedNotifications = {synthIndexReached, synthDoneSpeaking}
 
@@ -90,6 +92,7 @@ class SynthDriver(SynthDriver):
         super().__init__()
         self._player = nvwave.WavePlayer(1, 16000, 16)
         self._voice = "one"
+        self._variant = "compact"
         self._rate = 50
         self.spoken = []
         self.breaks = []
@@ -127,6 +130,21 @@ class SynthDriver(SynthDriver):
 
     def _set_voice(self, value):
         self._voice = value
+        # As Cerence: each voice has its own variants.
+        if hasattr(self, "_availableVariants"):
+            del self._availableVariants
+
+    def _getAvailableVariants(self):
+        if self._voice == "two":
+            return OrderedDict([("pro", VoiceInfo("pro", "embedded-pro"))])
+        return OrderedDict([("compact", VoiceInfo("compact", "embedded-compact")),
+                            ("high", VoiceInfo("high", "embedded-high"))])
+
+    def _get_variant(self):
+        return self._variant
+
+    def _set_variant(self, value):
+        self._variant = value
 
     def _get_rate(self):
         return self._rate
@@ -323,6 +341,138 @@ class TheHost(unittest.TestCase):
         self.assertEqual(synth.rate, 80)
         self.assertTrue(external.set_voice('nvda:fakeSynth', 'two'))
         self.assertEqual(synth.voice, 'two')
+
+    def test_one_instance_however_many_ask_and_none_retired_by_a_look(self):
+        """RHVoice was started nineteen times in one session: two threads
+        asking at once made two instances, and listing another
+        synthesizer's voices terminated the one the reader spoke with."""
+        nvda_host.unload()
+        nvda_host.load(Engine())
+        found = []
+
+        def ask():
+            found.append(nvda_host.synth_instance('fakeSynth'))
+        threads = [threading.Thread(target=ask) for _ in range(6)]
+        for one in threads:
+            one.start()
+        for one in threads:
+            one.join(10)
+        self.assertEqual(len(set(map(id, found))), 1)
+        speaking = found[0]
+        terminated = []
+        speaking.terminate = lambda: terminated.append(True)
+        nvda_host.synth_instance('madeSynth')
+        self.assertIs(nvda_host.synth_instance('fakeSynth'), speaking)
+        self.assertEqual(terminated, [])
+        del speaking.terminate
+
+    def test_a_synthesizer_that_stops_answering_is_started_again(self):
+        """Nothing fed and no index: the reader used to wait a minute per
+        utterance - silent, which from outside is a reader that hung."""
+        dead = nvda_host.synth_instance('fakeSynth')
+        dead.speak = lambda sequence: None
+        kept = external.FIRST_SOUND_S
+        external.FIRST_SOUND_S = 0.4
+        before = external.report()['stalled']
+        started = time.time()
+        try:
+            said = external.speak_parts('nvda:fakeSynth', [('Zapisz', 0)],
+                                        timeout=30)
+        finally:
+            external.FIRST_SOUND_S = kept
+        self.assertFalse(said)
+        self.assertLess(time.time() - started, 3)
+        self.assertEqual(external.report()['stalled'], before + 1)
+        fresh = nvda_host.synth_instance('fakeSynth')
+        self.assertIsNot(fresh, dead)
+        self.assertTrue(external.speak_parts('nvda:fakeSynth',
+                                             [('Zapisz', 0)], timeout=10))
+
+    def test_a_new_instance_is_given_the_chosen_voice(self):
+        """Reported as "the external synthesizer speaks in some default
+        voice, not the one I set": an instance retired (stalled, or pushed
+        out of KEEP_RUNNING by looking at other synthesizers' voices) was
+        made again on its default voice."""
+        external.set_voice('nvda:fakeSynth', 'two')
+        external.set_levels('nvda:fakeSynth', rate=70)
+        nvda_host.retire_synth('fakeSynth')
+        synth = nvda_host.synth_instance('fakeSynth')
+        self.assertEqual(external._synth('nvda:fakeSynth').voice, 'two')
+        self.assertEqual(synth.rate, 70)
+        # A voice may be named by what it is called, too.
+        self.assertTrue(external.set_voice('nvda:fakeSynth', 'voice one'))
+        self.assertEqual(synth.voice, 'one')
+        self.assertFalse(external.set_voice('nvda:fakeSynth', 'nobody'))
+        self.assertEqual(synth.voice, 'one')
+        external.set_voice('nvda:fakeSynth', 'one')
+
+    def test_variants_belong_to_a_voice(self):
+        """Cerence installs a voice as compact, embedded-pro or
+        embedded-high; the variant is a fourth level after the voice."""
+        synth = nvda_host.synth_instance('fakeSynth')
+        external.set_voice('nvda:fakeSynth', 'one')
+        self.assertEqual(external.variants('nvda:fakeSynth'),
+                         [('compact', 'embedded-compact'),
+                          ('high', 'embedded-high')])
+        # Another voice's variants are asked without changing the voice.
+        self.assertEqual(external.variants('nvda:fakeSynth', 'two'),
+                         [('pro', 'embedded-pro')])
+        self.assertEqual(synth.voice, 'one')
+        self.assertTrue(external.set_variant('nvda:fakeSynth', 'high'))
+        self.assertEqual(external.variant('nvda:fakeSynth'), 'high')
+        # One the voice has not got is refused, and nothing changes.
+        self.assertFalse(external.set_variant('nvda:fakeSynth', 'pro'))
+        self.assertEqual(synth.variant, 'high')
+        # A synthesizer with no variant setting has no variants.
+        self.assertEqual(external.variants('nvda:madeSynth'), [])
+
+    def test_the_reader_puts_its_variant_on(self):
+        from titan_access import speech_systems
+        speech_systems.forget_voices()
+        self.assertEqual(
+            speech_systems.variants('nvda:fakeSynth', 'one'),
+            [('compact', 'embedded-compact'), ('high', 'embedded-high')])
+        self.assertEqual(speech_systems.variants('sapi5', 'x'), [])
+        wanted = speech_systems.settings_for('nvda', 'nvda:fakeSynth', 'one',
+                                             'high')
+        self.assertEqual(wanted[('Speech', 'Variant')], 'high')
+
+        class Store(dict):
+            def get(self, section, key, default=None):
+                return dict.get(self, (section, key), default)
+
+            def get_bool(self, section, key, default=False):
+                value = dict.get(self, (section, key), default)
+                return value is True or str(value).lower() == 'true'
+
+            def get_int(self, section, key, default=0):
+                return int(dict.get(self, (section, key), default))
+
+            def set(self, section, key, value):
+                self[(section, key)] = value
+
+            def set_bool(self, section, key, value):
+                self[(section, key)] = bool(value)
+
+            def save(self):
+                pass
+        store = Store()
+        speech_systems.choose(store, 'nvda', 'nvda:fakeSynth', 'one',
+                              variant='compact')
+        said = speech_systems.step(store, 'variant')
+        self.assertEqual(said, 'embedded-high')
+        self.assertEqual(store[('Speech', 'Variant')], 'high')
+        # A new voice starts on its own default variant.
+        speech_systems.step(store, 'voice')
+        self.assertEqual(store[('Speech', 'Variant')], '')
+        from titan_access.speech_adapter import SpeechAdapter
+        adapter = SpeechAdapter.__new__(SpeechAdapter)
+        store[('Speech', 'Voice')] = 'one'
+        store[('Speech', 'Variant')] = 'high'
+        adapter._settings = store
+        adapter._apply_external('nvda:fakeSynth', warm=False)
+        synth = nvda_host.synth_instance('fakeSynth')
+        self.assertEqual((synth.voice, synth.variant), ('one', 'high'))
 
     def test_a_disabled_add_on_does_not_run(self):
         nvda_host.set_enabled('demoAddon', False)
@@ -601,6 +751,9 @@ class _FakeDevice(object):
 
     played = []
     streams = []
+    #: How much the device asks for at a time. A real WASAPI or MME device
+    #: asks for far more than 10 ms at once.
+    block_ms = 10
 
     class RawOutputStream(object):
         def __init__(self, samplerate, channels, dtype, callback,
@@ -615,12 +768,16 @@ class _FakeDevice(object):
             self.running = True
 
             def loop():
-                block = self.rate // 100
                 while self.running:
+                    block = self.rate * _FakeDevice.block_ms // 1000
                     out = bytearray(block * self.frame)
                     self.callback(out, block, None, None)
-                    _FakeDevice.played.append((self, bytes(out)))
-                    time.sleep(0.01)
+                    # Kept in 10 ms pieces, which is what `_runs` counts.
+                    piece = (self.rate // 100) * self.frame
+                    for at in range(0, len(out), piece):
+                        _FakeDevice.played.append(
+                            (self, bytes(out[at:at + piece])))
+                    time.sleep(_FakeDevice.block_ms / 1000.0)
             threading.Thread(target=loop, daemon=True).start()
 
         def stop(self):
@@ -714,6 +871,31 @@ class WhatIsPlayed(unittest.TestCase):
         self.assertEqual([loud for loud, _ms in runs], [True, False, True],
                          runs)
         self.assertTrue(250 <= runs[1][1] <= 400, runs)
+
+    def test_a_pause_is_a_pause_and_not_a_cut_word(self):
+        """RHVoice: "no pauses, only cuts". A synthesizer that reports an
+        index as its audio is PLAYED puts the pause in from that callback;
+        a device that asks for 60 ms at a time had already started the
+        next part when the silence went in, so the second word was heard
+        cut in two around the pause. The playing holds AT the index now."""
+        synth = nvda_host.synth_instance('fakeSynth')
+        from titan_access.nvda_host.shims.speech import commands
+        kept = type(synth).supportedCommands
+        type(synth).supportedCommands = {commands.IndexCommand,
+                                         commands.PitchCommand}
+        _FakeDevice.block_ms = 60
+        try:
+            _took, runs = self._say('fakeSynth', [('ab', 0), ('cd', 0)],
+                                    300)
+        finally:
+            type(synth).supportedCommands = kept
+            _FakeDevice.block_ms = 10
+        # Two words, one pause between them - not three or four pieces.
+        self.assertEqual([loud for loud, _ms in runs], [True, False, True],
+                         runs)
+        self.assertTrue(250 <= runs[1][1] <= 420, runs)
+        # And the second word is whole: 0.2 s of it, like the first.
+        self.assertTrue(abs(runs[2][1] - runs[0][1]) <= 20, runs)
 
     def test_rapid_interruptions_never_hang_or_leak(self):
         """A key held down: every utterance interrupted by the next, a

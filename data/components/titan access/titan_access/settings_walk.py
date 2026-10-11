@@ -87,6 +87,13 @@ def _options(entry, engine=None):
             return [(key, label) for key, label in speechSchemes.names()]
         except Exception:                            # noqa: BLE001
             return []
+    if kind == 'variants':
+        from . import speech_systems
+        _system, synth, voice = speech_systems.current(_speech_view())
+        try:
+            return speech_systems.variants(synth, voice) if synth else []
+        except Exception:                            # noqa: BLE001
+            return []
     if kind in _schema.SPEECH_LEVELS:
         # **The same three levels as the speech system dialog**: the
         # systems this machine has, the synthesizers of the CHOSEN system,
@@ -155,14 +162,19 @@ def _set_speech(entry, value, engine):
     from . import speech_systems
     kind = entry[3]
     system, synth, voice = speech_systems.current(_speech_view())
+    variant = speech_systems.current_variant(_speech_view())
     value = str(value or '')
-    if kind == 'speech_system':
+    if kind == 'variants':
+        variant = value
+    elif kind == 'speech_system':
         system, synth, voice = value, speech_systems.first_synth(value), ''
     elif kind == 'synthesizer':
         synth, voice = value, ''
     else:
         voice = value
-    wanted = speech_systems.settings_for(system, synth, voice)
+    if kind != 'variants':
+        variant = ''
+    wanted = speech_systems.settings_for(system, synth, voice, variant)
     program = _scope['program']
     store = _store()
     if program:
@@ -194,6 +206,9 @@ def value_of(entry, store=None):
     value where the profile says nothing)."""
     store = store or _store()
     section, key, _label, kind, _extra, default = entry
+    if kind == 'variants':
+        from . import speech_systems
+        return speech_systems.current_variant(_speech_view(store))
     if kind in _schema.SPEECH_LEVELS:
         from . import speech_systems
         now = speech_systems.current(_speech_view(store))
@@ -259,11 +274,23 @@ def value_word(entry, value, engine=None):
             if str(known) == str(value):
                 return label
         return str(value or '') or L('walk.notSet')
+    if kind == 'variants':
+        # Like the voice: named from what is already known, never by
+        # waiting for the synthesizer.
+        from . import speech_systems
+        _system, synth, voice = speech_systems.current(_speech_view())
+        for known, label in speech_systems.cached_variants(synth, voice) or []:
+            if str(known) == str(value):
+                return label
+        return str(value or '') or L('settings.speech.variantDefault')
     if kind in ('choice', 'scheme', 'braille_table') + _schema.SPEECH_LEVELS:
         for known, label in _options(entry, engine):
             if str(known) == str(value):
                 return label
         return str(value or '') or L('walk.notSet')
+    if kind == 'hotkey':
+        from . import hotkeys
+        return hotkeys.spoken(value) or L('walk.notSet')
     if kind == 'range':
         # Zero is a value - the pitch at 0, the rate at 0 - not "not set".
         return str(int(value)) if value is not None else L('walk.notSet')
@@ -279,7 +306,7 @@ def set_value(entry, value, engine=None):
     """
     store = _store()
     section, key, _label, kind, _extra, _default = entry
-    if kind in _schema.SPEECH_LEVELS:
+    if kind in _schema.SPEECH_LEVELS + ('variants',):
         _set_speech(entry, value, engine)
         return
     program = _scope['program']
@@ -312,6 +339,9 @@ def set_value(entry, value, engine=None):
     if (section, key) == ('General', 'Enabled'):
         _switch_reader(bool(value))
         return
+    if kind == 'hotkey':
+        from . import hotkeys
+        hotkeys.changed()
     _apply(engine, section)
 
 
@@ -391,8 +421,9 @@ def _kind_word(kind):
         'bool': 'checkbox', 'choice': 'combobox', 'braille_table': 'combobox',
         'scheme': 'combobox', 'speech_system': 'combobox',
         'synthesizer': 'combobox', 'voices': 'combobox',
+        'variants': 'combobox',
         'range': 'spinner', 'text': 'edit',
-    }.get(kind, 'combobox'))
+    }.get(kind, 'combobox')) if kind != 'hotkey' else L('walk.kind.hotkey')
 
 
 def _row_label(entry, engine=None):
@@ -529,7 +560,7 @@ def _change(engine, sid, entry, row):
         # would read the title on top of the answer.
         return True, row['label']
     if kind in ('choice', 'range', 'scheme', 'speech_system', 'synthesizer',
-                'voices',
+                'voices', 'variants',
                 'braille_table'):
         options = _options(entry, engine)
         if not options:
@@ -553,6 +584,8 @@ def _change(engine, sid, entry, row):
                             at=at)
     if kind == 'text':
         return _ask(engine, sid, entry, row)
+    if kind == 'hotkey':
+        return _press_shortcut(engine, sid, entry, row)
     return False, L('walk.setInWindow').format(what=L(entry[2]))
 
 
@@ -562,6 +595,36 @@ def _picked(engine, sid, entry, row, value):
     # Back to the section, on the setting that was just answered: the row
     # is re-read holding the new value, so it IS the confirmation.
     return open_section(engine, sid, at=_index_of(sid, row))
+
+
+def _press_shortcut(engine, sid, entry, row):
+    """Enter on a hotkey field: the next combination pressed IS the
+    answer, as in a hotkey field of Windows - taken by the reader's own
+    keyboard hook, so it reaches no program and fires no shortcut. Escape
+    leaves it as it was; a key with no Control, Alt or Windows is refused
+    and the field goes on listening."""
+    from . import hotkeys
+
+    def say(text):
+        try:
+            if engine is not None:
+                engine.speak(text, interrupt=True)
+        except Exception:                            # noqa: BLE001
+            pass
+
+    def done(text):
+        if text is None:
+            say(L('walk.hotkey.unchanged'))
+            return
+        if not text:
+            say(L('walk.hotkey.needsModifier'))
+            return
+        set_value(entry, text, engine)
+        row['label'] = _row_label(entry, engine)
+        say(row['label'])
+
+    hotkeys.begin_capture(done)
+    return True, L('walk.hotkey.press')
 
 
 def _ask(engine, sid, entry, row):

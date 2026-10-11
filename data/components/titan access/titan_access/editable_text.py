@@ -19,6 +19,7 @@ control exposes no ``TextPattern`` every method announces ``edit.cannotNavigate`
 
 import os
 import sys
+import threading
 import time
 
 from titan_access.localization import L, character_announcement
@@ -83,6 +84,10 @@ if os.name == "nt":
     _user32.GetGUIThreadInfo.restype = _wt.BOOL
     _user32.GetGUIThreadInfo.argtypes = [_wt.DWORD,
                                          _ctypes.POINTER(_GUITHREADINFO)]
+    _user32.SendMessageTimeoutW.restype = _ctypes.c_ssize_t
+    _user32.SendMessageTimeoutW.argtypes = [
+        _wt.HWND, _wt.UINT, _ctypes.c_size_t, _ctypes.c_size_t, _wt.UINT,
+        _wt.UINT, _ctypes.POINTER(_ctypes.c_size_t)]
 else:  # pragma: no cover - non-Windows
     _ctypes = None
     _user32 = None
@@ -134,6 +139,96 @@ def _win32_caret_text(hwnd):
         return None
 
 
+_SMTO_ABORTIFHUNG = 0x0002
+#: A field longer than this is not copied on every Backspace.
+_SNAPSHOT_LIMIT = 200000
+
+
+def _send(hwnd, msg, wparam, lparam, timeout_ms):
+    """SendMessage, or SendMessageTimeout when *timeout_ms* is given (the
+    keyboard hook's thread may not wait on a program that has hung).
+    ``None`` when the program did not answer in time."""
+    if timeout_ms is None:
+        return _user32.SendMessageW(hwnd, msg, wparam, lparam)
+    out = _ctypes.c_size_t(0)
+    if not _user32.SendMessageTimeoutW(hwnd, msg, wparam, lparam,
+                                       _SMTO_ABORTIFHUNG, int(timeout_ms),
+                                       _ctypes.byref(out)):
+        return None
+    return out.value
+
+
+def _win32_snapshot(hwnd, timeout_ms=None):
+    """``{'text', 'caret', 'whole', 't'}`` of a Win32 edit, or None."""
+    if _user32 is None or not hwnd:
+        return None
+    try:
+        start = _wt.DWORD()
+        end = _wt.DWORD()
+        if _send(hwnd, _EM_GETSEL, _ctypes.addressof(start),
+                 _ctypes.addressof(end), timeout_ms) is None:
+            return None
+        n = _send(hwnd, _WM_GETTEXTLENGTH, 0, 0, timeout_ms)
+        if n is None:
+            return None
+        n = int(n) if int(n) > 0 else 0
+        if n > _SNAPSHOT_LIMIT:
+            return None
+        buf = _ctypes.create_unicode_buffer(n + 1)
+        if _send(hwnd, _WM_GETTEXT, n + 1, _ctypes.addressof(buf),
+                 timeout_ms) is None:
+            return None
+        return {"text": buf.value, "caret": int(start.value),
+                "sel_end": int(end.value), "whole": True, "t": time.time()}
+    except Exception:
+        return None
+
+
+def _atspi_snapshot(text):
+    """The same of an AT-SPI Text: the whole text when it is short, the
+    caret's line otherwise."""
+    try:
+        caret = text.caret()
+        if caret < 0:
+            return None
+        if text.length() <= 20000:
+            return {"text": text.all(), "caret": caret, "whole": True,
+                    "t": time.time()}
+        content, start, _end = text.unit(caret, "line")
+        return {"text": content, "caret": caret - start, "whole": False,
+                "t": time.time()}
+    except Exception:
+        return None
+
+
+def removed_text(before, after):
+    """What a Backspace took away between two snapshots, or None.
+
+    Two whole texts are compared from both ends, which is right whatever
+    the key took - a character, a word, a selection, a line break. Two
+    LINES (UI Automation gives the caret's line) are compared the same
+    way while it is the same line; when the line after ends with the
+    whole line before, the line break between them is what went."""
+    if not before or not after:
+        return None
+    b, a = before.get("text") or "", after.get("text") or ""
+    if len(a) < len(b):
+        p = 0
+        top = min(len(a), len(b))
+        while p < top and a[p] == b[p]:
+            p += 1
+        q = 0
+        while q < top - p and a[len(a) - 1 - q] == b[len(b) - 1 - q]:
+            q += 1
+        if p + q == len(a):
+            gone = b[p:len(b) - q]
+            return gone or None
+        return None
+    if not before.get("whole") and len(a) > len(b) and b and a.endswith(b):
+        return "\n"
+    return None
+
+
 def _line_at(text, pos):
     """The text of the line containing offset ``pos``.
 
@@ -168,6 +263,10 @@ class EditableTextHandler:
         self._last_caret = None    # caret range from the last caret-tracking read
         self._last_win32_pos = None  # caret offset (Win32 fallback baseline)
         self._last_spoken = ("", "", 0.0)  # (kind, text, time) for dedup
+        # The field's text as last read, for Backspace to compare against
+        # where it cannot be read on the hook's thread (UI Automation).
+        self._snap = None
+        self._typed_at = 0.0
 
     # ================================================================== #
     # Focus binding + live-caret reading (caret tracking)
@@ -183,6 +282,7 @@ class EditableTextHandler:
         # first read). Seed whichever backend this control uses.
         self._last_caret = None
         self._last_win32_pos = None
+        self._snap = None
         try:
             text = self._atspi_text()
             if text is not None:
@@ -196,6 +296,7 @@ class EditableTextHandler:
                 tp = self._text_pattern()
                 if tp is not None:
                     self._last_caret = self._caret_range(tp)
+                    self._snap = self._uia_snapshot(tp)
                 else:
                     self._last_win32_pos = _win32_caret_pos(self._edit_hwnd())
         except Exception:
@@ -260,7 +361,7 @@ class EditableTextHandler:
         application applies the key after the hook answers, so the read
         waits (up to 0.3 s) for the caret to leave where it was."""
         before = self._last_caret if isinstance(self._last_caret, int) else None
-        deadline = time.time() + 0.30
+        deadline = time.time() + 0.15
         caret = text.caret()
         while before is not None and caret == before and time.time() < deadline:
             time.sleep(0.01)
@@ -388,9 +489,14 @@ class EditableTextHandler:
         if kind == "word" and text.strip() and self._misspelled(caret, unit):
             # **A word the program has underlined in red** (UIA's spelling
             # annotation) says so after the word.
-            return self._speak_caret_text(kind, text.strip() + ", "
+            said = self._speak_caret_text(kind, text.strip() + ", "
                                           + L("edit.misspelled"))
-        return self._speak_caret_text(kind, text)
+        else:
+            said = self._speak_caret_text(kind, text)
+        # Said first, then the line is kept for the next Backspace: the
+        # caret has moved, and what was typed before it no longer counts.
+        self._snap = self._uia_snapshot(tp)
+        return said
 
     @staticmethod
     def _misspelled(rng, unit):
@@ -410,6 +516,204 @@ class EditableTextHandler:
             return False
         return any(int(one) == 60001 for one in values
                    if isinstance(one, (int, float)))
+
+    # ================================================================== #
+    # Deleting: Backspace says what went, Delete what is there now
+    # ================================================================== #
+    def note_typed(self):
+        """A character was typed (the hook's thread). The snapshot is now
+        behind the text; for UI Automation a fresh one is taken once the
+        typing pauses, on the reader's own thread."""
+        self._typed_at = time.time()
+        if self._snap is None or self._snap.get("whole"):
+            return
+        stamp = self._typed_at
+
+        def _refresh():
+            if self._typed_at != stamp:
+                return                    # typed again since; a later one runs
+            tp = self._text_pattern()
+            if tp is not None:
+                self._snap = self._uia_snapshot(tp)
+                # The caret moved with the typing: the next arrow waits for
+                # it to leave where it is NOW.
+                self._last_caret = self._caret_range(tp)
+
+        def _post():
+            try:
+                self.engine.submit_action(_refresh)
+            except Exception:                        # noqa: BLE001
+                pass
+
+        timer = threading.Timer(0.12, _post)
+        timer.daemon = True
+        timer.start()
+
+    def note_caret_key(self):
+        """An arrow is about to reach the application (the hook's thread):
+        where the caret is now is the position the read waits for it to
+        leave. Asked of a Win32 edit with a 20 ms timeout and of AT-SPI on
+        the main thread; UI Automation keeps the baseline of its last read.
+        Without this, a caret moved by typing left the baseline behind,
+        and an arrow that landed back on it waited out the whole timeout."""
+        try:
+            if self._is_win32_edit():
+                hwnd = self._edit_hwnd()
+                start = _wt.DWORD()
+                end = _wt.DWORD()
+                if _send(hwnd, _EM_GETSEL, _ctypes.addressof(start),
+                         _ctypes.addressof(end), 20) is not None:
+                    self._last_win32_pos = int(start.value)
+                return
+            if not sys.platform.startswith("win") \
+                    and threading.current_thread() is threading.main_thread():
+                text = self._atspi_text()
+                if text is not None:
+                    caret = text.caret()
+                    if caret >= 0:
+                        self._last_caret = caret
+        except Exception:                            # noqa: BLE001
+            pass
+
+    def _rebase_caret(self, snap):
+        """After a deletion the caret is somewhere new; the next arrow
+        waits for it to leave THERE."""
+        if snap is None:
+            return
+        try:
+            if snap.get("whole") and self._is_win32_edit():
+                self._last_win32_pos = int(snap.get("caret") or 0)
+            elif self._atspi_text() is not None:
+                self._last_caret = self._atspi_text().caret()
+            else:
+                tp = self._text_pattern()
+                if tp is not None:
+                    self._last_caret = self._caret_range(tp)
+        except Exception:                            # noqa: BLE001
+            pass
+
+    def _uia_snapshot(self, tp):
+        """The caret's line and where in it the caret is (UI Automation)."""
+        caret = self._caret_range(tp)
+        if caret is None or _UNIT_LINE is None:
+            return None
+        try:
+            line = caret.Clone()
+            line.ExpandToEnclosingUnit(_UNIT_LINE)
+            text = line.GetText(-1) or ""
+            before = line.Clone()
+            before.MoveEndpointByRange(_EP_END, caret, _EP_START)
+            at = len(before.GetText(-1) or "")
+        except Exception:
+            return None
+        return {"text": text, "caret": at, "whole": False, "t": time.time()}
+
+    def _snapshot_now(self):
+        """The field as it is now, through whatever it answers."""
+        text = self._atspi_text()
+        if text is not None:
+            return _atspi_snapshot(text)
+        if self._is_win32_edit():
+            snap = _win32_snapshot(self._edit_hwnd())
+            if snap is not None:
+                return snap
+        tp = self._text_pattern()
+        if tp is not None:
+            return self._uia_snapshot(tp)
+        return _win32_snapshot(self._edit_hwnd())
+
+    def snapshot_before_key(self):
+        """The field before the application has the key - on the HOOK's
+        thread, so nothing here may wait: a Win32 edit is asked with a
+        40 ms timeout, AT-SPI only on the main thread (where libatspi
+        lives), and UI Automation, which cannot be asked from here, answers
+        with the line kept by the last read, marked stale when something
+        was typed after it."""
+        if self._is_win32_edit():
+            snap = _win32_snapshot(self._edit_hwnd(), timeout_ms=40)
+            if snap is not None:
+                return snap
+        if not sys.platform.startswith("win") \
+                and threading.current_thread() is threading.main_thread():
+            text = self._atspi_text()
+            if text is not None:
+                return _atspi_snapshot(text)
+        snap = self._snap
+        if snap is None:
+            return None
+        snap = dict(snap)
+        snap["stale"] = snap.get("t", 0.0) < self._typed_at + 0.05
+        return snap
+
+    def _wait_text_changed(self, before, timeout=0.30):
+        """The field once the key has changed it, or as it is at the
+        timeout (a Backspace at the start changes nothing)."""
+        if before is None:
+            time.sleep(0.05)
+            return self._snapshot_now()
+        deadline = time.time() + timeout
+        after = self._snapshot_now()
+        while after is not None and time.time() < deadline \
+                and after.get("text") == before.get("text") \
+                and after.get("caret") == before.get("caret"):
+            time.sleep(0.01)
+            after = self._snapshot_now()
+        return after
+
+    def read_deletion(self, key, ctrl, before, typed=""):
+        """Backspace: the character it took (Control: the word); Delete:
+        the character the caret is on now (Control: the word) - NVDA's
+        answers to both keys."""
+        typed = typed or ""
+        stale = bool(before and before.get("stale"))
+        after = self._wait_text_changed(None if stale else before)
+        if after is not None and not after.get("whole"):
+            self._snap = after
+        self._rebase_caret(after)
+        if key == "delete":
+            return self._say_at_caret(after, "word" if ctrl else "char")
+        gone = None
+        if not stale:
+            gone = removed_text(before, after)
+        if gone is None and typed and (time.time() - self._typed_at) < 2.0:
+            # What was just typed is what Backspace takes back, even where
+            # the field could not be read in time.
+            gone = typed if ctrl else typed[-1]
+        if gone is None:
+            if before is not None and after is not None \
+                    and before.get("text") == after.get("text") \
+                    and self._announce_bounds():
+                self.engine.speak(L("edit.start"))
+            return False
+        self._say_removed(gone)
+        return True
+
+    def _say_removed(self, gone):
+        if gone.replace("\r", "").replace("\n", "") == "":
+            self.engine.speak(L("edit.lineBreak"), obj=self.engine.current_object)
+            return
+        gone = gone.replace("\r\n", "\n")
+        if len(gone) == 1:
+            self._speak_char(gone)
+            return
+        if not gone.strip():
+            self._speak_char(gone[0])
+            return
+        self.engine.speak(self._text_for_speech("word", gone),
+                          obj=self.engine.current_object)
+
+    def _say_at_caret(self, snap, kind):
+        if snap is None:
+            return self._read_caret(kind)
+        text, at = snap.get("text") or "", int(snap.get("caret") or 0)
+        if kind == "word":
+            return self._speak_caret_text("word", _word_at(text, at))
+        ch = text[at] if 0 <= at < len(text) else ""
+        if ch in ("\r", "\n"):
+            self.engine.speak(L("edit.lineBreak"), obj=self.engine.current_object)
+            return True
+        self._last_spoken = ("", "", 0.0)
+        return self._speak_caret_text("char", ch)
 
     # ================================================================== #
     # The selection as it changes, and the formatting at the caret
@@ -614,7 +918,7 @@ class EditableTextHandler:
             return L("edit.emptyWord") if kind == "word" else L("edit.emptyLine")
         return prefix + said
 
-    def _wait_caret_moved_win32(self, hwnd, timeout=0.30):
+    def _wait_caret_moved_win32(self, hwnd, timeout=0.15):
         """Win32 counterpart of :meth:`_wait_caret_moved`: poll ``EM_GETSEL``
         until the caret offset leaves the last-read position, or the timeout."""
         base = self._last_win32_pos
@@ -636,7 +940,7 @@ class EditableTextHandler:
         h = int(getattr(obj, "hwnd", 0) or 0) if obj is not None else 0
         return h or _focused_hwnd()
 
-    def _wait_caret_moved(self, tp, timeout=0.30):
+    def _wait_caret_moved(self, tp, timeout=0.25):
         """Block until the live caret leaves :attr:`_last_caret`, or the timeout
         elapses.
 

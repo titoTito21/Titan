@@ -1,0 +1,14 @@
+Titan access jest to program udźwiękawiający środowisko Titan i system operacyjny windows lub linux
+O to najważniejsze skróty klawiszowe Titan access
+Insert+c - wejście w menu czytnika ekranu
+insert+shift+spacja - wejście do palety poleceń. W palecie, jak i w wirtualnym oknie
+ strzałki przemieszczają po liniach lub znakach
+num 1, 7, 3, 9, przemieszczają do odpowiedniego rogu okna, palety lub komunikatu
+num 4 i 6 zmieniają tryb prezentacji wirtualnego okna
+num 5 lub enter, klikają w obiekt, podwójne naciśnięcie klika podwójnie
+ins+shift+t - menu Titana (to jest menu dodatków dla czytnika ekranu Titan Access)
+insert+i - Alternatywny interfejs Titana w czytniku ekranu
+num minus, włącza/wyłącza TPad, w terminalu włącza/wyłącza tryb przeglądu ekranu
+
+uwaga!
+Titan access przestanie działać, gdy środowisko TCE zostanie wyłączone

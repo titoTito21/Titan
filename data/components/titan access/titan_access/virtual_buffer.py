@@ -612,6 +612,23 @@ def _node_from_cached(uc, cached, web):
     if ctid in _WRAPPER_CTIDS and not (
             not web and ctid == 50026 and name):
         return None
+    if not web:
+        # UWP / XAML: icons said as words, an icon-only control named by
+        # what it shows (uwp.py); a nameless one is asked live, the rest
+        # costs nothing.
+        from titan_access import uwp
+        control = None
+        if not name and role in uwp._NAMEABLE:
+            try:
+                control = uc.control_for(cached, ctid)
+            except Exception:
+                control = None
+        name = uwp.node_name(name, role, control,
+                             uc.text(cached, uc.FRAMEWORK_ID),
+                             uc.text(cached, uc.AUTOMATION_ID),
+                             uc.text(cached, uc.HELP_TEXT))
+        if name is None:
+            return None
     value = _cached_value(uc, cached)
     if not name and not value and role not in _ALWAYS_KEEP_ROLES:
         return None
@@ -747,6 +764,15 @@ def _build_uia_walk(root, deadline=None, web=False) -> List[VNode]:
         aria = _aria_role(control)
         if aria in _ARIA_TO_ROLE:
             role = _ARIA_TO_ROLE[aria]
+        if not web:
+            from titan_access import uwp
+            try:
+                name = uwp.node_name(name, role, control, control.FrameworkId,
+                                     control.AutomationId, control.HelpText)
+            except Exception:
+                pass
+            if name is None:
+                continue
         value = _uia_value(control)
         if not name and not value and role not in _ALWAYS_KEEP_ROLES:
             continue

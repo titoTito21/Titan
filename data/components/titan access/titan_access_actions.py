@@ -732,59 +732,415 @@ def _setting_key(name):
     return None
 
 
-def action_list_settings():
-    """Every reader setting that can be read or changed by name."""
-    store = _settings_store()
+# Every setting of the reader is in `settings_schema`: the settings page,
+# the walked settings and these actions are all built from it, so a setting
+# added there (Browsing the web, UWP apps...) is reachable here with no
+# change. The words above are kept as aliases for the names macros already
+# use.
+_ALIASES = {
+    "rate": ("Speech", "Rate"), "volume": ("Speech", "Volume"),
+    "pitch": ("Speech", "Pitch"), "voice": ("Speech", "Voice"),
+    "synthesizer": ("Speech", "Synthesizer"),
+    "speech system": ("Speech", "OwnVoice"),
+    "scan mode": ("Reader", "ScanMode"), "ai reading": ("Reader", "UseAiOcr"),
+    "ai labels": ("Reader", "AiOcrLabels"),
+    "progress bars": ("Reader", "ProgressMode"),
+    "keyboard echo": ("TextEditing", "KeyboardEcho"),
+    "phonetic letters": ("TextEditing", "PhoneticLetters"),
+    "speak hints": ("General", "SpeakHints"),
+    "mute outside titan": ("General", "MuteOutsideTCE"),
+    "virtual screen": ("General", "VirtualScreen"),
+    "welcome message": ("General", "WelcomeMessage"),
+    "read page on load": ("Browse", "SayAllOnPageLoad"),
+    "page summary": ("Browse", "PageSummary"),
+    "landmark start and end": ("Browse", "LandmarkStartEnd"),
+    "icons": ("UWP", "Glyphs"),
+    "name icon buttons": ("UWP", "NameIconControls"),
+    "virtual lists": ("UWP", "VirtualLists"),
+    "new list rows": ("Reader", "liveLists"),
+}
+
+#: The other way round: the English word for a setting, shown in the list
+#: so a caller reading a Polish label still has a name to ask for.
+_ALIAS_OF = {target: word for word, target in _ALIASES.items()}
+
+
+def _schema():
+    from titan_access import settings_schema
+    return settings_schema
+
+
+def _walk():
+    from titan_access import settings_walk
+    return settings_walk
+
+
+def _L(key, *args):
+    try:
+        from titan_access.localization import L
+        return L(key, *args)
+    except Exception:
+        return key
+
+
+def _walk_entry(entry):
+    return (entry.section, entry.key, entry.label, entry.kind, entry.extra,
+            entry.default)
+
+
+def _norm(text):
+    return " ".join(str(text or "").lower().replace("_", " ")
+                    .replace("/", " / ").split())
+
+
+def _find_entry(name):
+    """A schema entry by alias, ``Section/Key``, key, or its label's words
+    (in the user's language or English); None when nothing or several
+    things match."""
+    schema = _schema()
+    wanted = _norm(name)
+    if not wanted:
+        return None
+    if wanted in _ALIASES:
+        return schema.find(*_ALIASES[wanted])
+    entries = [e for e in schema.entries() if e.key]
+    for entry in entries:
+        if wanted in (_norm(entry.key), _norm(f"{entry.section}/{entry.key}"),
+                      _norm(f"{entry.section} {entry.key}")):
+            return entry
+    by_label = [e for e in entries if wanted in _norm(_L(e.label))]
+    if len(by_label) == 1:
+        return by_label[0]
+    exact = [e for e in by_label if _norm(_L(e.label)) == wanted]
+    return exact[0] if len(exact) == 1 else None
+
+
+def _value_text(entry):
+    walk = _walk()
+    tup = _walk_entry(entry)
+    try:
+        value = walk.value_of(tup)
+        if entry.kind == "bool":
+            return "on" if _bool(value, False) else "off"
+        return str(walk.value_word(tup, value, _engine()))
+    except Exception as e:
+        return f"? ({e})"
+
+
+def _accepts(entry):
+    if entry.kind == "bool":
+        return "on or off"
+    if entry.kind == "range":
+        low, high, _step = entry.extra
+        return f"{low} to {high}"
+    if entry.kind == "text":
+        return "any text"
+    try:
+        rows = _walk()._options(_walk_entry(entry), _engine())
+    except Exception:
+        rows = []
+    if not rows:
+        return "one of its options"
+    return "; ".join(f"{value} ({label})" if str(value) != str(label) else
+                     str(value) for value, label in rows[:30])
+
+
+def _category(name):
+    wanted = _norm(name)
+    for sid, title, rows in _schema().SECTIONS:
+        if wanted in (_norm(sid), _norm(_L(title))):
+            return sid, title, rows
+    return None
+
+
+def action_list_setting_categories():
+    """The reader's settings categories, as the settings page shows them."""
+    lines = [f"{_L(title)} [{sid}], {len(rows)} settings"
+             for sid, title, rows in _schema().SECTIONS]
+    return "Titan Access settings categories:\n" + "\n".join(lines)
+
+
+def action_list_settings(category=""):
+    """Every reader setting, or one category's, with its value now."""
+    sections = _schema().SECTIONS
+    if category:
+        found = _category(category)
+        if found is None:
+            return fails(f"There is no settings category called '{category}'. "
+                         "titan_access.list_setting_categories names them.")
+        sections = (found,)
     lines = []
-    for key in sorted(_SETTINGS):
-        attribute, accepts = _SETTINGS[key]
-        try:
-            value = getattr(store, attribute)
-        except Exception:
-            value = "?"
-        lines.append(f"{key}: {value} ({accepts})")
+    for sid, title, rows in sections:
+        lines.append(f"{_L(title)} [{sid}]:")
+        for entry in rows:
+            if not entry.key:
+                continue
+            alias = _ALIAS_OF.get((entry.section, entry.key))
+            named = f"{entry.section}/{entry.key}" + (
+                f", '{alias}'" if alias else "")
+            lines.append(f"  {_L(entry.label)} [{named}]: {_value_text(entry)}")
     return "Titan Access settings:\n" + "\n".join(lines)
 
 
 def action_get_setting(name):
-    """One reader setting."""
-    key = _setting_key(name)
-    if key is None:
-        return fails(f"There is no reader setting called '{name}'. "
-                     "titan_access.list_settings shows them all.")
-    attribute, accepts = _SETTINGS[key]
-    try:
-        return f"{key} is {getattr(_settings_store(), attribute)} ({accepts})."
-    except Exception as e:
-        return fails(f"Could not read '{key}': {e}")
+    """One reader setting, with what it accepts and what it does."""
+    entry = _find_entry(name)
+    if entry is None:
+        return fails(f"No single reader setting matches '{name}'. "
+                     "titan_access.list_settings shows them all with their "
+                     "Section/Key names.")
+    return (f"{_L(entry.label)} [{entry.section}/{entry.key}] is "
+            f"{_value_text(entry)}. Accepts: {_accepts(entry)}. "
+            f"{_L(entry.help)}")
+
+
+def _coerce_entry(entry, value):
+    """``value`` as the entry's own kind, or raise ValueError saying why."""
+    text = str(value if value is not None else "").strip()
+    if entry.kind == "bool":
+        return _bool(text, True)
+    if entry.kind == "range":
+        number = int(float(text))
+        low, high, _step = entry.extra
+        if not low <= number <= high:
+            raise ValueError(f"{number} is outside {low} to {high}")
+        return number
+    if entry.kind == "text":
+        return text
+    rows = _walk()._options(_walk_entry(entry), _engine())
+    for option, label in rows:
+        if _norm(option) == _norm(text) or _norm(label) == _norm(text):
+            return option
+    for option, label in rows:
+        if _norm(text) and _norm(text) in _norm(label):
+            return option
+    if not rows and entry.kind in ("voices", "variants", "synthesizer"):
+        return text
+    raise ValueError("it is not one of: " + _accepts(entry))
 
 
 def action_set_setting(name, value):
-    """Change one reader setting and save it."""
-    key = _setting_key(name)
-    if key is None:
-        return fails(f"There is no reader setting called '{name}'. "
-                     "titan_access.list_settings shows them all.")
-    attribute, accepts = _SETTINGS[key]
-    store = _settings_store()
+    """Change one reader setting, save it and apply it to the running
+    reader - the same write the settings page and the walked settings do."""
+    entry = _find_entry(name)
+    if entry is None:
+        return fails(f"No single reader setting matches '{name}'. "
+                     "titan_access.list_settings shows them all with their "
+                     "Section/Key names.")
     try:
-        current = getattr(store, attribute)
-    except Exception:
-        current = None
-    try:
-        setattr(store, attribute, _coerce(value, current))
-        store.save()
+        wanted = _coerce_entry(entry, value)
     except Exception as e:
-        return fails(f"Could not set '{key}' to '{value}' ({accepts}): {e}")
-    # A running reader holds its own copy of the settings; make it re-read them
-    # so the change is heard now rather than after a restart.
+        return fails(f"'{value}' cannot be {_L(entry.label)}: {e}.")
+    try:
+        _walk().set_value(_walk_entry(entry), wanted, _engine())
+    except Exception as e:
+        return fails(f"Could not set {_L(entry.label)}: {e}")
+    return f"{_L(entry.label)} is now {_value_text(entry)}."
+
+
+# --------------------------------------------------------------------------- #
+# What a page has, the speech system, profiles, the program in front
+# --------------------------------------------------------------------------- #
+_SUMMARY = (("browse.count.links", "link"), ("browse.count.headings", "heading"),
+            ("browse.count.formFields", "form"),
+            ("browse.count.landmarks", "landmark"),
+            ("browse.count.tables", "table"), ("browse.count.lists", "list"))
+
+
+def action_page_summary(window=0):
+    """How many links, headings, form fields, landmarks, tables and lists the
+    page or window in front has - what the reader says when a page loads
+    with "Browsing the web -> page summary" on."""
+    doc = _document(window=window)
+    if doc is None or not doc.nodes:
+        return fails("Nothing readable is on the screen.")
+    from titan_access import localization as loc
+    parts = []
+    for key, kind in _SUMMARY:
+        count = len(_matching(doc, kind))
+        if count:
+            parts.append(loc.plural(key, count))
+    if not parts:
+        return f"'{doc.title or 'window'}' has no links, headings or fields."
+    return loc.L("browse.summary", ", ".join(parts))
+
+
+def action_speech_systems():
+    """What the reader can speak with: the speech systems on this machine,
+    the synthesizers of each, and what it is set to now."""
+    from titan_access import speech_systems as ss
+    system, synth, voice = ss.current(_settings_store())
+    lines = [f"Now: {system}" + (f", {synth}" if synth else "")
+             + (f", voice {voice}" if voice else "")]
+    for sid, label in ss.systems():
+        synths = ss.synthesizers(sid)
+        names = ", ".join(f"{name} [{key}]" if key else name
+                          for key, name in synths)
+        lines.append(f"{label} [{sid}]: {names}")
+    return "Speech systems:\n" + "\n".join(lines)
+
+
+def action_list_voices(synthesizer=""):
+    """The voices of a synthesizer (the one in use when none is named)."""
+    from titan_access import speech_systems as ss
+    synth = str(synthesizer or "") or ss.current(_settings_store())[1]
+    if not synth:
+        return ("The reader speaks with Titan's own voice; choose a speech "
+                "system with titan_access.set_speech to pick a voice of its own.")
+    rows = ss.voices(synth)
+    if not rows:
+        return fails(f"'{synth}' offers no voices (or is not installed).")
+    return f"Voices of {synth}:\n" + "\n".join(
+        f"{label} [{key}]" for key, label in rows)
+
+
+def _pick(rows, wanted, what):
+    wanted_n = _norm(wanted)
+    for key, label in rows:
+        if _norm(key) == wanted_n or _norm(label) == wanted_n:
+            return key
+    near = [key for key, label in rows if wanted_n and wanted_n in _norm(label)]
+    if len(near) == 1:
+        return near[0]
+    raise ValueError(f"no {what} called '{wanted}'; there are: "
+                     + ", ".join(label for _k, label in rows[:20]))
+
+
+def action_set_speech(system, synthesizer="", voice=""):
+    """Choose what the reader speaks with - the same three levels as the
+    speech system dialog (Insert+Ctrl+S)."""
+    from titan_access import speech_systems as ss
+    try:
+        sid = _pick(ss.systems(), system, "speech system")
+        synths = ss.synthesizers(sid)
+        synth = _pick(synths, synthesizer, "synthesizer") if synthesizer \
+            else (synths[0][0] if synths else "")
+        chosen = _pick(ss.voices(synth), voice, "voice") \
+            if voice and synth else ""
+    except Exception as e:
+        return fails(str(e))
+    ss.choose(_settings_store(), sid, synth, chosen, engine=_engine())
+    return action_speech_systems().splitlines()[1]
+
+
+def action_list_profiles():
+    """The programs that have settings of their own."""
+    from titan_access import profiles
+    names = profiles.programs()
+    if not names:
+        return "No program has settings of its own."
+    lines = []
+    for name in names:
+        lines.append(f"{name}: {len(profiles.overrides(name))} settings")
+    active = profiles.active()
+    tail = f"\nIn force now: {active}." if active else ""
+    return "Programs with their own settings:\n" + "\n".join(lines) + tail
+
+
+def action_remove_profile(program):
+    """Throw a program's own settings away; it then uses the general ones."""
+    from titan_access import profiles
+    if str(program) not in profiles.programs():
+        return fails(f"'{program}' has no settings of its own.")
+    if not profiles.remove(str(program)):
+        return fails(f"The settings of '{program}' could not be removed.")
+    return f"'{program}' uses the general settings now."
+
+
+def action_app_info():
+    """The program in front: its executable, whether it is a UWP (Store)
+    app, and the profile in force for it."""
+    from titan_access import uwp, profiles
+    hwnd = _foreground()
+    if not hwnd:
+        return fails("No window is in front.")
+    pid = uwp.app_pid(hwnd) if uwp.IS_WINDOWS else 0
+    exe = uwp.executable(pid) if pid else ""
+    title = _buffer().window_text(hwnd)
+    parts = [f"'{title or 'untitled'}'"]
+    if exe:
+        parts.append(f"program {exe}")
+    if uwp.is_uwp_window(hwnd):
+        parts.append("a UWP app (its frame is ApplicationFrameHost; "
+                     "the settings under 'UWP apps' apply)")
+    program = profiles.program_in_front()
+    if program and program in profiles.programs():
+        parts.append(f"has its own settings ({program})")
+    return ", ".join(parts) + "."
+
+
+def action_braille_status():
+    """Whether braille is on, which table and display, and whether the
+    display is connected."""
+    from titan_access import braille
+    report = braille.report()
+    store = _settings_store()
+    on = store.get_bool("Braille", "Enabled", False)
+    display = store.get("Braille", "Display", "none") or "none"
+    table = store.get("Braille", "Table", "") or "automatic"
+    if not on:
+        return "Braille is off."
+    words = [f"Braille is on, table {table}, display {display}"]
+    words.append("connected" if report.get("display") else
+                 ("not connected" if display != "none" else "shown in the viewer"))
+    if not report.get("available"):
+        words.append("liblouis is not available, so nothing can be translated")
+    return ", ".join(words) + "."
+
+
+def tce_processes():
+    """Titan's own process and every process it started, by pid - what the
+    reader counts as TCE (`engine._is_tce_foreground` walks the same tree
+    the other way)."""
+    found = [os.getpid()]
+    try:
+        import psutil
+        found += [child.pid for child in
+                  psutil.Process().children(recursive=True)]
+    except Exception:
+        pass
+    return found
+
+
+def action_reader_policy():
+    """For ANOTHER screen reader: whether Titan Access reads TCE by itself
+    and leaves the rest of the system to it ("Mute outside TCE"), and which
+    processes are TCE. The NVDA add-on asks this and sleeps in exactly
+    those processes, so inside TCE only Titan Access speaks and outside it
+    only the system's reader does. Answered as JSON, because a program
+    reads it."""
+    import json
     engine = _engine()
-    if engine is not None:
-        try:
-            engine.settings.load()
-        except Exception:
-            pass
-    return f"{key} is now {getattr(store, attribute)}."
+    running = bool(engine is not None and getattr(engine, "running", False))
+    try:
+        from titan_access.settings_store import get_settings
+        mute = bool(get_settings().mute_outside_tce)
+    except Exception:
+        mute = False
+    return json.dumps({"running": running, "mute_outside_tce": mute,
+                       "reads_tce_alone": running and mute,
+                       "tce_pids": tce_processes() if running else []})
+
+
+def action_diagnostics():
+    """What the reader is made of right now - threads, the keyboard hook,
+    the supervisor's counts, the last things said. For finding out why
+    something is not heard."""
+    engine = _engine()
+    if engine is None:
+        return fails("The Titan screen reader is not running.")
+    try:
+        found = engine.diagnostics()
+    except Exception as e:
+        return fails(f"The reader could not describe itself: {e}")
+    lines = [f"running: {found.get('running')}",
+             f"threads: {found.get('threads')}",
+             f"keyboard hook: {found.get('hook')}",
+             f"supervisor: {found.get('supervisor')}"]
+    spoken = found.get("spoken") or []
+    if spoken:
+        lines.append("last said: " + " | ".join(str(x) for x in spoken[-8:]))
+    return "\n".join(lines)
 
 
 def _coerce(value, current):
@@ -849,6 +1205,483 @@ def action_toggle():
 
 
 # --------------------------------------------------------------------------- #
+# What a script - or the AI - does with the reader itself
+# --------------------------------------------------------------------------- #
+def _speak_out(text):
+    """Say ``text`` in the reader's voice; answer the text or a failure."""
+    text = str(text or "").strip()
+    if not text:
+        return fails("There is nothing to say.")
+    engine = _engine(require_running=False)
+    speak = getattr(engine, "speak", None) if engine is not None else None
+    if not callable(speak):
+        return fails("The screen reader is not available to speak.")
+    try:
+        speak(text, interrupt=True)
+    except Exception as e:
+        return fails(f"The screen reader could not speak: {e}")
+    return text
+
+
+def _focused():
+    engine = _engine()
+    obj = getattr(engine, "current_object", None) if engine is not None else None
+    return obj if obj is not None else _focused_without_engine()
+
+
+def _status_bar_text():
+    engine = _engine()
+    if engine is None or not hasattr(engine, "_status_bar_children"):
+        return ""
+    words = []
+    try:
+        for _key, child in engine._status_bar_children():
+            name = str(getattr(child, "name", "") or "").strip()
+            if name and name not in words:
+                words.append(name)
+    except Exception:
+        return ""
+    return ", ".join(words)
+
+
+def _selection_text():
+    engine = _engine()
+    editable = getattr(engine, "editable", None) if engine is not None else None
+    if editable is None:
+        return None
+    try:
+        return editable._selection_text()
+    except Exception:
+        return None
+
+
+#: What `read_aloud` can say, and how it is found.
+_READ_ALOUD = ("focus", "title", "value", "last", "screen", "position",
+               "selection", "status", "time", "date")
+
+
+def action_read_aloud(what="focus"):
+    """Say one thing in the reader's voice and answer what was said."""
+    what = str(what or "focus").strip().lower()
+    if what not in _READ_ALOUD:
+        return fails(f"'{what}' is not something to read; one of: "
+                     + ", ".join(_READ_ALOUD) + ".")
+    if what == "focus":
+        return _speak_out(action_read_focused())
+    if what == "title":
+        return _speak_out(action_window_title())
+    if what == "screen":
+        return action_speak_screen()
+    if what == "time":
+        return _speak_out(time.strftime("%H:%M"))
+    if what == "date":
+        return _speak_out(time.strftime("%Y-%m-%d"))
+    if what == "last":
+        said = _spoken()
+        return _speak_out(said[-1]) if said else fails("Nothing has been said yet.")
+    obj = _focused()
+    if what == "value":
+        value = str(getattr(obj, "value", "") or "").strip() if obj else ""
+        return _speak_out(value) if value else fails(
+            "The control in focus holds no value.")
+    if what == "position":
+        index = int(getattr(obj, "pos_in_set", 0) or 0) if obj else 0
+        count = int(getattr(obj, "size_of_set", 0) or 0) if obj else 0
+        if not (index and count):
+            return fails("The control in focus is not in a counted list.")
+        return _speak_out(_L("element.positionOf", index, count))
+    if what == "selection":
+        chosen = _selection_text()
+        if chosen is None:
+            return fails("The control in focus has no text to select in.")
+        return _speak_out(chosen) if chosen.strip() else _speak_out(
+            _L("edit.noSelection"))
+    status = _status_bar_text()
+    return _speak_out(status) if status else fails(
+        "The window in front has no status bar the reader can read.")
+
+
+def _spoken():
+    try:
+        from titan_access import speech_adapter
+        return [str(x) for x in speech_adapter.spoken()]
+    except Exception:
+        return []
+
+
+def action_last_spoken(count=5):
+    """The last things the reader said, newest last (at most twenty)."""
+    said = _spoken()
+    if not said:
+        return "The reader has not said anything yet."
+    count = max(1, min(int(count or 5), 20))
+    return "\n".join(said[-count:])
+
+
+def action_beep(frequency=880, duration=60, pan=0.0):
+    """A tone through the reader's own sound: frequency in Hz, length in ms,
+    pan -1 (left) to 1 (right)."""
+    engine = _engine(require_running=False)
+    sound = getattr(engine, "sound", None) if engine is not None else None
+    try:
+        frequency = max(40.0, min(float(frequency), 8000.0))
+        duration = max(5, min(int(float(duration)), 3000))
+        pan = max(-1.0, min(float(pan or 0), 1.0))
+    except Exception:
+        return fails("A beep wants a frequency in Hz and a length in ms.")
+    if sound is None:
+        try:
+            from titan_access.sound_manager import SoundManager
+            sound = SoundManager()
+        except Exception as e:
+            return fails(f"The reader has no sound: {e}")
+    try:
+        sound.play_tone(frequency=frequency, duration_ms=duration, pan=pan)
+    except Exception as e:
+        return fails(f"The tone could not be played: {e}")
+    return f"Beep, {int(frequency)} Hz, {duration} ms."
+
+
+def _cue_names():
+    folder = os.path.join(_HERE, "sfx")
+    try:
+        return sorted(name[:-4] for name in os.listdir(folder)
+                      if name.lower().endswith(".ogg"))
+    except OSError:
+        return []
+
+
+def action_play_cue(name):
+    """One of the reader's own sounds (cursor, edge, clicked...), placed where
+    the control in focus is."""
+    wanted = str(name or "").strip()
+    if wanted.lower().endswith(".ogg"):
+        wanted = wanted[:-4]
+    names = _cue_names()
+    match = [one for one in names if one.lower() == wanted.lower()]
+    if not match:
+        return fails(f"The reader has no sound called '{name}'. It has: "
+                     + ", ".join(names) + ".")
+    engine = _engine(require_running=False)
+    if engine is None or not hasattr(engine, "play"):
+        return fails("The screen reader is not available to play a sound.")
+    engine.play(match[0], getattr(engine, "current_object", None))
+    return f"Played {match[0]}."
+
+
+def action_braille(text):
+    """Show text on the braille display (or the braille viewer)."""
+    text = str(text or "").strip()
+    if not text:
+        return fails("There is nothing to show.")
+    try:
+        from titan_access import braille
+        braille.show_text(text)
+    except Exception as e:
+        return fails(f"Braille could not show it: {e}")
+    return f"Shown in braille: {text}"
+
+
+def action_pass_key(key):
+    """Press a key for the program, marked so the reader does not take it
+    again - what `pass` in a reader script does with the key that started it."""
+    spec = str(key or "").strip().lower()
+    parts = [part for part in spec.split("+")
+             if part and part not in ("insert", "nvda", "ta", "capslock")]
+    if not parts:
+        return fails("Say which key to pass on, like 'ctrl+s'.")
+    try:
+        from titan_access import keyboard_hook
+        ok = keyboard_hook.send_combo("+".join(parts))
+    except Exception as e:
+        return fails(f"The key could not be pressed: {e}")
+    return ("Passed " + "+".join(parts) + ".") if ok else fails(
+        f"'{key}' is not a key the reader can press.")
+
+
+def action_label_control(label=""):
+    """Give the control in focus a name of its own (kept for both readers,
+    per program); an empty label takes the name away again."""
+    obj = _focused()
+    if obj is None:
+        return fails("Nothing has the keyboard focus.")
+    try:
+        from titan_access import nvda_shape
+        from titan_access.portable import labels
+        adapted = nvda_shape.adapt(obj)
+    except Exception as e:
+        return fails(f"Names cannot be kept here: {e}")
+    label = str(label or "").strip()
+    if not label:
+        labels.remove(adapted)
+        return "The control's own name is used again."
+    if not labels.put(adapted, label, source="user"):
+        return fails("This control cannot be told apart from its "
+                     "neighbours, so a name for it would not stay on it.")
+    return f"This control is now called {label}."
+
+
+def action_list_labels(program=""):
+    """The names given to controls, for one program or the one in front."""
+    try:
+        from titan_access.portable import labels
+        from titan_access import profiles
+    except Exception as e:
+        return fails(f"Names cannot be read here: {e}")
+    program = str(program or "").strip() or profiles.program_in_front() or ""
+    if not program:
+        return fails("Say which program.")
+    try:
+        rows = labels.for_application(program)
+    except Exception as e:
+        return fails(f"The names of '{program}' could not be read: {e}")
+    if not rows:
+        return f"No control of '{program}' has a name of its own."
+    lines = []
+    for key, row in sorted(rows.items()):
+        said = row.get("label") if isinstance(row, dict) else row
+        if said:
+            lines.append(f"{said} ({key})")
+    return f"Names given in {program} ({len(lines)}):\n" + "\n".join(lines)
+
+
+def _shortcut_rows(engine):
+    rows = []
+    for binding in getattr(getattr(engine, "gestures", None), "_bindings",
+                           None) or ():
+        action = str(getattr(binding, "action_id", "") or "")
+        if not action:
+            continue
+        try:
+            key = engine._shortcut_key_text(binding)
+        except Exception:
+            key = str(getattr(binding, "key_spec", "") or "")
+        name = str(getattr(binding, "name", "") or action)
+        rows.append((action, name, key, binding))
+    return rows
+
+
+def action_list_shortcuts(contains=""):
+    """Every key of the running reader with the command it runs - the
+    command's id is what run_command and `command` in a script take."""
+    engine = _engine()
+    if engine is None:
+        return fails("The Titan screen reader is not running.")
+    grouped, order = {}, []
+    for action, name, key, _binding in _shortcut_rows(engine):
+        if action not in grouped:
+            grouped[action] = (name, [])
+            order.append(action)
+        if key and key not in grouped[action][1]:
+            grouped[action][1].append(key)
+    wanted = _norm(contains)
+    lines = []
+    for action in order:
+        name, keys = grouped[action]
+        line = f"{action}: {', '.join(keys)}" + (
+            f" ({name})" if name != action else "")
+        if wanted and wanted not in _norm(line):
+            continue
+        lines.append(line)
+    if not lines:
+        return "No command matches." if wanted else "The reader has no keys."
+    return f"Titan Access commands ({len(lines)}):\n" + "\n".join(lines)
+
+
+def action_run_command(name):
+    """Run one of the reader's own commands, exactly as its key would."""
+    engine = _engine()
+    if engine is None:
+        return fails("The Titan screen reader is not running.")
+    wanted = _norm(name)
+    rows = _shortcut_rows(engine)
+    found = [row for row in rows if _norm(row[0]) == wanted] or \
+        [row for row in rows if _norm(row[1]) == wanted] or \
+        [row for row in rows if wanted and wanted in _norm(row[1])]
+    if not found:
+        return fails(f"The reader has no command '{name}'. "
+                     "titan_access.list_shortcuts names them.")
+    if len({row[0] for row in found}) > 1:
+        return fails("Several commands match: "
+                     + ", ".join(sorted({row[0] for row in found}))
+                     + ". Say which one.")
+    action, label, _key, binding = found[0]
+    # A command may open a window or wait for speech: never on the thread
+    # that called (Titan's GUI thread, for an action).
+    threading.Thread(target=binding.handler, daemon=True,
+                     name="TitanAccessCommand").start()
+    return f"Ran {label}."
+
+
+def action_list_speech_schemes():
+    """The speech schemes (how each kind of control is announced) and the
+    one in use."""
+    try:
+        from titan_access.portable import speechSchemes
+    except Exception as e:
+        return fails(f"Speech schemes are not here: {e}")
+    active = speechSchemes.active()
+    lines = []
+    for key in speechSchemes.names():
+        mark = " (in use)" if key == active else ""
+        lines.append(f"{speechSchemes.label_of(key)} [{key}]{mark}")
+    return "Speech schemes:\n" + "\n".join(lines)
+
+
+def action_set_speech_scheme(name):
+    """Use another speech scheme."""
+    try:
+        from titan_access.portable import speechSchemes
+    except Exception as e:
+        return fails(f"Speech schemes are not here: {e}")
+    wanted = _norm(name)
+    keys = list(speechSchemes.names())
+    match = [k for k in keys if _norm(k) == wanted or
+             _norm(speechSchemes.label_of(k)) == wanted] or \
+        [k for k in keys if wanted and wanted in _norm(speechSchemes.label_of(k))]
+    if len(match) != 1:
+        return fails(f"No single speech scheme matches '{name}'. "
+                     + action_list_speech_schemes())
+    speechSchemes.use(match[0])
+    return f"The speech scheme is now {speechSchemes.label_of(match[0])}."
+
+
+# --------------------------------------------------------------------------- #
+# Writing the user's scripts
+# --------------------------------------------------------------------------- #
+def _script_path(name):
+    ta = _scripts()
+    clean = "".join(ch for ch in str(name or "").strip()
+                    if ch not in '\\/:*?"<>|').strip()
+    if clean.lower().endswith(ta.EXTENSION):
+        clean = clean[:-len(ta.EXTENSION)]
+    if not clean or clean.startswith("."):
+        return None, ""
+    return os.path.join(ta.folder(), clean + ta.EXTENSION), clean
+
+
+def action_script_language(language="en"):
+    """The Titan Access script language (.tas) - what a reader script may
+    say beyond Titan Script, read out of the reader itself."""
+    return _scripts().language_text(language or "en")
+
+
+def action_read_script(name):
+    """The text of one of the user's reader scripts."""
+    path, clean = _script_path(name)
+    if not path or not os.path.isfile(path):
+        return fails(f"There is no script called '{name}'.")
+    with open(path, "r", encoding="utf-8-sig") as handle:
+        return handle.read()
+
+
+def action_write_script(name, text, overwrite=False):
+    """Write a reader script, checked first: a script with a problem is not
+    saved, and the problems are the answer. Loaded at once."""
+    ta = _scripts()
+    path, clean = _script_path(name)
+    if not path:
+        return fails("A script needs a name.")
+    body = str(text or "").replace("\r\n", "\n")
+    if not body.strip():
+        return fails("The script is empty.")
+    if os.path.exists(path) and not _bool(overwrite, False):
+        return fails(f"There is already a script called '{clean}'. "
+                     "Pass overwrite=true to replace it.")
+    problems = ta.check(body)
+    if problems:
+        return fails(f"'{clean}' was not saved:\n" + "\n".join(problems))
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(body if body.endswith("\n") else body + "\n")
+    engine = _engine()
+    ta.bind(engine) if engine is not None else ta.load()
+    return f"Saved and loaded {clean}."
+
+
+def action_delete_script(name):
+    """Delete one of the user's reader scripts."""
+    ta = _scripts()
+    path, clean = _script_path(name)
+    if not path or not os.path.isfile(path):
+        return fails(f"There is no script called '{name}'.")
+    os.remove(path)
+    engine = _engine()
+    ta.bind(engine) if engine is not None else ta.load()
+    return f"Deleted {clean}."
+
+
+# --------------------------------------------------------------------------- #
+# What Titan Access is - for Titan's AI, read out of the reader as it is now
+# --------------------------------------------------------------------------- #
+def _component_version():
+    path = os.path.join(_HERE, "__component__.TCE")
+    try:
+        with open(path, "r", encoding="utf-8-sig") as handle:
+            for line in handle:
+                key, _sep, value = line.partition("=")
+                if key.strip().lower() == "version":
+                    return value.strip()
+    except OSError:
+        pass
+    return ""
+
+
+def briefing(with_actions=True):
+    """What Titan Access is and can do, built from the code as it stands -
+    its description, its settings categories, its script language and its
+    actions - so Titan's AI is never told about an older reader."""
+    parts = [TITAN_DESCRIPTION]
+    version = _component_version()
+    if version:
+        parts.append(f"Version {version}.")
+    try:
+        sections = ", ".join(f"{_L(title)} [{sid}]"
+                             for sid, title, _rows in _schema().SECTIONS)
+        parts.append(f"Settings categories: {sections}.")
+    except Exception:
+        pass
+    try:
+        statements = ", ".join(what.split(" - ")[0].split(" ")[0]
+                               for _p, _t, what in _scripts().STATEMENTS)
+        kinds = []
+        for trigger in _scripts().TRIGGERS:
+            word = trigger[0].split()[1]
+            if word not in kinds:
+                kinds.append(word)
+        triggers = "when " + ", ".join(kinds)
+        parts.append("Reader scripts (.tas, in the user's accessibility/"
+                     "scripts folder) are Titan Script plus the reader's own "
+                     f"triggers ({triggers}), statements ({statements}) and "
+                     "JAWS-like control rules; titan_access.script_language "
+                     "is the full reference and write_script saves one "
+                     "checked.")
+    except Exception:
+        pass
+    if with_actions:
+        names = ", ".join(entry["name"] for entry in TITAN_ACTIONS)
+        parts.append(f"Its actions: {names}.")
+    return " ".join(parts)
+
+
+#: Titan's AI asks this for what the reader is (src/ai/action_tools.py).
+TITAN_AI_BRIEFING = briefing
+
+
+def action_about():
+    """What Titan Access is and can do right now, read out of the reader -
+    the place to look before telling the user anything about it."""
+    lines = [briefing(with_actions=False), "", "Actions:"]
+    for entry in TITAN_ACTIONS:
+        lines.append(f"  {entry['name']} - {entry['summary']}")
+    engine = _engine()
+    lines.append("")
+    lines.append("The reader is " + ("running." if engine is not None
+                                     else "off (reading the screen still "
+                                          "works)."))
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
 # The declaration
 # --------------------------------------------------------------------------- #
 _KIND_ENUM = _KIND_NAMES
@@ -860,6 +1693,20 @@ _USE_AI_PARAM = {'type': 'boolean',
                                 "Windows reports nothing accessible in it. Off "
                                 "by default: it sends a picture of the screen "
                                 "to the configured AI provider."}
+
+#: What Titan Access is, for the AI's listing of add-ons (Titan reads it
+#: as the add-on's description, the Python twin of a manifest's).
+TITAN_DESCRIPTION = (
+    "Titan's own screen reader (Insert or CapsLock is its modifier). It "
+    "reads ANY program's window - UI Automation, MSAA, IAccessible2, Java, "
+    "AT-SPI, the raw controls, or its own OCR - even while the reader is "
+    "off, and presses what it found. Pages and apps are read as a document "
+    "(browse/scan mode, quick navigation, page summary); UWP apps get icons "
+    "said as words; notifications are read. It speaks through Titan TTS, "
+    "SAPI 5, eSpeak or NVDA add-on synthesizers, shows braille (liblouis, "
+    "BRLTTY), keeps settings per program, speech schemes, names given to "
+    "controls and the user's reader scripts (.tas). titan_access.about "
+    "says what it can do NOW.")
 
 TITAN_ACTIONS = [
     # -- reading -------------------------------------------------------- #
@@ -1071,20 +1918,211 @@ TITAN_ACTIONS = [
      'risk': 'confirm', 'run': action_toggle},
 
     # -- settings -------------------------------------------------------- #
+    {'name': 'list_setting_categories',
+     'summary': "The Titan Access settings categories (Speech, Browsing the "
+                "web, UWP apps, Braille...), as the settings page shows them.",
+     'run': action_list_setting_categories},
     {'name': 'list_settings',
-     'summary': "Every Titan Access setting that can be read or changed by "
-                "name, with what it accepts.",
+     'summary': "Every Titan Access setting with its value now and its "
+                "Section/Key name, or only one category's.",
+     'params': {'category': {'type': 'string',
+                             'description': "A category id or name, e.g. "
+                                            "'web' or 'uwp'; leave it out "
+                                            "for all of them."}},
      'run': action_list_settings},
     {'name': 'get_setting',
-     'summary': "One Titan Access setting.",
+     'summary': "One Titan Access setting: its value, what it accepts and "
+                "what it does.",
      'params': {'name': {'type': 'string', 'required': True,
-                         'description': "For example 'rate' or 'scan mode'."}},
+                         'description': "Its Section/Key (e.g. "
+                                        "'Browse/PageSummary'), its key, or "
+                                        "words from its label ('rate', "
+                                        "'page summary', 'scan mode')."}},
      'run': action_get_setting},
     {'name': 'set_setting',
-     'summary': "Change one Titan Access setting and save it.",
+     'summary': "Change one Titan Access setting, save it and apply it to "
+                "the running reader - the same as changing it in the "
+                "settings page or the walked settings.",
      'params': {'name': {'type': 'string', 'required': True,
-                         'description': "For example 'rate' or 'scan mode'."},
+                         'description': "Its Section/Key, key or label words, "
+                                        "as for get_setting."},
                 'value': {'type': 'string', 'required': True,
-                          'description': "The new value."}},
+                          'description': "on/off, a number, or an option's "
+                                         "value or label."}},
      'risk': 'confirm', 'run': action_set_setting},
+    {'name': 'list_profiles',
+     'summary': "The programs that have Titan Access settings of their own.",
+     'run': action_list_profiles},
+    {'name': 'remove_profile',
+     'summary': "Throw away a program's own reader settings, so it uses the "
+                "general ones.",
+     'params': {'program': {'type': 'string', 'required': True,
+                            'description': "The program, as list_profiles "
+                                           "names it."}},
+     'risk': 'confirm', 'run': action_remove_profile},
+
+    # -- speech ---------------------------------------------------------- #
+    {'name': 'speech_systems',
+     'summary': "What the reader can speak with (Titan's voice, Titan TTS, "
+                "SAPI 5, eSpeak, NVDA add-on synthesizers...) and what it "
+                "uses now.",
+     'run': action_speech_systems},
+    {'name': 'list_voices',
+     'summary': "The voices of a synthesizer of the reader.",
+     'params': {'synthesizer': {'type': 'string',
+                                'description': "A synthesizer id from "
+                                               "speech_systems; leave it out "
+                                               "for the one in use."}},
+     'run': action_list_voices},
+    {'name': 'set_speech',
+     'summary': "Choose the reader's speech system, synthesizer and voice "
+                "(the same as Insert+Ctrl+S).",
+     'params': {'system': {'type': 'string', 'required': True,
+                           'description': "A speech system's id or name."},
+                'synthesizer': {'type': 'string',
+                                'description': "Its synthesizer; the first "
+                                               "when left out."},
+                'voice': {'type': 'string',
+                          'description': "A voice's id or name; the "
+                                         "synthesizer's own when left out."}},
+     'risk': 'confirm', 'run': action_set_speech},
+
+    # -- what is in front ------------------------------------------------ #
+    {'name': 'page_summary',
+     'summary': "How many links, headings, form fields, landmarks, tables "
+                "and lists the page or window in front has.",
+     'params': {'window': _WINDOW_PARAM},
+     'run': action_page_summary},
+    {'name': 'app_info',
+     'summary': "The program in front: its executable, whether it is a UWP "
+                "(Store) app, and whether it has reader settings of its own.",
+     'run': action_app_info},
+    {'name': 'braille_status',
+     'summary': "Whether braille is on, its table and display, and whether "
+                "the display is connected.",
+     'run': action_braille_status},
+    {'name': 'reader_policy',
+     'summary': "For another screen reader (JSON): whether Titan Access is "
+                "running with 'mute outside TCE', so it reads TCE alone, and "
+                "the pids of TCE's processes.",
+     'needs_gui': False,
+     'run': action_reader_policy},
+    {'name': 'diagnostics',
+     'summary': "What the running reader is made of right now (threads, the "
+                "keyboard hook, restarts, the last things said) - for finding "
+                "out why something is not heard.",
+     'run': action_diagnostics},
+    # -- what the reader is, for the AI ------------------------------------ #
+    {'name': 'about',
+     'summary': "What Titan Access is and can do right now - its settings "
+                "categories, its script language and every action, read out "
+                "of the reader itself. Ask this before telling the user "
+                "anything about the reader.",
+     'run': action_about},
+
+    # -- the reader's own voice, sounds and keys -------------------------- #
+    {'name': 'read_aloud',
+     'summary': "Say one thing in the reader's voice: the focused control, "
+                "the window title, its value, the last thing said, the "
+                "screen, the place in the list, the selected text, the "
+                "status bar, the time or the date.",
+     'params': {'what': {'type': 'string', 'enum': list(_READ_ALOUD),
+                         'description': "What to say."}},
+     'run': action_read_aloud},
+    {'name': 'last_spoken',
+     'summary': "The last things the reader said, newest last - what the "
+                "user just heard.",
+     'params': {'count': {'type': 'integer',
+                          'description': "How many (1 to 20)."}},
+     'run': action_last_spoken},
+    {'name': 'beep',
+     'summary': "Play a tone through the reader's sound.",
+     'params': {'frequency': {'type': 'number', 'description': "Hz."},
+                'duration': {'type': 'integer', 'description': "Ms."},
+                'pan': {'type': 'number',
+                        'description': "-1 left to 1 right."}},
+     'run': action_beep},
+    {'name': 'play_cue',
+     'summary': "Play one of the reader's own sounds (cursor, edge, "
+                "clicked...), placed where the focused control is.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The sound's name."}},
+     'run': action_play_cue},
+    {'name': 'braille',
+     'summary': "Show text on the braille display (or the braille viewer).",
+     'params': {'text': {'type': 'string', 'required': True,
+                         'description': "What to show."}},
+     'run': action_braille},
+    {'name': 'pass_key',
+     'summary': "Press a key for the program, so the reader does not take "
+                "it again.",
+     'params': {'key': {'type': 'string', 'required': True,
+                        'description': "Like 'ctrl+s' or 'f5'."}},
+     'run': action_pass_key},
+    {'name': 'list_shortcuts',
+     'summary': "Every key of the running reader and the command it runs.",
+     'params': {'contains': {'type': 'string',
+                             'description': "Only commands whose id, name "
+                                            "or key has this."}},
+     'run': action_list_shortcuts},
+    {'name': 'run_command',
+     'summary': "Run one of the reader's own commands (say all, the virtual "
+                "window, the command palette...) exactly as its key would.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "Its id or name, as list_shortcuts "
+                                        "names it."}},
+     'run': action_run_command},
+    {'name': 'list_speech_schemes',
+     'summary': "The speech schemes (how each kind of control is announced) "
+                "and the one in use.",
+     'run': action_list_speech_schemes},
+    {'name': 'set_speech_scheme',
+     'summary': "Use another speech scheme.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "Its name or id."}},
+     'risk': 'confirm', 'run': action_set_speech_scheme},
+    {'name': 'label_control',
+     'summary': "Give the control in focus a name of its own, kept for "
+                "that program; an empty label takes it away.",
+     'params': {'label': {'type': 'string',
+                          'description': "The name; empty to remove it."}},
+     'risk': 'confirm', 'run': action_label_control},
+    {'name': 'list_labels',
+     'summary': "The names given to controls of a program (the one in "
+                "front when none is named).",
+     'params': {'program': {'type': 'string',
+                            'description': "The program, without .exe."}},
+     'run': action_list_labels},
+
+    # -- the user's reader scripts, written -------------------------------- #
+    {'name': 'script_language',
+     'summary': "The Titan Access script language (.tas): its triggers, "
+                "conditions, variables, statements and control rules. Read "
+                "it before writing a reader script.",
+     'params': {'language': {'type': 'string', 'enum': ['en', 'pl'],
+                             'description': "en (the default) or pl."}},
+     'run': action_script_language},
+    {'name': 'read_script',
+     'summary': "The text of one of the user's reader scripts.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The script, as list_scripts names "
+                                        "it."}},
+     'run': action_read_script},
+    {'name': 'write_script',
+     'summary': "Write a reader script (.tas). It is checked first - a "
+                "script with a problem is not saved and the problems are "
+                "the answer - and loaded at once.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The script's name."},
+                'text': {'type': 'string', 'required': True,
+                         'description': "The whole script."},
+                'overwrite': {'type': 'boolean',
+                              'description': "Replace a script of that "
+                                             "name."}},
+     'risk': 'confirm', 'run': action_write_script},
+    {'name': 'delete_script',
+     'summary': "Delete one of the user's reader scripts.",
+     'params': {'name': {'type': 'string', 'required': True,
+                         'description': "The script."}},
+     'risk': 'confirm', 'run': action_delete_script},
 ]

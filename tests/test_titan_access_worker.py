@@ -24,8 +24,12 @@ import ctypes
 import io
 import os
 import sys
+import tempfile
 import threading
 import unittest
+
+# Its deliberate errors go to a log of the test's own, never the user's.
+os.environ['APPDATA'] = tempfile.mkdtemp(prefix='ta_worker_')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TITAN = os.path.dirname(HERE)

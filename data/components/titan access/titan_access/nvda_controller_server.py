@@ -81,17 +81,31 @@ class NvdaControllerServer:
         self._cb_braille = None
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def wanted(settings):
+        """Whether the reader should hold NVDA's controller endpoint.
+
+        Not while "Mute outside TCE" is on: the endpoint is ONE name for
+        the whole session, and whoever holds it hears every program that
+        speaks through nvdaControllerClient - a game outside TCE included.
+        A reader that keeps quiet outside TCE holding it would make those
+        programs silent, so the system's own reader (NVDA) keeps it."""
+        try:
+            if not settings.get_bool("General", "NvdaControllerServer", True):
+                return False
+            if settings.mute_outside_tce:
+                return False
+        except Exception:
+            pass
+        return True
+
     def start(self):
         """Load + start the server. Returns self (always) so callers can chain;
         a missing DLL or any error just leaves the bridge inactive."""
         if not _IS_WINDOWS or self._started:
             return self
-        try:
-            if not self.engine.settings.get_bool(
-                    "General", "NvdaControllerServer", True):
-                return self
-        except Exception:
-            pass
+        if not self.wanted(self.engine.settings):
+            return self
 
         path = _find_dll()
         if path is None:
@@ -127,6 +141,7 @@ class NvdaControllerServer:
                 self._get_pid = None
             # Newer helper exports; an older DLL simply lacks them.
             for name, restype in (("TitanAccessHelper_ownsEndpoint", ctypes.c_int),
+                                  ("TitanAccessHelper_hasNvdaWindow", ctypes.c_int),
                                   ("TitanAccessHelper_retryEndpoint", ctypes.c_int),
                                   ("TitanAccessHelper_callCount", ctypes.c_ulong)):
                 try:
@@ -222,6 +237,19 @@ class NvdaControllerServer:
                                               name="TitanAccessCtlrWatch")
         self._watch_thread.start()
 
+    def has_nvda_window(self) -> bool:
+        """True while the hidden ``wxWindowClassNR`` / "NVDA" window is up.
+
+        Tolk (most audio games, both bitnesses) looks for that window before
+        it asks the controller anything; without it the game reports no
+        screen reader at all and the endpoint is never called."""
+        if self._dll is None:
+            return False
+        try:
+            return bool(self._dll.TitanAccessHelper_hasNvdaWindow())
+        except Exception:
+            return False
+
     def call_count(self) -> int:
         """How many controller calls this process has served."""
         if self._dll is None:
@@ -265,7 +293,14 @@ class NvdaControllerServer:
                 results.append((bits, False, "probe failed: %s" % e))
                 continue
             served = self.call_count() - before
-            if served > 0:
+            if served > 0 and not self.has_nvda_window():
+                # The endpoint answers, but Tolk asks for NVDA's window first
+                # and would still report no screen reader.
+                results.append((bits, False,
+                                "the controller answers, but the hidden NVDA "
+                                "window is missing, so Tolk-based programs "
+                                "will not find Titan Access: " + line))
+            elif served > 0:
                 results.append((bits, True, line))
             elif "1722" in line:
                 results.append((bits, False,
@@ -319,9 +354,12 @@ class NvdaControllerServer:
 
     def _on_braille(self, message):
         self._note_client()
-        # No braille display support yet; speak it so the message is not lost.
+        # Braille, not speech. Tolk_Output - what most audio games call - sends
+        # every line to speakText AND brailleMessage, so speaking this as well
+        # said every line of a game twice. Real NVDA puts it on the display.
         try:
             if message:
-                self.engine.speak(message, interrupt=False)
+                from . import braille
+                braille.show_text(message)
         except Exception as e:
             print(f"[TitanAccess] controller brailleMessage error: {e}")

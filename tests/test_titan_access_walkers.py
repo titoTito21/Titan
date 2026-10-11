@@ -426,14 +426,24 @@ class TheFifthPassReachesTheRest(unittest.TestCase):
         from titan_access.portable import compat
         from titan_access import speech_adapter
         heard = []
-        saved = speech_adapter.speak
+
+        class Adapter(object):
+            def speak_segments(self, segments, gap_ms=0):
+                heard.append([s[0] for s in segments])
+
+            def _enqueue(self, utterance, interrupt):
+                heard.append([s[0] for s in utterance.segments])
+
+        saved = speech_adapter._current
+        compat._Ui.last_message = 0.0
         try:
-            speech_adapter.speak = lambda text, *a, **k: heard.append(text)
+            speech_adapter._current = Adapter()
             self.assertTrue(compat.speech.speak(['Save', object(), 'button']))
             self.assertFalse(compat.speech.speak([]))
         finally:
-            speech_adapter.speak = saved
-        self.assertEqual(heard, ['Save, button'])
+            speech_adapter._current = saved
+        # The parts with the reader's pause between them, not "Save, button".
+        self.assertEqual(heard, [['Save', 'button']])
 
     def test_the_proxy_of_our_own_is_built_and_tried_first(self):
         from titan_access import ia2
@@ -639,6 +649,147 @@ class BrailleShowsAControlInCells(unittest.TestCase):
                 COMPONENT, 'locale', '%s.json' % lang), encoding='utf-8'))
             self.assertIn('settings.section.braille', words)
             self.assertIn('settings.braille.enabled', words)
+
+
+class WidgetsAndApplicationsAreWalkedHere(unittest.TestCase):
+    """The NVDA add-on walks a Titan widget and a described TCE
+    application with keys it borrows. Here both reviews STARTED - "Widget
+    review on" - and no key reached them: the arrows went to the window
+    underneath. They are asked in `_walked_key` now, key for key."""
+
+    def setUp(self):
+        from titan_access import engine as engine_module
+        from titan_access.portable import widgetReview, appReview
+        self.widget = widgetReview
+        self.app = appReview
+        self.kept = {}
+        self.calls = []
+        self.engine = engine_module.TitanAccessEngine.__new__(
+            engine_module.TitanAccessEngine)
+        self.said = []
+        self.engine._say = self.said.append
+
+        class Keyboard(object):
+            @staticmethod
+            def char_for(vk, shift=False, altgr=False):
+                if altgr and vk == 0x41:
+                    return 'ą'
+                if 0x41 <= vk <= 0x5A:
+                    letter = chr(vk)
+                    return letter if shift else letter.lower()
+                return None
+        self.engine.keyboard = Keyboard()
+
+    def tearDown(self):
+        for (module, name), value in self.kept.items():
+            setattr(module, name, value)
+
+    def _stub(self, module, name, value):
+        self.kept.setdefault((module, name), getattr(module, name))
+        setattr(module, name, value)
+
+    def _record(self, module, name, answer=(True, '')):
+        def call(*args):
+            self.calls.append((name,) + tuple(args))
+            return answer
+        self._stub(module, name, call)
+
+    def test_a_widget_takes_the_arrows_enter_and_escape(self):
+        self._stub(self.widget, 'reviewing', lambda: True)
+        for name in ('move', 'press'):
+            self._record(self.widget, name)
+        self._record(self.widget, 'stop', (False, 'Widget review off'))
+        for key, wanted in (('up', ('move', 'up')),
+                            ('down', ('move', 'down')),
+                            ('left', ('move', 'left')),
+                            ('right', ('move', 'right')),
+                            ('return', ('press',)),
+                            ('escape', ('stop',))):
+            del self.calls[:]
+            self.assertTrue(self.engine._walked_key(0, key, False, False,
+                                                    False), key)
+            self.assertEqual(self.calls, [wanted], key)
+        self.assertEqual(self.said, ['Widget review off'])
+        # A key a widget has no meaning for is not swallowed.
+        self.assertFalse(self.engine._walked_key(0, 'f7', False, False,
+                                                 False))
+
+    def test_no_widget_up_takes_nothing(self):
+        self._stub(self.widget, 'reviewing', lambda: False)
+        self._stub(self.app, 'reviewing', lambda: False)
+        self._record(self.widget, 'move')
+        self.assertFalse(self.engine._walked_key(0, 'up', False, False,
+                                                 False))
+        self.assertEqual(self.calls, [])
+
+    def test_an_application_is_walked_with_the_add_ons_keys(self):
+        self._stub(self.widget, 'reviewing', lambda: False)
+        self._stub(self.app, 'reviewing', lambda: True)
+        self._stub(self.app, 'typing_mode', lambda: False)
+        self._stub(self.app, 'in_a_menu', lambda: False)
+        for name in ('move', 'move_inside', 'move_page', 'move_end',
+                     'move_corner'):
+            self._record(self.app, name)
+        self._record(self.app, 'activate', (True, 'pressed'))
+        self._record(self.app, 'toggle', (True, 'checked'))
+        self._record(self.app, 'refresh', (True, 'read again'))
+        self._record(self.app, 'layout_cycle', (True, 'screen layout'))
+        self._record(self.app, 'stop', (False, 'Application review off'))
+        cases = (('up', ('move', -1)), ('down', ('move', 1)),
+                 ('left', ('move_inside', -1)),
+                 ('right', ('move_inside', 1)),
+                 ('pageup', ('move_page', -1)),
+                 ('pagedown', ('move_page', 1)),
+                 ('home', ('move_end', False)), ('end', ('move_end', True)),
+                 ('numpad7', ('move_corner', -1, -1)),
+                 ('numpad3', ('move_corner', 1, 1)),
+                 ('numpad6', ('layout_cycle', 1)),
+                 ('return', ('activate',)), ('space', ('toggle',)),
+                 ('f5', ('refresh',)), ('escape', ('stop',)))
+        for key, wanted in cases:
+            del self.calls[:]
+            self.assertTrue(self.engine._walked_key(0, key, False, False,
+                                                    False), key)
+            self.assertEqual(self.calls, [wanted], key)
+        self.assertIn('Application review off', self.said)
+
+    def test_escape_closes_a_menu_before_the_review(self):
+        self._stub(self.widget, 'reviewing', lambda: False)
+        self._stub(self.app, 'reviewing', lambda: True)
+        self._stub(self.app, 'typing_mode', lambda: False)
+        self._stub(self.app, 'in_a_menu', lambda: True)
+        self._record(self.app, 'close_menu', (True, ''))
+        self._record(self.app, 'stop')
+        self.assertTrue(self.engine._walked_key(0, 'escape', False, False,
+                                                False))
+        self.assertEqual(self.calls, [('close_menu',)])
+
+    def test_typing_into_a_described_field(self):
+        """Letters as the characters the layout types - a capital with
+        Shift, ą with AltGr - and the rest by the wire's own names."""
+        self._stub(self.widget, 'reviewing', lambda: False)
+        self._stub(self.app, 'reviewing', lambda: True)
+        self._stub(self.app, 'typing_mode', lambda: True)
+        self._record(self.app, 'relay')
+        self._record(self.app, 'leave_typing', (True, 'controls'))
+        self.engine._walked_key(0x41, 'a', False, False, False)
+        self.engine._walked_key(0x41, 'a', False, False, True)
+        self.engine._walked_key(0x41, 'a', True, True, False)
+        self.engine._walked_key(0x08, 'backspace', False, False, False)
+        self.engine._walked_key(0x0D, 'return', False, False, False)
+        self.engine._walked_key(0x25, 'left', True, False, False)
+        self.assertEqual([call[1] for call in self.calls],
+                         ['a', 'A', 'ą', 'back', 'enter', 'ctrl+left'])
+        del self.calls[:]
+        self.engine._walked_key(0x1B, 'escape', False, False, False)
+        self.assertEqual(self.calls, [('leave_typing',)])
+
+    def test_the_widgets_have_a_key_of_their_own(self):
+        from titan_access import engine as engine_module
+        keys = dict((command, spec) for _action, spec, command in
+                    engine_module.TitanAccessEngine.SHARED_KEYS)
+        self.assertEqual(keys.get('walk_a_widget'), 'shift+g')
+        self.assertEqual(keys.get('titan_applications'), 'shift+a')
 
 
 if __name__ == '__main__':

@@ -28,10 +28,11 @@ SPEECH_SYSTEM = "speechSystem"
 SPEED = "speed"
 VOLUME = "volume"
 SYNTHESIZER = "synthesizer"
+VARIANT = "variant"
 IMPORTANT_PLACES = "importantPlaces"
 
 _ALL = [CHARACTERS, WORDS, BUTTONS, HEADINGS, SPEED, VOLUME,
-        SPEECH_SYSTEM, SYNTHESIZER, VOICE, IMPORTANT_PLACES]
+        SPEECH_SYSTEM, SYNTHESIZER, VOICE, VARIANT, IMPORTANT_PLACES]
 
 # Category id -> (settings key, locale name key)
 _CAT_META = {
@@ -44,6 +45,7 @@ _CAT_META = {
     SPEED: ("DialSpeed", "dial.cat.speed"),
     VOLUME: ("DialVolume", "dial.cat.volume"),
     SYNTHESIZER: ("DialSynthesizer", "dial.cat.synthesizer"),
+    VARIANT: ("DialVariant", "dial.cat.variant"),
     IMPORTANT_PLACES: ("DialImportantPlaces", "dial.cat.importantPlaces"),
 }
 
@@ -129,6 +131,8 @@ class DialManager:
             return self._step_speech('synth', nxt)
         if cat == VOICE:
             return self._step_speech('voice', nxt)
+        if cat == VARIANT:
+            return self._step_speech('variant', nxt)
         if cat == CHARACTERS and self.engine.editable is not None:
             # `Navigation/PhoneticInDial`: a letter reached through the dial
             # is said phonetically (or not) as THIS setting says, whatever
@@ -209,7 +213,8 @@ class DialManager:
             print(f"[TitanAccess] dial {level}: {e}")
             said = ''
         if not said:
-            key = "dial.noVoices" if level == 'voice' else "dial.nothingHere"
+            key = {'voice': "dial.noVoices",
+                   'variant': "dial.noVariants"}.get(level, "dial.nothingHere")
             self.engine.speak(L(key), interrupt=True)
             return True
         self.engine.speak(str(said), interrupt=True)

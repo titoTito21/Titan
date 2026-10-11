@@ -352,8 +352,8 @@ again later." for every failure there is.
   under `_internal/src` left out always.
 - 7-Zip is run with `-sccUTF-8`, or its messages arrive in the OEM code
   page and the log fills with replacement characters.
-- **`updater.bat`** (repository root; ship it beside Titan.exe or in the
-  installer's folder) updates an installation from OUTSIDE Titan: closes
+- **`updater.bat`** (`data/components/tau/`, the "Titan alternative
+  updater" component; it can still be run by hand from anywhere) updates an installation from OUTSIDE Titan: closes
   Titan, reads `version.ver` and `changes.txt`, downloads `titan.main.7z`
   (and the interpreter when the version ends in `i`) with curl.exe or
   PowerShell, verifies and unpacks with a COPY of the installation's own
@@ -365,6 +365,23 @@ again later." for every failure there is.
   own updater fails (every compiled build up to 0.6.1). Batch trap met on
   the way: inside a parenthesised block an unquoted `echo` with a `)` in
   its text ends the block, reported as ". was unexpected at this time.".
+  `/wait` gives a Titan closing itself 60 s, `/restart` starts it again
+  after (also after a failure). The file must stay CRLF: cmd.exe's labels
+  misbehave in an LF-only batch file.
+- **TAU, the Titan alternative updater** (`data/components/tau/`, also
+  packed as `dist/tau.tcd` by `pack_addon.py`) reads `update.log` at every
+  start: when the last update offered by THIS version failed, or was
+  "applied successfully" and the running version is still not its target,
+  it asks once (remembered in `%APPDATA%/titosoft/Titan/tau.ini` by the
+  attempt's time) "It looks like there was an update error. Do you want to
+  use the alternative updater?". Yes copies the bat to
+  `%TEMP%\titan_tau` (the archive replaces the bat itself, and cmd reads a
+  batch file as it goes), runs it with `/y /wait /restart` and closes Titan
+  through `shutdown_app()` with no exit confirmation. Compiled Windows
+  builds only. Also a Components menu entry and `tau.status` / `tau.run`
+  actions. A Titan whose updater fails never receives TAU by updating, so
+  the .tcd is what is handed to those users. Tests: `tests/test_tau.py`
+  (14).
 - Tests: `tests/test_updater.py` (run it directly; 26 tests, with an
   ARM64-filtered archive built by `7z a -mf=ARM64`). Live: the frozen build
   applied the published ARM64 archive to itself with no 7-Zip on PATH in
@@ -2523,6 +2540,69 @@ Windows+M, `focus_tray()`, `focus_icons()` - now goes through first.
   Start menu, the file browser, the taskbar and the desktop, or replaces
   the Start menu or the browser outright - see "Shell add-ons" below.
 - Tests: `tests/test_shell.py` (run it directly; 323 tests).
+
+### Titan Antivirus and "Scan with antivirus:"
+
+`data/applications/tAntivirus/` (shortname `tantivirus`) is a scanner on the
+**ClamAV** engine; `data/shell addons/titan_antivirus/` puts "Skanuj przy
+pomocy antywirusa:" (a submenu: Titan Antivirus, and Microsoft Defender
+where it exists) on the menus of files, folders, drives, a folder's
+background and desktop icons, plus a Start-menu branch and the browser's
+Tools menu. Windows and Linux alike.
+
+- **Where ClamAV comes from.** Windows: the official portable build
+  (`clamav-<ver>.win.x64.zip`, newest non-prerelease off the Cisco-Talos
+  GitHub releases, checked against GitHub's SHA-256 `digest`) downloaded
+  on first use into `%APPDATA%/titosoft/Titan/antivirus/engine`; an
+  installed ClamAV or one on PATH is used instead when present. Linux: the
+  system's `clamscan` / `clamd` (sbin is searched) / `freshclam`. Our own
+  `freshclam.conf` / `clamd.conf` (rewritten each start; databases in
+  `antivirus/db`, clamd on TCP 127.0.0.1:`clamd_port`).
+- **clamd, then clamscan.** clamd is started on the first scan and stopped
+  after `clamd_idle_minutes` (it holds ~1 GB); a file is scanned by
+  **streaming its bytes (INSTREAM)** inside one IDSESSION, never by path -
+  clamd's idea of a path's encoding is not Python's, and a Polish file name
+  would be "not found". clamscan over `--file-list` is the floor; its
+  garbled code-page paths are matched back by position.
+- **Defender** is `MpCmdRun -Scan -ScanType 3 -File <path>
+  -DisableRemediation`: it only reports, and the app decides (exit 2 =
+  threats, parsed from `Threat :` / `file :` lines).
+- **The scan never runs in the shell's process.** The add-on writes a
+  request into `antivirus/requests/` (`av_store.write_request`, loaded from
+  the app folder under a private module name) and either a running
+  instance picks it up within a second or Titan starts the app with the
+  request's path through `app_manager.open_application`. One instance
+  (`instance.pid`, checked for being alive).
+- **Background protection** (`av_guard`): the Downloads watcher (XDG
+  `DOWNLOAD` on Linux, `FOLDERID_Downloads` on Windows; looks inside only
+  when the folder's mtime moved; a file is handed over once its size held
+  for two polls; partial-download names skipped) and the daily scheduled
+  scan. Runs in `main.py --guard` (no window), started by the add-on's
+  `on_shell_start` when either is on, or while the app is open (closing the
+  window then hides it).
+- **Threats**: ask (default; a real `wx.MessageDialog` with
+  `ICON_WARNING` and Quarantine / Delete / Ignore), quarantine, delete or
+  report. Quarantine XORs the bytes into `antivirus/quarantine/<id>.qar`
+  plus JSON with the SHA-256, so restoring is verified and never overwrites.
+- **Titan Access semantics** come from native controls and one reader
+  module (`readerModules/tantivirus.py`, shared and vendored): the results
+  list is File / Threat / Status / Location and the Threat column is the
+  row's kind, so a row reads "file, threat, Status: ..."; the progress is a
+  real `wx.Gauge` ("Scan progress", heard by the progress monitor); the
+  status bar is a polite live region rewritten at most every 3 s; a threat
+  is a warning-icon dialog, so `dialog_kind` says "warning" in both readers.
+- **The shell's menus take branches now**: `addons.add_to_menu` turns an
+  entry with `children` into a real submenu (an empty one is left out),
+  and the file browser's context menu goes through it.
+- Live-verified: the 1.5.4 engine downloaded and checksummed, freshclam
+  in 27 s, clamd up in 15 s and finding a custom `.ndb` signature in a
+  file named `zażółć.bin`, the second scan 0.06 s, the clamscan floor and
+  Defender; on Linux Debian's 0.103 clamd and clamscan with the same
+  databases (WSL could not resolve database.clamav.net, so freshclam was
+  not verified there). Use a custom `.ndb`, never EICAR, to test: Defender
+  takes EICAR off the disk first.
+- Tests: `tests/test_titan_antivirus.py` (27; a stand-in clamd speaking
+  the real protocol, temporary APPDATA, nothing shown, no network).
 
 ### Cling: Klango applications, running inside Titan
 
@@ -6279,6 +6359,13 @@ bars"). **Reading does not need the reader to be running** - it builds the
 document itself - and the AI tier is never reached unless a caller passes
 `use_ai=true`, because that tier sends a picture of the screen to the user's
 provider. Example: `data/macros/screen_reader_demo/`.
+- **A 32-bit game "found no screen reader" because Tolk looks for a WINDOW.**
+  Tolk (both bitnesses) does `FindWindowW("wxWindowClassNR", "NVDA")` before
+  calling the controller; the helper keeps that hidden window while it owns
+  the endpoint, and remembers its own endpoint across a reader restart (RPC
+  answers DUPLICATE_ENDPOINT to its own name). A `brailleMessage` goes to the
+  braille display, not to speech - `Tolk_Output` sends both, so every game
+  line was said twice. `tests/test_titan_access_nvda_controller.py` (4).
 - Tests: `tests/test_titan_access_speech_queue.py`,
   `tests/test_titan_access_document_mode.py`,
   `tests/test_titan_access_actions.py` (run them directly - `tests/` has no
@@ -7770,6 +7857,371 @@ process, done from outside as far as outside reaches.
   every control it speaks; a **Braille** reader section switches it on.
   Off by default.
 
+#### Pauses, not commas; a menu that opens ON its first item; the reader's shortcut (2026-10-08)
+
+Asked for as "palettes, virtual windows etc. use the screen reader's
+pauses: OK (pause) przycisk, not 'OK, przycisk'; when somebody is on a
+menu, focus the menu without an arrow; Insert+C says 'Titan Access'
+(pause) 'menu'; and a hotkey field in General, Ctrl+Shift+T by default".
+
+- **Every walked list said its row as one comma-joined line.** The shared
+  `palette` / `virtualWindow` / `widgetReview` / `appReview` say a row
+  through `elements.sequence` + `voices.speak_sequence`; `voices` is the
+  add-on's NVDA-only module and was never vendored, so the import failed
+  and each fell back on `', '.join(...)`, and the TA `elements.sequence`
+  and `compat.speech.speak` joined with commas as well. Now
+  `portable/elements.Sequence` is still a list of the words (one per part)
+  and carries `segments` built with `accessible._part`, `compat.speech.speak`
+  says any sequence as separate parts through the adapter's
+  `speak_segments` (the speech scheme's pause between them), and
+  `portable/voices.py` is a Titan Access shim (in the vendor script's
+  `SHIMS`) answering `speak_sequence` (queued like `ui.message`, so a
+  list's title is said FIRST), `sequence`, `VOICES`, `voice_of`,
+  `say_whole`. A row asked for within `_Ui.BREATH_S` (0.3 s) of a message
+  queues behind it instead of cutting it off, and two messages in one
+  breath no longer cut each other.
+- **A menu opened on its container is put on its first item**
+  (`menu_tracker`): Windows only, the focus on the MENU itself (Insert+C's
+  wx popup, a context menu opened from code) - after `SELECT_AFTER_S`
+  (0.15 s), and only if no item took the focus by itself (Explorer's
+  context menu does; pressing then would skip the first item), Down is
+  pressed with the hook's sentinel; the opening is announced with that
+  item, or on the container after `FALLBACK_AFTER_S`. Menu bar and menu
+  openings are segments too ("Plik" / "menu" / "3 elementy" / the item).
+- **Insert+C says "Titan Access" (pause) "menu"** and then the item
+  (`readerMenu.titleName` / `titleKind`).
+- **The reader's shortcut is a setting** (`General/ToggleHotkey`, kind
+  `hotkey`, default `ctrl+shift+t`, never in a profile; `hotkeys.py`):
+  `init.py`'s listener registers it and re-registers on
+  `hotkeys.changed()`; the settings page has a real hotkey field (the
+  combination pressed is what it holds, Backspace the default; the
+  shortcut does not fire while the field has the keyboard); in the walked
+  settings Enter makes the reader's own keyboard hook take the next
+  combination (`hotkeys.capture_key`, asked first in `_process`) - Escape
+  leaves it, a key with no Control/Alt/Windows (other than F1-F24) is
+  refused and it goes on listening. It was a fixed Ctrl+Shift+Alt+T.
+- **Off means off.** Reported as "the keyboard hook and the terminal
+  reader stay on after the reader is turned off". The terminal app
+  module's output poller ran for the life of the process and read new
+  output aloud through an engine that was off; the NVDA add-ons' plugins
+  and the speech adapter (`speech_adapter.current()`, which every shared
+  module speaks through) stayed too. `_teardown_subsystems` now ends with
+  `_teardown_the_rest`: `AppModuleManager.stop_all()` (every module's
+  `stop()`, `AppModuleBase.stop` a no-op, the terminal's joins its
+  poller, which also checks `engine.running`), `nvda_host.unload()`, a
+  shortcut capture cancelled, the walked lists closed, the seams
+  (`readerApi.hooks`, the touch listener) and the adapter released. And
+  `engine.stop()` tears down from the calling thread when the worker has
+  not done it within its 3 s (the hook still installed or the thread
+  alive). Tests: `tests/test_titan_access_off_means_off.py` (5).
+- Tests: `tests/test_titan_access_pauses_and_menus.py` (15). Two tests that
+  pinned the comma (`test_the_two_shims_answer`,
+  `test_the_smart_cursors_announcement_is_spoken_here`) assert the parts.
+
+#### Off is off, and "Mute outside TCE" hands the machine to NVDA (2026-10-09)
+
+- **Measured with `tests/check_titan_access_off.py`** (the real engine on a
+  copy of the stores, started, stopped, and asked what is left): the
+  speech pump, the private engine's SAPI worker, four Titan TTS bridge
+  processes with their conhosts, the attention watcher, an NVDA add-on
+  synthesizer made AGAIN by "screen reader off" after `nvda_host.unload`,
+  and two day-long add-on update timers. Now `SpeechAdapter.shutdown`
+  (first in `_teardown_the_rest`) ends the pump and releases the private
+  engine - its SAPI worker, and the registry's bridges only when Titan's
+  own speech is not using them (`_titan_speaks_on_its_own`; written in
+  the component, `tce_speech` is frozen in a compiled build);
+  `states._shell_loop` posts WM_QUIT on WM_DESTROY; `nvda_host.unload`
+  cancels every `threading.Timer` whose code is in the add-ons folder.
+  `--as-in-titan` starts Titan's speech and sound first; it ends "OFF
+  MEANS OFF" with nothing left.
+- **"Mute outside TCE" is the whole reader, not the focus.** Outside TCE:
+  `engine._silenced_here` drops every `speak` / `speak_segments` / `play`
+  (Titan speaking through the host bridge and the reader's own on/off are
+  wrapped in `engine.for_titan()` and still said); the keyboard hook passes
+  every key (`_outside_tce`, a reader modifier pressed inside and released
+  outside is still taken); NVDA's controller endpoint is not taken, and is
+  given back when the setting is turned on (`NvdaControllerServer.wanted`,
+  `_follow_controller_setting`). Inside TCE the NVDA add-on's `tceSleep`
+  asks `titan_access.reader_policy` (JSON: running + mute + TCE pids, Titan
+  and its descendants) every 1.5 s and puts NVDA's appModules for those
+  pids to SLEEP, waking only what it slept and never a process the user
+  woke with NVDA+shift+s; the first event of a new TCE window is swallowed
+  by `sleep_now`. JAWS or Narrator cannot be silenced that way.
+- Tests: `tests/test_titan_access_off_means_off.py` (21),
+  `InsideTceOnlyTitanAccessSpeaks` in the add-on suite.
+
+#### The taskbar said each button twice; an external synthesizer lost its voice (2026-10-06)
+
+- **A control focused again by nobody is not read again.** Reported as the
+  Windows taskbar reading a button, and a second later the same button. The
+  taskbar re-focuses the button when its thumbnail comes up - by UIA, or as
+  an MSAA event too late for `provider_manager`'s 0.6 s window, and with a
+  name and rectangle that need not match UIA's. The engine's own duplicate
+  window was 0.35 s. Now (`titan_access/user_input.py`, Windows'
+  `GetLastInputInfo`): the same control again within 10 s with no key or
+  mouse input since it was read (`REFOCUS_QUIET_S`, `_announce_focus`), and
+  an MSAA focus within 3 s of a UIA one with no input between
+  (`_UIA_LATE`), are not news. The key-up of the keystroke that caused a
+  focus lands just after it, so input counts only from 0.3 s on. The
+  double was not caught live (a 150 s recording saw no taskbar use); the
+  rule is tested in `tests/test_titan_access_refocus.py` (7).
+- **An external synthesizer keeps the voice it was given.** Reported as
+  "it speaks in some default voice straight away". The voice was put on
+  one INSTANCE; an instance retired after a stall, or pushed out of
+  `nvda_host.KEEP_RUNNING` (3) by looking at other synthesizers' voices,
+  was made again on its default - measured on Cerence: Krzysztof chosen,
+  Ewa after the instance was made again. `nvda_host/external.py` now
+  remembers voice, variant and levels per synthesizer (`_wanted`) and
+  dresses every new instance in them (`_dress`); a voice may be named by
+  its display name; one it has not got is logged. The reader's own
+  synthesizer is told its settings before its first word
+  (`_speak_external`), so speech before the settings are applied is no
+  longer on the default voice. Test:
+  `test_a_new_instance_is_given_the_chosen_voice`.
+- `tests/test_titan_access_worker.py` wrote its deliberate errors into the
+  user's real `titan_access.log`; it has a temporary APPDATA now.
+
+#### Titan's shell, read off the shell itself (2026-10-10)
+
+Asked for as "semantics, or more integration with Titan's shell", and then
+"it can be done without changing Titan's code, knowing the shell's code".
+`titan_access/titan_shell.py` does exactly that: Titan Access runs in the
+shell's own process, so it asks the shell's LIVE objects what the focused
+part is - nothing in `src/` was changed, and since a compiled Titan freezes
+`src` while the component is data, it reaches users with no rebuild.
+
+- **The shell is found, never started**: `sys.modules['src.shell.
+  shell_manager'].get_shell(create=False)`; `taskbar.groups()` /
+  `_group_of`, `TaskButton.window`, `TrayIconButton.icon`,
+  `DesktopFrame.items`, `MenuTree.selected_entry()` / `MenuList.entries`,
+  `explorer.open_windows()`. Recognised by class NAME, read on wx's thread
+  (`on_gui`, 0.25 s deadline - late is the ordinary announcement, never a
+  stalled reader), and only when `worth_asking()` (the foreground is a
+  shell window, or the focused HWND is a SysTreeView32/SysListView32 - the
+  Start menu's columns, which the classic menu shows without the shell).
+- **What it adds** (`engine._titan_shell_info`, `titan_shell.segments_for`):
+  a window button is "okno" with aktywne / zminimalizowane / wymaga uwagi /
+  nie odpowiada (`IsHungAppWindow`) and "2 z 5"; a tray icon "ikona
+  zasobnika, ukryta"; a dock item, the clock, Start's "menu otwarte"; a
+  desktop icon folder / skrót / skrót internetowy / the file's type; a
+  Start-menu entry aplikacja Titana / gra / makro / komunikator / program /
+  aplikacja Windows (a packaged AUMID) / grupa. The kind replaces the role
+  word; states and place follow at the state pitch.
+- **Tab into a taskbar group used to say the group and never the control.**
+  `announce_shell_group` reaches Titan Access as an override, and
+  `_consume_override` returned before the control was read. Now the shell
+  info is asked first; on the taskbar the override is not honoured, and the
+  group is said by this layer, once per arrival (`group_arrived`,
+  forgotten when the keyboard leaves the bar).
+- **Windows coming and going behind the user** (`WindowWatch`, 1 s, reads
+  the taskbar's own `_windows` list - no Windows call): "Otwarto w tle: X",
+  "Zamknięto: X" for a window that opened without coming to the front or
+  closed while not in front; `all` says every one. Started with the engine,
+  stopped in `_teardown_the_rest`.
+- **Where am I** (Insert+Alt+W, `commands.OWN['where_am_i']`) in the shell
+  says the surface, the place (the browser's folder), the group, the name,
+  the kind, the states, the place in the group and the detail (the program
+  behind a window, a shortcut's target, a Start entry's description, the
+  browser's selection); elsewhere the shared ancestry, as before.
+- Settings -> Titan Access -> **Powłoka Titana** (`TitanShell/Semantics`,
+  `GroupNames`, `Positions`, `WindowEvents` none/background/all).
+- Tests: `tests/test_titan_access_titan_shell.py` (20: stand-ins named as
+  the shell names its classes, the real engine's `announce_object`, and
+  the REAL `TaskButton`, `TrayIconButton` and `MenuTree` built in a frame
+  that is never shown - the shell is never started by a test, because
+  starting it takes the user's desktop over).
+
+#### Edit fields: what they are, and what Backspace took (2026-10-07)
+
+Asked for as "edit fields as responsive as documents: Backspace says the
+deleted word; a multiline field is 'Pole edycji' (pause) 'wieloliniowe',
+a read-only one 'tekst' (pause) 'tylko do odczytu'".
+
+- **What a field is** (`titan_access/edit_fields.py`, applied in
+  `accessible.describe`): an edit control or a NON-web document is
+  `shape()`d into a type word and states said as separate parts in their
+  own pitch. Read-only (UIA ValuePattern.IsReadOnly, MSAA, AT-SPI not
+  EDITABLE, or the Win32 `ES_READONLY` style) is "Tekst / tylko do
+  odczytu" and wins over lines; several lines (AT-SPI `MULTI_LINE` ->
+  `STATE_MULTILINE`, Win32 `ES_MULTILINE`, a UIA document - which is what
+  a multiline wx.TextCtrl reports - or a value with a line break in it) is
+  "Pole edycji / wieloliniowe". A web document is untouched. Measured on
+  real wx TextCtrls through the reader's own UIA provider.
+- **Six state words were never translated** - read-only, required,
+  pressed, busy, has-popup, protected were spoken as their English KEYS
+  ("readonly") because `localization._STATE_TO_JSON` had no entry. They
+  have one now, in both locales.
+- **Backspace says what it took; Delete what the caret is on now**
+  (NVDA's answers; Control: the word). The hook (`keyboard_hook` step
+  4c) calls `engine.on_edit_delete` BEFORE the application has the key,
+  never swallowing it: a Win32 edit is snapshotted there with
+  `SendMessageTimeout` (40 ms, `SMTO_ABORTIFHUNG`), AT-SPI only on the
+  main thread, and UI Automation - which cannot be asked from the hook's
+  thread - answers with the caret's line kept by the last read
+  (`EditableTextHandler._snap`, refreshed after every caret read and
+  0.12 s after typing pauses). The reader thread waits for the text to
+  change and `removed_text()` compares the two from both ends: a
+  character, a word, a selection, a line break ("nowa linia"). Where the
+  kept line is behind what was typed, the hook's own word buffer answers.
+  A password field says nothing of its content.
+- **Arrow reads no longer wait out a stale baseline.** The caret
+  position the read waits to LEAVE was the one from the last read, so
+  after typing an arrow that landed back on it waited the whole timeout.
+  `note_caret_key()` takes it when the key is pressed (Win32 EM_GETSEL
+  with a 20 ms timeout, AT-SPI caret), the deletion re-bases it, and the
+  timeouts are 0.15 s (Win32, AT-SPI) and 0.25 s (UIA) instead of 0.3 s.
+- Tests: `tests/test_titan_access_edit_fields.py` (28; real Win32 EDIT
+  windows made with CreateWindowEx and never shown).
+
+#### UWP and XAML applications (2026-10-06)
+
+Asked for as better UWP support "for every UWP app, Unigram among them",
+with design questions answered: all four areas below, icons said as their
+meaning, new rows read in the app in front. No Unigram-specific module -
+everything is generic. Measured on Unigram (UWP, `Telegram.exe`), then on
+WPF probe windows of the test's own (off the screen, never activated).
+
+- **The program is the app, not its frame** (`titan_access/uwp.py`). A UWP
+  app's top-level window is an `ApplicationFrameWindow` of
+  `ApplicationFrameHost.exe`; its `Windows.UI.Core.CoreWindow` is a child -
+  or, minimised, a top-level window of its own with the same title.
+  Profiles, app modules, .tas scripts, labels and the mute-outside-TCE gate
+  all got "applicationframehost". `uwp.app_pid(hwnd)` answers the app's
+  pid; `uwp.finish(obj, control)` - called at the end of BOTH converters
+  in `uia_focus` - puts it on the object, and `uwp.foreground_pid()`
+  serves the places that ask the window in front (engine, app module
+  manager, ta_scripts).
+- **Icons are words** (`uwp.GLYPHS`, `glyph.*` in both locales): XAML draws
+  icons as Segoe MDL2 / Fluent characters in the private-use area. A text
+  that IS a known icon becomes its word ("\ue711" -> "Anuluj"); an icon
+  beside words is dropped ("\uea07 pon." -> "pon."); an icon-only TextBlock
+  inside a control is not a scan-mode line of its own. Edit fields keep
+  their value.
+- **An icon-only control is named** (`uwp.name_for`): tooltip/description,
+  then its children's text and icons, then - XAML only - its AutomationId
+  as words (`SetBirthdateCard` -> "Set birthdate card"). Unigram's Hide
+  button said "Przycisk" and nothing else. Also in scan mode
+  (`virtual_buffer`, both builders; `FRAMEWORK_ID`/`HELP_TEXT` added to
+  `BUFFER_PROPERTIES`).
+- **A virtualised list is walked whole, lazily** (`virtual_lists.py`). A
+  XAML ListView holds only its visible rows. At the last/first row of such
+  a list in scan mode (`browse_mode._move_line`), the next 20 items are
+  found with `ItemContainerPattern.FindItemByProperty`, realised with
+  `VirtualizedItemPattern.Realize` (the raw call - the vendored wrapper
+  sleeps 0.5 s after it) and inserted; up works too (older messages).
+  Measured: 14 visible of 500, +20 in 0.07 s. Not up front: realising a
+  history of thousands of messages is minutes, and each Realize scrolls the
+  app. The shared virtual window (`portable/virtualWindow.py`) does not do
+  this yet - it walks the adapted tree.
+- **A new row at the end of a list is read** (`live_lists.py`, switch
+  `Reader/liveLists`): UWP apps announce a message arriving in the open
+  chat with no notification and no live region, only StructureChanged
+  ChildAdded. Registered on the window IN FRONT only (moved on focus
+  change), on its own MTA thread with its own CUIAutomation8 client; said
+  only for a XAML ListItem/DataItem that is the LAST child, never seen
+  before, not within 1.5 s of the user's own input (`GetLastInputInfo`:
+  rows scrolled to, the message just sent) and not in the first second of
+  a window. Trap met: importing comtypes on the listening thread made it an
+  STA first, so `start()` imports it on the calling thread.
+- **A suspended app holds the reader 6 s, not 20**: `uwp.limit_timeouts`
+  sets `IUIAutomation2` connection 2 s / transaction 6 s on the reader's
+  client and on the vendored library's - which was plain `CUIAutomation`
+  and answered no `IUIAutomation2`; `lib/uiautomation` now creates
+  `CUIAutomation8` first.
+- Tests: `tests/test_titan_access_uwp.py` (20; the live ones open WPF
+  windows off the screen and check the foreground never moved).
+
+#### "Browsing the web" and "UWP apps": two settings categories, and the AI told (2026-10-06)
+
+Asked for as two new categories, every setting working, the page and the
+walked settings in step, new AI actions, and Titan AI told what Titan
+Access is now.
+
+- **Two sections of `settings_schema`**, so the settings page
+  (`settings_panel._build_generic`), the walked settings
+  (`as_walk_schema`), the profiles and the actions all have them with no
+  second list. **Browsing the web** (`web`; kept in the `Browse` INI
+  section): `SayAllOnPageLoad` (a page read from its top on arrival),
+  `PageSummary` ("Na stronie: 12 łączy, 5 nagłówków, 3 pola formularza" -
+  `browse_mode.page_summary_text`, the same matching quick navigation uses,
+  so the numbers are what H and K find; Polish plurals through
+  `localization.plural`), `LandmarkStartEnd` ("koniec: nawigacja" leaving a
+  region, `_landmark_segment`) and `SayAllRate`. **UWP apps** (`uwp`):
+  `UWP/Glyphs` (word / strip / off - and off now keeps an icon-only line in
+  scan mode too, `uwp.node_name`), `UWP/NameIconControls`,
+  `UWP/VirtualLists` (`browse_mode._move_line`) and `Reader/liveLists`.
+- **The settings actions are the schema.** `list_settings` (all, or one
+  `category`), `get_setting` / `set_setting` reach EVERY setting by
+  `Section/Key`, key, label words in the user's language, or an English
+  alias (`_ALIASES`, shown in the listing so a caller reading Polish labels
+  still has a name); a value is checked against the entry's kind (a range,
+  an option by value or label) and written through
+  `settings_walk.set_value`, the walk's own write and apply. The old
+  hand-written table read eleven settings and none of the new ones.
+- **New actions**: `list_setting_categories`, `page_summary`,
+  `speech_systems`, `list_voices`, `set_speech` (Insert+Ctrl+S's three
+  levels), `list_profiles`, `remove_profile`, `app_info` (the executable
+  in front, a UWP app or not, its profile), `braille_status`,
+  `diagnostics`. **`_engine()` never `_engine(False)`**: `get_engine()`
+  BUILDS an engine when none is running.
+- **An in-process add-on can say what it is**: `TITAN_DESCRIPTION` beside
+  `TITAN_ACTIONS` becomes the add-on's description in the AI's listing
+  (`registry._merge_python_declared`; a manifest's own description wins).
+  Titan Access declares one, and both prompts (`ai_agent.DEFAULT_SYSTEM`,
+  `voice_assistant.build_system`) have a paragraph on it - before this,
+  nothing anywhere told Titan AI that the screen reader exists.
+- Tests: `tests/test_titan_access_web_and_uwp_settings.py` (13: each switch
+  flipped and its behaviour asked, and a value written in the walk read by
+  browse mode and `uwp`), `tests/test_titan_access_actions.py` (37, the
+  writing ones on a store of their own). The real page was built in
+  wxPython (never shown, temporary APPDATA): saved on the page, read by the
+  walk, and the other way round. `tests/test_titan_access_tce.py` hangs on
+  this machine with or without these changes (the engine stuck in `start`
+  or `stop` against the live desktop) - not chased here.
+
+#### The braille display is chosen, and BRLTTY drives it (2026-10-06)
+
+Settings -> Titan Access -> Braille -> **Display** (none / BRLTTY already
+running / detect automatically / one of BRLTTY's ~37 driver families, plus
+`xw`, BRLTTY's virtual display window) and **Port** (auto = USB then
+Bluetooth, USB, Bluetooth, HID, COM1-12 or `/dev/ttyUSB0`...). Before this
+there was no choice at all, and the display could never have shown
+anything: `_show_line` wrote only when `connected()`, and nothing ever
+connected.
+
+- **BrlAPI is spoken in Python** (`titan_access/brlapi_client.py`, read out
+  of BRLTTY 6.9.1's `brlapi_protocol.h` / `brlapi_client.c`): the named
+  pipe `\\.\pipe\BrlAPI<n>` on Windows, `/var/lib/BrlAPI/<n>` or TCP
+  `4101+n` elsewhere, auth none or key. The Windows BRLTTY build is 32-bit,
+  so its `brlapi-0.8.dll` cannot be loaded into a 64-bit Titan at all. The
+  key thread never blocks in a read (`PeekNamedPipe` / `select`): a
+  synchronous pipe handle would park every write behind it.
+- **Titan Access starts BRLTTY itself** (`brltty_host.py`): `-b <driver>
+  -d <device> -x no -s no` on channel `:7`, so it never collides with a
+  system BRLTTY on `:0`. Windows: the copy in `lib/brltty` (6.9.1, 13 MB:
+  `brltty.exe` + its DLLs, the LibUSB driver `.inf` for USB displays
+  without a maker's driver, the key tables). Linux: the system `brltty`
+  (or `TITAN_BRLTTY`, with `-D`/`-T` beside a portable copy), started as
+  the user, so it cannot use `/var/lib/BrlAPI`: TCP on the loopback with a
+  key file of mode 600. A stale instance of ours (Titan crashed) is found
+  by its pid file and stopped - `brltty -C` exits 4 on Windows. BRLTTY
+  takes 7-8 s to put its pipe up about one start in five (measured), so
+  opening waits up to 20 s on a thread of its own.
+- **The display's keys** (`braille._Display.on_key`): panning moves a long
+  line a display at a time, the line keys are Up/Down, a routing key
+  presses the focus, keys typed on a braille keyboard are pressed, and
+  dots are typed as the letter liblouis back-translates them to. In
+  `dotsIO` a cell is `0x8000 | dots`, not the Unicode character - passing
+  U+2801 back-translated it as `\1CE/`.
+- liblouis is found on Linux too (`liblouis.so.20`,
+  `/usr/share/liblouis/tables`).
+- Tests: `tests/test_titan_access_brltty.py` (14: a fake BrlAPI server over
+  TCP, the keys, the settings, and a real BRLTTY with `xw`). Live on both:
+  Windows' bundled 6.9.1 and Debian's 6.3 unpacked from its `.deb` (no
+  sudo here: `apt-get download brltty brltty-x11 libbluetooth3`,
+  `dpkg -x`, `LD_LIBRARY_PATH`) showed the cells in the `xw` window, and
+  clicking a cell came back as `route`.
+
 #### The reader's sections are a second list
 
 `settingsgui.py`. A category's sub-categories are a SECOND list box beneath
@@ -8204,6 +8656,71 @@ with a PitchCommand per part and waits for its index).
   184 ms (SAPI 32-bit through its bridge) of silence before the first word;
   a sentence is 7-27 ms. Labels were already 2-17 ms. Each chunk is waited
   out, so an interrupt cuts the rest.
+
+#### Titan AI is told the reader as it is now, and the .tas language grew (2026-10-06)
+
+Reported as "Titan AI knows an old version of Titan Access". It did: the
+agent's and the assistant's prompts each carried a paragraph about the
+reader written by hand, and every release left it behind.
+
+- **The prompts no longer describe the reader; they ask it.**
+  `src/ai/action_tools.titan_access_note()` is the paragraph, built per
+  prompt: fixed guidance on HOW to use the reader (ask
+  `titan_access.about` before saying what it can do, read
+  `script_language` before writing a script, start with `diagnostics` /
+  `last_spoken` when it is silent) and then `addon_briefing('titan_access')`
+  - the add-on's own `TITAN_AI_BRIEFING()` when it defines one, else its
+  description and action names. Titan Access's briefing
+  (`titan_access_actions.briefing`) reads its settings categories off
+  `settings_schema.SECTIONS`, its script triggers and statements off
+  `ta_scripts`, and its actions off `TITAN_ACTIONS`, so a setting, statement
+  or action added tomorrow is in tomorrow's prompt. Nothing is said about an
+  add-on the AI may not drive. `ai_agent.default_system()` and
+  `voice_assistant.build_system` append it; `init.py` re-exports
+  `TITAN_AI_BRIEFING` beside `TITAN_ACTIONS`.
+- **Twenty more actions** (63 with the generic three): `about`,
+  `read_aloud` (focus / title / value / last / screen / position /
+  selection / status / time / date, said and answered), `last_spoken`,
+  `beep`, `play_cue`, `braille`, `pass_key`, `list_shortcuts` /
+  `run_command` (every key of the running reader, and the command behind
+  it run as its key would - on a thread, never the GUI's), speech schemes
+  (`list_speech_schemes`, `set_speech_scheme`), names given to controls
+  (`label_control`, `list_labels`), and the scripts written rather than
+  only run (`script_language`, `read_script`, `write_script` - checked, a
+  script with a mistake is not saved and its problems are the answer -
+  and `delete_script`).
+- **The .tas language** (`titan_access/ta_scripts.py`):
+  - triggers `when notification text contains "..."` (UIA notifications
+    and live regions, through `engine._notified`; `{{text}}`),
+    `when every 30s|5m|1h` (at least `MIN_EVERY` 2 s) and
+    `when time "07:30"` (once a day) - one clock thread, started by `bind`
+    only when a script asks, stopped with the engine; `tick(now)` is what
+    it calls and what a test calls;
+  - conditions `!=`, `not contains`, `starts with`, `matches` (a regular
+    expression, case kept), beside `=` and `contains` - the tuple is still
+    `(name, op, value)` with `op` False/True for the two old shapes;
+  - the reader's own statements (`STATEMENTS`): `beep`, `cue`, `braille`,
+    `press`, `jump [previous] <kind>`, `read <what>`, `scan`,
+    `setting "name" = value`, `label`, `pass` (gives the triggering key
+    to the program, sentinel-marked so the hook does not take it again),
+    `silence`, `command`, `script`. Each becomes ONE Titan Script line
+    calling a Titan Access action, in place, so the Macro Manager's
+    checker, messages and line numbers apply unchanged. `check` ignores
+    "'titan_access' has no action X" for the reader's own actions (the
+    registry may have been built before they were declared);
+  - variables `states`, `position`, `index`, `count`, `level`, `x`, `y`,
+    `link`, `title`, `spoken`, `text`;
+  - control rules may also say `prefix`, `suffix` and `sound`.
+- **The reference is generated** (`language_text(language)`) from the same
+  tables, English for the AI and Polish for a Polish Titan, and written as
+  README.txt beside the scripts at every load - unless the user has made
+  the README their own. The Titan Script reference (both languages) has a
+  paragraph pointing at it.
+- Tests: `tests/test_titan_access_scripts.py` (34),
+  `tests/test_titan_access_actions.py` (49; the note checked against every
+  declared action, category, trigger and statement, and refused for a
+  blocked add-on). Probed on the real registry with the component loaded:
+  63 actions, a 3 000-character note.
 
 #### Tkinter, WPF, Qt and Unity in their own windows (2026-10-05)
 

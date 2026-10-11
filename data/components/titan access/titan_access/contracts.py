@@ -77,6 +77,7 @@ STATE_PRESSED = "pressed"
 STATE_BUSY = "busy"
 STATE_HASPOPUP = "haspopup"
 STATE_PROTECTED = "protected"          # password fields
+STATE_MULTILINE = "multiline"          # an edit field that takes several lines
 
 
 # =========================================================================== #

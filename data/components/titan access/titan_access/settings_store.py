@@ -401,6 +401,11 @@ class SettingsStore:
     def speak_hints(self, v): self.set_bool(SEC_GENERAL, "SpeakHints", v)
 
     @property
+    def show_welcome(self): return self.get_bool(SEC_GENERAL, "ShowWelcome", True)
+    @show_welcome.setter
+    def show_welcome(self, v): self.set_bool(SEC_GENERAL, "ShowWelcome", v)
+
+    @property
     def language(self):
         v = self.get(SEC_GENERAL, "Language", "pl").strip().lower()
         return v if v in ("pl", "en") else "pl"

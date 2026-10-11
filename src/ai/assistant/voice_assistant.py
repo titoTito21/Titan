@@ -134,7 +134,19 @@ def build_system(persona):
         "spoken lead-in (a few words, e.g. 'Sure, one moment' / 'Jasne, chwila') "
         "BEFORE calling any tool, so the user hears you immediately instead of "
         "waiting in silence; then perform the action and give a short spoken "
-        "confirmation when the task is done.")
+        "confirmation when the task is done."
+        + _titan_access_note())
+
+
+def _titan_access_note():
+    """What Titan Access is NOW, read out of the reader rather than written
+    into this prompt (where it went stale with every release)."""
+    try:
+        from src.ai import action_tools
+        note = action_tools.titan_access_note()
+    except Exception:                                # noqa: BLE001
+        note = ''
+    return (" " + note) if note else ''
 
 
 def _confirm_from_policy(gui_confirm):

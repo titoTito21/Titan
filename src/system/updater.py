@@ -1466,24 +1466,6 @@ class Updater:
             self._show_result(success)
         return success
 
-
-def exit_after_update(code=0):
-    """Leave the process the moment an update has been applied.
-
-    The files under the running process are the NEW version now - Titan.exe
-    with its PYZ, the libraries - and interpreter finalisation imports and
-    runs things (atexit handlers, threading's shutdown) out of them at the
-    old offsets. Measured: a successful --apply-update exited 120 that way.
-    Nothing needs tidying at this point - no window has been built - so the
-    process ends here, with the log flushed.
-    """
-    try:
-        sys.stdout and sys.stdout.flush()
-        sys.stderr and sys.stderr.flush()
-    except Exception:
-        pass
-    os._exit(code)
-
     def check_and_update(self):
         """Check for updates and, if one exists, offer it before startup.
 
@@ -1526,6 +1508,24 @@ def exit_after_update(code=0):
         # Update failed and was rolled back - keep running the old version.
         log("[UPDATER] Update failed; starting current version")
         return False
+
+
+def exit_after_update(code=0):
+    """Leave the process the moment an update has been applied.
+
+    The files under the running process are the NEW version now - Titan.exe
+    with its PYZ, the libraries - and interpreter finalisation imports and
+    runs things (atexit handlers, threading's shutdown) out of them at the
+    old offsets. Measured: a successful --apply-update exited 120 that way.
+    Nothing needs tidying at this point - no window has been built - so the
+    process ends here, with the log flushed.
+    """
+    try:
+        sys.stdout and sys.stdout.flush()
+        sys.stderr and sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(code)
 
 
 def cleanup_old_update_files(base_dir=None):

@@ -73,6 +73,24 @@ class AppModuleManager:
         self._current_process = None
         self._app_gesture_ids = []   # gesture action ids registered for the app
 
+    def stop_all(self):
+        """The reader is off: every module ends what it started (the
+        terminal's output poller first of all)."""
+        self._unregister_app_gestures()
+        seen = set()
+        for module in list(self._modules.values()):
+            if id(module) in seen:
+                continue
+            seen.add(id(module))
+            stop = getattr(module, "stop", None)
+            if callable(stop):
+                try:
+                    stop()
+                except Exception as e:
+                    print(f"[TitanAccess] app module stop error: {e}")
+        self._current = None
+        self._current_process = None
+
     # ==================================================================== #
     # Focus delegation
     # ==================================================================== #
@@ -196,6 +214,14 @@ class AppModuleManager:
 # Win32 helpers (defensive; never raise)
 # =========================================================================== #
 def _foreground_pid() -> int:
+    try:
+        # A UWP app's own process, not ApplicationFrameHost's.
+        from titan_access import uwp
+        found = uwp.foreground_pid()
+        if found:
+            return found
+    except Exception:
+        pass
     try:
         import ctypes.wintypes as wt
         hwnd = ctypes.windll.user32.GetForegroundWindow()

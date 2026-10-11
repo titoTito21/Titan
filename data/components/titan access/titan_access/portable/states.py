@@ -295,6 +295,16 @@ def _shell_loop():
         return
 
     def procedure(hwnd, message, wparam, lparam):
+        # **The loop has to be told to end.** `stop()` posts WM_CLOSE and
+        # the default answer destroys the window - but a destroyed window
+        # posts no WM_QUIT, so `GetMessageW` went on waiting and the
+        # thread outlived the reader that was switched off (measured:
+        # TitanAttentionWatch still alive after Titan Access stopped).
+        if message == 0x0002:                        # WM_DESTROY
+            try:
+                user32.PostQuitMessage(0)
+            except Exception:                        # noqa: BLE001
+                pass
         try:
             if message and message == _held['message'] \
                     and int(wparam or 0) == HSHELL_FLASH:

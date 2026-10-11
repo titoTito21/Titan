@@ -22,13 +22,33 @@ TCE imports it defensively: ``from titan_access.host_bridge import ...``.
 """
 
 
+class _ForTitan(object):
+    """The engine, with everything said through it marked as TITAN speaking
+    (`engine.for_titan`): "Mute outside TCE" holds back the reader's own
+    voice outside TCE, never Titan's - the Invisible UI answers keys while
+    another program is in front, and it is TCE all the same."""
+
+    def __init__(self, eng):
+        self._eng = eng
+
+    def __getattr__(self, name):
+        found = getattr(self._eng, name)
+        if not callable(found) or not hasattr(self._eng, 'for_titan'):
+            return found
+
+        def call(*args, **kwargs):
+            with self._eng.for_titan():
+                return found(*args, **kwargs)
+        return call
+
+
 def _engine():
     """Return the running engine instance, or None when the reader is off."""
     try:
         from titan_access.engine import TitanAccessEngine
         eng = TitanAccessEngine.instance
         if eng is not None and getattr(eng, "running", False):
-            return eng
+            return _ForTitan(eng)
     except Exception:
         pass
     return None
