@@ -182,12 +182,10 @@ class MenuTracker:
         """Select the first item a moment after the menu opened; where that
         reached no item (an empty menu, a program that ignores it), the
         opening is still said - on the container."""
-        import threading
+        from titan_access import later as _later
 
-        down = threading.Timer(self.SELECT_AFTER_S, self._press_down,
-                               args=(menu_id,))
-        down.daemon = True
-        down.start()
+        _later.call_later(self.SELECT_AFTER_S,
+                          lambda: self._press_down(menu_id))
 
         def check():
             pending = self._pending
@@ -210,9 +208,7 @@ class MenuTracker:
                     pass
             check()
 
-        timer = threading.Timer(self.FALLBACK_AFTER_S, later)
-        timer.daemon = True
-        timer.start()
+        _later.call_later(self.FALLBACK_AFTER_S, later)
 
     def _announce_menu(self, obj, menu_parent, settings):
         """Speak "{menu name}, menu, {N} items, {first item}"."""

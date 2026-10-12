@@ -12,6 +12,7 @@ reader runs it:
     when focus program="notepad" role="edit"
     when window program="explorer" title contains "Downloads"
     when notification text contains "battery"
+    when change name="Total"               a control's text changed
     when every 5m / when time "07:30"
     when reader starts
 
@@ -50,7 +51,7 @@ MIN_EVERY = 2
 
 #: The reader's own triggers - the lines Titan Script itself does not know.
 _TRIGGER = re.compile(r'^\s*when\s+(key|focus|window|reader|every|time|'
-                      r'notification)\b(.*)$', re.IGNORECASE)
+                      r'notification|change)\b(.*)$', re.IGNORECASE)
 #: `for program "name"` - the script is about ONE program, the way a JAWS
 #: script file is: its triggers and its rules apply only while that
 #: program is in front.
@@ -177,7 +178,9 @@ VARIABLES = (
     ('program', 'the program in front, without .exe'),
     ('key', 'the key that started the script'),
     ('spoken', 'the last thing the reader said'),
-    ('text', 'what a notification said (when notification)'),
+    ('text', 'what a notification said (when notification); a control\'s '
+             'new text (when change)'),
+    ('old', "a control's text before it changed (when change)"),
 )
 
 #: The trigger lines, one per kind.
@@ -186,12 +189,20 @@ TRIGGERS = (
                             "goes in front of the reader's own binding"),
     ('when key "ctrl+shift+f12"', "any key without the modifier - the key is "
                                   "then the script's (pass gives it back)"),
+    ('when key "f5" title contains "Inbox"', "a key with conditions: the "
+                                             "script runs only where they "
+                                             "hold, the key stays the "
+                                             "program's everywhere else"),
     ('when focus role="edit" program="notepad"', 'the focus lands on a '
                                                   'control that matches'),
     ('when window title contains "Downloads"', 'a new window comes to the '
                                                'front'),
     ('when notification text contains "battery"', 'a program says something '
                                                   'without moving the focus'),
+    ('when change name="Total"', "the text of a control of the window in "
+                                 "front changed ({{text}} is the new text, "
+                                 "{{old}} the one before) - a JAWS frame, a "
+                                 "SuperNova watch; checked once a second"),
     ('when every 5m', 'over and over: s, m or h, at least %d seconds'
                       % MIN_EVERY),
     ('when time "07:30"', 'once a day at that time'),
@@ -294,8 +305,43 @@ _PL = {
     "the program in front, without .exe": "program na wierzchu, bez .exe",
     "the key that started the script": "klawisz, który uruchomił skrypt",
     "the last thing the reader said": "ostatnia wypowiedź czytnika",
-    "what a notification said (when notification)":
-        "treść powiadomienia (when notification)",
+    "what a notification said (when notification); a control's new text "
+    "(when change)":
+        "treść powiadomienia (when notification); nowy tekst kontrolki "
+        "(when change)",
+    "a control's text before it changed (when change)":
+        "tekst kontrolki przed zmianą (when change)",
+    "a key with conditions: the script runs only where they hold, the key "
+    "stays the program's everywhere else":
+        "klawisz z warunkami: skrypt działa tylko tam, gdzie są spełnione, "
+        "a wszędzie indziej klawisz należy do programu",
+    "the text of a control of the window in front changed ({{text}} is the "
+    "new text, {{old}} the one before) - a JAWS frame, a SuperNova watch; "
+    "checked once a second":
+        "zmienił się tekst kontrolki okna na wierzchu ({{text}} to nowy "
+        "tekst, {{old}} poprzedni) - jak ramka w JAWS czy obserwacja w "
+        "SuperNovej; sprawdzane raz na sekundę",
+    "focus \"Save\" / focus button \"Save\" - put the keyboard on a control "
+    "of the window in front, by what it says":
+        "focus \"Zapisz\" / focus button \"Zapisz\" - przenieś fokus na "
+        "kontrolkę okna na wierzchu, po jej tekście",
+    "read control \"Total\" / read control statusbar - say a control "
+    "without moving to it":
+        "read control \"Suma\" / read control statusbar - przeczytaj "
+        "kontrolkę bez przechodzenia do niej",
+    "read region 10 40 300 20 - read part of the window (x y width height "
+    "from its top left corner) with the reader's own OCR":
+        "read region 10 40 300 20 - odczytaj fragment okna (x y szerokość "
+        "wysokość od jego lewego górnego rogu) własnym OCR czytnika",
+    "click 120 300 / click right 120 300 / click double 120 300 - a hot "
+    "spot: pixels from the window's top left corner; the mouse is put back":
+        "click 120 300 / click right 120 300 / click double 120 300 - "
+        "gorący punkt: piksele od lewego górnego rogu okna; mysz wraca na "
+        "swoje miejsce",
+    "wait for window \"Save as\" 10s / wait for control \"OK\" 5s - wait "
+    "until it is there; the script stops when it never comes":
+        "wait for window \"Zapisz jako\" 10s / wait for control \"OK\" 5s "
+        "- czekaj, aż się pojawi; skrypt kończy się, gdy się nie pojawi",
     "The reader's own statements (each is one Titan Access action, so a "
     "script may also call the action itself):":
         "Własne instrukcje czytnika (każda to jedna akcja Titan Access, "
@@ -574,6 +620,13 @@ def parse(text):
                                 'like when key "insert+j"' % number)
                 continue
             trigger['spec'] = spec.group(1).strip().lower()
+            trigger['conditions'] = _conditions(rest[spec.end():])
+        elif kind == 'change':
+            trigger['conditions'] = _conditions(rest)
+            if not trigger['conditions']:
+                problems.append('line %d: "when change" says which control, '
+                                'like when change name="Total"' % number)
+                continue
         elif kind == 'reader':
             if not rest.lower().startswith('start'):
                 problems.append('line %d: the reader trigger is '
@@ -611,7 +664,42 @@ _Q = r'("(?:[^"\\]|\\.)*")'
 #: ``(pattern, template, what it means)``. A template is the Titan Script
 #: line the statement becomes, so the Macro Manager's checker, its error
 #: messages and its line numbers apply to it unchanged.
+def _kind_arg(word):
+    return ' kind="%s"' % word.lower() if word else ''
+
+
 STATEMENTS = (
+    (r'focus\s+(?:(\w+)\s+)?' + _Q,
+     lambda m: 'titan_access.focus_element text=%s%s'
+               % (m.group(2), _kind_arg(m.group(1))),
+     'focus "Save" / focus button "Save" - put the keyboard on a control of '
+     'the window in front, by what it says'),
+    (r'read\s+control\s+(?:(\w+)\s*)?' + _Q + '?',
+     lambda m: 'titan_access.read_control text=%s%s'
+               % (m.group(2) or '""', _kind_arg(m.group(1))),
+     'read control "Total" / read control statusbar - say a control '
+     'without moving to it'),
+    (r'read\s+region\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)',
+     lambda m: 'titan_access.read_region x=%s y=%s width=%s height=%s'
+               % m.groups(),
+     'read region 10 40 300 20 - read part of the window (x y width height '
+     'from its top left corner) with the reader\'s own OCR'),
+    (r'click\s+(?:(left|right|middle|double)\s+)?(-?\d+)\s+(-?\d+)',
+     lambda m: 'titan_access.click_at x=%s y=%s button="%s" clicks=%s'
+               % (m.group(2), m.group(3),
+                  'left' if (m.group(1) or 'left').lower() == 'double'
+                  else (m.group(1) or 'left').lower(),
+                  '2' if (m.group(1) or '').lower() == 'double' else '1'),
+     'click 120 300 / click right 120 300 / click double 120 300 - a hot '
+     'spot: pixels from the window\'s top left corner; the mouse is put '
+     'back'),
+    (r'wait\s+for\s+(window|control)\s+' + _Q +
+     r'(?:\s+(\d+(?:\.\d+)?)\s*s?)?',
+     lambda m: 'titan_access.wait_for %s=%s seconds=%s'
+               % ('window_title' if m.group(1).lower() == 'window' else 'text',
+                  m.group(2), m.group(3) or '10'),
+     'wait for window "Save as" 10s / wait for control "OK" 5s - wait until '
+     'it is there; the script stops when it never comes'),
     (r'beep\s+(\d+)(?:\s+(\d+))?',
      lambda m: 'titan_access.beep frequency=%s duration=%s'
                % (m.group(1), m.group(2) or '60'),
@@ -763,16 +851,8 @@ _OWN_UNKNOWN = re.compile(r"'titan_access' has no action '(\w+)'")
 def own_actions():
     """The names of this reader's own actions, read from its declaration."""
     try:
-        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        module = sys.modules.get('titan_access_actions')
-        if module is None:
-            spec = importlib.util.spec_from_file_location(
-                'titan_access_actions',
-                os.path.join(here, 'titan_access_actions.py'))
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            sys.modules['titan_access_actions'] = module
-        return {str(one['name']) for one in module.TITAN_ACTIONS}
+        return {str(one['name'])
+                for one in _actions_module().TITAN_ACTIONS}
     except Exception:                                # noqa: BLE001
         return set()
 
@@ -1077,13 +1157,39 @@ def on_notification(text, program='', engine=None):
 # --------------------------------------------------------------------------- #
 # `when every` and `when time` - one slow thread, only while a script asks
 # --------------------------------------------------------------------------- #
-_clock = {'thread': None, 'generation': 0, 'due': {}, 'fired': {}}
+_clock = {'thread': None, 'generation': 0, 'due': {}, 'fired': {},
+          'seen': {}}
+
+
+def _actions_module():
+    """``titan_access_actions`` - the reader's own actions, beside this
+    package."""
+    module = sys.modules.get('titan_access_actions')
+    if module is None:
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        spec = importlib.util.spec_from_file_location(
+            'titan_access_actions',
+            os.path.join(here, 'titan_access_actions.py'))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules['titan_access_actions'] = module
+    return module
+
+
+def _control_text(conditions):
+    """The text of the first control in front that meets ``conditions``,
+    or None. `when change` asks it once a second."""
+    try:
+        return _actions_module().control_text(conditions)
+    except Exception:                                # noqa: BLE001
+        return None
 
 
 def _timed():
     return [(script, trigger) for script in scripts()
             for trigger in script['triggers']
-            if trigger['kind'] in ('every', 'time') and not script['problems']]
+            if trigger['kind'] in ('every', 'time', 'change')
+            and not script['problems']]
 
 
 def _start_clock():
@@ -1091,6 +1197,7 @@ def _start_clock():
         _clock['generation'] += 1
         generation = _clock['generation']
         _clock['due'] = {}
+        _clock['seen'] = {}
         if not _timed():
             _clock['thread'] = None
             return False
@@ -1121,6 +1228,20 @@ def tick(now):
                                      if trigger.get('program') else ''}):
             continue
         key = (script['name'], trigger['line'])
+        if trigger['kind'] == 'change':
+            text = _control_text(trigger.get('conditions') or [])
+            with _LOCK:
+                seen = _clock['seen']
+                old = seen.get(key)
+                seen[key] = text
+            # The first reading is where the watch starts, and a control
+            # that is not on the screen is not a change.
+            if old is None or text is None or text == old:
+                continue
+            run(script, engine=_state.get('engine'),
+                extra={'text': text, 'old': old})
+            started += 1
+            continue
         if trigger['kind'] == 'every':
             with _LOCK:
                 due = _clock['due'].setdefault(key, now + trigger['seconds'])
@@ -1158,9 +1279,22 @@ def plain_key(name, ctrl, alt, shift, engine=None):
                         program = _foreground_process().lower()
                     if program != trigger['program']:
                         continue
+                if not _key_conditions_hold(trigger):
+                    continue
                 run(script, key=trigger['spec'], engine=engine)
                 return True
     return False
+
+
+def _key_conditions_hold(trigger):
+    """`when key "f5" title contains "Inbox"`: the window in front is
+    asked only when the trigger has conditions."""
+    conditions = trigger.get('conditions') or []
+    if not conditions:
+        return True
+    title, program = _window_and_program()
+    return _matches(conditions, {'title': title, 'window': title,
+                                 'program': program})
 
 
 def _normalise(spec):
@@ -1217,8 +1351,8 @@ def bind(engine):
             try:
                 binding = gestures.register(
                     action_id, spec,
-                    lambda one=script, key=spec, scope=trigger.get('program'):
-                    _run_scoped(one, key, scope))
+                    lambda one=script, key=spec, scope=trigger.get('program'),
+                    when=trigger: _run_scoped(one, key, scope, when))
                 gestures._bindings.remove(binding)
                 gestures._bindings.insert(0, binding)
                 binding.name = script['name']
@@ -1235,10 +1369,12 @@ def bind(engine):
     return found
 
 
-def _run_scoped(script, key, program):
-    """A modifier key of a program's script: that script's in that program,
-    the reader's own everywhere else."""
+def _run_scoped(script, key, program, trigger=None):
+    """A modifier key of a program's script: that script's in that program
+    (and where its conditions hold), the reader's own everywhere else."""
     if program and _foreground_process().lower() != program:
+        return _fall_through(key)
+    if trigger is not None and not _key_conditions_hold(trigger):
         return _fall_through(key)
     return run(script, key=key)
 

@@ -37,6 +37,7 @@ import os
 import sys as _sys
 _IS_WINDOWS = _sys.platform == 'win32'
 from titan_access.log import log
+from titan_access import later
 import queue
 import threading
 import time
@@ -260,6 +261,10 @@ class TitanAccessEngine:
             found["has_" + name] = getattr(self, name, None) is not None
         try:
             found["hook"] = self.keyboard.native_status() if self.keyboard else {}
+            if self.keyboard is not None and \
+                    hasattr(self.keyboard, "slow_keys"):
+                found["hook"] = dict(found["hook"] or {},
+                                     slow_keys=self.keyboard.slow_keys())
         except Exception:
             found["hook"] = {}
         try:
@@ -2054,7 +2059,7 @@ class TitanAccessEngine:
             # On the reader's own thread, not the timer's: the announcement
             # reads the element (its ancestors, its text), which is COM on
             # Windows and libatspi on Linux, and neither is for any thread.
-            threading.Timer(0.12, lambda: self.post_to_worker(_fire)).start()
+            later.call_later(0.12, lambda: self.post_to_worker(_fire))
         else:
             self.announce_object(obj)
 
@@ -2107,6 +2112,15 @@ class TitanAccessEngine:
                 self.editable.note_caret_key()
             except Exception:                        # noqa: BLE001
                 pass
+            # **The field answers like a virtual window**: what the key
+            # lands on is worked out from the field's own text and said
+            # now, before the program has the key; the read below only
+            # confirms it, or corrects it where the program did something
+            # of its own. No mode, no sound - it stays an edit field.
+            try:
+                self.editable.predict_caret_move(key, ctrl)
+            except Exception as e:                   # noqa: BLE001
+                log(f"[TitanAccess] caret prediction error: {e}")
 
         def _do():
             # The read itself waits for the caret to actually move before reading
@@ -2119,7 +2133,11 @@ class TitanAccessEngine:
                     return
                 if ctrl and key in ("left", "right"):
                     self.editable.read_caret_word()
-                elif key in ("up", "down", "home", "end"):
+                elif key in ("up", "down", "home", "end",
+                             "pageup", "pagedown"):
+                    # Control with these too (the top or the end of the
+                    # text, the paragraph before or after): the line the
+                    # caret arrives on is what the user needs.
                     self.editable.read_caret_line()
                 else:  # left / right by character
                     self.editable.read_caret_char()
@@ -3129,8 +3147,8 @@ class TitanAccessEngine:
                     'up', 'down', 'left', 'right', 'home', 'end', 'tab',
                     'return', 'enter', 'pageup', 'pagedown'):
                 said_key = str(key_name or '').lower()
-                threading.Timer(0.15, lambda: guest.after_key(
-                    key=said_key)).start()
+                later.call_later(0.15, lambda: guest.after_key(
+                    key=said_key))
         except Exception:
             pass
         # **Space on a check box is a change worth hearing.** Nothing
@@ -3567,7 +3585,8 @@ class TitanAccessEngine:
             after = self._toggle_state(fresh)
             if after and after != before:
                 self._announce_toggle(fresh, after)
-        threading.Timer(self.TOGGLE_REREAD_S, _later).start()
+        later.call_later(self.TOGGLE_REREAD_S,
+                         lambda: self.post_to_worker(_later))
 
     def on_state_change(self, obj):
         """A state changed somewhere (MSAA ``EVENT_OBJECT_STATECHANGE``,

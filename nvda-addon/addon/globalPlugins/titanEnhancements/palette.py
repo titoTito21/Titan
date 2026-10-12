@@ -299,6 +299,7 @@ def show(rows, title, back=None, kind='', at=0):
         at = 0
     with _LOCK:
         first = not _state['on']
+        was_message = _text(_state.get('kind')) == 'text' and not first
         _state.update({'on': True, 'rows': rows, 'at': at,
                        'title': _text(title), 'back': back,
                        'letter': 0, 'inner': 0, 'depth': None,
@@ -308,7 +309,12 @@ def show(rows, title, back=None, kind='', at=0):
             # another keeps the first one's, since the user has not moved.
             _state['hwnd'] = _foreground_hwnd()
         _counted['opened'] += 1
-    if first:
+    if kind == 'text' and not was_message:
+        # **A message has its own sound** (`sr_message.ogg` under Titan),
+        # also when it replaces a palette that was open: an answer is a
+        # different thing from a list of things to choose.
+        icons.play('reader.message')
+    elif first:
         icons.play('reader.palette-open')
 
     def announce():

@@ -937,6 +937,7 @@
   "dial.noVariants": "This voice has no variants",
   "speechSystem.label.variant": "V&ariant:",
   "speechSystem.noVariants": "This voice has no variants",
+  "speechSystem.variant.none": "No variant (the voice's own)",
   "gesture.titanWidgets.name": "Titan widgets",
   "gesture.titanWidgets.desc": "Chooses a Titan widget and walks it with the arrows (Insert+Shift+G)",
   "settings.braille.display": "Braille display",

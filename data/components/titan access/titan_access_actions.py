@@ -81,6 +81,10 @@ _KINDS = {
     "form": ("edit", "password", "combobox", "checkbox", "radio", "button",
              "slider", "spinner"),
     "landmark": ("__landmark__",),
+    "statusbar": ("statusbar",),
+    "toolbar": ("toolbar",),
+    "dialog": ("dialog", "alert"),
+    "progressbar": ("progressbar",),
 }
 
 _KIND_NAMES = sorted(_KINDS)
@@ -419,6 +423,209 @@ def action_read_text(window=0, engine="auto"):
     if not lines:
         return "The window was read and holds no text."
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------- #
+# What an application script does with a program (JAWS, NVDA and SuperNova
+# scripts do these all the time): put the keyboard on a control, say a
+# control without going there, click a hot spot, wait for something to
+# appear, read a corner of the window, watch a control for changes.
+# --------------------------------------------------------------------------- #
+def _say_here(text):
+    """Say ``text`` in the reader's voice, when a reader is running."""
+    engine = _engine()
+    if engine is None or not text:
+        return
+    try:
+        engine.speak(str(text), interrupt=False)
+    except Exception:
+        pass
+
+
+def action_focus_element(text="", kind="all", window=0):
+    """Put the keyboard focus on a control of the window in front, found
+    by what it says (JAWS's SetFocus / NVDA's obj.setFocus)."""
+    if not str(text or "").strip():
+        return fails("Say which control to move to.")
+    doc = _document(window, refresh=True)
+    if doc is None or not doc.nodes:
+        return fails("Nothing readable is on the screen.")
+    if _matching(doc, kind) is None:
+        return fails(f"'{kind}' is not something to look for.")
+    node = _best_match(doc, kind, text)
+    if node is None:
+        return fails(f"There is no '{text}' on the screen.")
+    if not _buffer().focus_node(node):
+        return fails(f"The focus could not be put on '{_line(node)}'.")
+    return f"The focus is on {_line(node)}."
+
+
+def action_read_control(text="", kind="all", window=0, speak=True):
+    """What a control says, without moving the focus there (JAWS's
+    SayWindow): spoken in the reader's voice and handed back, so a script
+    can `set total = titan_access.read_control text="Total"`."""
+    if not str(text or "").strip() and (kind or "all") == "all":
+        return fails("Say which control to read, by its text or its type.")
+    doc = _document(window, refresh=True)
+    if doc is None or not doc.nodes:
+        return fails("Nothing readable is on the screen.")
+    pool = _matching(doc, kind)
+    if pool is None:
+        return fails(f"'{kind}' is not something to look for.")
+    node = _best_match(doc, kind, text) if str(text or "").strip() \
+        else (pool[0] if pool else None)
+    if node is None:
+        return fails(f"There is no '{text or kind}' on the screen.")
+    line = _line(node)
+    if _bool(speak, True):
+        _say_here(line)
+    return line
+
+
+def control_text(conditions, window=0):
+    """The text of the first control of the window in front whose name,
+    role or value meet ``conditions`` (``[(field, op, wanted)]``, a TA
+    script's own), or None when there is none. For `when change`."""
+    doc = _document(window, refresh=True)
+    if doc is None:
+        return None
+    from titan_access import ta_scripts
+    for node in doc.nodes:
+        values = {"name": node.name or "", "role": node.role or "",
+                  "value": node.value or "", "text": node.text or ""}
+        try:
+            from titan_access import localization as loc
+            values["role_key"] = node.role or ""
+            values["role"] = loc.role_label(node.role)
+        except Exception:
+            pass
+        if ta_scripts._matches(conditions, values):
+            return node.text or ""
+    return None
+
+
+def _window_origin(window=0):
+    """The top left corner of the window in front (or ``window``)."""
+    vbuf = _buffer()
+    hwnd = int(window or 0) or _foreground()
+    rect = vbuf.window_rect(hwnd) if hwnd else ()
+    if rect and len(rect) == 4:
+        return int(rect[0]), int(rect[1])
+    return 0, 0
+
+
+def _click_point(x, y, button="left", clicks=1):
+    """A real mouse click at a screen point; the pointer is put back."""
+    button = str(button or "left").lower()
+    if sys.platform.startswith("win"):
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.windll.user32
+        before = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(before))
+        down, up = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010),
+                    "middle": (0x0020, 0x0040)}.get(button, (0x0002, 0x0004))
+        try:
+            user32.SetCursorPos(int(x), int(y))
+            for _ in range(max(1, int(clicks))):
+                user32.mouse_event(down, 0, 0, 0, 0)
+                user32.mouse_event(up, 0, 0, 0, 0)
+                time.sleep(0.03)
+        finally:
+            user32.SetCursorPos(before.x, before.y)
+        return True
+    import shutil
+    import subprocess
+    if not shutil.which("xdotool"):
+        return False
+    number = {"left": "1", "middle": "2", "right": "3"}.get(button, "1")
+    subprocess.run(["xdotool", "mousemove", "--sync", str(int(x)), str(int(y)),
+                    "click", "--repeat", str(max(1, int(clicks))), number,
+                    "mousemove", "restore"], timeout=5,
+                   capture_output=True)
+    return True
+
+
+def action_click_at(x=0, y=0, button="left", clicks=1, relative="window",
+                    window=0):
+    """Click a hot spot - a place in the window rather than a control
+    (JAWS's HotSpot Clicker, SuperNova's hotspots). ``x``/``y`` are pixels
+    from the window's top left corner, or from the screen's with
+    ``relative="screen"``."""
+    try:
+        x, y = int(x), int(y)
+        clicks = max(1, min(3, int(clicks or 1)))
+    except (TypeError, ValueError):
+        return fails("A hot spot is two whole numbers of pixels: x and y.")
+    if str(button or "left").lower() not in ("left", "right", "middle"):
+        return fails("The button is left, right or middle.")
+    if str(relative or "window").lower() != "screen":
+        left, top = _window_origin(window)
+        x, y = x + left, y + top
+    if not _click_point(x, y, button, clicks):
+        return fails("This machine has nothing to click with (xdotool).")
+    _forget_document()
+    return f"Clicked at {x}, {y}."
+
+
+def action_wait_for(window_title="", text="", kind="all", seconds=10):
+    """Wait until a window whose title contains ``window_title`` is in
+    front, or a control saying ``text`` is on the screen - polled four
+    times a second, at most ``seconds``."""
+    if not str(window_title or "").strip() and not str(text or "").strip():
+        return fails("Say what to wait for: a window title or a control.")
+    try:
+        limit = max(0.2, min(120.0, float(seconds or 10)))
+    except (TypeError, ValueError):
+        limit = 10.0
+    vbuf = _buffer()
+    deadline = time.time() + limit
+    wanted_title = str(window_title or "").strip().casefold()
+    while True:
+        if wanted_title:
+            hwnd = _foreground()
+            title = vbuf.window_text(hwnd) if hwnd else ""
+            if wanted_title in str(title or "").casefold():
+                return f"'{title}' is in front."
+        else:
+            doc = _document(refresh=True)
+            node = _best_match(doc, kind, text) if doc is not None else None
+            if node is not None:
+                return f"{_line(node)} is on the screen."
+        if time.time() >= deadline:
+            return fails(f"'{window_title or text}' did not appear in "
+                         f"{limit:g} seconds.")
+        time.sleep(0.25)
+
+
+def action_read_region(x=0, y=0, width=0, height=0, window=0, speak=True):
+    """Read part of the window in front off its picture, with the reader's
+    own OCR - for a program that draws its text (a status area, a score).
+    Pixels from the window's top left corner."""
+    from titan_access import windows_ocr
+    try:
+        x, y, width, height = int(x), int(y), int(width), int(height)
+    except (TypeError, ValueError):
+        return fails("A region is four whole numbers: x, y, width, height.")
+    if width <= 0 or height <= 0:
+        return fails("A region needs a width and a height.")
+    hwnd = int(window or 0) or _foreground()
+    left, top = _window_origin(hwnd)
+    found = windows_ocr.read_rect(left + x, top + y, width, height, hwnd=hwnd)
+    if not found.get("ok"):
+        return fails(found.get("text") or "Nothing could be read there.")
+    lines = []
+    for one in found.get("lines") or []:
+        if isinstance(one, list):
+            lines.append(" ".join(w.get("text", "") for w in one))
+        else:
+            lines.append(str(one.get("text") or ""))
+    text = " ".join(line for line in lines if line.strip()).strip()
+    if not text:
+        return "There is no text there."
+    if _bool(speak, True):
+        _say_here(text)
+    return text
 
 
 # --------------------------------------------------------------------------- #
@@ -1793,6 +2000,90 @@ TITAN_ACTIONS = [
      'needs_gui': False,
      'timeout': 120,
      'run': action_read_text},
+    {'name': 'focus_element',
+     'summary': "Put the keyboard focus on a control of the window in front, "
+                "by what it says.",
+     'params': {
+         'text': {'type': 'string', 'required': True,
+                  'description': "What the control says."},
+         'kind': {'type': 'string', 'enum': _KIND_ENUM,
+                  'description': "Only elements of this type."},
+         'window': _WINDOW_PARAM,
+     },
+     'timeout': 60,
+     'run': action_focus_element},
+    {'name': 'read_control',
+     'summary': "Say what a control says without moving the focus there, "
+                "and hand it back.",
+     'params': {
+         'text': {'type': 'string',
+                  'description': "What the control says (or part of it)."},
+         'kind': {'type': 'string', 'enum': _KIND_ENUM,
+                  'description': "Only elements of this type; alone, the "
+                                 "first of them."},
+         'window': _WINDOW_PARAM,
+         'speak': {'type': 'boolean',
+                   'description': "Say it in the reader's voice (default "
+                                  "yes)."},
+     },
+     'timeout': 60,
+     'run': action_read_control},
+    {'name': 'click_at',
+     'summary': "Click a hot spot: a place in the window in front, in pixels "
+                "from its top left corner.",
+     'params': {
+         'x': {'type': 'integer', 'required': True,
+               'description': "Pixels from the left edge."},
+         'y': {'type': 'integer', 'required': True,
+               'description': "Pixels from the top edge."},
+         'button': {'type': 'string', 'enum': ['left', 'right', 'middle'],
+                    'description': "Which mouse button (default left)."},
+         'clicks': {'type': 'integer',
+                    'description': "1 for a click, 2 for a double click."},
+         'relative': {'type': 'string', 'enum': ['window', 'screen'],
+                      'description': "From the window's corner (default) or "
+                                     "the screen's."},
+         'window': _WINDOW_PARAM,
+     },
+     'risk': 'confirm',
+     'run': action_click_at},
+    {'name': 'wait_for',
+     'summary': "Wait until a window comes to the front or a control "
+                "appears on the screen.",
+     'params': {
+         'window_title': {'type': 'string',
+                          'description': "Part of the window's title."},
+         'text': {'type': 'string',
+                  'description': "What the control says."},
+         'kind': {'type': 'string', 'enum': _KIND_ENUM,
+                  'description': "Only elements of this type."},
+         'seconds': {'type': 'number',
+                     'description': "How long to wait at most (default 10)."},
+     },
+     # Never on Titan's own thread: it waits, and Titan would wait with it.
+     'needs_gui': False,
+     'timeout': 130,
+     'run': action_wait_for},
+    {'name': 'read_region',
+     'summary': "Read part of the window in front off its picture with the "
+                "reader's own OCR.",
+     'params': {
+         'x': {'type': 'integer', 'required': True,
+               'description': "Pixels from the window's left edge."},
+         'y': {'type': 'integer', 'required': True,
+               'description': "Pixels from the window's top edge."},
+         'width': {'type': 'integer', 'required': True,
+                   'description': "Width in pixels."},
+         'height': {'type': 'integer', 'required': True,
+                    'description': "Height in pixels."},
+         'window': _WINDOW_PARAM,
+         'speak': {'type': 'boolean',
+                   'description': "Say it in the reader's voice (default "
+                                  "yes)."},
+     },
+     'needs_gui': False,
+     'timeout': 60,
+     'run': action_read_region},
     {'name': 'nvda_addons',
      'summary': "The NVDA add-ons installed in Titan Access.",
      'needs_gui': False,

@@ -120,12 +120,59 @@ def _keysym_char(keysym):
         return chr(keysym & 0xffffff)
     if 0x100 <= keysym <= 0x1ff:                     # Latin-2
         try:
+            import gi
+            try:
+                gi.require_version('Gdk', '3.0')
+            except Exception:                        # noqa: BLE001
+                pass
             from gi.repository import Gdk
             code = Gdk.keyval_to_unicode(keysym)
             return chr(code) if code else ''
         except Exception:                            # noqa: BLE001
             return ''
     return ''
+
+
+# Latin-2's Polish letters (ó is Latin-1), known without asking GDK.
+_POLISH_KEYSYMS = {
+    0x1b1: '\u0105', 0x1a1: '\u0104', 0x1e6: '\u0107', 0x1c6: '\u0106',
+    0x1ea: '\u0119', 0x1ca: '\u0118', 0x1b3: '\u0142', 0x1a3: '\u0141',
+    0x1f1: '\u0144', 0x1d1: '\u0143', 0x1b6: '\u015b', 0x1a6: '\u015a',
+    0x1bc: '\u017a', 0x1ac: '\u0179', 0x1bf: '\u017c', 0x1af: '\u017b',
+}
+
+
+def typed_char(keysym):
+    """The character an X keysym TYPES, or '' - what the echo says.
+
+    ASCII and Latin-1 keysyms are their own code points, Unicode keysyms
+    carry 0x1000000, and the rest (Latin-2's Polish letters, EuroSign) are
+    asked of GDK. A key that types nothing answers ''."""
+    if 0x20 <= keysym <= 0x7e or 0xa0 <= keysym <= 0xff:
+        return chr(keysym)
+    if keysym in _POLISH_KEYSYMS:
+        return _POLISH_KEYSYMS[keysym]
+    if 0xfd00 <= keysym <= 0xffff:
+        return ''                      # function, cursor and modifier keys
+    try:
+        char = _keysym_char(keysym)
+    except Exception:                                # noqa: BLE001
+        char = ''
+    if char:
+        return char
+    if keysym == 0x20ac:
+        return '\u20ac'
+    try:
+        import gi
+        try:
+            gi.require_version('Gdk', '3.0')
+        except Exception:                            # noqa: BLE001
+            pass
+        from gi.repository import Gdk
+        code = Gdk.keyval_to_unicode(keysym)
+        return chr(code) if code and code >= 0x20 else ''
+    except Exception:                                # noqa: BLE001
+        return ''
 
 
 _listener = None
@@ -151,6 +198,10 @@ def start(hook):
             flags = LLKHF_EXTENDED if extended else 0
             if not pressed:
                 flags |= LLKHF_UP
+            # **What the key types** is in the keysym (the layout and
+            # AltGr already applied by X): the echo reads it from here,
+            # there being no ToUnicodeEx off Windows.
+            hook._posix_char = typed_char(int(event.id)) if pressed else ''
             swallow = hook._process(vk, int(event.hw_code or 0), flags, pressed)
             if _TRACE:
                 print(f"[TitanAccess] key: keysym=0x{int(event.id):x} {event.event_string!r} "
@@ -248,6 +299,7 @@ def _start_pynput(hook):
             flags = LLKHF_EXTENDED if extended else 0
             if not pressed:
                 flags |= LLKHF_UP
+            hook._posix_char = (getattr(key, 'char', None) or '') if pressed else ''
             hook._process(vk, 0, flags, pressed)
         except Exception as e:                       # noqa: BLE001
             print(f"[TitanAccess] atspi_keys (pynput): {e}")

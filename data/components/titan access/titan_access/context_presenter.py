@@ -785,6 +785,12 @@ class ContextPresenter:
         if key in self._seen_dialogs:
             return []
         try:
+            from titan_access import native_hook
+            if not native_hook.window_answers(hwnd):
+                return []
+        except Exception:
+            pass
+        try:
             ctrl = _auto.ControlFromHandle(hwnd)
         except Exception:
             ctrl = None

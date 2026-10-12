@@ -199,7 +199,16 @@ class AProgressBarIsHeardRising(unittest.TestCase):
         def driver():
             try:
                 engine.start()
-                time.sleep(1.5)
+                # The engine builds its subsystems on its own thread, and
+                # how long that takes depends on the machine (every Titan
+                # TTS engine is loaded): wait for it rather than guess.
+                deadline = time.time() + 20.0
+                while time.time() < deadline and (
+                        getattr(engine, 'provider', None) is None
+                        or getattr(engine, 'sound', None) is None
+                        or getattr(engine, 'progress', None) is None):
+                    time.sleep(0.1)
+                time.sleep(0.3)
                 sound = engine.sound
                 real = sound.play_tone
 

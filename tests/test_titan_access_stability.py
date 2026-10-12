@@ -347,7 +347,7 @@ class TheSelectionIsReportedAsItChanges(unittest.TestCase):
         hook = io.open(os.path.join(COMPONENT, 'titan_access', 'keyboard_hook.py'),
                        encoding='utf-8').read()
         self.assertIn('self.engine.on_edit_caret_move(key_name, self._ctrl,\n'
-                      '                                                   self._shift)', hook)
+                      '                                               self._shift)', hook)
 
 
 class WhatTheReaderOpensIsInFront(unittest.TestCase):

@@ -225,7 +225,9 @@ class TitanAccessObjectsWearNvdasShape(unittest.TestCase):
         self.assertIn('monitors.watch_this_control(adapted)', source)
         self.assertIn('guest.consider(adapted)', source)
         self.assertIn('surface.consider(adapted', source)
-        self.assertIn('readerModules.for_object(adapted)', source)
+        # The module is looked up for the object and, since the reader
+        # learnt which Titan application a window is, for that too.
+        self.assertRegex(source, r'readerModules\.for_object\(\s*adapted\b')
         self.assertIn('live.changed(child)', source)
 
 

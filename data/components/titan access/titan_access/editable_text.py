@@ -229,6 +229,134 @@ def removed_text(before, after):
     return None
 
 
+# --------------------------------------------------------------------------- #
+# UI Automation text, without the vendored library's sleeps
+# --------------------------------------------------------------------------- #
+# The vendored ``uiautomation`` wraps every text range in a class whose
+# Move / MoveEndpointByUnit / MoveEndpointByRange / ExpandToEnclosingUnit /
+# Select end in ``time.sleep(0.5)`` (OPERATION_WAIT_TIME, there for test
+# scripts that drive a UI and wait for it) - measured on a WPF TextBox:
+# 0.50 s per call, so one caret read cost two seconds and more, and every
+# poll of the caret half a second. And its CompareEndpoints hands the COM
+# call the WRAPPER, which raises: the wait for the caret to move failed
+# silently every time. The edit field speaks to the COM ranges directly.
+def _raw_range(rng):
+    if isinstance(rng, _FastRange):
+        return rng.raw
+    return getattr(rng, "textRange", rng)
+
+
+class _FastRange(object):
+    """An IUIAutomationTextRange under the names the wrapper used."""
+    __slots__ = ("raw",)
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def Clone(self):
+        return _FastRange(self.raw.Clone())
+
+    def CompareEndpoints(self, src, other, target):
+        return self.raw.CompareEndpoints(src, _raw_range(other), target)
+
+    def ExpandToEnclosingUnit(self, unit, waitTime=0):
+        self.raw.ExpandToEnclosingUnit(unit)
+        return True
+
+    def GetText(self, max_length=-1):
+        return self.raw.GetText(max_length) or ""
+
+    def Move(self, unit, count, waitTime=0):
+        return self.raw.Move(unit, count)
+
+    def MoveEndpointByRange(self, src, other, target, waitTime=0):
+        self.raw.MoveEndpointByRange(src, _raw_range(other), target)
+        return True
+
+    def MoveEndpointByUnit(self, endpoint, unit, count, waitTime=0):
+        return self.raw.MoveEndpointByUnit(endpoint, unit, count)
+
+    def Select(self, waitTime=0):
+        self.raw.Select()
+        return True
+
+    def GetAttributeValue(self, attribute):
+        return self.raw.GetAttributeValue(attribute)
+
+    def __getattr__(self, name):
+        return getattr(self.raw, name)
+
+
+class _FastPattern(object):
+    """A TextPattern whose ranges are :class:`_FastRange`."""
+
+    def __init__(self, pattern):
+        self._pattern = pattern
+
+    def GetSelection(self):
+        return [_FastRange(_raw_range(r)) for r in (self._pattern.GetSelection() or [])]
+
+    @property
+    def DocumentRange(self):
+        return _FastRange(_raw_range(self._pattern.DocumentRange))
+
+    def __getattr__(self, name):
+        return getattr(self._pattern, name)
+
+
+def _expand(rng, unit):
+    """A copy of the UIA range *rng* expanded to *unit*.
+
+    **WPF answers the wrong line at both ends of one** (measured on a
+    TextBox): the caret at the very START of a line, expanded to Line,
+    answers that line AND the one before; the character at the END of a
+    line (its CR LF), expanded, answers that line and the next. So both
+    are asked - the caret as it is, and the character at it, NVDA's way
+    round the first - and the SHORTEST of them that still holds the caret
+    is the line. A control without the fault answers the same twice."""
+    work = rng.Clone()
+    if _UNIT_CHAR is None or unit == _UNIT_CHAR:
+        work.ExpandToEnclosingUnit(unit)
+        return work
+    try:
+        degenerate = work.CompareEndpoints(_EP_START, work, _EP_END) == 0
+    except Exception:                                # noqa: BLE001
+        degenerate = False
+    work.ExpandToEnclosingUnit(unit)
+    if not degenerate:
+        return work
+    candidates = [work]
+    # The character at the caret, and the one before it: a caret put at
+    # the end of a line by a selection leans FORWARD in WPF, and then the
+    # caret and its CR LF both answer two lines - the character before
+    # it answers the line it ends.
+    for endpoint, step in ((_EP_END, 1), (_EP_START, -1)):
+        try:
+            probe = rng.Clone()
+            if probe.MoveEndpointByUnit(endpoint, _UNIT_CHAR, step) == step:
+                probe.ExpandToEnclosingUnit(unit)
+                candidates.append(probe)
+        except Exception:                            # noqa: BLE001
+            pass
+    if len(candidates) == 1:
+        return work
+
+    def holds(c):
+        try:
+            return c.CompareEndpoints(_EP_START, rng, _EP_START) <= 0 \
+                and c.CompareEndpoints(_EP_END, rng, _EP_START) >= 0
+        except Exception:                            # noqa: BLE001
+            return True
+
+    def size(c):
+        try:
+            return len(c.GetText(-1) or "")
+        except Exception:                            # noqa: BLE001
+            return 1 << 30
+    held = [c for c in candidates if holds(c)] or candidates
+    return min(held, key=size)
+
+
 def _line_at(text, pos):
     """The text of the line containing offset ``pos``.
 
@@ -253,6 +381,185 @@ def _word_at(text, pos):
     return ""
 
 
+# --------------------------------------------------------------------------- #
+# Visual lines of a Win32 edit (a field that wraps is read a SCREEN line at a
+# time, as NVDA reads it - not a whole paragraph on every Down)
+# --------------------------------------------------------------------------- #
+_EM_GETLINECOUNT = 0x00BA
+_EM_LINEINDEX = 0x00BB
+_EM_LINELENGTH = 0x00C1
+_EM_LINEFROMCHAR = 0x00C9
+#: wParam -1: "the line the caret is on" (or the selection's start).
+_WPARAM_MINUS_ONE = (1 << (8 * (_ctypes.sizeof(_ctypes.c_size_t)
+                                if _ctypes is not None else 8))) - 1
+
+
+def _signed(value):
+    """An LRESULT read through ``c_size_t`` back as the int it was."""
+    if value is None:
+        return None
+    value = int(value)
+    if value >= 1 << 63:
+        value -= 1 << 64
+    return value
+
+
+def _win32_lines(hwnd, text_length, wanted=(), timeout_ms=None):
+    """``(caret line, line count, {line: (start, length)})`` of a Win32
+    edit, the caret's line and the *wanted* offsets from it (-1, +1...)
+    and the first and the last line measured; None where the control does
+    not answer the EM_ line messages sensibly (a control merely CALLED
+    Edit), so nothing is guessed from a wrong answer."""
+    if _user32 is None or not hwnd:
+        return None
+    try:
+        count = _signed(_send(hwnd, _EM_GETLINECOUNT, 0, 0, timeout_ms))
+        cur = _signed(_send(hwnd, _EM_LINEFROMCHAR, _WPARAM_MINUS_ONE, 0,
+                            timeout_ms))
+        if count is None or cur is None or count < 1 or not 0 <= cur < count:
+            return None
+        lines = {}
+        for i in {cur, 0, count - 1} | {cur + d for d in wanted}:
+            if not 0 <= i < count:
+                continue
+            start = _signed(_send(hwnd, _EM_LINEINDEX, i, 0, timeout_ms))
+            if start is None or not 0 <= start <= text_length:
+                return None
+            length = _signed(_send(hwnd, _EM_LINELENGTH, start, 0, timeout_ms))
+            if length is None or length < 0 or start + length > text_length:
+                return None
+            lines[i] = (start, length)
+        return cur, count, lines
+    except Exception:
+        return None
+
+
+def _win32_model(hwnd, timeout_ms=25):
+    """The field as the hook's thread may ask it, BEFORE the key reaches
+    the program: the whole text, the caret, the selection and the visual
+    lines round the caret. None where any answer is missing."""
+    snap = _win32_snapshot(hwnd, timeout_ms=timeout_ms)
+    if snap is None:
+        return None
+    got = _win32_lines(hwnd, len(snap["text"]), wanted=(-1, 1),
+                       timeout_ms=timeout_ms)
+    if got is not None:
+        snap["line"], snap["count"], snap["lines"] = got
+    return snap
+
+
+def _line_of(snap, i):
+    start, length = snap["lines"][i]
+    return snap["text"][start:start + length]
+
+
+def predict_caret(snap, key, ctrl=False):
+    """Where an arrow will put the caret, worked out from the field's own
+    text before the program has the key: ``(kind, text, snap after)``, or
+    None where it cannot be known for certain.
+
+    This is what makes a field answer like a virtual window - the unit is
+    said the moment the key is pressed, out of the model, and the read of
+    the real control afterwards only confirms it (or corrects it, where
+    the program did something of its own). It never switches modes and
+    never plays a sound: it is an ordinary edit field, read faster.
+
+    Only what is certain is predicted: Left/Right (a CR LF is one step,
+    as every Windows field takes it), Home/End (the caret's own line),
+    Up/Down and Control+Home/End where the visual lines are known. A
+    selection collapses rather than moving, Control+arrows stop where
+    each program decides, and a model the typing has overtaken is
+    behind - none of those is guessed.
+    """
+    if not snap or snap.get("stale"):
+        return None
+    text = snap.get("text")
+    if text is None:
+        return None
+    caret = int(snap.get("caret") or 0)
+    if snap.get("sel") or int(snap.get("sel_end", caret)) != caret:
+        return None
+    whole = bool(snap.get("whole"))
+    lines = snap.get("lines")
+    after = dict(snap)
+    if ctrl:
+        if not (whole and lines) or key not in ("home", "end"):
+            return None
+        i = 0 if key == "home" else snap["count"] - 1
+        if i not in lines:
+            return None
+        start, length = lines[i]
+        new = start if key == "home" else start + length
+        after.update(caret=new, sel_end=new, line=i)
+        after.pop("lines", None)
+        return "line", _line_of(snap, i), after
+    if key in ("left", "right"):
+        if not 0 <= caret <= len(text):
+            return None
+        if key == "left":
+            if caret == 0:
+                if not whole:
+                    return None             # the line before is not known
+                new = 0
+            else:
+                new = caret - 1
+                if new > 0 and text[new] == "\n" and text[new - 1] == "\r":
+                    new -= 1
+        else:
+            if caret >= len(text):
+                if not whole:
+                    return None
+                new = caret
+            else:
+                new = caret + 1
+                if text[caret] == "\r" and text[caret + 1:caret + 2] == "\n":
+                    new = caret + 2
+                if not whole and new >= len(text):
+                    return None             # past the line: the next is unknown
+        after.update(caret=new, sel_end=new)
+        if lines and whole:
+            after.pop("lines", None)        # which visual line: asked again
+        return "char", (text[new] if new < len(text) else ""), after
+    if key in ("home", "end"):
+        if whole:
+            if not lines or snap.get("line") not in lines:
+                return None
+            start, length = lines[snap["line"]]
+            line = _line_of(snap, snap["line"])
+            new = start if key == "home" else start + length
+        else:
+            line = text
+            new = 0 if key == "home" else len(text.rstrip("\r\n"))
+        after.update(caret=new, sel_end=new)
+        return "line", line, after
+    if key in ("up", "down"):
+        if not (whole and lines) or int(snap.get("count") or 1) < 2:
+            return None                     # one line: each program differs
+        cur = snap.get("line")
+        if cur not in lines:
+            return None
+        target = cur + (-1 if key == "up" else 1)
+        if not 0 <= target < snap["count"]:
+            target = cur                    # the edge: the line stays
+        if target not in lines:
+            return None
+        start, length = lines[target]
+        column = caret - lines[cur][0]
+        new = start + max(0, min(column, length))
+        after.update(caret=new, sel_end=new, line=target)
+        after.pop("lines", None)
+        return "line", _line_of(snap, target), after
+    return None
+
+
+def _same_unit(kind, a, b):
+    """Whether two reads of one unit say the same thing."""
+    if kind == "char":
+        norm = lambda t: "\n" if t in ("\r", "\n", "\r\n") else (t or "")
+        return norm(a) == norm(b)
+    return (a or "").strip() == (b or "").strip()
+
+
 class EditableTextHandler:
     """TextPattern-based character / word / line review."""
 
@@ -267,6 +574,10 @@ class EditableTextHandler:
         # where it cannot be read on the hook's thread (UI Automation).
         self._snap = None
         self._typed_at = 0.0
+        # What the model said for the last arrow before the program had it
+        # (``(kind, text, time)``); the read of the real control that
+        # follows is silent when it says the same (`predict_caret_move`).
+        self._predicted = None
 
     # ================================================================== #
     # Focus binding + live-caret reading (caret tracking)
@@ -283,6 +594,7 @@ class EditableTextHandler:
         self._last_caret = None
         self._last_win32_pos = None
         self._snap = None
+        self._predicted = None
         try:
             text = self._atspi_text()
             if text is not None:
@@ -505,8 +817,7 @@ class EditableTextHandler:
         if _auto is None:
             return False
         try:
-            work = rng.Clone()
-            work.ExpandToEnclosingUnit(unit)
+            work = _expand(rng, unit)
             value = work.GetAttributeValue(_auto.TextAttributeId.AnnotationTypesAttribute)
         except Exception:
             return False
@@ -545,9 +856,9 @@ class EditableTextHandler:
             except Exception:                        # noqa: BLE001
                 pass
 
-        timer = threading.Timer(0.12, _post)
-        timer.daemon = True
-        timer.start()
+        # One scheduler thread, not a thread per key typed.
+        from titan_access import later
+        later.call_later(0.12, _post)
 
     def note_caret_key(self):
         """An arrow is about to reach the application (the hook's thread):
@@ -575,6 +886,68 @@ class EditableTextHandler:
         except Exception:                            # noqa: BLE001
             pass
 
+    def _model_before_key(self):
+        """The field as it stands before the program has the key, from
+        wherever it may be asked on the hook's thread (`snapshot_before_key`
+        for the rules): a Win32 edit with its visual lines, AT-SPI on the
+        main thread, otherwise the line the last read kept."""
+        if self._is_win32_edit():
+            return _win32_model(self._edit_hwnd())
+        if not sys.platform.startswith("win") \
+                and threading.current_thread() is threading.main_thread():
+            text = self._atspi_text()
+            if text is not None:
+                snap = _atspi_snapshot(text)
+                if snap is not None:
+                    try:
+                        chosen = text.selection()
+                        snap["sel"] = bool(chosen)
+                    except Exception:            # noqa: BLE001
+                        pass
+                return snap
+        snap = self._snap
+        if snap is None:
+            return None
+        snap = dict(snap)
+        snap["stale"] = snap.get("t", 0.0) < self._typed_at + 0.05
+        return snap
+
+    def predict_caret_move(self, key, ctrl=False):
+        """An arrow is about to reach the program (the hook's thread): say
+        at once what it will land on, out of the field's own text
+        (`predict_caret`), and leave the read of the real control to
+        confirm it. Returns ``(kind, text)`` when something was said, None
+        when the read decides alone - as before."""
+        self._predicted = None
+        # Which key this read answers: the repeat filter below is for one
+        # key delivered twice, never for Home pressed right after Down.
+        self._key_now = (key, bool(ctrl))
+        try:
+            snap = self._model_before_key()
+        except Exception:                            # noqa: BLE001
+            snap = None
+        if snap is None:
+            return None
+        if snap.get("whole"):
+            # Where the caret is NOW is what the confirming read waits for
+            # it to leave.
+            if self._is_win32_edit():
+                self._last_win32_pos = int(snap.get("caret") or 0)
+            elif isinstance(self._last_caret, int) or self._last_caret is None:
+                self._last_caret = int(snap.get("caret") or 0)
+        got = predict_caret(snap, key, ctrl)
+        if got is None:
+            return None
+        kind, text, after = got
+        after["t"] = time.time()
+        if not after.get("whole"):
+            # The line the last read kept, moved with the caret, so the
+            # next arrow is answered at once as well.
+            self._snap = after
+        self._predicted = (kind, text, time.time())
+        self._speak_caret_text(kind, text, predicted=True)
+        return kind, text
+
     def _rebase_caret(self, snap):
         """After a deletion the caret is somewhere new; the next arrow
         waits for it to leave THERE."""
@@ -598,15 +971,21 @@ class EditableTextHandler:
         if caret is None or _UNIT_LINE is None:
             return None
         try:
-            line = caret.Clone()
-            line.ExpandToEnclosingUnit(_UNIT_LINE)
+            line = _expand(caret, _UNIT_LINE)
             text = line.GetText(-1) or ""
             before = line.Clone()
             before.MoveEndpointByRange(_EP_END, caret, _EP_START)
             at = len(before.GetText(-1) or "")
         except Exception:
             return None
-        return {"text": text, "caret": at, "whole": False, "t": time.time()}
+        selected = False
+        try:
+            sel = tp.GetSelection()
+            selected = bool(sel) and bool(sel[0].GetText(1))
+        except Exception:                            # noqa: BLE001
+            pass
+        return {"text": text, "caret": at, "whole": False, "sel": selected,
+                "t": time.time()}
 
     def _snapshot_now(self):
         """The field as it is now, through whatever it answers."""
@@ -865,28 +1244,69 @@ class EditableTextHandler:
         elif kind == "word":
             out = _word_at(text, pos)
         else:
-            out = _line_at(text, pos)
+            out = self._win32_visual_line(hwnd, text, pos)
         if _DEBUG_CARET:
             print(f"[TitanAccess][caret] win32 kind={kind} pos={pos} "
                   f"moved={moved} read={out!r}")
         return self._speak_caret_text(kind, out)
 
-    def _speak_caret_text(self, kind, text):
-        # Drop an immediate duplicate read of the same unit. A single arrow press
-        # can reach the hook twice (e.g. when another screen reader is also
-        # running and re-injects the key), which would otherwise read the same
-        # line/word/char twice. A true repeat (pressing Down twice on one wrapped
-        # line) is >0.25 s apart and still announced.
+    @staticmethod
+    def _win32_visual_line(hwnd, text, pos):
+        """The SCREEN line the caret is on: a field that wraps holds a
+        paragraph on several lines, and Up/Down move by those. The
+        control is asked (EM_LINEFROMCHAR knows which side of a wrap the
+        caret is on); a control that does not answer is read by its line
+        breaks, as before."""
+        got = _win32_lines(hwnd, len(text), timeout_ms=200)
+        if got is not None:
+            cur, _count, lines = got
+            start, length = lines[cur]
+            if start <= pos <= start + length + 2:
+                return text[start:start + length]
+        return _line_at(text, pos)
+
+    def _speak_caret_text(self, kind, text, predicted=False):
         now = time.time()
-        lk, lt, ltime = self._last_spoken
-        if lk == kind and lt == text and (now - ltime) < 0.25:
-            return True
-        self._last_spoken = (kind, text, now)
+        if predicted:
+            # Said the moment the key was pressed; a key pressed twice on
+            # "aa" is two answers, so the repeat filter is not asked.
+            self._last_spoken = (kind, text, now)
+            self._spoken_for = getattr(self, "_key_now", None)
+        else:
+            # **The read that confirms a prediction says nothing** when the
+            # program did what the model said; where it did something of
+            # its own, what it really did is said over the prediction.
+            p, self._predicted = self._predicted, None
+            # Bound to the KEY, not to a clock: the next key clears it, so
+            # a slow program confirming late is still the same answer.
+            if p is not None and p[0] == kind and (now - p[2]) < 10.0 \
+                    and _same_unit(kind, p[1], text):
+                self._last_spoken = (kind, text, now)
+                return True
+            # Drop an immediate duplicate read of the same unit. A single
+            # arrow press can reach the hook twice (e.g. when another screen
+            # reader is also running and re-injects the key), which would
+            # otherwise read the same line/word/char twice. A true repeat
+            # (pressing Down twice on one wrapped line) is >0.25 s apart and
+            # still announced.
+            lk, lt, ltime = self._last_spoken
+            key = getattr(self, "_key_now", None)
+            if lk == kind and lt == text and (now - ltime) < 0.25 \
+                    and getattr(self, "_spoken_for", None) == key:
+                return True
+            self._last_spoken = (kind, text, now)
+            self._spoken_for = key
         if kind == "char":
             if not text:
                 # Caret sits past the last character.
                 if self._announce_bounds():
                     self.engine.speak(L("edit.endOfText"))
+                return True
+            if text[0] in "\r\n":
+                # The end of a line: a CR has no name of its own, and
+                # saying nothing there sounds like a dead key.
+                self.engine.speak(L("edit.lineBreak"),
+                                  obj=self.engine.current_object)
                 return True
             self._speak_char(text)
         else:
@@ -1136,11 +1556,12 @@ class EditableTextHandler:
             return None
         try:
             # Prefer the typed getter when the control exposes it.
+            tp = None
             if hasattr(native, "GetTextPattern"):
                 tp = native.GetTextPattern()
-                if tp is not None:
-                    return tp
-            return native.GetPattern(_TEXT_PATTERN_ID)
+            if tp is None:
+                tp = native.GetPattern(_TEXT_PATTERN_ID)
+            return _FastPattern(tp) if tp is not None else None
         except Exception:
             return None
 
@@ -1176,9 +1597,7 @@ class EditableTextHandler:
     def _unit_text(rng, unit):
         """Text of one *unit* starting at the (degenerate) range *rng*."""
         try:
-            work = rng.Clone()
-            work.ExpandToEnclosingUnit(unit)
-            return work.GetText(-1) or ""
+            return _expand(rng, unit).GetText(-1) or ""
         except Exception:
             return ""
 
@@ -1187,6 +1606,9 @@ class EditableTextHandler:
             self.engine.speak(L("edit.emptyChar"))
             return
         ch = text[0]
+        if ch in "\r\n":
+            self.engine.speak(L("edit.lineBreak"), obj=self.engine.current_object)
+            return
         try:
             phonetic = bool(self.engine.settings.phonetic_letters)
         except Exception:

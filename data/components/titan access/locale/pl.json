@@ -2058,6 +2058,7 @@
   "dial.noVariants": "Ten głos nie ma wariantów",
   "speechSystem.label.variant": "&Wariant:",
   "speechSystem.noVariants": "Ten głos nie ma wariantów",
+  "speechSystem.variant.none": "Bez wariantu (brzmienie samego głosu)",
   "gesture.titanWidgets.name": "Widżety Titana",
   "gesture.titanWidgets.desc": "Wybiera widżet Titana i pozwala chodzić po nim strzałkami (Insert+Shift+G)",
   "Speech s&ystem": "S&ystem mowy",
@@ -2291,5 +2292,7 @@
   "titanShell.detail.selected": "zaznaczono {0} z {1}",
   "titanShell.detail.items": "elementów: {0}",
   "titanShell.event.opened": "Otwarto w tle: {0}",
-  "titanShell.event.closed": "Zamknięto: {0}"
+  "titanShell.event.closed": "Zamknięto: {0}",
+  "A message opens": "Otwiera się komunikat",
+  "The palette opens": "Otwiera się paleta"
 }

@@ -45,6 +45,31 @@ DEFAULT_EXCLUDES = (
 )
 
 
+#: What stays in an excluded folder. eSpeak NG lives beside the Titan TTS
+#: engines but is not one of them: it is the platform voice Titan's own
+#: speech and Titan Access fall back on (``stereo_speech``'s eSpeak DLL),
+#: and a Titan updated without it had no eSpeak to choose at all.
+KEEP_INSIDE = {
+    'data/titantts engines': ('espeak',),
+}
+
+
+def expand_excludes(source, excludes):
+    """An excluded folder with something in `KEEP_INSIDE` is left out
+    entry by entry, so what is kept is still shipped."""
+    found = []
+    for rel in excludes:
+        keep = KEEP_INSIDE.get(rel.replace(os.sep, '/').rstrip('/'))
+        folder = os.path.join(source, rel.replace('/', os.sep))
+        if keep and os.path.isdir(folder):
+            for name in sorted(os.listdir(folder)):
+                if name not in keep:
+                    found.append(rel.rstrip('/') + '/' + name)
+        else:
+            found.append(rel)
+    return found
+
+
 def seven_zip():
     if os.path.exists(BUNDLED_7Z):
         return BUNDLED_7Z
@@ -121,7 +146,7 @@ def pack(source, output, level, excludes):
     # src); they are nobody's business in an update.
     command += ['-xr!*_debug*.log', '-xr!*.old',
                 '-x!titan_update.7z', '-x!titan_interpreter.7z']
-    for rel in excludes:
+    for rel in expand_excludes(source, excludes):
         rel = rel.replace('/', os.sep).rstrip(os.sep)
         if os.path.exists(os.path.join(source, rel)):
             command.append(f'-x!{rel}')

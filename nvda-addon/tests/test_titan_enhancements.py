@@ -15578,6 +15578,19 @@ class ASoundBelongsToAnEventOfTheReader(unittest.TestCase):
         source = _source_of('managerGui.py')
         self.assertIn("self.icons.Set([row['label'] for row", source)
 
+    def test_the_walkers_have_the_sounds_the_user_chose(self):
+        titan = self.icons.READER_TITAN
+        self.assertEqual(titan['reader.palette-open'], 'reader/sr_menu_on.ogg')
+        self.assertEqual(titan['reader.palette-close'], 'reader/sr_menu_off.ogg')
+        self.assertEqual(titan['reader.virtual-on'], 'reader/virtual_window_on.ogg')
+        self.assertEqual(titan['reader.virtual-off'], 'reader/virtual_window_off.ogg')
+        self.assertEqual(titan['reader.message'], 'reader/sr_message.ogg')
+        sfx = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), 'data', 'components', 'titan access', 'sfx')
+        for name in ('sr_menu_on', 'sr_menu_off', 'virtual_window_on',
+                     'virtual_window_off', 'sr_message'):
+            self.assertTrue(os.path.isfile(os.path.join(sfx, name + '.ogg')), name)
+
     def test_the_events_are_played_where_they_happen(self):
         for name, events in (
                 ('virtualWindow.py', ('reader.virtual-on', 'reader.virtual-off',
@@ -15585,6 +15598,7 @@ class ASoundBelongsToAnEventOfTheReader(unittest.TestCase):
                                       'reader.interact-in', 'reader.interact-out',
                                       'reader.corner', 'reader.explore')),
                 ('palette.py', ('reader.palette-open', 'reader.palette-close',
+                                'reader.message',
                                 'reader.edge', 'reader.corner', 'reader.explore')),
                 ('ocrReview.py', ('reader.review-on', 'reader.edge')),
                 ('interject.py', ("'reader.dialog.'",)),

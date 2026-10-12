@@ -277,6 +277,8 @@ def variants(synth, voice='', fresh=False):
     without one, so the level is simply not offered there."""
     import time
     synth = str(synth or '')
+    if synth in ('espeak', 'espeak_dll'):
+        return _espeak_variants(fresh)
     if not synth.startswith('nvda:'):
         return []
     key = (synth, str(voice or ''))
@@ -293,7 +295,33 @@ def variants(synth, voice='', fresh=False):
     return rows
 
 
+def _espeak_variants(fresh=False):
+    """eSpeak's variants - the files of ``espeak-ng-data/voices/!v`` -
+    the same for every voice, so kept once. The first row is the voice's
+    own sound, with no variant."""
+    import time
+    key = ('espeak', '')
+    kept = _variant_cache.get(key)
+    if kept is not None and not fresh:
+        return list(kept[1])
+    engine = _engine()
+    rows = []
+    try:
+        for one in engine.get_espeak_variants() or []:
+            if one.get('id'):
+                rows.append((str(one['id']),
+                             str(one.get('display_name') or one['id'])))
+    except Exception as error:                       # noqa: BLE001
+        print(f"[TitanAccess] eSpeak variants: {error}")
+    if rows:
+        rows.insert(0, ('', L('speechSystem.variant.none')))
+    _variant_cache[key] = (time.time(), list(rows))
+    return rows
+
+
 def cached_variants(synth, voice=''):
+    if str(synth or '') in ('espeak', 'espeak_dll'):
+        voice = ''
     kept = _variant_cache.get((str(synth or ''), str(voice or '')))
     return list(kept[1]) if kept is not None else None
 
@@ -301,7 +329,14 @@ def cached_variants(synth, voice=''):
 def current_variant(settings):
     """The variant the reader is set to, '' for the synthesizer's own."""
     try:
-        return str(settings.get('Speech', 'Variant', '') or '')
+        variant = str(settings.get('Speech', 'Variant', '') or '')
+        if not variant and system_of(settings.get(
+                'Speech', 'Synthesizer', '')) == 'espeak':
+            # Saved before eSpeak had a variant level: 'pl+f1' as the voice.
+            voice = str(settings.get('Speech', 'Voice', '') or '')
+            if '+' in voice:
+                variant = voice.split('+', 1)[1]
+        return variant
     except Exception:                                # noqa: BLE001
         return ''
 
@@ -333,7 +368,11 @@ def _voices_now(synth, engine=None):
                     name += ' (32-bit)'
                 raw.append(name)
         elif synth in ('espeak', 'espeak_dll'):
-            raw = list(engine.get_espeak_voices() or [])
+            # 'pl+m1' and the rest are the variant level of their voice,
+            # not voices of their own: listing them here made eleven
+            # copies of every popular language.
+            raw = [one for one in engine.get_espeak_voices() or []
+                   if '+' not in str(one.get('id', ''))]
         elif synth == 'say':
             raw = list(engine.get_say_voices() or [])
         else:
@@ -368,6 +407,8 @@ def current(settings):
     engine_id = str(settings.get('Speech', 'Synthesizer', '') or '')
     voice = str(settings.get('Speech', 'Voice', '') or '')
     system = system_of(engine_id)
+    if system == 'espeak' and '+' in voice:
+        voice = voice.split('+', 1)[0]
     synth = engine_id
     if engine_id == 'spd':
         synth = 'spd:%s' % str(settings.get(

@@ -267,6 +267,13 @@ class SpeechAdapter(object):
                 at = _voice_index(engine, voice)
                 if at is not None:
                     engine.set_voice(at)
+            # **eSpeak's variant** (voices/!v: f1, m3, Annie...), chosen
+            # apart from the voice and spoken as "<voice>+<variant>".
+            if hasattr(engine, "set_espeak_variant"):
+                engine.set_espeak_variant(
+                    str(st.get("Speech", "Variant", "") or "")
+                    if str(getattr(engine, "engine", "") or "") in
+                    ("espeak", "espeak_dll") else "")
             for key, setter, default in (("Rate", "set_rate", 0),
                                          ("Pitch", "set_pitch", 0),
                                          ("Volume", "set_volume", 100)):
@@ -826,6 +833,9 @@ class SpeechAdapter(object):
                 if at is not None:
                     engine.set_voice(at)
                     changed = True
+            if "variant" in profile and hasattr(engine, "set_espeak_variant"):
+                engine.set_espeak_variant(str(profile.get("variant") or ""))
+                changed = True
             for key, setter, base in (("rate", "set_rate", "Rate"),
                                       ("pitch", "set_pitch", "Pitch"),
                                       ("volume", "set_volume", "Volume")):
@@ -853,6 +863,7 @@ class SpeechAdapter(object):
             print(f"[TitanAccess] own voice back: {e}")
 
     def _render(self, item, eng):
+        _pin_espeak(eng)
         if item.segments:
             # **Parts whose class names a synthesizer of its own** - the
             # name in SAPI, the type in eSpeak - are grouped by profile and
@@ -992,6 +1003,7 @@ class SpeechAdapter(object):
         else:
             engine = self._voice_engine(profile)
             borrowed = self._borrow_on(engine, profile)
+        _pin_espeak(engine)
         try:
             done = False
             if hasattr(engine, "speak_concat"):
@@ -1509,6 +1521,37 @@ def speak_with(profile, text, interrupt=True):
                  pitch_offset=int(profile.get("pitch") or 0), voice=profile)
 
 
+def _pin_espeak(engine):
+    """Load THIS engine's eSpeak voice and dials on the shared eSpeak
+    library before it speaks - for a Titan whose `stereo_speech` does not
+    hand them over with every synthesis (``_espeak_caller``, a compiled
+    Titan from before it existed). The library is one per process, and
+    without this the reader's Polish was spoken in whatever eSpeak voice
+    Titan itself set last."""
+    try:
+        if engine is None or hasattr(engine, "_espeak_caller"):
+            return
+        if str(getattr(engine, "engine", "") or "") not in \
+                ("espeak", "espeak_dll"):
+            return
+        dll = getattr(engine, "espeak_dll", None)
+        voice = getattr(engine, "espeak_voice", None)
+        if dll is None or not voice:
+            return
+        if getattr(dll, "voice", None) != voice:
+            dll.set_voice(voice)
+        for attribute, own in (("rate", "espeak_rate"),
+                               ("pitch", "espeak_pitch"),
+                               ("volume", "espeak_volume")):
+            value = getattr(engine, own, None)
+            if value is not None and getattr(dll, attribute, None) != value:
+                setattr(dll, attribute, value)
+                dll._set_parameter({"rate": 1, "volume": 2,
+                                    "pitch": 3}[attribute], int(value))
+    except Exception as e:                           # noqa: BLE001
+        print(f"[TitanAccess] eSpeak voice: {e}")
+
+
 def _voice_index(engine, voice):
     """Where ``voice`` is in the engine's own list - by id, display name or
     name for a dict, by text for a string, by number for an index. None
@@ -1527,6 +1570,13 @@ def _voice_index(engine, voice):
                           str(one.get("name"))):
                 return at
         elif str(one).strip() == wanted:
+            return at
+    # **A voice saved by its language** - eSpeak's ids were language codes
+    # and two voices of one language shared one; the first voice of that
+    # language is what such a setting meant.
+    for at, one in enumerate(voices):
+        if isinstance(one, dict) and wanted and \
+                str(one.get("language") or "").lower() == wanted.lower():
             return at
     try:
         number = int(wanted)

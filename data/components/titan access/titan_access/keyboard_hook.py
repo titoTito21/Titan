@@ -30,6 +30,7 @@ The module is import-safe on non-Windows: :meth:`start` becomes a no-op.
 import ctypes
 import platform
 import sys
+import time
 
 from titan_access.log import log
 
@@ -124,7 +125,8 @@ _ARROW_TO_NUMPAD = {
     "left": "numpad4", "right": "numpad6", "up": "numpad8", "down": "numpad2",
 }
 # Real (extended) caret-movement keys that trigger reading inside an edit field.
-_EDIT_CARET_KEYS = {"left", "right", "up", "down", "home", "end"}
+_EDIT_CARET_KEYS = {"left", "right", "up", "down", "home", "end",
+                    "pageup", "pagedown"}
 # Keys that type nothing and are said as commands when the user asks for
 # command keys (`Keyboard/SpeakCommandKeys`), beside F1..F24.
 _BARE_COMMAND_KEYS = {"escape", "delete", "insert", "pageup", "pagedown",
@@ -132,6 +134,53 @@ _BARE_COMMAND_KEYS = {"escape", "delete", "insert", "pageup", "pagedown",
 _MODIFIER_NAMES = {"vk10", "vk11", "vk12", "vka0", "vka1", "vka2", "vka3",
                    "vka4", "vka5"}
 VK_RMENU = 0xA5  # right Alt (AltGr)
+
+
+# A dead key's spacing form -> the combining mark it puts on the next letter.
+_DEAD_MARKS = {
+    "`": "\u0300", "\u00b4": "\u0301", "'": "\u0301", "^": "\u0302",
+    "~": "\u0303", "\u00a8": "\u0308", '"': "\u0308", "\u02dd": "\u030b",
+    "\u02c7": "\u030c", "\u02d8": "\u0306", "\u02d9": "\u0307",
+    "\u00b8": "\u0327", "\u02db": "\u0328", "\u00b0": "\u030a",
+}
+# Polish (Programmers): the tilde is the old way to every Polish letter.
+_POLISH_TILDE = dict(zip("acelnoszxACELNOSZX",
+                         "\u0105\u0107\u0119\u0142\u0144\u00f3\u015b\u017c\u017a"
+                         "\u0104\u0106\u0118\u0141\u0143\u00d3\u015a\u017b\u0179"))
+
+
+def compose_dead(dead, ch, hkl=0):
+    """The character a dead key and the key after it type together: the
+    accent alone after Space, the Polish letter after Polish
+    (Programmers)' tilde, otherwise the letter with the accent where one
+    exists, and the letter itself where it does not."""
+    import unicodedata
+    if not dead:
+        return ch
+    if ch == " ":
+        return dead
+    try:
+        polish = (int(hkl or 0) & 0xFFFF) == 0x0415
+    except Exception:
+        polish = False
+    if dead == "~" and polish and ch in _POLISH_TILDE:
+        return _POLISH_TILDE[ch]
+    mark = _DEAD_MARKS.get(dead)
+    if mark:
+        joined = unicodedata.normalize("NFC", ch + mark)
+        if len(joined) == 1:
+            return joined
+    return ch
+
+
+def _keeps_state_flag():
+    try:
+        return sys.getwindowsversion().build >= 14393
+    except Exception:
+        return False
+
+
+_TOUNICODE_KEEPS_STATE = _IS_WINDOWS and _keeps_state_flag()
 
 
 if _IS_WINDOWS:
@@ -399,12 +448,40 @@ class KeyboardHook:
         through `_process`. Runs on the DLL's decider thread."""
         if int(extra) == _INJECT_SENTINEL:
             return 0
+        started = time.perf_counter()
         try:
             return 1 if self._process(int(vk), int(scan), int(flags),
                                       bool(is_down)) else 0
         except Exception as e:  # never let an exception reach the DLL
             log(f"[TitanAccess] keyboard_hook: proc error: {e}")
             return 0
+        finally:
+            self._note_slow(vk, is_down, time.perf_counter() - started)
+
+    #: A key whose decision took longer than this is written down. The DLL
+    #: counts the keys that missed its deadline ("late") and cannot say why;
+    #: this says which key and how long, so a slow path can be found.
+    SLOW_KEY_S = 0.1
+
+    def _note_slow(self, vk, is_down, took):
+        if took < self.SLOW_KEY_S:
+            return
+        slow = getattr(self, '_slow_keys', None)
+        if slow is None:
+            slow = self._slow_keys = []
+        slow.append((round(took * 1000), int(vk), bool(is_down)))
+        slow.sort(reverse=True)
+        del slow[10:]
+        now = time.monotonic()
+        if now - getattr(self, '_slow_logged', 0.0) > 30.0:
+            self._slow_logged = now
+            log("[TitanAccess] keyboard_hook: key 0x%02X (%s) took %d ms to "
+                "decide" % (int(vk), 'down' if is_down else 'up',
+                            round(took * 1000)))
+
+    def slow_keys(self):
+        """The ten slowest decisions so far: ``[(ms, vk, down)]``."""
+        return list(getattr(self, '_slow_keys', None) or [])
 
     # ==================================================================== #
     # Hook procedure
@@ -609,12 +686,13 @@ class KeyboardHook:
         # ProcessArrowNavigation / ProcessCtrlArrowNavigation.
         if (self.is_in_edit_field and not self._alt and not self._reader_mod
                 and key_name in _EDIT_CARET_KEYS):
-            if not (self._ctrl and key_name not in ("left", "right")):
-                try:
-                    self.engine.on_edit_caret_move(key_name, self._ctrl,
-                                                   self._shift)
-                except Exception as e:
-                    log(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
+            # Control+Home/End and Control+Up/Down move the caret too (the
+            # top, the end, a paragraph) and were left unread.
+            try:
+                self.engine.on_edit_caret_move(key_name, self._ctrl,
+                                               self._shift)
+            except Exception as e:
+                log(f"[TitanAccess] keyboard_hook: edit caret error: {e}")
             return False  # never swallow caret movement
 
         # ---- 4c. Deleting in an edit field ---------------------------- #
@@ -637,7 +715,15 @@ class KeyboardHook:
 
         # ---- 5. Character / word echo --------------------------------- #
         # Only echo ordinary typing: no Ctrl/Alt, no reader modifier.
-        if not self._ctrl and not self._alt and not self._reader_mod:
+        # **AltGr is typing**, not Control+Alt: on a Polish keyboard it is
+        # how ą, ę, ł, ż are written (and €), and treating it as a
+        # command left every one of them unsaid.
+        if self._ralt and not self._reader_mod:
+            try:
+                self._echo(vk, scan, altgr=True)
+            except Exception as e:
+                log(f"[TitanAccess] keyboard_hook: echo error: {e}")
+        elif not self._ctrl and not self._alt and not self._reader_mod:
             try:
                 self._echo(vk, scan)
             except Exception as e:
@@ -853,7 +939,7 @@ class KeyboardHook:
     # ==================================================================== #
     # Character / word echo (ToUnicodeEx + word buffer)
     # ==================================================================== #
-    def _echo(self, vk, scan):
+    def _echo(self, vk, scan, altgr=False):
         # Word terminators flush the pending word. Space is echoed as a
         # character ("space"); Enter and Tab only flush the word -- the user
         # does not want them spoken as "new line" / "tab" on every keystroke.
@@ -869,7 +955,7 @@ class KeyboardHook:
                 self._word.pop()
             return
 
-        ch = self._vk_to_char(vk, scan)
+        ch = self._vk_to_char(vk, scan, altgr=altgr)
         if not ch:
             return  # non-printable (arrows, F-keys, ...)
 
@@ -914,6 +1000,11 @@ class KeyboardHook:
         ``None`` for keys that produce no character, and skips dead keys (while
         flushing the dead-key state so live typing is not corrupted).
         """
+        if not _IS_WINDOWS:
+            # Off Windows the accessibility bus says what the key typed
+            # (`atspi_keys.typed_char`), layout and AltGr included.
+            ch = getattr(self, "_posix_char", "") or ""
+            return ch[0] if ch and ch[0] >= " " else None
         u = self._user32
         # Build a synthetic key-state array: only Shift + CapsLock matter for
         # echo (we never reach here with Ctrl/Alt held).
@@ -941,21 +1032,36 @@ class KeyboardHook:
             hkl = 0
 
         buf = ctypes.create_unicode_buffer(8)
+        # **The program's dead keys are left alone.** ToUnicodeEx keeps a
+        # dead key pending in the keyboard state, and asking it from the
+        # hook took the pending accent away from the program the key was
+        # for - Polish (Programmers)' tilde, an acute, a circumflex. Flag 4
+        # (Windows 10 1607 and newer) asks without touching that state;
+        # the accented letter is then put together here.
+        flags = 4 if _TOUNICODE_KEEPS_STATE else 0
         try:
-            n = u.ToUnicodeEx(vk, scan, state, buf, len(buf), 0, hkl)
+            n = u.ToUnicodeEx(vk, scan, state, buf, len(buf), flags, hkl)
         except Exception:
             return None
         if n == -1:
-            # Dead key: call again to consume/flush the pending state, skip echo.
-            try:
-                u.ToUnicodeEx(vk, scan, state, buf, len(buf), 0, hkl)
-            except Exception:
-                pass
+            if flags:
+                self._dead = (buf.value[:1], hkl)
+            else:
+                # Older Windows: call again to flush what was just made
+                # pending, skip the echo.
+                try:
+                    u.ToUnicodeEx(vk, scan, state, buf, len(buf), 0, hkl)
+                except Exception:
+                    pass
             return None
         if n <= 0:
             return None
         ch = buf.value[:n]
         # Ignore control characters that slipped through.
-        if ch and ch[0] >= " ":
-            return ch[0]
-        return None
+        if not ch or ch[0] < " ":
+            return None
+        dead = getattr(self, "_dead", None)
+        if dead is not None:
+            self._dead = None
+            return compose_dead(dead[0], ch[0], dead[1])
+        return ch[0]

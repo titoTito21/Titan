@@ -238,6 +238,20 @@ SPECIAL_CHARS_PL = {
     '{': "nawias klamrowy otwierający", '}': "nawias klamrowy zamykający",
     '<': "mniejszy niż", '>': "większy niż", '\'': "apostrof", '"': "cudzysłów",
     '`': "grawis", '~': "tylda", '|': "kreska pionowa",
+    # What a Polish keyboard types with AltGr, and what text is full of.
+    '€': "euro", '§': "paragraf", '°': "stopień", '–': "półpauza",
+    '—': "pauza", '…': "wielokropek", '„': "cudzysłów otwierający",
+    '”': "cudzysłów zamykający", '“': "cudzysłów otwierający",
+    '‘': "apostrof otwierający", '’': "apostrof zamykający",
+    '«': "cudzysłów kątowy otwierający", '»': "cudzysłów kątowy zamykający",
+    '©': "prawa autorskie", '®': "zastrzeżony znak towarowy",
+    '™': "znak towarowy", '×': "razy", '÷': "dzielone przez",
+    '±': "plus minus", 'µ': "mikro", '£': "funt", '¥': "jen", '¢': "cent",
+    '´': "akcent ostry", '¨': "dwukropek nad literą", '¸': "cedylla",
+    '˛': "ogonek", '˙': "kropka nad literą", 'ˇ': "haczek", '˝': "podwójny akcent ostry",
+    '·': "kropka środkowa", '•': "punktor", '¬': "negacja", '¦': "przerwana kreska pionowa",
+    '¿': "odwrócony pytajnik", '¡': "odwrócony wykrzyknik", '‰': "promil",
+    '¤': "znak waluty", '\u00a0': "twarda spacja",
 }
 
 SPECIAL_CHARS_EN = {
@@ -252,6 +266,19 @@ SPECIAL_CHARS_EN = {
     '{': "left brace", '}': "right brace",
     '<': "less than", '>': "greater than", '\'': "apostrophe", '"': "quote",
     '`': "grave", '~': "tilde", '|': "vertical bar",
+    '€': "euro", '§': "section", '°': "degree", '–': "en dash",
+    '—': "em dash", '…': "ellipsis", '„': "low double quote",
+    '”': "right double quote", '“': "left double quote",
+    '‘': "left single quote", '’': "right single quote",
+    '«': "left angle quote", '»': "right angle quote",
+    '©': "copyright", '®': "registered", '™': "trademark", '×': "times",
+    '÷': "divided by", '±': "plus or minus", 'µ': "micro", '£': "pound",
+    '¥': "yen", '¢': "cent", '´': "acute accent", '¨': "diaeresis",
+    '¸': "cedilla", '˛': "ogonek", '˙': "dot above", 'ˇ': "caron",
+    '˝': "double acute accent", '·': "middle dot", '•': "bullet",
+    '¬': "not sign", '¦': "broken bar", '¿': "inverted question mark",
+    '¡': "inverted exclamation mark", '‰': "per mille", '¤': "currency sign",
+    '\u00a0': "no-break space",
 }
 
 PHONETIC_PL = {

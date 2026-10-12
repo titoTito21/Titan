@@ -27,6 +27,9 @@ LEVELS = ('none', 'some', 'most', 'all')
 _SOME = set('.,!?@')
 _MOST = set(';:-=+*/#$%&()"')
 _ALL_ONLY = set('_\\^[]{}<>\'`~|')
+# The typographic ones and what AltGr types: named at "all", where every
+# symbol is wanted.
+_ALL_ONLY |= set('€§°–—…„”“‘’«»©®™×÷±µ£¥¢´¨¸˛˙ˇ˝·•¬¦¿¡‰¤')
 
 _DIGITS = re.compile(r'\d{2,}')
 

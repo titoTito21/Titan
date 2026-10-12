@@ -396,5 +396,151 @@ class TheReferenceIsTheReaders(unittest.TestCase):
         self.assertIn('when every 5m', text)        # the syntax is not translated
 
 
+
+class Node(object):
+    def __init__(self, name, role, value=''):
+        self.name, self.role, self.value = name, role, value
+        self.states, self.level, self.landmark = (), 0, ''
+        self.landmark_start = self.link = False
+        self.is_heading = role == 'heading'
+
+    @property
+    def text(self):
+        return ('%s %s' % (self.name, self.value)).strip() if self.value \
+            else self.name
+
+
+class Doc(object):
+    def __init__(self, nodes, title='Okno'):
+        self.nodes, self.title, self.source = nodes, title, 'uia'
+
+
+class WhatJawsAndNvdaScriptsDo(unittest.TestCase):
+    """The instructions an application script needs: put the keyboard on a
+    control, say one without going there, click a hot spot, wait for a
+    window, read a region, watch a control for changes, a key only in one
+    window. Driven against a document of their own - nothing is focused,
+    clicked or read on the real desktop."""
+
+    def setUp(self):
+        self.actions = ta_scripts._actions_module()
+        self.doc = Doc([Node('Zapisz', 'button'), Node('Suma', 'text', '12'),
+                        Node('Gotowe', 'statusbar')])
+        self.keep = (self.actions._document, self.actions._buffer,
+                     self.actions._engine, self.actions._click_point,
+                     self.actions._window_origin)
+        self.actions._document = lambda window=0, refresh=False, \
+            use_ai=False: self.doc
+        self.focused, self.clicked = [], []
+        test = self
+
+        class Buffer(object):
+            def focus_node(self, node):
+                test.focused.append(node.name)
+                return True
+
+            def window_text(self, hwnd):
+                return 'Zapisz jako'
+
+            def foreground_hwnd(self):
+                return 5
+        self.actions._buffer = lambda: Buffer()
+        self.spoken = Spoken()
+        self.actions._engine = lambda require_running=True: self.spoken
+        self.actions._click_point = lambda x, y, button='left', clicks=1: \
+            self.clicked.append((x, y, button, clicks)) or True
+        self.actions._window_origin = lambda window=0: (100, 200)
+
+    def tearDown(self):
+        (self.actions._document, self.actions._buffer, self.actions._engine,
+         self.actions._click_point, self.actions._window_origin) = self.keep
+
+    def test_focus_puts_the_keyboard_on_the_control(self):
+        said = self.actions.action_focus_element(text='zapisz', kind='button')
+        self.assertEqual(self.focused, ['Zapisz'])
+        self.assertIn('Zapisz', str(said))
+
+    def test_read_control_says_it_without_moving(self):
+        said = self.actions.action_read_control(text='Suma')
+        self.assertEqual(self.focused, [])
+        self.assertIn('12', said)
+        self.assertEqual(len(self.spoken.said), 1)
+        self.assertIn('Gotowe',
+                      self.actions.action_read_control(kind='statusbar'))
+
+    def test_a_hot_spot_is_from_the_windows_corner(self):
+        self.actions.action_click_at(x=10, y=20)
+        self.actions.action_click_at(x=10, y=20, button='right',
+                                     relative='screen')
+        self.assertEqual(self.clicked, [(110, 220, 'left', 1),
+                                        (10, 20, 'right', 1)])
+
+    def test_waiting_ends_when_it_is_there_and_says_when_it_is_not(self):
+        self.assertIn('Zapisz jako',
+                      str(self.actions.action_wait_for(window_title='zapisz')))
+        missing = self.actions.action_wait_for(text='Nie ma', seconds=0.3)
+        self.assertIn('did not appear', str(missing))
+
+    def test_a_watched_control_runs_its_script_when_it_changes(self):
+        ran = []
+        keep = ta_scripts.run
+        ta_scripts.run = lambda script, **kw: ran.append(kw.get('extra'))
+        try:
+            with open(os.path.join(ta_scripts.folder(), 'watched.tas'), 'w',
+                      encoding='utf-8') as handle:
+                handle.write('when change name="Suma"\nsay "{{text}}"\n')
+            ta_scripts.load()
+            ta_scripts._clock['seen'] = {}
+            ta_scripts.tick(1000.0)               # where the watch starts
+            ta_scripts.tick(1001.0)
+            self.assertEqual(ran, [])
+            self.doc.nodes[1].value = '15'
+            ta_scripts.tick(1002.0)
+            self.assertEqual(ran, [{'text': 'Suma 15', 'old': 'Suma 12'}])
+        finally:
+            ta_scripts.run = keep
+            os.remove(os.path.join(ta_scripts.folder(), 'watched.tas'))
+            ta_scripts.load()
+            ta_scripts.stop_clock()
+
+    def test_a_key_with_conditions_is_the_programs_elsewhere(self):
+        ran = []
+        keep = ta_scripts.run, ta_scripts._window_and_program
+        ta_scripts.run = lambda script, **kw: ran.append(script['name'])
+        try:
+            with open(os.path.join(ta_scripts.folder(), 'inbox.tas'), 'w',
+                      encoding='utf-8') as handle:
+                handle.write('when key "f5" title contains "Inbox"\n'
+                             'say "odswiez"\n')
+            ta_scripts.load()
+            ta_scripts._window_and_program = lambda: ('Notatnik', 'notepad')
+            self.assertFalse(ta_scripts.plain_key('f5', False, False, False))
+            ta_scripts._window_and_program = lambda: ('Inbox - Poczta', 'x')
+            self.assertTrue(ta_scripts.plain_key('f5', False, False, False))
+            self.assertEqual(ran, ['inbox'])
+        finally:
+            ta_scripts.run, ta_scripts._window_and_program = keep
+            os.remove(os.path.join(ta_scripts.folder(), 'inbox.tas'))
+            ta_scripts.load()
+
+    def test_the_new_lines_are_titan_script_the_checker_accepts(self):
+        text = ('when key "insert+k"\nfocus button "Zapisz"\n'
+                'read control "Suma"\nread control statusbar\n'
+                'read region 1 2 30 40\nclick double 5 6\n'
+                'wait for window "Zapisz jako" 5s\n'
+                'set total = titan_access.read_control text="Suma" '
+                'speak=false\nsay "{{total}}"\n')
+        self.assertEqual(ta_scripts.check(text), [])
+        problems = ta_scripts.check('when change\nsay "x"\n')
+        self.assertTrue(problems and 'line 1' in problems[0])
+
+    def test_the_reference_names_every_new_instruction(self):
+        text = ta_scripts.language_text('en')
+        for word in ('focus "Save"', 'read control', 'read region',
+                     'click 120 300', 'wait for window', 'when change',
+                     '{{old}}' if '{{old}}' in text else 'old'):
+            self.assertIn(word, text)
+
+
 if __name__ == '__main__':
     unittest.main()

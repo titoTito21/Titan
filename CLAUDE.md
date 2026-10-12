@@ -8073,6 +8073,221 @@ a read-only one 'tekst' (pause) 'tylko do odczytu'".
 - Tests: `tests/test_titan_access_edit_fields.py` (28; real Win32 EDIT
   windows made with CreateWindowEx and never shown).
 
+#### An edit field answers like a virtual window (2026-10-11)
+
+Asked for as "edit fields, multiline and single-line, as responsive as
+the virtual window - a pseudo virtual window, but with no sounds and no
+modes; Polish letters and symbols said while typing".
+
+- **The arrow is answered before the program has it**
+  (`editable_text.predict_caret`, a pure function, and
+  `EditableTextHandler.predict_caret_move`, called from
+  `engine.on_edit_caret_move` on the hook's thread). The field's own
+  text is the model: a Win32 edit is asked on the hook thread
+  (`_win32_model`: text, caret, selection and the VISUAL lines round the
+  caret through EM_LINEFROMCHAR(-1) / EM_LINEINDEX / EM_LINELENGTH, all
+  SendMessageTimeout 25 ms), AT-SPI on the main thread, UI Automation
+  answers from the line the last read kept. Predicted only where it is
+  certain: Left/Right (CR LF one step), Home/End (the caret's line),
+  Up/Down and Control+Home/End where the visual lines are known (more
+  than one line). Never with a selection, Control+arrows, or a model the
+  typing has overtaken (`stale`). The read of the real control that
+  follows is SILENT when it says the same (`_predicted`, `_same_unit`,
+  1.5 s) and speaks over the prediction where the program did something
+  else. No mode, no sound - the keys always reach the program.
+- **A wrapped field is read a screen line at a time**:
+  `_win32_visual_line` (was `_line_at`, which read the whole paragraph on
+  every Down).
+- **The end of a line said nothing**: the caret on a CR read `'\r'`,
+  whose name is `""`. It is "nowa linia" now, by arrow and by review.
+- **Control+Home/End, Control+Up/Down, Page Up/Down were not read at
+  all** (the hook passed every Control key but Left/Right unread); they
+  read the line now.
+- **AltGr letters were never echoed**: AltGr is Control+Alt to the hook,
+  and step 5 echoed only with neither held - so ą, ę, ł, ż, € were
+  silent, and `_vk_to_char` was not given AltGr either. `_ralt` is
+  typing now.
+- **The hook took the program's dead key away**: `ToUnicodeEx` with
+  flags 0 (twice, "to flush") consumed the pending accent. Flag 4
+  (Windows 10 1607+, `_TOUNICODE_KEEPS_STATE`) leaves it, and
+  `keyboard_hook.compose_dead` puts the letter together for the echo
+  (Polish (Programmers)' tilde: ~a = ą ... ~x = ź, ~z = ż).
+- **On Linux typing was never echoed at all**: `_vk_to_char` is
+  ToUnicodeEx only. `atspi_keys.typed_char(keysym)` (ASCII/Latin-1,
+  Latin-2's Polish letters, Unicode keysyms, GDK) is handed over as
+  `hook._posix_char`.
+- Symbols a Polish keyboard and typography produce have names in both
+  tables (€ § ° – — … „ ” « » © ® ™ × ÷ ± ...), and are named inside text
+  at the "all" punctuation level.
+- Tests: `tests/test_titan_access_edit_as_virtual_window.py` (33: the
+  prediction, the silent confirmation, real wrapped and single-line EDIT
+  windows never shown, AltGr and dead keys in the hook, the real Polish
+  (Programmers) layout through ToUnicodeEx, the Linux keysyms). No key
+  is pressed anywhere.
+- **Every UI Automation edit field waited half a second per call.** The
+  vendored `uiautomation` ends Move / MoveEndpointByUnit /
+  MoveEndpointByRange / ExpandToEnclosingUnit / Select in
+  `time.sleep(0.5)` (OPERATION_WAIT_TIME, meant for test scripts), and its
+  CompareEndpoints hands COM the wrapper, which raises - so one caret read
+  in a WPF TextBox took 3.01 s measured, and the wait for the caret to
+  move failed silently every time. `editable_text._FastPattern` /
+  `_FastRange` speak to the raw IUIAutomationTextRange (`.textRange`)
+  under the same method names: 0.00-0.01 s. Anything else in the reader
+  that calls those wrapper methods pays the same sleep.
+- **WPF answers the wrong line at both ends of one**: a degenerate range
+  at a line's start, expanded to Line, gives that line and the one
+  before; a caret put at a line's end by a selection leans forward and
+  gives that line and the next. `_expand` asks the caret, the character
+  at it and the character before it, and takes the shortest that holds
+  the caret.
+- The repeat filter (0.25 s) is per key (`_key_now`): Home right after
+  Down on the same line is said; one key delivered twice still is not.
+  The confirmation marker is bound to the key, not to 1.5 s.
+- `atspi_keys.typed_char` never asks GDK about a function key, and asks
+  for Gdk 3.0 by version (an unversioned import may load another GDK
+  into a GTK 3 process).
+- Live: `tests/check_titan_access_edit_live_uia.py` (a WPF TextBox put up
+  by PowerShell off the screen and never activated; the probe is MTA -
+  an STA that does not pump waits 3 s per UIA callback) and
+  `tests/check_titan_access_edit_live_linux.py` (a GtkTextView over
+  AT-SPI under WSLg; the program's moves played through Atspi.Text).
+- Live: `tests/check_titan_access_edit_live.py` - the reader's own engine
+  object, handler, `KeyboardHook._process` and a background read thread,
+  against a real wrapping EDIT window with its own message loop; each key
+  goes through the hook and then to THAT window only (PostMessage), never
+  globally. Measured: every arrow said once, 0-2 ms after the key (the
+  confirming read silent), screen lines of a wrapped paragraph, "nowa
+  linia" at a line end, Ctrl+Home/End, AltGr+A "ą", "małpa",
+  "wykrzyknik", "ukośnik", and a dead key end to end: the window's own
+  thread runs Polish (Programmers) (`ActivateKeyboardLayout`, that thread
+  only), Shift is set with `SetKeyboardState` on it, and ~a ~z go through
+  the program's real TranslateMessage AFTER the hook has asked about them
+  - the reader said "ą", "ż" and the program typed "ąż". It sets the echo on its copy of the store: the
+  user's own `KeyboardEcho` may be None (the echo cycle and the settings
+  ring both offer it), and then nothing typed is said, by choice.
+
+#### The walkers' own sounds (2026-10-12)
+
+The palette opening / closing is `sr_menu_on.ogg` / `sr_menu_off.ogg`, the
+virtual window on / off `virtual_window_on.ogg` / `virtual_window_off.ogg`,
+and a message - an AI answer, anything the reader shows as a page to walk
+(`dialogs.message` / `browse` -> `palette.page`, `kind='text'`) - opens
+with `sr_message.ogg`, also when it replaces an open palette (new event
+`reader.message`). They are `icons.READER_EVENTS` (shared, one source in
+`nvda-addon/`, vendored), played through Titan's
+`sound.play_reader_sound`. The files live in the component's `sfx/` only:
+`sfx/<theme>/SRE/` is looked at FIRST, and a copy there would shadow the
+user's own newer sounds in the component (the theme still has the old
+`sr_menu.ogg` / `sr_menu_close.ogg`). Probe:
+`tests/check_titan_access_walker_sounds.py` (the real path, the mixer's
+last step recorded, no host window).
+
+#### eSpeak: every voice that loads, its own voice per caller, variants apart (2026-10-12)
+
+Reported as "eSpeak must be there with all its working voices; Polish does
+not work". Measured (`src/titan_core/stereo_speech.py`, `ESpeakDLL`):
+
+- **The eSpeak library is one per process, and Titan's speech and the
+  reader's private engine both speak through it.** A voice was a
+  `set_voice` on the shared object, so the last one anybody set was the
+  voice for everybody: Titan setting its English eSpeak voice after the
+  reader had chosen Polish made the reader read Polish in English. Every
+  synthesis now carries its caller's voice and dials
+  (`StereoSpeech._espeak_caller()` -> `ESpeakDLL._apply_caller`, the voice
+  loaded only when it differs from `_loaded_voice`). A compiled Titan from
+  before this has `stereo_speech` frozen in Titan.exe, so Titan Access (data
+  beside it) pins its own voice before each utterance there
+  (`speech_adapter._pin_espeak`). Measured with two real engines: the
+  reader's clip the length of the Polish one, Titan's of the English.
+- **132 of the 222 voices the bundled data lists load; the other 90 are
+  MBROLA** ("Could not load the mbrola.dll file"). `list_voices` leaves
+  MBROLA out unless `mbrola_available()`, LOADS every voice once (0.1 s)
+  and lists only those that loaded. **A voice's id is its own**: the
+  language code for the first voice of a language (`pl`, what saved
+  settings have), then the voice file's short name, then its path
+  (`mb/mb-pl1`). The language code alone was the id before - two Polish
+  voices were both `pl`, sixteen English ones `en`, and `zh` / `en-gb`
+  resolved to nothing. `_voice_index` also finds a voice saved by its
+  language.
+- **Variants are a level of their own** (`espeak-ng-data/voices/!v`, 101
+  of them): `ESpeakDLL.list_variants()` asks the library with a spec whose
+  language is `variant` (ListVoices(NULL) leaves them out) and reads the
+  folder (`!v`, or `v` in an older eSpeak) when it answers none;
+  `StereoSpeech.set_espeak_variant` and `_espeak_voice_spec()` speak
+  `<voice>+<variant>`. In Titan Access it is the fourth level the dialog,
+  the settings page, the walk and the class manager already had for NVDA
+  synthesizers (`speech_systems.variants('espeak', ...)`, first row "No
+  variant"); the flattened `pl+m1` voices are no longer in the reader's
+  voice list, and a saved `pl+f1` reads as voice `pl`, variant `f1`.
+- **The audio came out of the callback a sample at a time** - a Python int
+  per sample into a list, then `struct.pack(*list)`, with the interpreter
+  lock held throughout. Bytes now (`ctypes.string_at`): a paragraph 129 ->
+  22 ms, a word 1.1 -> 0.3 ms; the reader's three-part announcement is
+  2-4 ms to the first sound on eSpeak.
+- **The published update shipped no eSpeak**: `pack_release.py` left out
+  `data/titantts engines` whole, and eSpeak lives there though it is not a
+  Titan TTS engine. `KEEP_INSIDE` leaves the other engines out folder by
+  folder and ships `espeak` (24 MB).
+- Tests: `tests/test_espeak_voices.py` (14, Windows and Linux).
+
+#### The reader's thread is not held by anything it does not need (2026-10-12)
+
+Read out of the user's `titan_access.log`: 21 times the worker did not
+answer and 3 restarts. What held it, and what holds it no longer:
+
+- **A thread per focus change.** `_announce_focus` started a
+  `threading.Timer` for every container that took the focus, and
+  `Thread.start()` waits for the thread to really start - over four seconds,
+  twice, on a busy machine. `editable_text` started one per KEY TYPED,
+  `menu_tracker` two per menu, the guest reader one per arrow key.
+  `titan_access/later.py` is one scheduler thread, made once, that hands
+  the job back through `post_to_worker`; `tests/test_titan_access_
+  responsiveness.py` fails if a `threading.Timer` comes back to the hot
+  paths.
+- **UI Automation into a window that does not answer.** `ControlFromHandle`
+  on `_window_arrived` and on the dialog context held the worker for
+  Windows' own timeouts. `native_hook.window_answers(hwnd)` is asked first
+  (the helper DLL, else `IsHungAppWindow` + `SendMessageTimeout(WM_NULL,
+  SMTO_ABORTIFHUNG)`); "cannot tell" means go ahead.
+- (The AI OCR label on the focus path, seen on 2026-10-05, was already
+  `cached_only`.)
+- **The ELTEN add-on's pipe loop logged ten tracebacks a second** (336 in
+  four days). The `logHandler` stand-in writes one line per complaint per
+  minute, keyed on where and what kind (not the text: the pipe name is new
+  every try), with the count when the minute is up.
+- **A key whose decision took over 100 ms is written down**
+  (`keyboard_hook._note_slow`; the ten slowest in Insert+Shift+F1's
+  diagnostics as `hook.slow_keys`). The DLL counted 97 late keys out of
+  2664 and could not say which.
+
+#### TA scripts do what JAWS, NVDA and SuperNova scripts do (2026-10-12)
+
+New `.tas` instructions, each one line of Titan Script calling a new
+Titan Access action (`titan_access_actions.py`), so the macro checker,
+its messages and line numbers apply unchanged:
+
+- `focus "Save"` / `focus button "Save"` - the keyboard onto a control by
+  what it says (`focus_element`, JAWS SetFocus).
+- `read control "Total"` / `read control statusbar` - said without moving
+  there, and handed back (`set t = titan_access.read_control text="Total"
+  speak=false`) - JAWS SayWindow.
+- `read region 10 40 300 20` - part of the window, read by the reader's
+  own OCR (`read_region`, `windows_ocr.read_rect`).
+- `click 120 300`, `click right ...`, `click double ...` - a hot spot,
+  pixels from the window's corner, the mouse put back (`click_at`, JAWS
+  HSC, SuperNova hotspots; xdotool on Linux).
+- `wait for window "Save as" 10s` / `wait for control "OK" 5s`
+  (`wait_for`, `needs_gui=False` - it may wait two minutes).
+- `when change name="Total"` - a control's text changed, `{{text}}` and
+  `{{old}}` (JAWS frames, SuperNova watches): the script clock reads it
+  once a second (`control_text`), the first reading is the baseline.
+- `when key "f5" title contains "Inbox"` - a key with conditions; where
+  they do not hold, the key is the program's (or the reader's own binding).
+- New kinds for every action that takes one: `statusbar`, `toolbar`,
+  `dialog`, `progressbar`. The README / AI briefing / Polish reference are
+  generated from the tables as before. Tests: `WhatJawsAndNvdaScriptsDo`
+  in `tests/test_titan_access_scripts.py` (42).
+
 #### UWP and XAML applications (2026-10-06)
 
 Asked for as better UWP support "for every UWP app, Unigram among them",

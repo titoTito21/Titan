@@ -185,3 +185,37 @@ def window_responding(hwnd, timeout_ms=300):
                                                     int(timeout_ms)))
     except Exception:                                # noqa: BLE001
         return None
+
+
+def _python_responding(hwnd, timeout_ms):
+    """`window_responding` without the helper DLL: Windows' own verdict
+    (`IsHungAppWindow`), then a WM_NULL sent with a deadline and
+    SMTO_ABORTIFHUNG. 1 answering, 0 hung, -1 not a window."""
+    try:
+        user32 = ctypes.windll.user32
+        if not user32.IsWindow(wintypes.HWND(int(hwnd))):
+            return -1
+        if user32.IsHungAppWindow(wintypes.HWND(int(hwnd))):
+            return 0
+        result = ctypes.c_size_t(0)
+        sent = user32.SendMessageTimeoutW(
+            wintypes.HWND(int(hwnd)), 0, 0, 0, 0x0002 | 0x0008,
+            int(timeout_ms), ctypes.byref(result))
+        return 1 if sent else 0
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+def window_answers(hwnd, timeout_ms=250):
+    """False only when ``hwnd`` is a window that is certainly not
+    answering - the one case where a UI Automation call into it holds the
+    reader's thread for Windows' own timeouts (seconds; measured in the
+    reader's log as the worker stuck in ``ControlFromHandle`` until the
+    supervisor restarted the reader). True for anything else, including
+    "cannot tell", so nothing is refused for want of the helper."""
+    if not hwnd or not _IS_WINDOWS:
+        return True
+    verdict = window_responding(hwnd, timeout_ms)
+    if verdict is None:
+        verdict = _python_responding(hwnd, timeout_ms)
+    return verdict != 0

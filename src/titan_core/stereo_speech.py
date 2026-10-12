@@ -157,13 +157,20 @@ class ESpeakDLL:
         self.initialized = False
         self.data_path = None
         self._lock = threading.Lock()
+        # The voice eSpeak has LOADED right now. The library is one per
+        # process and Titan's own speech and Titan Access's private engine
+        # both speak through it, so a voice is not something this object
+        # can keep: every synthesis is handed its caller's voice and dials
+        # (`_apply_caller`) and this says whether loading it is needed.
+        self._loaded_voice = None
+        self._mbrola = None
         self.rate = 175
         self.pitch = 50
         self.volume = 100
         self.voice = None
         self.sample_rate = 22050  # Will be set by espeak_Initialize
         # For audio retrieval mode
-        self.audio_buffer = []
+        self.audio_buffer = bytearray()
         self.callback_fn = None
         self._play_channel = None  # pygame channel for direct playback in RETRIEVAL mode
         # Interruption state. eSpeak-NG keeps global synthesis state, so any call
@@ -342,7 +349,36 @@ class ESpeakDLL:
     def is_available(self):
         return self.initialized
 
-    def speak(self, text, interrupt=True):
+    def _apply_caller(self, caller):
+        """Put ONE caller's voice and dials on the shared library, under
+        `_lock`. Returns the base pitch to speak at.
+
+        Without this the last ``set_voice`` anybody made was the voice for
+        everybody: Titan setting its own eSpeak voice at startup put the
+        reader's Polish into an English voice, and a rate change in one
+        was a rate change in both."""
+        if not caller:
+            return self.pitch
+        voice = caller.get('voice')
+        if voice and voice != self._loaded_voice:
+            try:
+                if self.dll.espeak_SetVoiceByName(
+                        str(voice).encode('utf-8')) == 0:
+                    self._loaded_voice = voice
+            except Exception:
+                pass
+        rate = caller.get('rate')
+        volume = caller.get('volume')
+        pitch = caller.get('pitch')
+        self._set_parameter(espeakRATE, int(rate if rate is not None
+                                            else self.rate))
+        self._set_parameter(espeakVOLUME, int(volume if volume is not None
+                                              else self.volume))
+        base = int(pitch if pitch is not None else self.pitch)
+        self._set_parameter(espeakPITCH, base)
+        return base
+
+    def speak(self, text, interrupt=True, caller=None):
         """Synthesize text and play via pygame (RETRIEVAL mode - no DirectSound/COM)."""
         if not self.initialized:
             return False
@@ -350,13 +386,14 @@ class ESpeakDLL:
             with self._lock:
                 if interrupt:
                     self.cancel()
+                self._apply_caller(caller)
 
                 # Fresh synthesis: clear any abort left by a previous interrupt
                 # and mark synthesis active atomically. Doing it under the state
                 # lock means a concurrent cancel() can't slip an abort in between
                 # clearing the flag and the start of synthesis.
                 with self._state_lock:
-                    self.audio_buffer = []
+                    self.audio_buffer = bytearray()
                     self._abort = False
                     self._synthesizing = True
 
@@ -367,9 +404,13 @@ class ESpeakDLL:
                         return 1
                     if numsamples > 0 and wav:
                         try:
+                            # The samples as BYTES, one copy: extending a
+                            # list sample by sample was a Python int per
+                            # sample while holding the interpreter lock -
+                            # time the keyboard hook's decider waited for.
                             addr = ctypes.cast(wav, c_void_p).value
-                            arr = (c_short * numsamples).from_address(addr)
-                            self.audio_buffer.extend(arr)
+                            self.audio_buffer.extend(
+                                ctypes.string_at(addr, numsamples * 2))
                         except Exception:
                             pass
                     return 0
@@ -404,7 +445,7 @@ class ESpeakDLL:
                                          channels=1, buffer=512):
                         return False
 
-                    audio_bytes = struct.pack(f'{len(self.audio_buffer)}h', *self.audio_buffer)
+                    audio_bytes = bytes(self.audio_buffer)
                     wav_buf = io.BytesIO()
                     with _wave.open(wav_buf, 'wb') as wf:
                         wf.setnchannels(1)
@@ -490,9 +531,11 @@ class ESpeakDLL:
             return False
         try:
             voice_bytes = voice_name.encode('utf-8')
-            result = self.dll.espeak_SetVoiceByName(voice_bytes)
+            with self._lock:
+                result = self.dll.espeak_SetVoiceByName(voice_bytes)
             if result == 0:
                 self.voice = voice_name
+                self._loaded_voice = voice_name
                 return True
             return False
         except Exception:
@@ -512,67 +555,205 @@ class ESpeakDLL:
         except Exception:
             return ''
 
+    def mbrola_available(self):
+        """Whether eSpeak can speak with an MBROLA voice on this machine.
+
+        An MBROLA voice is listed by eSpeak whether or not MBROLA is
+        installed - 90 of the 222 the bundled data lists - and every one
+        of them refuses to load ("Could not load the mbrola.dll file")
+        without it. Offering them is offering voices that say nothing."""
+        if self._mbrola is not None:
+            return self._mbrola
+        found = False
+        try:
+            import ctypes.util
+            if IS_WINDOWS:
+                bundled = os.path.join(_get_base_path(), 'data',
+                                       'titantts engines', 'espeak')
+                found = os.path.exists(os.path.join(bundled, 'mbrola.dll')) \
+                    or bool(ctypes.util.find_library('mbrola'))
+            else:
+                import shutil
+                found = bool(shutil.which('mbrola'))
+        except Exception:
+            found = False
+        self._mbrola = found
+        return found
+
+    def _voice_rows(self, spec=None):
+        """``(name, identifier, language, gender_code)`` of every voice the
+        library lists, variants (``!v/``) apart."""
+        voices_ptr = self.dll.espeak_ListVoices(spec)
+        rows, variants = [], []
+        if not voices_ptr:
+            return rows, variants
+        i = 0
+        while True:
+            try:
+                vp = voices_ptr[i]
+                if not vp:
+                    break
+                v = vp.contents
+            except (ValueError, OSError):
+                break
+            i += 1
+            name = v.name.decode('utf-8', errors='ignore') if v.name else ''
+            identifier = (v.identifier.decode('utf-8', errors='ignore')
+                          if v.identifier else '').replace('\\', '/')
+            lang = self._parse_voice_language(v.languages)
+            if identifier.startswith('!v/'):
+                variants.append((name, identifier[3:], v.gender))
+            else:
+                rows.append((name, identifier, lang, v.gender))
+        return rows, variants
+
     def list_voices(self):
         """
-        List available eSpeak voices using DLL API (espeak_ListVoices).
+        List the eSpeak voices that really load, using the DLL API.
+
+        Every voice is LOADED once to be sure of it (0.2 s for the whole
+        list, once per session - the caller caches it), MBROLA voices are
+        left out where MBROLA is not installed, and every voice gets an id
+        of its own: the language code for the first voice of a language
+        (``pl``, which is what settings saved before have), the voice
+        file's own path for the rest (``mb/mb-pl1``, ``gmw/en-GB-x-rp``).
+        The language code alone was the id before, so the two Polish
+        voices were both ``pl`` and sixteen English ones ``en``, and
+        ``zh`` or ``en-gb`` - which eSpeak does not resolve - chose
+        nothing at all.
 
         Returns:
-            list: List of dicts with 'id', 'name', 'display_name', 'gender', 'identifier'
+            list: dicts with 'id', 'name', 'display_name', 'gender',
+            'identifier', 'language'
         """
         if not self.initialized:
             return []
         try:
-            voices_ptr = self.dll.espeak_ListVoices(None)
-            if not voices_ptr:
-                return []
-
-            voices = []
-            i = 0
-            while True:
-                try:
-                    vp = voices_ptr[i]
-                    if not vp:
-                        break
-                    v = vp.contents
-                except (ValueError, OSError):
-                    break
-
-                name = v.name.decode('utf-8', errors='ignore') if v.name else ''
-                identifier = v.identifier.decode('utf-8', errors='ignore') if v.identifier else ''
-                lang = self._parse_voice_language(v.languages)
-                gender_code = v.gender
-                gender = {1: 'Male', 2: 'Female'}.get(gender_code, '')
-
-                # Skip voice variants (from !v/ directory) - they are added separately
-                if identifier.startswith('!v/') or identifier.startswith('!v\\'):
-                    i += 1
-                    continue
-
-                # Use language code as voice ID (what espeak_SetVoiceByName expects)
-                voice_id = lang if lang else identifier.split('/')[-1] if '/' in identifier else name.lower()
-
-                display_name = name.replace('_', ' ').replace('-', ' ')
-                if gender:
-                    display_name = f"{display_name} ({gender})"
-
-                voices.append({
-                    'id': voice_id,
-                    'name': name,
-                    'display_name': display_name,
-                    'gender': gender,
-                    'gender_code': gender_code,
-                    'identifier': identifier,
-                    'language': lang,
-                })
-                i += 1
-
-            print(f"[eSpeak DLL] Listed {len(voices)} voices via DLL API")
+            with self._lock:
+                rows, _variants = self._voice_rows()
+                mbrola = self.mbrola_available()
+                voices, taken = [], set()
+                for name, identifier, lang, gender_code in rows:
+                    if identifier.startswith('mb/') and not mbrola:
+                        continue
+                    candidates = []
+                    if lang and lang not in taken:
+                        candidates.append(lang)
+                    short = identifier.split('/')[-1]
+                    if short and short not in taken and short != lang:
+                        candidates.append(short)
+                    if identifier:
+                        candidates.append(identifier)
+                    voice_id = None
+                    for candidate in candidates:
+                        try:
+                            if self.dll.espeak_SetVoiceByName(
+                                    candidate.encode('utf-8')) == 0:
+                                voice_id = candidate
+                                break
+                        except Exception:
+                            pass
+                    if not voice_id or voice_id in taken:
+                        continue
+                    taken.add(voice_id)
+                    gender = {1: 'Male', 2: 'Female'}.get(gender_code, '')
+                    display_name = name.replace('_', ' ').replace('-', ' ')
+                    if gender:
+                        display_name = f"{display_name} ({gender})"
+                    voices.append({
+                        'id': voice_id,
+                        'name': name,
+                        'display_name': display_name,
+                        'gender': gender,
+                        'gender_code': gender_code,
+                        'identifier': identifier,
+                        'language': lang,
+                    })
+                # Listing loaded every voice in turn; put back the one in
+                # use, or the next synthesis with no voice of its own
+                # would speak in the last voice of the list.
+                if self._loaded_voice:
+                    try:
+                        self.dll.espeak_SetVoiceByName(
+                            str(self._loaded_voice).encode('utf-8'))
+                    except Exception:
+                        pass
+                self._set_parameter(espeakRATE, self.rate)
+                self._set_parameter(espeakPITCH, self.pitch)
+                self._set_parameter(espeakVOLUME, self.volume)
+            print(f"[eSpeak DLL] Listed {len(voices)} voices that load")
             return voices
         except Exception as e:
             print(f"[eSpeak DLL] Error listing voices: {e}")
             return []
 
-    def synthesize_to_memory(self, text, pitch_offset=0):
+    def _variants_on_disk(self):
+        """The variant files themselves - ``voices/!v`` (``voices/v`` in
+        an older eSpeak) of the data this library uses - for a library
+        whose own listing answers none."""
+        roots = [self.data_path] if self.data_path else []
+        roots += ['/usr/lib/x86_64-linux-gnu/espeak-ng-data',
+                  '/usr/lib/aarch64-linux-gnu/espeak-ng-data',
+                  '/usr/share/espeak-ng-data', '/usr/lib/espeak-ng-data',
+                  '/opt/homebrew/share/espeak-ng-data',
+                  '/usr/local/share/espeak-ng-data']
+        for root in roots:
+            for sub in ('!v', 'v'):
+                folder = os.path.join(root, 'voices', sub)
+                if not os.path.isdir(folder):
+                    continue
+                found = []
+                for file_id in sorted(os.listdir(folder)):
+                    path = os.path.join(folder, file_id)
+                    if not os.path.isfile(path):
+                        continue
+                    name = file_id
+                    try:
+                        with open(path, encoding='utf-8',
+                                  errors='ignore') as handle:
+                            for line in handle:
+                                parts = line.split(None, 1)
+                                if len(parts) == 2 and parts[0] == 'name':
+                                    name = parts[1].strip()
+                                    break
+                    except OSError:
+                        pass
+                    found.append((name, file_id, 0))
+                if found:
+                    return found
+        return []
+
+    def list_variants(self):
+        """``[{'id', 'name', 'display_name'}]`` - eSpeak's variants
+        (``espeak-ng-data/voices/!v``): spoken as ``<voice>+<id>``."""
+        if not self.initialized:
+            return []
+        try:
+            # ListVoices(NULL) leaves the variants out; a spec whose
+            # language is "variant" lists them and nothing else.
+            language = ctypes.create_string_buffer(b'variant')
+            spec = EspeakVoice()
+            spec.languages = ctypes.cast(language, c_void_p).value
+            with self._lock:
+                rows, variants = self._voice_rows(ctypes.byref(spec))
+            if not variants:
+                variants = self._variants_on_disk()
+        except Exception as e:
+            print(f"[eSpeak DLL] Error listing variants: {e}")
+            return []
+        found, seen = [], set()
+        for name, file_id, gender_code in variants:
+            if not file_id or file_id in seen:
+                continue
+            seen.add(file_id)
+            label = name or file_id
+            if label.lower() != file_id.lower():
+                label = f"{label} ({file_id})"
+            found.append({'id': file_id, 'name': name, 'display_name': label})
+        found.sort(key=lambda v: v['display_name'].lower())
+        return found
+
+    def synthesize_to_memory(self, text, pitch_offset=0, caller=None):
         """
         Synthesize text to AudioSegment using callback (RETRIEVAL mode - no re-initialization,
         no DirectSound/COM). Returns pydub AudioSegment for stereo panning by the caller.
@@ -590,12 +771,13 @@ class ESpeakDLL:
         try:
             with self._lock:
                 with self._state_lock:
-                    self.audio_buffer = []
+                    self.audio_buffer = bytearray()
                     self._abort = False
                     self._synthesizing = True
 
-                # Apply pitch with offset
-                adjusted_pitch = max(0, min(99, self.pitch + pitch_offset * 5))
+                # Apply the caller's voice and dials, then pitch with offset
+                base_pitch = self._apply_caller(caller)
+                adjusted_pitch = max(0, min(99, base_pitch + pitch_offset * 5))
                 self._set_parameter(espeakPITCH, adjusted_pitch)
 
                 def audio_callback(wav, numsamples, events):
@@ -603,9 +785,13 @@ class ESpeakDLL:
                         return 1
                     if numsamples > 0 and wav:
                         try:
+                            # The samples as BYTES, one copy: extending a
+                            # list sample by sample was a Python int per
+                            # sample while holding the interpreter lock -
+                            # time the keyboard hook's decider waited for.
                             addr = ctypes.cast(wav, c_void_p).value
-                            arr = (c_short * numsamples).from_address(addr)
-                            self.audio_buffer.extend(arr)
+                            self.audio_buffer.extend(
+                                ctypes.string_at(addr, numsamples * 2))
                         except Exception:
                             pass
                     return 0
@@ -634,7 +820,7 @@ class ESpeakDLL:
 
                 import struct
                 import wave as _wave
-                audio_bytes = struct.pack(f'{len(self.audio_buffer)}h', *self.audio_buffer)
+                audio_bytes = bytes(self.audio_buffer)
                 wav_buffer = io.BytesIO()
                 with _wave.open(wav_buffer, 'wb') as wf:
                     wf.setnchannels(1)
@@ -1713,6 +1899,9 @@ class StereoSpeech:
         self.espeak_pitch = 50  # Pitch 0-99 (default: 50)
         self.espeak_volume = 100  # Volume 0-200 (default: 100)
         self.espeak_voice = None  # Voice identifier
+        # An eSpeak VARIANT (f1, m3, klatt, Annie... - espeak-ng-data/voices/!v)
+        # chosen apart from the voice; spoken as "<voice>+<variant>".
+        self.espeak_variant = ''
 
         # Platform-specific native TTS parameters
         self.say_voice = None     # macOS say voice name
@@ -1989,7 +2178,7 @@ class StereoSpeech:
 
             # Voice
             if hasattr(self, 'espeak_voice') and self.espeak_voice:
-                cmd.extend(['-v', self.espeak_voice])
+                cmd.extend(['-v', self._espeak_voice_spec()])
 
             # Output to stdout as WAV
             cmd.append('--stdout')
@@ -2067,7 +2256,7 @@ class StereoSpeech:
 
             # Add voice if specified
             if self.espeak_voice:
-                cmd.extend(['-v', self.espeak_voice])
+                cmd.extend(['-v', self._espeak_voice_spec()])
 
             # Output to stdout as WAV
             cmd.append('--stdout')
@@ -2513,7 +2702,7 @@ class StereoSpeech:
                         and pitch_offset == 0):
                     if self.engine == 'espeak_dll' and self.espeak_dll:
                         try:
-                            self.espeak_dll.speak(text, interrupt=True)
+                            self.espeak_dll.speak(text, interrupt=True, caller=self._espeak_caller())
                             return  # Async - don't wait
                         except Exception as e:
                             print(f"[StereoSpeech] eSpeak DLL error: {e}")
@@ -2539,7 +2728,7 @@ class StereoSpeech:
                     # No pydub - try direct speech methods (pitch_offset lost for engines
                     # that can't synthesize to memory, except spd which supports -p)
                     if self.engine == 'espeak_dll' and self.espeak_dll:
-                        self.espeak_dll.speak(text, interrupt=True)
+                        self.espeak_dll.speak(text, interrupt=True, caller=self._espeak_caller())
                         return
                     if self.engine == 'say' and self._speak_native_say(text):
                         return
@@ -2567,7 +2756,7 @@ class StereoSpeech:
                         audio = self._generate_espeak_to_memory(text, pitch_offset)
                     # DLL-only fallback: re-init in RETRIEVAL mode (no double-playback)
                     if not audio and self.espeak_dll:
-                        audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset)
+                        audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset, caller=self._espeak_caller())
 
                     # Check if a newer message arrived during generation
                     if _seq is not None and _seq != self._speak_seq:
@@ -2592,7 +2781,7 @@ class StereoSpeech:
                     if not audio:
                         # All generation failed: DLL direct speak (no stereo/pitch)
                         if self.espeak_dll:
-                            self.espeak_dll.speak(text, interrupt=True)
+                            self.espeak_dll.speak(text, interrupt=True, caller=self._espeak_caller())
                         elif use_fallback:
                             self.fallback_speaker.speak(text)
                         return
@@ -3087,7 +3276,7 @@ class StereoSpeech:
                         audio = self._generate_espeak_to_memory(text, pitch_offset)
                 if not audio and getattr(self, 'espeak_dll', None):
                     # DLL in RETRIEVAL mode (no double playback).
-                    audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset)
+                    audio = self.espeak_dll.synthesize_to_memory(text, pitch_offset, caller=self._espeak_caller())
                 return audio
             if engine == 'say':
                 return self._generate_say_to_memory(text, pitch_offset)
@@ -3593,12 +3782,16 @@ class StereoSpeech:
 
             voices = []
             for v in raw_voices:
-                voice_id = v.get('language') or v.get('id', '')
+                # The DLL's id is already unique and loads; the language
+                # alone is not (two Polish voices were both 'pl').
+                voice_id = v.get('id') or v.get('language', '')
                 if not voice_id:
                     continue
                 display_name = v.get('display_name', voice_id)
                 voices.append({
                     'id': voice_id,
+                    'name': v.get('name', ''),
+                    'language': v.get('language', ''),
                     'display_name': display_name
                 })
             return voices
@@ -3660,10 +3853,17 @@ class StereoSpeech:
         """Add voice variants (m1-m7, f1-f4) for popular languages."""
         LANGUAGES_WITH_VARIANTS = ['en', 'pl', 'de', 'fr', 'es', 'it', 'pt', 'ru', 'cs']
 
+        # The base of 'pl+m1' is the voice whose id IS 'pl' - the first
+        # voice of a language that loads - not whichever voice of that
+        # language happened to come first in eSpeak's own list (for
+        # English that was an MBROLA voice).
         base_voices = {}
         for voice in voices:
+            if voice['id'] in LANGUAGES_WITH_VARIANTS:
+                base_voices.setdefault(voice['id'], voice)
+        for voice in voices:
             lang_code = voice['id'].split('-')[0]
-            if lang_code not in base_voices:
+            if '/' not in lang_code and lang_code not in base_voices:
                 base_voices[lang_code] = voice
 
         variant_voices = []
@@ -3683,6 +3883,38 @@ class StereoSpeech:
                         'display_name': f"{base_name} (f{i}, Female variant {i})"
                     })
         return variant_voices
+
+    def _espeak_voice_spec(self):
+        """The name eSpeak is asked to load: the voice, and the variant
+        after a '+' when one is chosen and the voice has none of its own."""
+        voice = self.espeak_voice
+        variant = str(getattr(self, 'espeak_variant', '') or '')
+        if voice and variant and '+' not in str(voice):
+            return f"{voice}+{variant}"
+        return voice
+
+    def _espeak_caller(self):
+        """This engine's own voice and dials, handed to the eSpeak library
+        with every synthesis - the library is one per process and Titan's
+        speech and the reader's private engine share it."""
+        return {'voice': self._espeak_voice_spec(),
+                'rate': self.espeak_rate,
+                'pitch': self.espeak_pitch,
+                'volume': self.espeak_volume}
+
+    def set_espeak_variant(self, variant):
+        """Choose an eSpeak variant ('' for the voice's own)."""
+        self.espeak_variant = str(variant or '').strip()
+        return True
+
+    def get_espeak_variants(self):
+        """``[{'id', 'display_name'}]`` of eSpeak's variants."""
+        if self.espeak_dll and getattr(self.espeak_dll, 'initialized', False):
+            try:
+                return self.espeak_dll.list_variants()
+            except Exception as e:
+                print(f"[StereoSpeech] eSpeak variants: {e}")
+        return []
 
     def get_espeak_voices(self):
         """

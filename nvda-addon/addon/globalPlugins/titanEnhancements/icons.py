@@ -202,10 +202,14 @@ ROLE_EVENTS = {
 #: (`sfx/<theme>/SRE/`), which is what these events have always sounded
 #: like under Titan Access, so a reader event starts on Titan's sound.
 READER_EVENTS = (
-    ('reader.virtual-on', 'open-object', 'reader/vscreenOn.ogg'),
-    ('reader.virtual-off', 'close-object', 'reader/vscreenOff.ogg'),
-    ('reader.palette-open', 'open-object', 'reader/sr_menu.ogg'),
-    ('reader.palette-close', 'close-object', 'reader/sr_menu_close.ogg'),
+    ('reader.virtual-on', 'open-object', 'reader/virtual_window_on.ogg'),
+    ('reader.virtual-off', 'close-object', 'reader/virtual_window_off.ogg'),
+    ('reader.palette-open', 'open-object', 'reader/sr_menu_on.ogg'),
+    ('reader.palette-close', 'close-object', 'reader/sr_menu_off.ogg'),
+    # A message - an answer from the AI, something the reader has to say
+    # that is longer than a line - opens as a page to walk, with a sound
+    # of its own so it is not mistaken for the palette.
+    ('reader.message', 'new-mail', 'reader/sr_message.ogg'),
     ('reader.review-on', 'open-object', 'reader/vscreenOn.ogg'),
     ('reader.review-off', 'close-object', 'reader/vscreenOff.ogg'),
     ('reader.edge', 'large-movement', 'reader/edge.ogg'),
@@ -248,7 +252,8 @@ def reader_labels():
         # Translators: a reader event, in the sounds manager.
         'reader.virtual-on': _('The virtual window is turned on'),
         'reader.virtual-off': _('The virtual window is turned off'),
-        'reader.palette-open': _('The palette or a message opens'),
+        'reader.palette-open': _('The palette opens'),
+        'reader.message': _('A message opens'),
         'reader.palette-close': _('The palette or a message closes'),
         'reader.review-on': _('The screen review is turned on'),
         'reader.review-off': _('The screen review is turned off'),

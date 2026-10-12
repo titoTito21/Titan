@@ -245,7 +245,7 @@ class SpeechSystemDialog(_Base):
 
     def _voice_chosen(self):
         synth, voice = self._synth(), self._voice()
-        if not synth.startswith('nvda:') or not voice:
+        if not _variants_possible(synth) or not voice:
             self._no_variants()
             return
         self._variant_token += 1
@@ -322,3 +322,10 @@ class SpeechSystemDialog(_Base):
             self.Destroy()
         except Exception:                            # noqa: BLE001
             pass
+
+
+def _variants_possible(synth):
+    """A synthesizer with a variant level: an NVDA add-on synthesizer
+    (Cerence's compact / embedded-pro...) or eSpeak (its voices/!v)."""
+    synth = str(synth or '')
+    return synth.startswith('nvda:') or synth in ('espeak', 'espeak_dll')

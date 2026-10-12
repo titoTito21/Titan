@@ -465,7 +465,7 @@ def _fill_variants(panel, keep=''):
     ticket = panel._variant_ticket[0]
     panel.cmb_variant.Clear()
     panel._variant_ids = []
-    if not synth.startswith('nvda:') or not voice:
+    if not _variants_possible(synth) or not voice:
         panel.cmb_variant.Enable(False)
         return
 
@@ -801,3 +801,10 @@ def register(component_manager):
                 save_panel, load_panel)
         except Exception as e:  # pragma: no cover
             print(f"[TitanAccess] settings category {which} failed: {e}")
+
+
+def _variants_possible(synth):
+    """A synthesizer with a variant level: an NVDA add-on synthesizer
+    (Cerence's compact / embedded-pro...) or eSpeak (its voices/!v)."""
+    synth = str(synth or '')
+    return synth.startswith('nvda:') or synth in ('espeak', 'espeak_dll')

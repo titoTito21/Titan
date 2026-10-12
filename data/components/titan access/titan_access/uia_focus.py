@@ -374,6 +374,12 @@ class UIAProvider:
         if not _UIA_LIB_OK:
             return None
         try:
+            from titan_access import native_hook
+            if not native_hook.window_answers(hwnd):
+                return None
+        except Exception:                            # noqa: BLE001
+            pass
+        try:
             control = _auto.ControlFromHandle(hwnd)
             return self._control_to_object(control) if control else None
         except Exception as e:
