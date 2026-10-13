@@ -131,7 +131,7 @@ SECTIONS = (
         _e('General', 'Modifier', 'choice', 'settings.general.modifier',
            ScreenReaderModifier.INSERT_AND_CAPSLOCK, _modifiers),
         _e('General', 'WelcomeMessage', 'text', 'settings.general.welcomeMessage',
-           'Czytnik ekranu uruchomiony'),
+           ''),
         # The welcome window (`welcome_screen`) shown as the reader starts.
         _e('General', 'ShowWelcome', 'bool', 'settings.general.showWelcome', True),
         _e('General', 'SpeakHints', 'bool', 'settings.general.speakHints', True),

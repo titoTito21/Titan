@@ -58,6 +58,16 @@ def _own_calls():
             'ocr.read_local': local_model.call_read_local}
 
 
+def _plain(error):
+    """Titan's refusal as the sentence it is. A Titan.exe built before the
+    bridge stopped doing so puts "RuntimeError: " in front of a sentence
+    that was meant for the user, and that would be read aloud."""
+    said = _text(error)
+    if said.startswith('RuntimeError: '):
+        said = said[len('RuntimeError: '):]
+    return said
+
+
 def _answer_own(call, args):
     """``(True, data)`` when this reader answers the call itself, else None."""
     try:
@@ -144,7 +154,7 @@ class Link(object):
         if not found.get('ok'):
             with _LOCK:
                 _counted['failed'] += 1
-            self.last_error = _text(found.get('error')) or 'the call failed'
+            self.last_error = _plain(found.get('error')) or 'the call failed'
             return False, self.last_error
         return True, found.get('data')
 

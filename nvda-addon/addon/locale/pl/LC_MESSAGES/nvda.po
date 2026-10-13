@@ -14,742 +14,746 @@ msgstr ""
 "Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 
-#: __init__.py:695
+#: __init__.py:713
 msgid "In a virtual machine, a game or a window that draws itself: say what the key moved onto"
 msgstr "W maszynie wirtualnej, grze lub oknie, które rysuje się samo: powiedz, na co przeniosło się zaznaczenie"
 
-#: __init__.py:866
+#: __init__.py:887
 msgid "In a described application: type into the field"
 msgstr "W opisanej aplikacji: pisz w polu edycji"
 
-#: __init__.py:1009
+#: __init__.py:1042
 msgid "In a walked list: the trackpad - explore with a finger, flick to move, more fingers for the corners, the layout and the ends"
 msgstr "W przeglądanej liście: gładzik - eksploracja palcem, machnięcie przesuwa, więcej palców to rogi, układ i końce"
 
-#: __init__.py:1052
+#: __init__.py:1046
+msgid "Touch: two fingers twice - the virtual window; one finger three times - Titan; two fingers three times - read the screen with OCR"
+msgstr "Dotyk: dwa palce dwukrotnie - wirtualne okno; jeden palec trzykrotnie - Titan; dwa palce trzykrotnie - odczyt ekranu przez OCR"
+
+#: __init__.py:1103
 msgid "In the application: the top left corner - the first control"
 msgstr "W aplikacji: lewy górny róg - pierwsza kontrolka"
 
-#: __init__.py:1057
+#: __init__.py:1108
 msgid "In the application: the top right corner - the end of the first control"
 msgstr "W aplikacji: prawy górny róg - koniec pierwszej kontrolki"
 
-#: __init__.py:1062
+#: __init__.py:1113
 msgid "In the application: the bottom left corner - the last control"
 msgstr "W aplikacji: lewy dolny róg - ostatnia kontrolka"
 
-#: __init__.py:1067
+#: __init__.py:1118
 msgid "In the application: the bottom right corner - the end of the last control"
 msgstr "W aplikacji: prawy dolny róg - koniec ostatniej kontrolki"
 
-#: __init__.py:1072
+#: __init__.py:1123
 msgid "In the application: the next arrow layout"
 msgstr "W aplikacji: następny układ strzałek"
 
-#: __init__.py:1083
+#: __init__.py:1134
 msgid "In the application: the previous arrow layout"
 msgstr "W aplikacji: poprzedni układ strzałek"
 
-#: __init__.py:1094
+#: __init__.py:1145
 msgid "In the screen review: the top left corner - the start of the first line"
 msgstr "W przeglądzie ekranu: lewy górny róg - początek pierwszego wiersza"
 
-#: __init__.py:1099
+#: __init__.py:1150
 msgid "In the screen review: the top right corner - the end of the first line"
 msgstr "W przeglądzie ekranu: prawy górny róg - koniec pierwszego wiersza"
 
-#: __init__.py:1104
+#: __init__.py:1155
 msgid "In the screen review: the bottom left corner - the start of the last line"
 msgstr "W przeglądzie ekranu: lewy dolny róg - początek ostatniego wiersza"
 
-#: __init__.py:1109
+#: __init__.py:1160
 msgid "In the screen review: the bottom right corner - the end of the last line"
 msgstr "W przeglądzie ekranu: prawy dolny róg - koniec ostatniego wiersza"
 
-#: __init__.py:1114
+#: __init__.py:1165
 msgid "In the screen review: the next arrow layout"
 msgstr "W przeglądzie ekranu: następny układ strzałek"
 
-#: __init__.py:1125
+#: __init__.py:1176
 msgid "In the screen review: the previous arrow layout"
 msgstr "W przeglądzie ekranu: poprzedni układ strzałek"
 
-#: __init__.py:1136
+#: __init__.py:1187
 msgid "In the command palette: the command above - or, in the interaction layout, out of this row"
 msgstr "W palecie poleceń: polecenie wyżej - lub, w układzie z interakcją, wyjście z tego wiersza"
 
-#: __init__.py:1142
+#: __init__.py:1193
 msgid "In the command palette: the command below - or, in the interaction layout, into this row"
 msgstr "W palecie poleceń: polecenie niżej - lub, w układzie z interakcją, wejście w ten wiersz"
 
-#: __init__.py:1148
+#: __init__.py:1199
 msgid "In the command palette: the first command"
 msgstr "W palecie poleceń: pierwsze polecenie"
 
-#: __init__.py:1153
+#: __init__.py:1204
 msgid "In the command palette: the last command"
 msgstr "W palecie poleceń: ostatnie polecenie"
 
-#: __init__.py:1158
+#: __init__.py:1209
 msgid "In the command palette: run this command"
 msgstr "W palecie poleceń: wykonaj to polecenie"
 
-#: __init__.py:1174
+#: __init__.py:1225
 msgid "In the palette: back through the row - a character, the word beside, or the row beside, by layout"
 msgstr "W palecie: wstecz przez wiersz - znak, słowo obok lub wiersz obok, zależnie od układu"
 
-#: __init__.py:1180
+#: __init__.py:1231
 msgid "In the palette: on through the row - a character, the word beside, or the row beside, by layout"
 msgstr "W palecie: dalej przez wiersz - znak, słowo obok lub wiersz obok, zależnie od układu"
 
-#: __init__.py:1186
+#: __init__.py:1237
 msgid "In the palette: the other way through the row - the word beside in the simple layout, a character in the others"
 msgstr "W palecie: wstecz na drugi sposób - słowo obok w układzie prostym, znak w pozostałych"
 
-#: __init__.py:1192
+#: __init__.py:1243
 msgid "In the palette: the other way on through the row - the word beside in the simple layout, a character in the others"
 msgstr "W palecie: dalej na drugi sposób - słowo obok w układzie prostym, znak w pozostałych"
 
-#: __init__.py:1198
+#: __init__.py:1249
 msgid "In the palette: the top left corner - the start of the first row"
 msgstr "W palecie: lewy górny róg - początek pierwszego wiersza"
 
-#: __init__.py:1203
+#: __init__.py:1254
 msgid "In the palette: the top right corner - the end of the first row"
 msgstr "W palecie: prawy górny róg - koniec pierwszego wiersza"
 
-#: __init__.py:1208
+#: __init__.py:1259
 msgid "In the palette: the bottom left corner - the start of the last row"
 msgstr "W palecie: lewy dolny róg - początek ostatniego wiersza"
 
-#: __init__.py:1213
+#: __init__.py:1264
 msgid "In the palette: the bottom right corner - the end of the last row"
 msgstr "W palecie: prawy dolny róg - koniec ostatniego wiersza"
 
-#: __init__.py:1218
+#: __init__.py:1269
 msgid "In the palette: the next layout - simple, screen, interaction; shared with the virtual window"
 msgstr "W palecie: następny układ - prosty, ekranu, z interakcją; wspólny z wirtualnym oknem"
 
-#: __init__.py:1224
+#: __init__.py:1275
 msgid "In the palette: the previous layout - simple, screen, interaction; shared with the virtual window"
 msgstr "W palecie: poprzedni układ - prosty, ekranu, z interakcją; wspólny z wirtualnym oknem"
 
-#: __init__.py:1230
+#: __init__.py:1281
 msgid "In the palette: the word before, in this command's name"
 msgstr "W palecie: poprzednie słowo w nazwie tego polecenia"
 
-#: __init__.py:1235
+#: __init__.py:1286
 msgid "In the palette: the word after, in this command's name"
 msgstr "W palecie: następne słowo w nazwie tego polecenia"
 
-#: __init__.py:1239
+#: __init__.py:1290
 msgid "In the command palette: back one level, or close it"
 msgstr "W palecie poleceń: poziom wyżej lub zamknij"
 
-#: __init__.py:1338
+#: __init__.py:1389
 msgid "In the virtual window: type into the field"
 msgstr "W wirtualnym oknie: pisz w polu edycji"
 
 #. Translators: an NVDA command.
-#: __init__.py:1602
+#: __init__.py:1661
 msgid "Reports whether Titan is connected and what it can send to this NVDA"
 msgstr "Mówi, czy Titan jest połączony i co potrafi wysłać do tego NVDA"
 
 #. Translators: an NVDA command.
-#: __init__.py:1610
+#: __init__.py:1669
 msgid "Opens the Titan menu: everything Titan can do"
 msgstr "Otwiera menu Titana: wszystko, co Titan potrafi"
 
 #. Translators: an NVDA command.
-#: __init__.py:1622
+#: __init__.py:1681
 msgid "Runs one of the macros in Titan"
 msgstr "Uruchamia jedno z makr Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1629
+#: __init__.py:1688
 msgid "Runs anything Titan or one of its add-ons can do"
 msgstr "Uruchamia dowolną akcję Titana lub jego dodatku"
 
 #. Translators: an NVDA command.
-#: __init__.py:1636
+#: __init__.py:1695
 msgid "Reads the current window with Titan's AI OCR"
 msgstr "Odczytuje bieżące okno przez AI OCR Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1643
+#: __init__.py:1702
 msgid "Asks Titan's AI a question about the current window"
 msgstr "Zadaje SI Titana pytanie o bieżące okno"
 
 #. Translators: an NVDA command.
-#: __init__.py:1650
+#: __init__.py:1709
 msgid "Puts Titan's AI OCR overlay over the current window"
 msgstr "Nakłada kontrolki AI OCR Titana na bieżące okno"
 
 #. Translators: an NVDA command.
-#: __init__.py:1657
+#: __init__.py:1716
 msgid "Reads the last AI OCR reading again, without reading the screen afresh"
 msgstr "Odczytuje ponownie ostatni odczyt AI OCR, bez ponownego czytania ekranu"
 
 #. Translators: an NVDA command.
-#: __init__.py:1665
+#: __init__.py:1724
 msgid "Presses a control AI OCR read, by its name"
 msgstr "Naciska kontrolkę odczytaną przez AI OCR, po jej nazwie"
 
 #. Translators: an NVDA command.
-#: __init__.py:1672
+#: __init__.py:1731
 msgid "Sends a whole key to the window AI OCR read"
 msgstr "Wysyła cały klawisz do okna odczytanego przez AI OCR"
 
 #. Translators: an NVDA command.
-#: __init__.py:1679
+#: __init__.py:1738
 msgid "Asks Titan's AI assistant a question"
 msgstr "Zadaje pytanie asystentowi SI Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1686
+#: __init__.py:1745
 msgid "Tells Titan's AI to do something, and lets it act"
 msgstr "Zleca SI Titana zadanie i pozwala jej działać"
 
 #. Translators: an NVDA command.
-#: __init__.py:1693
+#: __init__.py:1752
 msgid "Reads the conversation with Titan's AI assistant"
 msgstr "Odczytuje rozmowę z asystentem SI Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1700
+#: __init__.py:1759
 msgid "Forgets the conversation with Titan's AI assistant"
 msgstr "Zapomina rozmowę z asystentem SI Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1707
+#: __init__.py:1766
 msgid "Reads Titan's notifications"
 msgstr "Odczytuje powiadomienia Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1714
+#: __init__.py:1773
 msgid "Reads a Titan buffer: what arrived while its window was closed"
 msgstr "Odczytuje bufor Titana: to, co przyszło przy zamkniętym oknie"
 
 #. Translators: an NVDA command.
-#: __init__.py:1722
+#: __init__.py:1781
 msgid "Says what Titan is showing right now"
 msgstr "Mówi, co Titan właśnie pokazuje"
 
 #. Translators: an NVDA command.
-#: __init__.py:1729
+#: __init__.py:1788
 msgid "Lists Titan's components"
 msgstr "Wypisuje komponenty Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:1736
+#: __init__.py:1795
 msgid "Asks Titan what it can do, so every one of its actions can be given a key in Input Gestures"
 msgstr "Pyta Titana, co potrafi, aby każdej jego akcji można było przypisać klawisz w zdarzeniach wejścia"
 
 #. Translators: an NVDA command.
-#: __init__.py:1754
+#: __init__.py:1813
 msgid "Read this window with Windows' own recogniser - no AI, nothing sent anywhere"
 msgstr "Odczytaj to okno rozpoznawaniem tekstu Windows - bez SI, nic nie jest wysyłane"
 
 #. Translators: an NVDA command.
-#: __init__.py:1763
+#: __init__.py:1822
 msgid "The windows, their controls, and what each control can do"
 msgstr "Okna, ich kontrolki i to, co każda kontrolka potrafi"
 
 #. Translators: an NVDA command.
-#: __init__.py:1771
+#: __init__.py:1830
 msgid "The manager: place markers, watched areas and the sound scheme"
 msgstr "Menedżer: znaczniki miejsca, obserwowane obszary i schemat dźwiękowy"
 
 #. Translators: an NVDA command.
-#: __init__.py:1779
+#: __init__.py:1838
 msgid "Run the add-on's own features here and say what worked"
 msgstr "Uruchamia funkcje dodatku i mówi, co zadziałało"
 
 #. Translators: an NVDA command.
-#: __init__.py:1788
+#: __init__.py:1847
 msgid "Read this window and walk it with the arrow keys; Enter clicks where you are"
 msgstr "Odczytaj to okno i chodź po nim strzałkami; Enter klika tam, gdzie jesteś"
 
-#: __init__.py:1808
+#: __init__.py:1867
 msgid "In the screen review: the line above"
 msgstr "W przeglądzie ekranu: wiersz wyżej"
 
-#: __init__.py:1813
+#: __init__.py:1872
 msgid "In the screen review: the line below"
 msgstr "W przeglądzie ekranu: wiersz niżej"
 
-#: __init__.py:1818
+#: __init__.py:1877
 msgid "In the screen review: the word before"
 msgstr "W przeglądzie ekranu: słowo wcześniej"
 
-#: __init__.py:1823
+#: __init__.py:1882
 msgid "In the screen review: the word after"
 msgstr "W przeglądzie ekranu: słowo dalej"
 
-#: __init__.py:1828
+#: __init__.py:1887
 msgid "In the screen review: a screenful back"
 msgstr "W przeglądzie ekranu: ekran wstecz"
 
-#: __init__.py:1833
+#: __init__.py:1892
 msgid "In the screen review: a screenful on"
 msgstr "W przeglądzie ekranu: ekran naprzód"
 
-#: __init__.py:1838
+#: __init__.py:1897
 msgid "In the screen review: the start of the line"
 msgstr "W przeglądzie ekranu: początek wiersza"
 
-#: __init__.py:1843
+#: __init__.py:1902
 msgid "In the screen review: the end of the line"
 msgstr "W przeglądzie ekranu: koniec wiersza"
 
 #. Translators: an NVDA command.
-#: __init__.py:1850
+#: __init__.py:1909
 msgid "In the screen review: click where you are"
 msgstr "W przeglądzie ekranu: kliknij tam, gdzie jesteś"
 
 #. Translators: an NVDA command.
-#: __init__.py:1870
+#: __init__.py:1926
 msgid "In the screen review: read the window again"
 msgstr "W przeglądzie ekranu: odczytaj okno ponownie"
 
 #. Translators: an NVDA command.
-#: __init__.py:1884
+#: __init__.py:1940
 msgid "Leave the screen review"
 msgstr "Wyjdź z przeglądu ekranu"
 
 #. Translators: an NVDA command.
-#: __init__.py:1896
+#: __init__.py:1952
 msgid "What the reader has said, and go back to what said it"
 msgstr "Co czytnik powiedział - i powrót do tego, co to powiedziało"
 
 #. Translators: an NVDA command.
-#: __init__.py:1904
+#: __init__.py:1960
 msgid "Find something the reader said, and go back to what said it"
 msgstr "Znajdź coś, co czytnik powiedział, i wróć do tego, co to powiedziało"
 
 #. Translators: an NVDA command.
-#: __init__.py:1912
+#: __init__.py:1968
 msgid "What the reader has said, as a page to read"
 msgstr "Co czytnik powiedział, jako strona do przeczytania"
 
 #. Translators: an NVDA command.
-#: __init__.py:1920
+#: __init__.py:1976
 msgid "Start recording what you do, or keep what was recorded"
 msgstr "Zacznij nagrywać, co robisz, albo zapisz to, co nagrano"
 
 #. Translators: an NVDA command.
-#: __init__.py:1928
+#: __init__.py:1984
 msgid "Throw away what is being recorded"
 msgstr "Odrzuć to, co jest nagrywane"
 
 #. Translators: an NVDA command.
-#: __init__.py:1935
+#: __init__.py:1991
 msgid "Do one of this program's recorded procedures again"
 msgstr "Wykonaj ponownie jedną z nagranych procedur tego programu"
 
 #. Translators: an NVDA command.
-#: __init__.py:1942
+#: __init__.py:1998
 msgid "Read the steps of a recorded procedure"
 msgstr "Przeczytaj kroki nagranej procedury"
 
 #. Translators: an NVDA command.
-#: __init__.py:1950
+#: __init__.py:2006
 msgid "Find a control in this window by its name or by what is written on the screen"
 msgstr "Znajdź kontrolkę w tym oknie po nazwie albo po tym, co jest napisane na ekranie"
 
 #. Translators: an NVDA command.
-#: __init__.py:1958
+#: __init__.py:2014
 msgid "Find a control by what it DOES, using the AI"
 msgstr "Znajdź kontrolkę po tym, CO ROBI, za pomocą SI"
 
 #. Translators: an NVDA command.
-#: __init__.py:1966
+#: __init__.py:2022
 msgid "Mark the control you are on, so a key comes back to it"
 msgstr "Zaznacz kontrolkę, na której jesteś, aby klawisz do niej wracał"
 
 #. Translators: an NVDA command.
-#: __init__.py:1974
+#: __init__.py:2030
 msgid "Go to one of this program's place markers"
 msgstr "Przejdź do jednego ze znaczników miejsca tego programu"
 
 #. Translators: an NVDA command.
-#: __init__.py:1981
+#: __init__.py:2037
 msgid "Forget one of this program's place markers"
 msgstr "Zapomnij jeden ze znaczników miejsca tego programu"
 
 #. Translators: an NVDA command.
-#: __init__.py:1988
+#: __init__.py:2044
 msgid "Which state is answered with a sound instead of the word"
 msgstr "Który stan jest oznajmiany dźwiękiem zamiast słowem"
 
 #. Translators: an NVDA command.
-#: __init__.py:1997
+#: __init__.py:2053
 msgid "Watch the object the navigator is on, and say when it changes"
 msgstr "Obserwuj obiekt, na którym jest nawigator, i mów, gdy się zmieni"
 
 #. Translators: an NVDA command.
-#: __init__.py:2005
+#: __init__.py:2061
 msgid "Watch the area this object covers with Windows' own recogniser, and say when it changes"
 msgstr "Obserwuj obszar tego obiektu rozpoznawaniem tekstu Windows i mów, gdy się zmieni"
 
 #. Translators: an NVDA command.
-#: __init__.py:2013
+#: __init__.py:2069
 msgid "Watch this whole window with Windows' own recogniser, and say when it changes"
 msgstr "Obserwuj całe to okno rozpoznawaniem tekstu Windows i mów, gdy się zmieni"
 
 #. Translators: an NVDA command.
-#: __init__.py:2021
+#: __init__.py:2077
 msgid "What is being watched, and stop watching one"
 msgstr "Co jest obserwowane - i przerwanie obserwacji wybranego"
 
-#: __init__.py:2034
+#: __init__.py:2090
 msgid "In a widget: up"
 msgstr "W widżecie: w górę"
 
-#: __init__.py:2038
+#: __init__.py:2094
 msgid "In a widget: down"
 msgstr "W widżecie: w dół"
 
-#: __init__.py:2042
+#: __init__.py:2098
 msgid "In a widget: left"
 msgstr "W widżecie: w lewo"
 
-#: __init__.py:2046
+#: __init__.py:2102
 msgid "In a widget: right"
 msgstr "W widżecie: w prawo"
 
-#: __init__.py:2050
+#: __init__.py:2106
 msgid "In a widget: press what you are on"
 msgstr "W widżecie: naciśnij to, na czym jesteś"
 
-#: __init__.py:2059
-msgid "Leave the widget"
-msgstr "Wyjdź z widżetu"
+#: __init__.py:2115
+msgid "Leave the widget and close it"
+msgstr "Opuść widżet i zamknij go"
 
 #. Translators: an NVDA command.
-#: __init__.py:2071
+#: __init__.py:2128
 msgid "Titan widgets: choose one and walk it"
 msgstr "Widżety Titana: wybierz jeden i chodź po nim"
 
-#: __init__.py:2088
+#: __init__.py:2145
 msgid "In the virtual window: the control above"
 msgstr "W wirtualnym oknie: kontrolka wyżej"
 
-#: __init__.py:2093
+#: __init__.py:2150
 msgid "In the virtual window: the control below"
 msgstr "W wirtualnym oknie: kontrolka niżej"
 
-#: __init__.py:2098
+#: __init__.py:2155
 msgid "In the virtual window: back - a character of this control's text, the control beside it, or the control before it at this level, by layout"
 msgstr "W wirtualnym oknie: wstecz - znak tekstu tej kontrolki, kontrolka obok lub poprzednia kontrolka na tym poziomie, zależnie od układu"
 
-#: __init__.py:2105
+#: __init__.py:2162
 msgid "In the virtual window: on - a character of this control's text, the control beside it, or the control after it at this level, by layout"
 msgstr "W wirtualnym oknie: dalej - znak tekstu tej kontrolki, kontrolka obok lub następna kontrolka na tym poziomie, zależnie od układu"
 
-#: __init__.py:2112
+#: __init__.py:2169
 msgid "In the virtual window: the word before, in this control's text"
 msgstr "W wirtualnym oknie: słowo przed tym, w tekście tej kontrolki"
 
-#: __init__.py:2117
+#: __init__.py:2174
 msgid "In the virtual window: the word after, in this control's text"
 msgstr "W wirtualnym oknie: słowo za tym, w tekście tej kontrolki"
 
-#: __init__.py:2122
+#: __init__.py:2179
 msgid "In the virtual window: the other way back - the control beside this one in the simple layout, a character of its text in the others"
 msgstr "W wirtualnym oknie: wstecz na drugi sposób - kontrolka obok w układzie prostym, znak jej tekstu w pozostałych"
 
-#: __init__.py:2130
+#: __init__.py:2187
 msgid "In the virtual window: the other way on - the control beside this one in the simple layout, a character of its text in the others"
 msgstr "W wirtualnym oknie: dalej na drugi sposób - kontrolka obok w układzie prostym, znak jej tekstu w pozostałych"
 
-#: __init__.py:2138
+#: __init__.py:2195
 msgid "In the virtual window: the top left corner of the window"
 msgstr "W wirtualnym oknie: lewy górny róg okna"
 
-#: __init__.py:2143
+#: __init__.py:2200
 msgid "In the virtual window: the top right corner of the window"
 msgstr "W wirtualnym oknie: prawy górny róg okna"
 
-#: __init__.py:2148
+#: __init__.py:2205
 msgid "In the virtual window: the bottom left corner of the window"
 msgstr "W wirtualnym oknie: lewy dolny róg okna"
 
-#: __init__.py:2153
+#: __init__.py:2210
 msgid "In the virtual window: the bottom right corner of the window"
 msgstr "W wirtualnym oknie: prawy dolny róg okna"
 
-#: __init__.py:2158
+#: __init__.py:2215
 msgid "In the virtual window: click the control with the mouse - twice quickly for a double click"
 msgstr "W wirtualnym oknie: kliknij kontrolkę myszą - dwa razy szybko, aby kliknąć podwójnie"
 
-#: __init__.py:2179
+#: __init__.py:2236
 msgid "In the virtual window: the next layout the arrows follow - simple, screen, interaction"
 msgstr "W wirtualnym oknie: następny układ, za którym idą strzałki - prosty, ekranu, z interakcją"
 
-#: __init__.py:2185
+#: __init__.py:2242
 msgid "In the virtual window: the previous layout the arrows follow - simple, screen, interaction"
 msgstr "W wirtualnym oknie: poprzedni układ, za którym idą strzałki - prosty, ekranu, z interakcją"
 
-#: __init__.py:2191
+#: __init__.py:2248
 msgid "In the virtual window: ten controls back"
 msgstr "W wirtualnym oknie: dziesięć kontrolek wstecz"
 
-#: __init__.py:2196
+#: __init__.py:2253
 msgid "In the virtual window: ten controls on"
 msgstr "W wirtualnym oknie: dziesięć kontrolek dalej"
 
-#: __init__.py:2201
+#: __init__.py:2258
 msgid "In the virtual window: the first control"
 msgstr "W wirtualnym oknie: pierwsza kontrolka"
 
-#: __init__.py:2206
+#: __init__.py:2263
 msgid "In the virtual window: the last control"
 msgstr "W wirtualnym oknie: ostatnia kontrolka"
 
-#: __init__.py:2211
+#: __init__.py:2268
 msgid "In the virtual window: click what you are on"
 msgstr "W wirtualnym oknie: kliknij to, na czym jesteś"
 
-#: __init__.py:2225
+#: __init__.py:2282
 msgid "In the virtual window: the program's own Backspace - up one folder - and then build the window again"
 msgstr "W wirtualnym oknie: Backspace programu - katalog wyżej - i zbudowanie okna od nowa"
 
-#: __init__.py:2249
+#: __init__.py:2306
 msgid "In the virtual window: build it again"
 msgstr "W wirtualnym oknie: zbuduj je ponownie"
 
-#: __init__.py:2259
+#: __init__.py:2316
 msgid "Leave the virtual window, or the field being typed into"
 msgstr "Wyjdź z wirtualnego okna lub z pola edycji"
 
-#: __init__.py:2308
+#: __init__.py:2365
 msgid "In the virtual window: the next button, heading, check box, list and so on - b, h, x, i, l, c, e, t, k, g, s, m, a, o"
 msgstr "W wirtualnym oknie: następny przycisk, nagłówek, pole wyboru, lista i tak dalej - b, h, x, i, l, c, e, t, k, g, s, m, a, o"
 
-#: __init__.py:2315
+#: __init__.py:2372
 msgid "In the virtual window: the same, backwards"
 msgstr "W wirtualnym oknie: to samo, wstecz"
 
 #. Translators: an NVDA command.
-#: __init__.py:2322
+#: __init__.py:2379
 msgid "Walk this window as a virtual window of all its controls"
 msgstr "Przeglądaj to okno jako wirtualne okno wszystkich jego kontrolek"
 
 #. Translators: an NVDA command.
-#: __init__.py:2333
+#: __init__.py:2390
 msgid "TCE applications: open one and walk it with the arrow keys"
 msgstr "Aplikacje TCE: otwórz jedną i chodź po niej strzałkami"
 
-#: __init__.py:2352
+#: __init__.py:2409
 msgid "In an application: the control above"
 msgstr "W aplikacji: kontrolka wyżej"
 
-#: __init__.py:2357
+#: __init__.py:2414
 msgid "In an application: the control below"
 msgstr "W aplikacji: kontrolka niżej"
 
-#: __init__.py:2362
+#: __init__.py:2419
 msgid "In an application: back through what is inside this control"
 msgstr "W aplikacji: wstecz po zawartości tej kontrolki"
 
-#: __init__.py:2368
+#: __init__.py:2425
 msgid "In an application: on through what is inside this control"
 msgstr "W aplikacji: dalej po zawartości tej kontrolki"
 
-#: __init__.py:2374
+#: __init__.py:2431
 msgid "In an application: ten controls back"
 msgstr "W aplikacji: dziesięć kontrolek wstecz"
 
-#: __init__.py:2379
+#: __init__.py:2436
 msgid "In an application: ten controls on"
 msgstr "W aplikacji: dziesięć kontrolek dalej"
 
-#: __init__.py:2384
+#: __init__.py:2441
 msgid "In an application: the first control"
 msgstr "W aplikacji: pierwsza kontrolka"
 
-#: __init__.py:2389
+#: __init__.py:2446
 msgid "In an application: the last control"
 msgstr "W aplikacji: ostatnia kontrolka"
 
-#: __init__.py:2394
+#: __init__.py:2451
 msgid "In an application: press what you are on"
 msgstr "W aplikacji: naciśnij to, na czym jesteś"
 
-#: __init__.py:2408
+#: __init__.py:2465
 msgid "In an application: tick or untick what you are on"
 msgstr "W aplikacji: zaznacz lub odznacz to, na czym jesteś"
 
-#: __init__.py:2420
+#: __init__.py:2477
 msgid "In an application: read the screen again"
 msgstr "W aplikacji: odczytaj ekran ponownie"
 
-#: __init__.py:2430
-msgid "Leave the application review"
-msgstr "Wyjdź z przeglądu aplikacji"
+#: __init__.py:2487
+msgid "Application review: go back one level; in the main window, close the application"
+msgstr "Przeglądanie aplikacji: wróć o jeden poziom; w głównym oknie zamknij aplikację"
 
 #. Translators: an NVDA command.
-#: __init__.py:2460
+#: __init__.py:2509
 msgid "TCE applications: show it as real controls instead"
 msgstr "Aplikacje TCE: pokaż jako prawdziwe kontrolki"
 
 #. Translators: an NVDA command.
-#: __init__.py:2469
+#: __init__.py:2518
 msgid "TCE applications: close it"
 msgstr "Aplikacje TCE: zamknij"
 
 #. Translators: an NVDA command.
-#: __init__.py:2477
+#: __init__.py:2526
 msgid "Titan: what it can start, its settings, what arrived"
 msgstr "Titan: co może uruchomić, ustawienia, co przyszło"
 
 #. Translators: an NVDA command.
-#: __init__.py:2486
+#: __init__.py:2535
 msgid "In a terminal: review what is on the screen with the plain arrow keys"
 msgstr "W terminalu: przeglądaj to, co jest na ekranie, zwykłymi strzałkami"
 
-#: __init__.py:2533
+#: __init__.py:2582
 msgid "In a terminal review: the line above"
 msgstr "W przeglądzie terminala: wiersz wyżej"
 
-#: __init__.py:2538
+#: __init__.py:2587
 msgid "In a terminal review: the line below"
 msgstr "W przeglądzie terminala: wiersz niżej"
 
-#: __init__.py:2543
+#: __init__.py:2592
 msgid "In a terminal review: the character before"
 msgstr "W przeglądzie terminala: znak wcześniej"
 
-#: __init__.py:2548
+#: __init__.py:2597
 msgid "In a terminal review: the character after"
 msgstr "W przeglądzie terminala: znak dalej"
 
-#: __init__.py:2553
+#: __init__.py:2602
 msgid "In a terminal review: a screenful back"
 msgstr "W przeglądzie terminala: ekran wstecz"
 
-#: __init__.py:2558
+#: __init__.py:2607
 msgid "In a terminal review: a screenful on"
 msgstr "W przeglądzie terminala: ekran naprzód"
 
-#: __init__.py:2563
+#: __init__.py:2612
 msgid "In a terminal review: the start of the line"
 msgstr "W przeglądzie terminala: początek wiersza"
 
-#: __init__.py:2568
+#: __init__.py:2617
 msgid "In a terminal review: the end of the line"
 msgstr "W przeglądzie terminala: koniec wiersza"
 
-#: __init__.py:2573
+#: __init__.py:2622
 msgid "Leave the terminal review"
 msgstr "Wyjdź z przeglądu terminala"
 
-#: __init__.py:2582
+#: __init__.py:2631
 msgid "In a window being read as a picture: the next control"
 msgstr "W oknie czytanym jako obraz: następna kontrolka"
 
-#: __init__.py:2587
+#: __init__.py:2636
 msgid "In a window being read as a picture: the previous control"
 msgstr "W oknie czytanym jako obraz: poprzednia kontrolka"
 
-#: __init__.py:2592
+#: __init__.py:2641
 msgid "In a window being read as a picture: press the control you are on"
 msgstr "W oknie czytanym jako obraz: naciśnij kontrolkę, na której jesteś"
 
-#: __init__.py:2600
+#: __init__.py:2649
 msgid "Stop reading this window as a picture and give the keyboard back"
 msgstr "Przestań czytać to okno jako obraz i oddaj klawiaturę"
 
 #. Translators: an NVDA command.
-#: __init__.py:2610
+#: __init__.py:2659
 msgid "Says where the keyboard is: the window, the dialog and the part of it you are in"
 msgstr "Mówi, gdzie jest klawiatura: okno, okno dialogowe i jego część, w której jesteś"
 
 #. Translators: an NVDA command.
-#: __init__.py:2618
+#: __init__.py:2667
 msgid "Opens the voices: what each kind of thing sounds like, and in what order a control is read"
 msgstr "Otwiera głosy: jak brzmi każdy rodzaj rzeczy i w jakiej kolejności czytana jest kontrolka"
 
 #. Translators: an NVDA command.
-#: __init__.py:2626
+#: __init__.py:2675
 msgid "Gives the control you are on a name, and remembers it"
 msgstr "Nadaje nazwę kontrolce, na której jesteś, i zapamiętuje ją"
 
 #. Translators: an NVDA command.
-#: __init__.py:2634
+#: __init__.py:2683
 msgid "Switches to the next speech scheme: how each kind of control is announced, in speech and in braille"
 msgstr "Przełącza na następny schemat mowy: jak każdy rodzaj kontrolki jest oznajmiany, mową i w brajlu"
 
 #. Translators: an NVDA command.
-#: __init__.py:2642
+#: __init__.py:2691
 msgid "Opens the speech schemes: what is said for each kind of control, in what order, in which voice, with what sound, and how it is shown in braille"
 msgstr "Otwiera schematy mowy: co jest mówione dla każdego rodzaju kontrolki, w jakiej kolejności, jakim głosem, z jakim dźwiękiem i jak jest pokazywane w brajlu"
 
 #. Translators: an NVDA command. It is bound to the layers' own
 #. letters while a layer is open and to nothing the rest of the
 #. time.
-#: __init__.py:2713
+#: __init__.py:2762
 msgid "In an open command layer: the key that chooses"
 msgstr "W otwartej warstwie poleceń: klawisz, który wybiera"
 
 #. Translators: an NVDA command.
-#: __init__.py:2756
+#: __init__.py:2805
 msgid "Everything you may decide about the control you are on: what it is called, what it is said to be, what is added after it, its voice, or never announcing it"
 msgstr "Wszystko, co możesz ustalić o kontrolce, na której jesteś: jak się nazywa, czym jest nazywana, co jest po niej dodawane, jej głos, albo żeby nie była oznajmiana wcale"
 
 #. Translators: an NVDA command.
-#: __init__.py:2766
+#: __init__.py:2815
 msgid "Opens the command palette: one key opens a layer, the next key chooses in it, and ? says what is in it"
 msgstr "Otwiera paletę poleceń: jeden klawisz otwiera warstwę, następny wybiera w niej, a ? mówi, co w niej jest"
 
 #. Translators: an NVDA command.
-#: __init__.py:2785
+#: __init__.py:2834
 msgid "Checks whether the reader module for this program really does anything to it, and names the rules that match nothing"
 msgstr "Sprawdza, czy moduł czytnika dla tego programu naprawdę cokolwiek w nim robi, i nazywa reguły, które do niczego nie pasują"
 
 #. Translators: an NVDA command.
-#: __init__.py:2794
+#: __init__.py:2843
 msgid "Says what this program is written in - the toolkit it runs on, and what that means for reading it"
 msgstr "Mówi, w czym napisany jest ten program - na jakim zestawie narzędzi działa i co to oznacza dla jego odczytu"
 
 #. Translators: an NVDA command.
-#: __init__.py:2802
+#: __init__.py:2851
 msgid "Says what the picture or the control you are on shows, by reading it"
 msgstr "Mówi, co przedstawia obraz lub kontrolka, na której jesteś, odczytując ją"
 
 #. Translators: an NVDA command.
-#: __init__.py:2810
+#: __init__.py:2859
 msgid "Reads a window that exposes nothing - a game's menu - as a picture, and follows what is highlighted"
 msgstr "Czyta jako obraz okno, które nic nie udostępnia - menu gry - i śledzi to, co jest podświetlone"
 
 #. Translators: an NVDA command.
-#: __init__.py:2818
+#: __init__.py:2867
 msgid "Writes a reader module for the program you are in"
 msgstr "Pisze moduł czytnika dla programu, w którym jesteś"
 
 #. Translators: an NVDA command.
-#: __init__.py:2825
+#: __init__.py:2874
 msgid "Lists the reader modules and what each one knows"
 msgstr "Wypisuje moduły czytnika i to, co każdy z nich wie"
 
 #. Translators: an NVDA command.
-#: __init__.py:2832
+#: __init__.py:2881
 msgid "Uses the laptop's touchpad as a touch screen, so NVDA's touch gestures work on it"
 msgstr "Używa gładzika laptopa jak ekranu dotykowego, aby działały na nim gesty dotykowe NVDA"
 
 #. Translators: an NVDA command.
-#: __init__.py:2840
+#: __init__.py:2889
 msgid "Turns positioned speech for Titan on and off"
 msgstr "Włącza i wyłącza mowę pozycjonowaną dla Titana"
 
 #. Translators: an NVDA command.
-#: __init__.py:2847
+#: __init__.py:2896
 msgid "Turns Titan's own announcements on and off"
 msgstr "Włącza i wyłącza własne komunikaty Titana"
 
 #. Translators: an NVDA command. {n} is the marker's number.
-#: __init__.py:2874
+#: __init__.py:2923
 msgid "Go to place marker {n} in this program"
 msgstr "Przejdź do znacznika miejsca {n} w tym programie"
 
@@ -781,180 +785,180 @@ msgid "this control"
 msgstr "ta kontrolka"
 
 #. Translators: said when the review hands the keyboard to a field.
-#: appReview.py:679
+#: appReview.py:734
 msgid "Edit field on"
 msgstr "Pole edycji włączone"
 
 #. Translators: said when the review of an application is turned off.
-#: appReview.py:239
+#: appReview.py:242
 msgid "Application review off"
 msgstr "Przeglądanie aplikacji wyłączone"
 
 #. Translators: said while the screen is read again.
-#: appReview.py:265
+#: appReview.py:268
 msgid "Reading it again"
 msgstr "Odczytuję ponownie"
 
-#: appReview.py:570
+#: appReview.py:580
 msgid "Opened"
 msgstr "Otwarte"
 
 #. Translators: said when the review takes the keyboard back.
-#: appReview.py:700
+#: appReview.py:755
 msgid "Edit field off"
 msgstr "Pole edycji wyłączone"
 
 #. Translators: said when something has been typed into a field.
-#: appReview.py:817
+#: appReview.py:872
 msgid "Written"
 msgstr "Wpisane"
 
 #. Translators: said when there is nothing at the cursor.
-#: appReview.py:1016
+#: appReview.py:1071
 msgid "Nothing here"
 msgstr "Nic tutaj"
 
 #. Translators: said when a reviewed application is closed.
-#: appReview.py:237
+#: appReview.py:240
 msgid "Application closed"
 msgstr "Aplikacja zamknięta"
 
 #. Translators: said when there is no application being reviewed.
-#: appReview.py:245
+#: appReview.py:248
 msgid "No application is being reviewed"
 msgstr "Żadna aplikacja nie jest przeglądana"
 
-#: appReview.py:290
+#: appReview.py:293
 msgid "Sub-window"
 msgstr "Podokno"
 
 #. Translators: said when a menu item is chosen.
-#: appReview.py:544
+#: appReview.py:554
 msgid "Chosen"
 msgstr "Wybrano"
 
 #. Translators: said when a control is pressed.
-#: appReview.py:549
+#: appReview.py:559
 msgid "Pressed"
 msgstr "Naciśnięte"
 
 #. Translators: said when a menu has nothing on it.
-#: appReview.py:585
+#: appReview.py:595
 msgid "That menu is empty"
 msgstr "To menu jest puste"
 
-#: appReview.py:635
+#: appReview.py:690
 msgid "Checked"
 msgstr "Zaznaczone"
 
-#: appReview.py:635
+#: appReview.py:690
 msgid "Unchecked"
 msgstr "Odznaczone"
 
 #. Translators: said when the cursor is not on something to type in.
-#: appReview.py:662
+#: appReview.py:717
 msgid "This is not a field"
 msgstr "To nie jest pole edycji"
 
 #. Translators: said when a field cannot be typed into.
-#: appReview.py:665
+#: appReview.py:720
 msgid "This cannot be typed into"
 msgstr "W tym nie można pisać"
 
 #. Translators: said when Titan would not open an application.
-#: appReview.py:195
+#: appReview.py:198
 msgid "Titan did not open that application."
 msgstr "Titan nie otworzył tej aplikacji."
 
-#: appReview.py:208
+#: appReview.py:211
 msgid "read off the window, so it says less"
 msgstr "odczytane z okna, więc mówi mniej"
 
 #. Translators: said while a Titan application is being opened.
-#: appReview.py:220
+#: appReview.py:223
 msgid "Opening {what}"
 msgstr "Otwieram {what}"
 
 #. Translators: a kind of control in a Titan application.
-#: appReview.py:949
+#: appReview.py:1004
 msgid "button"
 msgstr "przycisk"
 
 #. Translators: a kind of control.
-#: appReview.py:951
+#: appReview.py:1006
 msgid "check box"
 msgstr "pole wyboru"
 
 #. Translators: a kind of control.
-#: appReview.py:953
+#: appReview.py:1008
 msgid "combo box"
 msgstr "pole kombi"
 
 #. Translators: a kind of control.
-#: appReview.py:955
+#: appReview.py:1010
 msgid "list"
 msgstr "lista"
 
 #. Translators: a kind of control.
-#: appReview.py:957
+#: appReview.py:1012
 msgid "table"
 msgstr "tabela"
 
 #. Translators: a kind of control.
-#: appReview.py:959
+#: appReview.py:1014
 msgid "tree"
 msgstr "drzewo"
 
 #. Translators: a kind of control.
-#: appReview.py:961
+#: appReview.py:1016
 msgid "edit"
 msgstr "pole edycji"
 
 #. Translators: a kind of control.
-#: appReview.py:963
+#: appReview.py:1018
 msgid "edit, multi line"
 msgstr "pole edycji, wielowierszowe"
 
 #. Translators: a kind of control.
-#: appReview.py:965
+#: appReview.py:1020
 msgid "slider"
 msgstr "suwak"
 
 #. Translators: a kind of control.
-#: appReview.py:967
+#: appReview.py:1022
 msgid "progress bar"
 msgstr "pasek postępu"
 
 #. Translators: a kind of control.
-#: appReview.py:969
+#: appReview.py:1024
 msgid "tab control"
 msgstr "karty"
 
 #. Translators: said on arriving in an application's sub-window.
 #. {title} is what the sub-window is called.
-#: appReview.py:289
+#: appReview.py:292
 msgid "{title}, sub-window"
 msgstr "{title}, podokno"
 
 #. Translators: added after the kind of a field of several lines.
-#: appReview.py:940
+#: appReview.py:995
 msgid "multi line"
 msgstr "wielowierszowe"
 
 #. Translators: how many things are on a menu.
-#: appReview.py:166
+#: appReview.py:169
 msgid "{count} items"
 msgstr "{count} pozycji"
 
-#: appReview.py:465
+#: appReview.py:468
 msgid "{at} of {count}"
 msgstr "{at} z {count}"
 
-#: appReview.py:904
+#: appReview.py:959
 msgid "checked"
 msgstr "zaznaczone"
 
-#: appReview.py:904
+#: appReview.py:959
 msgid "unchecked"
 msgstr "niezaznaczone"
 
@@ -1006,355 +1010,355 @@ msgid "Pages"
 msgstr "Strony"
 
 #. Translators: the first entry of every voice list in the class manager.
-#: classManager.py:202
+#: classManager.py:216
 msgid "(the one the reader is using)"
 msgstr "(ten, którego używa czytnik)"
 
 #. Translators: shown for a class that is part of a control's
 #. reading.
-#: classManager.py:980
+#: classManager.py:990
 msgid "This is part of a control's reading, so it shares the reader's synthesizer. A voice or a variant of that synthesizer can still be chosen."
 msgstr "To jest część odczytu kontrolki, więc korzysta z syntezatora czytnika. Nadal można wybrać głos lub wariant tego syntezatora."
 
-#: classManager.py:1041
+#: classManager.py:1051
 msgid "Kept."
 msgstr "Zapisano."
 
 #. Translators: a page of the class manager.
-#: classManager.py:237
+#: classManager.py:251
 msgid "Voices"
 msgstr "Głosy"
 
-#: classManager.py:242
+#: classManager.py:256
 msgid "What is being said"
 msgstr "Co jest mówione"
 
 #. Translators: the label of the text that explains a voice
 #. class.
-#: classManager.py:256
+#: classManager.py:270
 msgid "What this is"
 msgstr "Co to jest"
 
 #. Translators: a control in the voice class manager.
-#: classManager.py:280
+#: classManager.py:293
 msgid "&Synthesizer"
 msgstr "&Syntezator"
 
 #. Translators: a control in the voice class manager.
-#: classManager.py:284
+#: classManager.py:297
 msgid "&Voice"
 msgstr "&Głos"
 
 #. Translators: a control in the voice class manager.
-#: classManager.py:288
+#: classManager.py:301
 msgid "V&ariant"
 msgstr "W&ariant"
 
 #. Translators: a dial in the voice class manager.
-#: classManager.py:306
+#: classManager.py:318
 msgid "&Pitch"
 msgstr "&Wysokość"
 
 #. Translators: a dial in the voice class manager.
-#: classManager.py:308
+#: classManager.py:320
 msgid "&Rate"
 msgstr "&Prędkość"
 
 #. Translators: a dial in the voice class manager.
-#: classManager.py:310
+#: classManager.py:322
 msgid "V&olume"
 msgstr "Gł&ośność"
 
 #. Translators: a dial in the voice class manager.
-#: classManager.py:312
+#: classManager.py:324
 msgid "&Inflection"
 msgstr "&Intonacja"
 
 #. Translators: a control in the voice class manager.
-#: classManager.py:322
+#: classManager.py:334
 msgid "&Named voice"
 msgstr "&Nazwany głos"
 
 #. Translators: a page of the class manager.
-#: classManager.py:351
+#: classManager.py:363
 msgid "Reading order"
 msgstr "Kolejność odczytu"
 
 #. Translators: the label of the reading order list.
-#: classManager.py:371
+#: classManager.py:383
 msgid "&Parts of a control"
 msgstr "Częś&ci kontrolki"
 
 #. Translators: said when the reading order is saved.
-#: classManager.py:419
+#: classManager.py:431
 msgid "The reading order is kept."
 msgstr "Kolejność odczytu zapisana."
 
 #. Translators: said when the reading order is put back.
-#: classManager.py:425
+#: classManager.py:437
 msgid "The reading order is back to the default."
 msgstr "Kolejność odczytu przywrócona do domyślnej."
 
 #. Translators: a page of the class manager.
-#: classManager.py:436
+#: classManager.py:448
 msgid "Speech schemes"
 msgstr "Schematy mowy"
 
 #. Translators: the list of speech schemes.
-#: classManager.py:446
+#: classManager.py:458
 msgid "&Scheme"
 msgstr "&Schemat"
 
 #. Translators: the pause control on the speech schemes page.
-#: classManager.py:453
+#: classManager.py:465
 msgid "Pa&use between parts (milliseconds)"
 msgstr "Pa&uza między częściami (milisekundy)"
 
-#: classManager.py:474
+#: classManager.py:486
 msgid "&Kind of control"
 msgstr "&Rodzaj kontrolki"
 
 #. Translators: the list of parts of a control's reading.
-#: classManager.py:488
+#: classManager.py:499
 msgid "&Parts, in order"
 msgstr "&Części, w kolejności"
 
 #. Translators: which part a voice is chosen for.
-#: classManager.py:500
+#: classManager.py:511
 msgid "&Voice of the"
 msgstr "&Głos części"
 
 #. Translators: the voice class of a part.
-#: classManager.py:509
+#: classManager.py:520
 msgid "is the &class"
 msgstr "to &klasa"
 
 #. Translators: what to call a kind of control.
-#: classManager.py:514
+#: classManager.py:525
 msgid "The &type is called (empty for the reader's own word)"
 msgstr "&Typ jest nazywany (puste: własne słowo czytnika)"
 
 #. Translators: the sound for a kind of control.
-#: classManager.py:520
+#: classManager.py:531
 msgid "S&ound"
 msgstr "D&źwięk"
 
 #. Translators: how a control type is shown in braille.
-#: classManager.py:537
+#: classManager.py:547
 msgid "The type is shown as (empty: not shown; \"own\" for the reader's own)"
 msgstr "Typ jest pokazywany jako (puste: niepokazywany; \"own\": własny skrót czytnika)"
 
 #. Translators: the parts shown in braille.
-#: classManager.py:541
+#: classManager.py:551
 msgid "Parts s&hown"
 msgstr "Części po&kazywane"
 
 #. Translators: asks for the name of a new speech scheme.
-#: classManager.py:662
+#: classManager.py:672
 msgid "The name of the new scheme"
 msgstr "Nazwa nowego schematu"
 
-#: classManager.py:677
+#: classManager.py:687
 msgid "The new name of the scheme"
 msgstr "Nowa nazwa schematu"
 
 #. Translators: said when a scheme is deleted or put back.
-#: classManager.py:689
+#: classManager.py:699
 msgid "Done"
 msgstr "Gotowe"
 
 #. Translators: said when a kind's rule is put back.
-#: classManager.py:793
+#: classManager.py:803
 msgid "Put back."
 msgstr "Przywrócono."
 
 #. Translators: shown for the class that reads text.
-#: classManager.py:963
+#: classManager.py:973
 msgid "Reading text is NVDA's own: choosing a synthesizer here puts it in NVDA's say all configuration profile, so NVDA switches to it while it reads and back again afterwards."
 msgstr "Czytanie tekstu należy do NVDA: wybór syntezatora w tym miejscu wpisuje go do profilu konfiguracji NVDA dla czytania ciągłego, więc NVDA przełącza się na niego na czas czytania i wraca po nim."
 
 #. Translators: shown for a class that is a whole message.
-#: classManager.py:969
+#: classManager.py:979
 msgid "This is a whole message, so it may have a synthesizer of its own."
 msgstr "To jest cały komunikat, więc może mieć własny syntezator."
 
 #. Translators: shown for a part of a control's reading in a
 #. reader that speaks the parts one after the other.
-#: classManager.py:974
+#: classManager.py:984
 msgid "This is part of a control's reading. This reader speaks the parts one after the other, so it may have a synthesizer of its own - the name in one voice, the type in another."
 msgstr "To część odczytu kontrolki. Ten czytnik wypowiada części jedna po drugiej, więc może mieć własny syntezator - nazwa jednym głosem, typ innym."
 
 #. Translators: the title of the voice class manager.
-#: classManager.py:218
+#: classManager.py:232
 msgid "Voices and reading order"
 msgstr "Głosy i kolejność odczytu"
 
+#. Translators: a group in the voice class manager.
 #: classManager.py:277
+msgid "Which voice"
+msgstr "Który głos"
+
+#: classManager.py:290
 msgid "Speech s&ystem"
 msgstr "S&ystem mowy"
 
+#. Translators: a group in the voice class manager.
+#: classManager.py:310
+msgid "How it sounds"
+msgstr "Jak brzmi"
+
 #. Translators: a button in the voice class manager.
-#: classManager.py:329
+#: classManager.py:341
 msgid "&Try it"
 msgstr "&Wypróbuj"
 
 #. Translators: a button in the voice class manager.
-#: classManager.py:332
+#: classManager.py:344
 msgid "&Keep"
 msgstr "&Zapisz"
 
 #. Translators: a button in the voice class manager.
-#: classManager.py:335
+#: classManager.py:347
 msgid "Put this one &back"
 msgstr "Przywróć &tę"
 
 #. Translators: a button in the voice class manager.
-#: classManager.py:338
+#: classManager.py:350
 msgid "Put them a&ll back"
 msgstr "Przywróć wszystki&e"
 
 #. Translators: a button on the reading order page.
-#: classManager.py:376
+#: classManager.py:388
 msgid "Move &up"
 msgstr "Przenieś w &górę"
 
 #. Translators: a button on the reading order page.
-#: classManager.py:379
+#: classManager.py:391
 msgid "Move &down"
 msgstr "Przenieś w &dół"
 
 #. Translators: a button on the reading order page.
-#: classManager.py:382
+#: classManager.py:394
 msgid "&Keep this order"
 msgstr "&Zapisz tę kolejność"
 
 #. Translators: a button on the reading order page.
-#: classManager.py:385
+#: classManager.py:397
 msgid "Put the order &back"
 msgstr "Przywróć &kolejność"
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:458
+#: classManager.py:470
 msgid "&Use this scheme"
 msgstr "&Użyj tego schematu"
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:461
+#: classManager.py:473
 msgid "&New, a copy of this one..."
 msgstr "&Nowy, kopia tego..."
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:464
+#: classManager.py:476
 msgid "Re&name..."
 msgstr "Zmień &nazwę..."
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:467
+#: classManager.py:479
 msgid "&Delete, or put back as shipped"
 msgstr "&Usuń albo przywróć fabryczny"
 
+#. Translators: a group on the speech schemes page.
+#: classManager.py:495
+msgid "What is said"
+msgstr "Co jest mówione"
+
 #. Translators: a button on the speech schemes page.
-#: classManager.py:492
+#: classManager.py:503
 msgid "Move u&p"
 msgstr "Przenieś w &górę"
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:495
+#: classManager.py:506
 msgid "Move do&wn"
 msgstr "Przenieś w &dół"
 
+#. Translators: a group on the speech schemes page.
+#: classManager.py:544
+msgid "In braille"
+msgstr "W brajlu"
+
 #. Translators: a button on the speech schemes page.
-#: classManager.py:547
+#: classManager.py:557
 msgid "&Keep the words"
 msgstr "&Zachowaj słowa"
 
 #. Translators: a button on the speech schemes page.
-#: classManager.py:550
+#: classManager.py:560
 msgid "Put this kind &back"
 msgstr "Przywróć ten &rodzaj"
 
 #. Translators: said when a shipped scheme is to be renamed.
-#: classManager.py:670
+#: classManager.py:680
 msgid "A shipped scheme keeps its name; make a copy."
 msgstr "Schemat fabryczny zachowuje swoją nazwę; zrób kopię."
 
 #. Translators: said when there is nothing to delete.
-#: classManager.py:685
+#: classManager.py:695
 msgid "Nothing to delete: this one is as shipped."
 msgstr "Nie ma czego usuwać: ten jest fabryczny."
 
-#: classManager.py:747
+#: classManager.py:757
 msgid "Choose a sound file"
 msgstr "Wybierz plik dźwiękowy"
 
 #. Translators: text at the top of the reading order page.
-#: classManager.py:354
+#: classManager.py:366
 msgid "The parts of a control, in the order they are read. Move them with the buttons, and untick anything that should not be said at all. \"Checked, check box\" and \"check box, checked\" are the same three facts in two orders - this is where you say which."
 msgstr "Części kontrolki w kolejności, w jakiej są odczytywane. Przenoś je przyciskami i odznacz to, co w ogóle nie ma być mówione. \"Zaznaczone, pole wyboru\" i \"pole wyboru, zaznaczone\" to te same fakty w dwóch kolejnościach - tutaj wybierasz, która obowiązuje."
 
 #. Translators: text at the top of the speech schemes page.
-#: classManager.py:439
+#: classManager.py:451
 msgid "A scheme says, for each kind of control, what is said and in what order, in which voice, what the type is called, whether a sound stands for it, and what is shown in braille. Several can be kept and switched with a key."
 msgstr "Schemat mówi, dla każdego rodzaju kontrolki, co jest mówione i w jakiej kolejności, jakim głosem, jak nazywany jest typ, czy zastępuje go dźwięk i co jest pokazywane w brajlu. Można mieć kilka i przełączać je klawiszem."
 
 #. Translators: a check box on the speech schemes page.
-#: classManager.py:527
+#: classManager.py:538
 msgid "The sound stands for the type &word"
 msgstr "Dźwięk zastępuje &słowo typu"
 
 #. Translators: said when a scheme is put in force.
-#: classManager.py:645
+#: classManager.py:655
 msgid "Scheme: {name}"
 msgstr "Schemat: {name}"
 
 #. Translators: said when a scheme could not be made.
-#: classManager.py:656
+#: classManager.py:666
 msgid "That name cannot be used, or is in use already."
 msgstr "Tej nazwy nie można użyć albo jest już zajęta."
 
 #. Translators: shown when a synthesizer will not start.
-#: classManager.py:958
+#: classManager.py:968
 msgid "That synthesizer would not start: {why}"
 msgstr "Ten syntezator nie uruchomił się: {why}"
 
-#: classManager.py:324
+#: classManager.py:336
 msgid "(edited)"
 msgstr "(zmieniony ręcznie)"
 
 #. Translators: the choice of a sound file of the user's own.
-#: classManager.py:523
+#: classManager.py:534
 msgid "A file of your own..."
 msgstr "Własny plik..."
 
 #. Translators: marks the scheme in force.
-#: classManager.py:565
+#: classManager.py:575
 msgid "in use"
 msgstr "w użyciu"
 
 #. Translators: marks a voice class the user has changed.
-#: classManager.py:817
+#: classManager.py:827
 msgid "{what} (changed)"
 msgstr "{what} (zmienione)"
-
-#. Translators: a group in the voice class manager.
-#: classManager.py:263
-msgid "Which voice"
-msgstr "Który głos"
-
-#. Translators: a group in the voice class manager.
-#: classManager.py:297
-msgid "How it sounds"
-msgstr "Jak brzmi"
-
-#. Translators: a group on the speech schemes page.
-#: classManager.py:483
-msgid "What is said"
-msgstr "Co jest mówione"
-
-#. Translators: a group on the speech schemes page.
-#: classManager.py:533
-msgid "In braille"
-msgstr "W brajlu"
 
 #. Translators: a semantic voice class, shown in the class manager.
 #: classes.py:103
@@ -1651,7 +1655,7 @@ msgstr "Gdzie jest - \"3 z 10\", \"poziom 2\""
 msgid "This is {what}"
 msgstr "To jest {what}"
 
-#: commands.py:1051
+#: commands.py:1106
 msgid "What should this control be called?"
 msgstr "Jak ma się nazywać ta kontrolka?"
 
@@ -1671,227 +1675,227 @@ msgstr "Odczytuję, co Titan potrafi."
 msgid "Do what?"
 msgstr "Co zrobić?"
 
-#: commands.py:460
+#: commands.py:508
 msgid "Reading the window."
 msgstr "Odczytuję okno."
 
-#: commands.py:480
+#: commands.py:528
 msgid "What would you like to know about this window?"
 msgstr "Czego chcesz się dowiedzieć o tym oknie?"
 
-#: commands.py:481
+#: commands.py:529
 msgid "AI OCR"
 msgstr "AI OCR"
 
-#: commands.py:513
+#: commands.py:561
 msgid "Which control, as AI OCR read its name?"
 msgstr "Nazwa kontrolki odczytana przez AI OCR?"
 
-#: commands.py:532
+#: commands.py:580
 msgid "Which key? For example escape, enter, down."
 msgstr "Który klawisz? Na przykład escape, enter, strzałka w dół."
 
-#: commands.py:539
+#: commands.py:587
 msgid "Opening the Titan overlay."
 msgstr "Otwieram nakładkę Titana."
 
-#: commands.py:605
+#: commands.py:653
 msgid "Titan assistant"
 msgstr "Asystent Titana"
 
-#: commands.py:670
+#: commands.py:718
 msgid "Forget the conversation with Titan's assistant?"
 msgstr "Zapomnieć rozmowę z asystentem Titana?"
 
-#: commands.py:771
+#: commands.py:826
 msgid "Reading the buffers."
 msgstr "Odczytuję bufory."
 
-#: commands.py:828
+#: commands.py:883
 msgid "Asking Titan what it is showing."
 msgstr "Pytam Titana, co pokazuje."
 
-#: commands.py:1053
+#: commands.py:1108
 msgid "What should this control be called? (This program does not name its controls, so the name is kept by where this one sits - it may move if the program changes.)"
 msgstr "Jak ma się nazywać ta kontrolka? (Ten program nie nazywa swoich kontrolek, więc nazwa jest zapamiętana po położeniu - może się przesunąć, jeśli program się zmieni.)"
 
-#: commands.py:1056
+#: commands.py:1111
 msgid "Name this control"
 msgstr "Nazwij tę kontrolkę"
 
-#: commands.py:1138
+#: commands.py:1193
 msgid "Reading this control."
 msgstr "Odczytuję tę kontrolkę."
 
-#: commands.py:1275
+#: commands.py:1346
 msgid "Reader modules"
 msgstr "Moduły czytnika"
 
 #. Translators: the title of the window for customising one control.
-#: commands.py:1350
+#: commands.py:1421
 msgid "This control"
 msgstr "Ta kontrolka"
 
 #. Translators: the title of the command palette.
-#: commands.py:1423
+#: commands.py:1494
 msgid "Commands"
 msgstr "Polecenia"
 
-#: commands.py:1475
+#: commands.py:1546
 msgid "Keyboard shortcuts"
 msgstr "Skróty klawiszowe"
 
 #. Translators: the title of the list of everything Titan offers.
-#: commands.py:1637
+#: commands.py:1714
 msgid "Everything Titan offers"
 msgstr "Wszystko, co oferuje Titan"
 
 #. Translators: asked before downloading the local recogniser.
-#: commands.py:1705
+#: commands.py:1795
 msgid "The local recogniser is not installed. It is a download of a few hundred megabytes, and after it nothing leaves this machine and no reading costs anything. Fetch it now?"
 msgstr "Lokalny model rozpoznawania nie jest zainstalowany. To pobranie kilkuset megabajtów, a potem nic nie opuszcza tego komputera i żaden odczyt nic nie kosztuje. Pobrać teraz?"
 
-#: commands.py:1708
+#: commands.py:1798
 msgid "Local recogniser"
 msgstr "Lokalny model rozpoznawania"
 
-#: commands.py:1743
+#: commands.py:1833
 msgid "Does this module work?"
 msgstr "Czy ten moduł działa?"
 
-#: commands.py:1753
+#: commands.py:1843
 msgid "Looking at this program."
 msgstr "Przyglądam się temu programowi."
 
-#: commands.py:1797
+#: commands.py:1887
 msgid "Working out names for unnamed controls"
 msgstr "Ustalanie nazw dla nienazwanych kontrolek"
 
-#: commands.py:1798
+#: commands.py:1888
 msgid "Reading this window as a picture"
 msgstr "Czytanie tego okna jako obrazu"
 
-#: commands.py:1799
+#: commands.py:1889
 msgid "Saying what pictures are"
 msgstr "Mówienie, czym są obrazy"
 
 #. Translators: a kind of watched area.
-#: commands.py:1920
+#: commands.py:2010
 msgid "a control"
 msgstr "kontrolka"
 
 #. Translators: a kind of watched area.
-#: commands.py:1922
+#: commands.py:2012
 msgid "a place in the window"
 msgstr "miejsce w oknie"
 
 #. Translators: a kind of watched area.
-#: commands.py:1924
+#: commands.py:2014
 msgid "an area of the screen"
 msgstr "obszar ekranu"
 
 #. Translators: the title of the list of watched areas.
-#: commands.py:1943
+#: commands.py:2033
 msgid "Watched areas"
 msgstr "Obserwowane obszary"
 
 #. Translators: said when a watched area is forgotten.
-#: commands.py:1950
+#: commands.py:2040
 msgid "No longer watching"
 msgstr "Obserwacja wyłączona"
 
 #. Translators: the title of the list of Titan's applications. TCE is
 #. what Titan's own applications have always been called.
-#: commands.py:2023
+#: commands.py:2113
 msgid "TCE applications"
 msgstr "Aplikacje TCE"
 
-#: commands.py:2095
+#: commands.py:2185
 msgid "Widgets"
 msgstr "Widżety"
 
 #. Translators: the title of the page listing the quick navigation keys.
-#: commands.py:2112
+#: commands.py:2202
 msgid "Quick navigation in the virtual window"
 msgstr "Szybka nawigacja w wirtualnym oknie"
 
 #. Translators: the title of the page showing an application's log.
-#: commands.py:2140
+#: commands.py:2230
 msgid "What the application said"
 msgstr "Co powiedziała aplikacja"
 
 #. Translators: the title of the list of windows.
-#: commands.py:2182
+#: commands.py:2272
 msgid "Windows"
 msgstr "Okna"
 
 #. Translators: an entry in the list of what can be done with a control.
-#: commands.py:2220
+#: commands.py:2310
 msgid "Move the keyboard here"
 msgstr "Przenieś tu klawiaturę"
 
 #. Translators: an entry in the list of what can be done with a control.
-#: commands.py:2222
+#: commands.py:2312
 msgid "Move the review cursor here"
 msgstr "Przenieś tu kursor przeglądu"
 
 #. Translators: the title of the list of place markers.
-#: commands.py:2268
+#: commands.py:2358
 msgid "Place markers"
 msgstr "Znaczniki miejsca"
 
 #. Translators: the title of the list of place markers to forget.
-#: commands.py:2296
+#: commands.py:2386
 msgid "Forget a marker"
 msgstr "Zapomnij znacznik"
 
 #. Translators: the title of the sound scheme manager.
-#: commands.py:2315
+#: commands.py:2405
 msgid "Sound scheme"
 msgstr "Schemat dźwiękowy"
 
 #. Translators: an entry in the sound scheme manager - hear the sound.
-#: commands.py:2324
+#: commands.py:2414
 msgid "Hear the sound"
 msgstr "Posłuchaj dźwięku"
 
 #. Translators: the title of the list of what the reader has said.
-#: commands.py:2385
+#: commands.py:2475
 msgid "What was said"
 msgstr "Co zostało powiedziane"
 
 #. Translators: asked when searching what the reader has said.
-#: commands.py:2410
+#: commands.py:2500
 msgid "What was said?"
 msgstr "Co zostało powiedziane?"
 
 #. Translators: asked when searching what the reader has said.
-#: commands.py:2410
+#: commands.py:2500
 msgid "Search what was said"
 msgstr "Szukaj w tym, co powiedziano"
 
 #. Translators: asked when a recorded procedure is being kept.
-#: commands.py:2440
+#: commands.py:2530
 msgid "What should it be called?"
 msgstr "Jak ma się nazywać?"
 
 #. Translators: the title of that box.
-#: commands.py:2442
+#: commands.py:2532
 msgid "Keep the procedure"
 msgstr "Zapisz procedurę"
 
 #. Translators: the title of the list of procedures.
-#: commands.py:2476
+#: commands.py:2566
 msgid "Procedures"
 msgstr "Procedury"
 
 #. Translators: asked when searching for a control.
-#: commands.py:2531
+#: commands.py:2621
 msgid "What are you looking for?"
 msgstr "Czego szukasz?"
 
 #. Translators: the title of that box.
-#: commands.py:2533
+#: commands.py:2623
 msgid "Find a control"
 msgstr "Znajdź kontrolkę"
 
@@ -1927,235 +1931,234 @@ msgstr "Które makro uruchomić?"
 msgid "Which part of Titan?"
 msgstr "Która część Titana?"
 
-#: commands.py:451
+#: commands.py:498
 msgid "Nothing was read."
 msgstr "Nic nie odczytano."
 
-#: commands.py:473
+#: commands.py:521
 msgid "Asking."
 msgstr "Pytam."
 
-#: commands.py:507
+#: commands.py:555
 msgid "Pressing."
 msgstr "Naciskam."
 
-#: commands.py:562
+#: commands.py:610
 msgid "Titan is not running."
 msgstr "Titan nie jest uruchomiony."
 
-#: commands.py:603
+#: commands.py:651
 msgid "What would you like Titan to do?"
 msgstr "Co ma zrobić Titan?"
 
-#: commands.py:604
+#: commands.py:652
 msgid "What would you like to ask Titan?"
 msgstr "O co chcesz zapytać Titana?"
 
-#: commands.py:695
+#: commands.py:750
 msgid "Already reading."
 msgstr "Już czytam."
 
-#: commands.py:760
+#: commands.py:815
 msgid "Titan notifications"
 msgstr "Powiadomienia Titana"
 
-#: commands.py:798
+#: commands.py:853
 msgid "Titan buffers"
 msgstr "Bufory Titana"
 
-#: commands.py:798
+#: commands.py:853
 msgid "Which buffer?"
 msgstr "Który bufor?"
 
-#: commands.py:817
+#: commands.py:872
 msgid "There is nothing in that buffer."
 msgstr "W tym buforze nic nie ma."
 
-#: commands.py:917
+#: commands.py:972
 msgid "Titan's own announcements on"
 msgstr "Własne komunikaty Titana włączone"
 
-#: commands.py:919
+#: commands.py:974
 msgid "Titan's own announcements off"
 msgstr "Własne komunikaty Titana wyłączone"
 
-#: commands.py:929
+#: commands.py:984
 msgid "Positioned speech on"
 msgstr "Mowa pozycjonowana włączona"
 
-#: commands.py:930
+#: commands.py:985
 msgid "Positioned speech off"
 msgstr "Mowa pozycjonowana wyłączona"
 
-#: commands.py:961
+#: commands.py:1016
 msgid "The reader is not reporting a focus."
 msgstr "Czytnik nie zgłasza fokusu."
 
-#: commands.py:969
+#: commands.py:1024
 msgid "There is nothing above this control."
 msgstr "Nad tą kontrolką nic nie ma."
 
-#: commands.py:990
+#: commands.py:1045
 msgid "The voice classes need NVDA's own interface."
 msgstr "Klasy głosu wymagają interfejsu graficznego NVDA."
 
-#: commands.py:1008
+#: commands.py:1063
 msgid "The speech schemes need NVDA's own interface."
 msgstr "Schematy mowy wymagają własnego interfejsu NVDA."
 
-#: commands.py:1034
+#: commands.py:1089
 msgid "You cannot set a name on this control"
 msgstr "Na tej kontrolce nie można ustawić nazwy"
 
 #. Translators: said when the toolkit of a window cannot be told.
-#: commands.py:1087
+#: commands.py:1142
 msgid "This window will not say what it is written in - which usually means it is running as another user."
 msgstr "To okno nie powie, w czym jest napisane - zwykle znaczy to, że działa na innym koncie użytkownika."
 
-#: commands.py:1091
+#: commands.py:1146
 msgid "What this is written in"
 msgstr "W czym to jest napisane"
 
 #. Translators: said when there is no window to read.
-#: commands.py:1189
+#: commands.py:1244
 msgid "There is no window to read."
 msgstr "Nie ma okna do odczytania."
 
-#. Translators: the title of the window showing a local OCR reading.
-#: commands.py:1206
+#: commands.py:1277
 msgid "What Windows read here"
 msgstr "Co Windows tutaj odczytał"
 
-#: commands.py:1215
+#: commands.py:1286
 msgid "No longer watching."
 msgstr "Już nie obserwuję."
 
-#: commands.py:1266
+#: commands.py:1337
 msgid "Modules that were not loaded:"
 msgstr "Moduły, które się nie wczytały:"
 
-#: commands.py:1273
+#: commands.py:1344
 msgid "There are no reader modules."
 msgstr "Nie ma modułów czytnika."
 
 #. Translators: said about a control that cannot be recognised again.
-#: commands.py:1315
+#: commands.py:1386
 msgid "This control has nothing stable to remember it by, so nothing set on it would be found again."
 msgstr "Ta kontrolka nie ma nic trwałego, po czym można by ją rozpoznać, więc nic tu ustawionego nie zostałoby odnalezione."
 
-#: commands.py:1321
+#: commands.py:1392
 msgid "as the reader says it"
 msgstr "tak jak mówi czytnik"
 
 #. Translators: said when what the user decided about a control is
 #. kept.
-#: commands.py:1342
+#: commands.py:1413
 msgid "Kept"
 msgstr "Zapamiętane"
 
 #. Translators: said when Titan has not been asked what it offers.
-#: commands.py:1617
+#: commands.py:1694
 msgid "Titan has not said what it offers yet."
 msgstr "Titan jeszcze nie powiedział, co oferuje."
 
-#: commands.py:1683
+#: commands.py:1773
 msgid "Titan is not answering."
 msgstr "Titan nie odpowiada."
 
-#: commands.py:1697
+#: commands.py:1787
 msgid "Fetching the local recogniser. This takes a few minutes."
 msgstr "Pobieranie lokalnego modelu rozpoznawania. To potrwa kilka minut."
 
 #. Translators: said when no reader module claims this program.
-#: commands.py:1733
+#: commands.py:1823
 msgid "No reader module claims this program."
 msgstr "Żaden moduł czytnika nie odnosi się do tego programu."
 
-#: commands.py:1792
+#: commands.py:1882
 msgid "There is no program in front to set this for."
 msgstr "Nie ma programu na pierwszym planie, dla którego można to ustawić."
 
-#: commands.py:1811
+#: commands.py:1901
 msgid "There is no program in front."
 msgstr "Nie ma programu na pierwszym planie."
 
 #. Translators: said when nothing is being watched.
-#: commands.py:1915
+#: commands.py:2005
 msgid "Nothing is being watched. Use the command for watching this control, its area or this window to mark one."
 msgstr "Nic nie jest obserwowane. Użyj polecenia obserwowania tej kontrolki, jej obszaru albo tego okna, aby coś zaznaczyć."
 
 #. Translators: said when a window of this add-on cannot be opened.
-#: commands.py:1988
+#: commands.py:2078
 msgid "That window could not be opened"
 msgstr "Nie udało się otworzyć tego okna"
 
 #. Translators: said when Titan has no application to describe.
-#: commands.py:2009
+#: commands.py:2099
 msgid "Titan has no applications to show"
 msgstr "Titan nie ma aplikacji do pokazania"
 
 #. Translators: said when Titan has no widgets.
-#: commands.py:2082
+#: commands.py:2172
 msgid "Titan has no widgets"
 msgstr "Titan nie ma widżetów"
 
 #. Translators: said when an application has said nothing.
-#: commands.py:2137
+#: commands.py:2227
 msgid "The application has said nothing"
 msgstr "Aplikacja nic nie powiedziała"
 
 #. Translators: said when no windows could be listed.
-#: commands.py:2164
+#: commands.py:2254
 msgid "No windows could be listed."
 msgstr "Nie udało się wypisać żadnych okien."
 
 #. Translators: the title of the list of controls in a window.
-#: commands.py:2205
+#: commands.py:2295
 msgid "Controls"
 msgstr "Kontrolki"
 
 #. Translators: said when a program has no place markers.
-#: commands.py:2256
+#: commands.py:2346
 msgid "Nothing is marked in this program. Use the command for marking this control to mark one."
 msgstr "W tym programie nic nie jest zaznaczone. Użyj polecenia zaznaczania tej kontrolki, aby coś zaznaczyć."
 
 #. Translators: said when a program has no place markers.
-#: commands.py:2284
+#: commands.py:2374
 msgid "Nothing is marked in this program."
 msgstr "W tym programie nic nie jest zaznaczone."
 
 #. Translators: said when a place marker is forgotten.
-#: commands.py:2294
+#: commands.py:2384
 msgid "Marker forgotten"
 msgstr "Znacznik zapomniany"
 
 #. Translators: said when the manager window cannot be opened.
-#: commands.py:2363
+#: commands.py:2453
 msgid "The manager needs NVDA's own interface."
 msgstr "Menedżer wymaga interfejsu graficznego NVDA."
 
 #. Translators: said when the journal is empty.
-#: commands.py:2375
+#: commands.py:2465
 msgid "Nothing has been said yet."
 msgstr "Jeszcze nic nie powiedziano."
 
 #. Translators: said when nothing is being recorded.
-#: commands.py:2450
+#: commands.py:2540
 msgid "Nothing is being recorded"
 msgstr "Nic nie jest nagrywane"
 
 #. Translators: said when a program has no recorded procedures.
-#: commands.py:2461
+#: commands.py:2551
 msgid "Nothing is recorded for this program. Use the command for recording a procedure to make one."
 msgstr "Dla tego programu nic nie jest nagrane. Użyj polecenia nagrywania procedury, aby coś nagrać."
 
 #. Translators: said when a program has no recorded procedures.
-#: commands.py:2485
+#: commands.py:2575
 msgid "Nothing is recorded for this program."
 msgstr "Dla tego programu nic nie jest nagrane."
 
 #. Translators: the title of the page of self-test results.
-#: commands.py:2564
+#: commands.py:2654
 msgid "Does it all work?"
 msgstr "Czy wszystko działa?"
 
@@ -2199,137 +2202,137 @@ msgstr "To się nie udało."
 msgid "Titan offered nothing."
 msgstr "Titan nic nie udostępnił."
 
-#: commands.py:568
+#: commands.py:616
 msgid "Asking Titan."
 msgstr "Pytam Titana."
 
-#: commands.py:569
+#: commands.py:617
 msgid "Asking Titan to do it."
 msgstr "Proszę Titana, żeby to zrobił."
 
-#: commands.py:633
+#: commands.py:681
 msgid "Nothing has been asked yet."
 msgstr "Jeszcze o nic nie pytano."
 
-#: commands.py:746
+#: commands.py:801
 msgid "There are no notifications."
 msgstr "Nie ma powiadomień."
 
-#: commands.py:792
+#: commands.py:847
 msgid "There is nothing in the buffers."
 msgstr "W buforach nic nie ma."
 
-#: commands.py:864
+#: commands.py:919
 msgid "Titan did not say what it is showing."
 msgstr "Titan nie powiedział, co pokazuje."
 
-#: commands.py:883
+#: commands.py:938
 msgid "on"
 msgstr "włączone"
 
-#: commands.py:883
+#: commands.py:938
 msgid "off"
 msgstr "wyłączone"
 
-#: commands.py:885
+#: commands.py:940
 msgid "Titan components"
 msgstr "Komponenty Titana"
 
-#: commands.py:886
+#: commands.py:941
 msgid "Titan has no components."
 msgstr "Titan nie ma komponentów."
 
-#: commands.py:1049
+#: commands.py:1104
 msgid "That name could not be kept."
 msgstr "Nie udało się zapamiętać tej nazwy."
 
-#: commands.py:1124
+#: commands.py:1179
 msgid "What this shows"
 msgstr "Co to przedstawia"
 
 #. Translators: a field: the name to read instead of the
 #. control's own.
-#: commands.py:1354
+#: commands.py:1425
 msgid "Call it"
 msgstr "Nazywaj to"
 
-#: commands.py:1359
+#: commands.py:1430
 msgid "Say it is a"
 msgstr "Mów, że to"
 
 #. Translators: a field: something to say after the control,
 #. every time.
-#: commands.py:1362
+#: commands.py:1433
 msgid "And add"
 msgstr "I dodaj"
 
 #. Translators: a field: the voice its name is spoken in.
-#: commands.py:1365
+#: commands.py:1436
 msgid "In the voice for"
 msgstr "Głosem dla"
 
-#: commands.py:1369
+#: commands.py:1440
 msgid "Never announce it"
 msgstr "Nigdy nie oznajmiaj"
 
 #. Translators: what a row of the palette's first list is.
-#: commands.py:1407
+#: commands.py:1478
 msgid "layer"
 msgstr "warstwa"
 
 #. Translators: what a row of the keyboard-shortcut list is.
-#: commands.py:1444
+#: commands.py:1515
 msgid "shortcut"
 msgstr "skrót"
 
 #. Translators: what a row of a layer's command list is.
-#: commands.py:1527
+#: commands.py:1598
 msgid "command"
 msgstr "polecenie"
 
 #. Translators: the last row of a layer's command list.
-#: commands.py:1537
+#: commands.py:1608
 msgid "Press a layer key instead"
 msgstr "Naciśnij klawisz warstwy"
 
 #. Translators: what a row of the actions list is.
-#: commands.py:1631
+#: commands.py:1708
 msgid "add-on"
 msgstr "dodatek"
 
 #. Translators: what a row of an add-on's action list is.
-#: commands.py:1648
+#: commands.py:1738
 msgid "action"
 msgstr "akcja"
 
-#: commands.py:1801
+#: commands.py:1891
 msgid "{what} in {program}: {state}"
 msgstr "{what} w programie {program}: {state}"
 
 #. Translators: said when a window has no controls to list.
-#: commands.py:2192
+#: commands.py:2282
 msgid "Nothing in that window could be listed."
 msgstr "Nie udało się wypisać niczego w tym oknie."
 
 #. Translators: the title of the list of what a control can do. {what}
 #. is the control.
-#: commands.py:2236
+#: commands.py:2326
 msgid "{what}: what it can do"
 msgstr "{what}: co potrafi"
 
 #. Translators: the title of the list of ways a state can be answered.
 #. {what} is the state.
-#: commands.py:2339
+#: commands.py:2429
 msgid "{what}: how to say it"
 msgstr "{what}: jak to oznajmiać"
 
 #. Translators: said when nothing in the journal matches.
-#: commands.py:2398
+#: commands.py:2488
 msgid "Nothing said that."
 msgstr "Nic takiego nie zostało powiedziane."
 
 #. Translators: the title of the list of controls found.
-#: commands.py:2528
+#: commands.py:2618
 msgid "Found"
 msgstr "Znalezione"
 
@@ -2361,83 +2364,83 @@ msgstr "Czynnościom Titana ({count}) można przypisać klawisz w oknie zdarzeń
 msgid "{label} offers nothing that can be run from here."
 msgstr "{label} nie oferuje niczego, co można stąd uruchomić."
 
-#: commands.py:592
+#: commands.py:640
 msgid "The assistant said nothing."
 msgstr "Asystent nic nie powiedział."
 
-#: commands.py:629
+#: commands.py:677
 msgid "Titan is not keeping the conversation. Switch it on in Titan's settings, AI features."
 msgstr "Titan nie zapamiętuje rozmowy. Włącz to w ustawieniach Titana, Funkcje SI."
 
-#: commands.py:835
+#: commands.py:890
 msgid "Titan has no window open."
 msgstr "Titan nie ma otwartego okna."
 
-#: commands.py:1043
+#: commands.py:1098
 msgid "That name has been forgotten."
 msgstr "Ta nazwa została zapomniana."
 
-#: commands.py:1148
+#: commands.py:1203
 msgid "It could not be read."
 msgstr "Nie udało się tego odczytać."
 
 #. Translators: said when the local recogniser found no
 #. words in a window.
-#: commands.py:1198
+#: commands.py:1253
 msgid "Windows read nothing in that window."
 msgstr "Windows nie odczytał niczego w tym oknie."
 
-#: commands.py:1257
+#: commands.py:1328
 msgid "    {lists} list rules, {regions} places, {controls} controls, {live} live, {labels} names"
 msgstr "    reguły list: {lists}, miejsca: {regions}, kontrolki: {controls}, na żywo: {live}, nazwy: {labels}"
 
-#: commands.py:1271
+#: commands.py:1342
 msgid "Your own modules go in {where}"
 msgstr "Własne moduły umieszczaj w {where}"
 
 #. Translators: said when control names have been shared.
-#: commands.py:1291
+#: commands.py:1362
 msgid "Shared."
 msgstr "Udostępnione."
 
 #. Translators: said when control names have been shared.
-#: commands.py:1291
+#: commands.py:1362
 msgid "Nothing was shared."
 msgstr "Nic nie zostało udostępnione."
 
-#: commands.py:1689
+#: commands.py:1779
 msgid "The local recogniser is installed. {reads} reading(s), last one {ms} ms."
 msgstr "Lokalny model rozpoznawania jest zainstalowany. Odczytów: {reads}, ostatni {ms} ms."
 
-#: commands.py:1701
+#: commands.py:1791
 msgid "It could not be fetched."
 msgstr "Nie udało się go pobrać."
 
-#: commands.py:1758
+#: commands.py:1848
 msgid "There was nothing to write."
 msgstr "Nie było czego zapisać."
 
-#: commands.py:1764
+#: commands.py:1854
 msgid "A module for this program has been written to {where}. {note}"
 msgstr "Moduł dla tego programu zapisano w {where}. {note}"
 
-#: commands.py:1815
+#: commands.py:1905
 msgid "{program} now follows the general settings."
 msgstr "{program} korzysta teraz z ustawień ogólnych."
 
-#: commands.py:1817
+#: commands.py:1907
 msgid "{program} already follows the general settings."
 msgstr "{program} już korzysta z ustawień ogólnych."
 
-#: commands.py:1859
+#: commands.py:1949
 msgid "{program} will be read as a game: what is highlighted is announced, and the keys stay the game's."
 msgstr "{program} będzie czytany jak gra: podświetlenie jest ogłaszane, a klawisze zostają przy grze."
 
-#: commands.py:1862
+#: commands.py:1952
 msgid "{program} will be given controls of its own: what was read is put on the window as real controls you can Tab through."
 msgstr "{program} dostanie własne kontrolki: to, co odczytano, zostanie nałożone na okno jako prawdziwe kontrolki, po których chodzi się tabulatorem."
 
-#: commands.py:1937
+#: commands.py:2027
 msgid "Stop watching {what}?"
 msgstr "Przestać obserwować {what}?"
 
@@ -2485,31 +2488,31 @@ msgstr "Obserwacja okna jako obrazu: odczytów {reads}, zmian {changed}."
 msgid "The touchpad is a touch screen: {gestures} gestures from {contacts} contacts."
 msgstr "Gładzik jako ekran dotykowy: gestów {gestures} z {contacts} dotknięć."
 
-#: commands.py:668
+#: commands.py:716
 msgid "Forgotten."
 msgstr "Zapomniano."
 
-#: commands.py:841
+#: commands.py:896
 msgid "Titan's window is on the screen."
 msgstr "Okno Titana jest na ekranie."
 
-#: commands.py:1046
+#: commands.py:1101
 msgid "This control is now called {name}."
 msgstr "Ta kontrolka nazywa się teraz {name}."
 
-#: commands.py:1767
+#: commands.py:1857
 msgid "Open it and correct it."
 msgstr "Otwórz i popraw."
 
 #. Translators: how an application that can only be
 #. read off its own window is listed.
-#: commands.py:2020
+#: commands.py:2110
 msgid "{name} (read off its window)"
 msgstr "{name} (odczytana z okna)"
 
 #. Translators: said when a state's answer is changed. {what} is
 #. the state, {how} how it will be answered.
-#: commands.py:2333
+#: commands.py:2423
 msgid "{what}: {how}"
 msgstr "{what}: {how}"
 
@@ -2525,32 +2528,32 @@ msgstr "To się nie udało: {error}"
 msgid "The touchpad is not being read: {why}"
 msgstr "Gładzik nie jest odczytywany: {why}"
 
-#: commands.py:651
+#: commands.py:699
 msgid "You: {text}"
 msgstr "Ty: {text}"
 
-#: commands.py:653
+#: commands.py:701
 msgid "Titan: {text}"
 msgstr "Titan: {text}"
 
-#: commands.py:837
+#: commands.py:892
 msgid "Titan's window is out of the way."
 msgstr "Okno Titana jest schowane."
 
-#: commands.py:849
+#: commands.py:904
 msgid "Views: {names}."
 msgstr "Widoki: {names}."
 
-#: commands.py:852
+#: commands.py:907
 msgid "Showing: {name}."
 msgstr "Pokazuje: {name}."
 
 #. Translators: how many controls a module's rule matched.
-#: commands.py:1741
+#: commands.py:1831
 msgid "{count} matched"
 msgstr "pasowało {count}"
 
-#: commands.py:838
+#: commands.py:893
 msgid "The Invisible UI is answering keys."
 msgstr "Interfejs niewidzialny odpowiada na klawisze."
 
@@ -2574,7 +2577,7 @@ msgstr "ostrzeżenie"
 msgid "error"
 msgstr "błąd"
 
-#: dialogs.py:210
+#: dialogs.py:229
 msgid "Choose:"
 msgstr "Wybierz:"
 
@@ -2676,23 +2679,23 @@ msgstr "{what}, kursor przeglądu"
 msgid "{why} Working out names has been switched off for now."
 msgstr "{why} Ustalanie nazw zostało na razie wyłączone."
 
-#: gestures.py:401
+#: gestures.py:432
 msgid "(needs AI features)"
 msgstr "(wymaga funkcji SI)"
 
-#: gestures.py:409
+#: gestures.py:440
 msgid "Titan: {label}"
 msgstr "Titan: {label}"
 
-#: gestures.py:277
+#: gestures.py:308
 msgid "{what}\n\nGo ahead?"
 msgstr "{what}\n\nKontynuować?"
 
-#: gestures.py:244
+#: gestures.py:275
 msgid "the macro \"{name}\", with its own key in Titan: {key}"
 msgstr "makro \"{name}\", z własnym klawiszem w Titanie: {key}"
 
-#: gestures.py:246
+#: gestures.py:277
 msgid "the macro \"{name}\""
 msgstr "makro \"{name}\""
 
@@ -3123,168 +3126,172 @@ msgid "The focus lands on anything else"
 msgstr "Fokus trafia na cokolwiek innego"
 
 #. Translators: a reader event, in the sounds manager.
-#: icons.py:253
+#: icons.py:254
 msgid "The virtual window is turned on"
 msgstr "Wirtualne okno zostaje włączone"
 
-#: icons.py:254
+#: icons.py:255
 msgid "The virtual window is turned off"
 msgstr "Wirtualne okno zostaje wyłączone"
 
-#: icons.py:255
+#: icons.py:256
 msgid "The palette opens"
 msgstr "Otwiera się paleta"
 
-#: icons.py:256
+#: icons.py:257
 msgid "A message opens"
 msgstr "Otwiera się komunikat"
 
-#: icons.py:257
+#: icons.py:258
 msgid "The palette or a message closes"
 msgstr "Zamyka się paleta lub komunikat"
 
-#: icons.py:258
+#: icons.py:259
 msgid "The screen review is turned on"
 msgstr "Przegląd ekranu zostaje włączony"
 
-#: icons.py:259
+#: icons.py:260
 msgid "The screen review is turned off"
 msgstr "Przegląd ekranu zostaje wyłączony"
 
-#: icons.py:260
+#: icons.py:261
 msgid "The end of a list is reached"
 msgstr "Osiągnięto koniec listy"
 
-#: icons.py:261
+#: icons.py:262
 msgid "A corner of the window is reached"
 msgstr "Osiągnięto róg okna"
 
-#: icons.py:262
+#: icons.py:263
 msgid "The layout of the arrows changes"
 msgstr "Zmienia się układ strzałek"
 
-#: icons.py:263
+#: icons.py:264
 msgid "Stepping into a control"
 msgstr "Wejście w kontrolkę"
 
-#: icons.py:264
+#: icons.py:265
 msgid "Stepping out of a control"
 msgstr "Wyjście z kontrolki"
 
 #. Translators: the first finger touches the trackpad.
-#: icons.py:266
+#: icons.py:267
 msgid "The start of a gesture"
 msgstr "Początek gestu"
 
 #. Translators: one finger begins to move over the trackpad.
-#: icons.py:268
+#: icons.py:269
 msgid "The start of exploration"
 msgstr "Początek eksploracji"
 
-#: icons.py:269
+#: icons.py:270
 msgid "A finger explores onto a control"
 msgstr "Palec trafia na kontrolkę"
 
-#: icons.py:270
+#: icons.py:271
 msgid "A control is clicked"
 msgstr "Kontrolka zostaje kliknięta"
 
-#: icons.py:271
+#: icons.py:272
+msgid "A control is double-clicked"
+msgstr "Dwukrotne kliknięcie kontrolki"
+
+#: icons.py:273
 msgid "A menu opens"
 msgstr "Otwiera się menu"
 
-#: icons.py:272
+#: icons.py:274
 msgid "A menu closes"
 msgstr "Zamyka się menu"
 
-#: icons.py:273
+#: icons.py:275
 msgid "The menus are left"
 msgstr "Opuszczenie menu"
 
-#: icons.py:274
+#: icons.py:276
 msgid "A question dialog appears"
 msgstr "Pojawia się okno z pytaniem"
 
-#: icons.py:275
+#: icons.py:277
 msgid "A warning dialog appears"
 msgstr "Pojawia się okno z ostrzeżeniem"
 
-#: icons.py:276
+#: icons.py:278
 msgid "An error dialog appears"
 msgstr "Pojawia się okno z błędem"
 
-#: icons.py:277
+#: icons.py:279
 msgid "An information dialog appears"
 msgstr "Pojawia się okno z informacją"
 
-#: icons.py:278
+#: icons.py:280
 msgid "A program becomes busy"
 msgstr "Program staje się zajęty"
 
-#: icons.py:279
+#: icons.py:281
 msgid "A program is ready again"
 msgstr "Program jest znów gotowy"
 
-#: icons.py:280
+#: icons.py:282
 msgid "A window asks for attention"
 msgstr "Okno prosi o uwagę"
 
-#: icons.py:281
+#: icons.py:283
 msgid "A live region changes"
 msgstr "Zmienia się region na żywo"
 
-#: icons.py:282
+#: icons.py:284
 msgid "A watched control changes"
 msgstr "Zmienia się obserwowana kontrolka"
 
-#: icons.py:283
+#: icons.py:285
 msgid "A marker is made"
 msgstr "Powstaje znacznik"
 
-#: icons.py:284
+#: icons.py:286
 msgid "A marker is reached"
 msgstr "Osiągnięto znacznik"
 
-#: icons.py:285
+#: icons.py:287
 msgid "A procedure starts recording"
 msgstr "Rozpoczyna się nagrywanie procedury"
 
-#: icons.py:286
+#: icons.py:288
 msgid "A procedure is kept"
 msgstr "Procedura zostaje zapisana"
 
-#: icons.py:287
+#: icons.py:289
 msgid "A procedure has run"
 msgstr "Procedura została wykonana"
 
-#: icons.py:288
+#: icons.py:290
 msgid "The trackpad is turned on"
 msgstr "Gładzik zostaje włączony"
 
-#: icons.py:289
+#: icons.py:291
 msgid "The trackpad is turned off"
 msgstr "Gładzik zostaje wyłączony"
 
-#: icons.py:290
+#: icons.py:292
 msgid "Titan is connected"
 msgstr "Titan jest połączony"
 
-#: icons.py:291
+#: icons.py:293
 msgid "Titan is disconnected"
 msgstr "Titan jest rozłączony"
 
 #. Translators: where an icon's sound comes from - the add-on's own.
-#: icons.py:336
+#: icons.py:338
 msgid "the built-in sound"
 msgstr "dźwięk wbudowany"
 
 #. Translators: where an icon's sound comes from - Titan's theme.
-#: icons.py:338
+#: icons.py:340
 msgid "Titan's own sound"
 msgstr "dźwięk Titana"
 
 #. Translators: where an icon's sound comes from - a file chosen.
-#: icons.py:340
+#: icons.py:342
 msgid "a sound file of your own"
 msgstr "własny plik dźwiękowy"
 
@@ -3405,7 +3412,7 @@ msgstr "Titan"
 msgid "Titan has not been told this add-on may control it. Answer the question Titan asked when NVDA connected, or allow it in Titan's settings."
 msgstr "Titanowi nie powiedziano, że ten dodatek może nim sterować. Odpowiedz na pytanie, które Titan zadał przy połączeniu NVDA, albo zezwól w ustawieniach Titana."
 
-#: link.py:185
+#: link.py:189
 msgid "This Titan is older than the add-on: it does not have {call}."
 msgstr "Ten Titan jest starszy niż dodatek: nie ma {call}."
 
@@ -3473,59 +3480,59 @@ msgid "&Scripts"
 msgstr "&Skrypty"
 
 #. Translators: the title of the window showing a script's steps.
-#: managerGui.py:482
+#: managerGui.py:492
 msgid "The steps"
 msgstr "Kroki"
 
 #. Translators: said when a recorded script is forgotten.
-#: managerGui.py:509
+#: managerGui.py:519
 msgid "Script forgotten"
 msgstr "Skrypt zapomniany"
 
 #. Translators: a page of the manager window.
-#: managerGui.py:526
+#: managerGui.py:536
 msgid "Control names"
 msgstr "Nazwy kontrolek"
 
-#: managerGui.py:530
+#: managerGui.py:540
 msgid "&Program"
 msgstr "&Program"
 
-#: managerGui.py:534
+#: managerGui.py:544
 msgid "&Controls"
 msgstr "&Kontrolki"
 
 #. Translators: asked in the manager about one control.
-#: managerGui.py:657
+#: managerGui.py:667
 msgid "Never announce this control?"
 msgstr "Nigdy nie oznajmiać tej kontrolki?"
 
-#: managerGui.py:711
+#: managerGui.py:721
 msgid "&Watched"
 msgstr "&Obserwowane"
 
 #. Translators: a page of the manager window.
-#: managerGui.py:777
+#: managerGui.py:787
 msgid "Sounds"
 msgstr "Dźwięki"
 
-#: managerGui.py:781
+#: managerGui.py:791
 msgid "&Events"
 msgstr "&Zdarzenia"
 
-#: managerGui.py:787
+#: managerGui.py:797
 msgid "What this marks"
 msgstr "Co to oznacza"
 
-#: managerGui.py:797
+#: managerGui.py:807
 msgid "The sound comes from"
 msgstr "Źródło dźwięku"
 
-#: managerGui.py:924
+#: managerGui.py:934
 msgid "&States"
 msgstr "&Stany"
 
-#: managerGui.py:930
+#: managerGui.py:940
 msgid "Answer it with"
 msgstr "Oznajmiaj przez"
 
@@ -3583,66 +3590,66 @@ msgstr "&Kroki"
 
 #. Translators: a button in the manager window - everything
 #. else that can be decided about a control.
-#: managerGui.py:541
+#: managerGui.py:551
 msgid "&Everything else..."
 msgstr "&Reszta ustawień..."
 
 #. Translators: a button in the manager window - read the stored
 #. description of a picture.
-#: managerGui.py:545
+#: managerGui.py:555
 msgid "&Description"
 msgstr "&Opis"
 
 #. Translators: said about a control whose picture has never
 #. been read.
-#: managerGui.py:674
+#: managerGui.py:684
 msgid "That one has no description"
 msgstr "Ta kontrolka nie ma opisu"
 
 #. Translators: a button in the manager window.
-#: managerGui.py:714
+#: managerGui.py:724
 msgid "&Read it now"
 msgstr "Odczytaj &teraz"
 
 #. Translators: a button in the manager window.
-#: managerGui.py:717
+#: managerGui.py:727
 msgid "S&top watching"
 msgstr "Przestań o&bserwować"
 
 #. Translators: said when a watched area cannot be read now.
-#: managerGui.py:750
+#: managerGui.py:760
 msgid "That is not on the screen now"
 msgstr "Tego teraz nie ma na ekranie"
 
 #. Translators: a button in the manager window.
-#: managerGui.py:802
+#: managerGui.py:812
 msgid "&Hear it"
 msgstr "Po&słuchaj"
 
 #. Translators: a button in the manager window - pick a sound
 #. file of the user's own for this icon.
-#: managerGui.py:806
+#: managerGui.py:816
 msgid "Choose a &file..."
 msgstr "Wybierz &plik..."
 
 #. Translators: a button in the manager window.
-#: managerGui.py:809
+#: managerGui.py:819
 msgid "&Where they are"
 msgstr "&Gdzie one są"
 
 #. Translators: the sounds manager: what the built-in sound for
 #. this event is called. {what} is the sound's own meaning.
-#: managerGui.py:838
+#: managerGui.py:848
 msgid "Built-in sound: {what}"
 msgstr "Dźwięk wbudowany: {what}"
 
 #. Translators: said when an icon cannot be played.
-#: managerGui.py:897
+#: managerGui.py:907
 msgid "That one has no sound"
 msgstr "Ta nie ma dźwięku"
 
 #. Translators: a button in the manager window.
-#: managerGui.py:949
+#: managerGui.py:959
 msgid "Put them all &back"
 msgstr "Przywróć wszystki&e"
 
@@ -3664,23 +3671,23 @@ msgid "Forget every name, description and answer for {program}? This cannot be u
 msgstr "Zapomnieć każdą nazwę, opis i odpowiedź dla {program}? Tego nie da się cofnąć."
 
 #. Translators: shown for an icon with no sound file.
-#: managerGui.py:841
+#: managerGui.py:851
 msgid "{what} - there is no sound for this one"
 msgstr "{what} - dla tej nie ma dźwięku"
 
 #. Translators: text at the top of the sound scheme page.
-#: managerGui.py:917
+#: managerGui.py:927
 msgid "A state said in words costs a word every time. Choosing a sound for one you already expect - a tick box being ticked, a row being selected - takes the word away and leaves the sound. Nothing is chosen for you."
 msgstr "Stan mówiony słowem kosztuje słowo za każdym razem. Wybranie dźwięku dla stanu, którego i tak się spodziewasz - zaznaczenia pola wyboru, wybrania wiersza - zabiera słowo i zostawia dźwięk. Nic nie jest wybierane za ciebie."
 
 #. Translators: marks a control whose picture has been
 #. read and remembered.
-#: managerGui.py:591
+#: managerGui.py:601
 msgid "described"
 msgstr "opisana"
 
 #. Translators: said when the manager window will not open.
-#: managerGui.py:1078
+#: managerGui.py:1088
 msgid "The manager could not be opened. If the add-on was just updated, restart NVDA rather than reloading plugins."
 msgstr "Nie udało się otworzyć menedżera. Jeśli dodatek został właśnie zaktualizowany, uruchom NVDA ponownie zamiast przeładowywać wtyczki."
 
@@ -4288,13 +4295,13 @@ msgid "{n} lines"
 msgstr "Wierszy: {n}"
 
 #. Translators: said when the command palette is closed.
-#: palette.py:767
+#: palette.py:792
 msgid "Palette closed"
 msgstr "Paleta zamknięta"
 
 #. Translators: said when a long answer being walked is closed.
 #. The pair with 'Message'.
-#: palette.py:765
+#: palette.py:790
 msgid "Closing message"
 msgstr "Zamykam komunikat"
 
@@ -4406,7 +4413,7 @@ msgid "Nothing was recorded"
 msgstr "Nic nie nagrano"
 
 #. Translators: said when a procedure has no steps.
-#: procedures.py:384
+#: procedures.py:457
 msgid "There is nothing in that procedure"
 msgstr "W tej procedurze nic nie ma"
 
@@ -4426,62 +4433,62 @@ msgid "Kept {what}, {n} steps"
 msgstr "Zapisano: {what}, kroków: {n}"
 
 #. Translators: a step of a procedure. {what} is a control.
-#: procedures.py:324
+#: procedures.py:397
 msgid "go to {what}"
 msgstr "przejdź do: {what}"
 
 #. Translators: a step of a procedure. {what} is a control.
-#: procedures.py:327
+#: procedures.py:400
 msgid "press {what}"
 msgstr "naciśnij: {what}"
 
 #. Translators: a step of a procedure. {text} is what is typed.
-#: procedures.py:330
+#: procedures.py:403
 msgid "type \"{text}\""
 msgstr "wpisz \"{text}\""
 
 #. Translators: a step of a procedure. {key} is a key.
-#: procedures.py:333
+#: procedures.py:406
 msgid "press the key {key}"
 msgstr "naciśnij klawisz {key}"
 
 #. Translators: a step of a procedure. {what} is a control.
-#: procedures.py:336
+#: procedures.py:409
 msgid "wait for {what}"
 msgstr "czekaj na: {what}"
 
-#: procedures.py:410
+#: procedures.py:483
 msgid "{what}: done"
 msgstr "{what}: gotowe"
 
 #. Translators: said when a step could not type. {n} is the step.
-#: procedures.py:470
+#: procedures.py:543
 msgid "Step {n}: the text could not be typed"
 msgstr "Krok {n}: nie udało się wpisać tekstu"
 
 #. Translators: said when a step's key could not be sent. {n} is the
 #. step, {key} the key.
-#: procedures.py:479
+#: procedures.py:552
 msgid "Step {n}: the key {key} could not be sent"
 msgstr "Krok {n}: nie udało się wysłać klawisza {key}"
 
-#: procedures.py:398
+#: procedures.py:471
 msgid "{n}. {what}"
 msgstr "{n}. {what}"
 
-#: procedures.py:458
+#: procedures.py:531
 msgid "Step {n} could not be done"
 msgstr "Nie udało się wykonać kroku {n}"
 
 #. Translators: said when a procedure took too long. {n} is the
 #. step it had reached.
-#: procedures.py:396
+#: procedures.py:469
 msgid "It is taking too long; stopped at step {n}"
 msgstr "Trwa to za długo; zatrzymano na kroku {n}"
 
 #. Translators: said when a step's control is not there. {n} is
 #. the step's number, {what} the control.
-#: procedures.py:420
+#: procedures.py:493
 msgid "Step {n}: {what} is not there"
 msgstr "Krok {n}: nie ma tu {what}"
 
@@ -5223,35 +5230,35 @@ msgstr "{category}: przełączniki"
 #. Translators: said when an unreadable window has been read as a
 #. picture and its controls can now be walked with Tab and the
 #. arrows.
-#: smart.py:221
+#: smart.py:222
 msgid "Window recognised, Native TCE cursor"
 msgstr "Rozpoznano okno, Native TCE cursor"
 
 #. Translators: said when that stops.
-#: smart.py:223
+#: smart.py:224
 msgid "Native TCE cursor off"
 msgstr "Native TCE cursor wyłączony"
 
-#: smart.py:372
+#: smart.py:502
 msgid "There is nothing to press."
 msgstr "Nie ma czego nacisnąć."
 
-#: smart.py:407
+#: smart.py:603
 msgid "That control has no place on the screen."
 msgstr "Ta kontrolka nie ma miejsca na ekranie."
 
 #. Translators: said when a control read from the screen is pressed.
-#: smart.py:434
+#: smart.py:635
 msgid "Pressed {name}."
 msgstr "Naciśnięto {name}."
 
-#: smart.py:327
+#: smart.py:329
 msgid "{index} of {count}"
 msgstr "{index} z {count}"
 
 #. Translators: said when a control read from the screen is
 #. double-clicked.
-#: smart.py:432
+#: smart.py:633
 msgid "Double-clicked {name}."
 msgstr "Kliknięto dwukrotnie {name}."
 
@@ -5843,7 +5850,7 @@ msgstr "pusty"
 msgid "new line"
 msgstr "nowy wiersz"
 
-#: titan.py:69
+#: titan.py:70
 msgid "Titan answered nothing that could be listed."
 msgstr "Titan nie odpowiedział niczym, co da się wypisać."
 
@@ -6085,43 +6092,95 @@ msgstr "nieustawione"
 msgid "none"
 msgstr "brak"
 
-#: toolkit.py:389
+#: toolkit.py:150
+msgid "Java Access Bridge has to be on, or nothing is answered at all."
+msgstr "Java Access Bridge musi być włączony, inaczej nic nie odpowiada."
+
+#: toolkit.py:152
+msgid "Java Access Bridge has to be on."
+msgstr "Java Access Bridge musi być włączony."
+
+#: toolkit.py:153
+msgid "Qt answers UI Automation only when its accessibility plugin is loaded; a list often reports no columns."
+msgstr "Qt odpowiada przez UI Automation tylko z załadowaną wtyczką dostępności; lista często nie podaje kolumn."
+
+#: toolkit.py:156
+msgid "wxWidgets controls are real Win32 controls, so MSAA answers even where UI Automation does not."
+msgstr "Kontrolki wxWidgets to prawdziwe kontrolki Win32, więc MSAA odpowiada nawet tam, gdzie UI Automation milczy."
+
+#: toolkit.py:158
+msgid "GTK on Windows exposes little; the picture is often the only way in."
+msgstr "GTK w Windows udostępnia niewiele; często jedyną drogą jest obraz."
+
+#: toolkit.py:160
+msgid "Tk draws its own widgets and names almost nothing."
+msgstr "Tk rysuje własne kontrolki i prawie niczego nie nazywa."
+
+#: toolkit.py:161
+msgid "Delphi answers MSAA for the standard controls and nothing for its own."
+msgstr "Delphi odpowiada przez MSAA dla standardowych kontrolek, a dla własnych wcale."
+
+#: toolkit.py:163
+msgid "Windows proxies the standard controls, so MSAA answers even for a program from 1998."
+msgstr "Windows obsługuje standardowe kontrolki za program, więc MSAA odpowiada nawet w programie z 1998 roku."
+
+#: toolkit.py:165
+msgid "A game that paints its own screen: there is nothing to walk."
+msgstr "Gra, która sama rysuje ekran: nie ma tu czego przeglądać."
+
+#: toolkit.py:167
+msgid "Paints its own screen: there is nothing to walk."
+msgstr "Sama rysuje ekran: nie ma tu czego przeglądać."
+
+#: toolkit.py:169
+msgid "A console: the text is the interface, and it is reviewed rather than walked."
+msgstr "Konsola: interfejsem jest tekst, który się przegląda, a nie przechodzi po kontrolkach."
+
+#: toolkit.py:171
+msgid "DirectUI draws its own controls; UI Automation is the only way in and it is often thin."
+msgstr "DirectUI rysuje własne kontrolki; jedyną drogą jest UI Automation, a ona często mówi niewiele."
+
+#: toolkit.py:173
+msgid "Flutter paints its own screen and answers a tree of its own only when semantics are switched on."
+msgstr "Flutter sam rysuje ekran i udostępnia drzewo kontrolek tylko z włączoną semantyką."
+
+#: toolkit.py:395
 msgid "This window is {framework} - {why}."
 msgstr "To okno jest zbudowane w {framework} - {why}."
 
-#: toolkit.py:386
+#: toolkit.py:392
 msgid "it has loaded {what}"
 msgstr "załadowało {what}"
 
-#: toolkit.py:387
+#: toolkit.py:393
 msgid "UI Automation calls it {what}"
 msgstr "UI Automation nazywa to {what}"
 
-#: toolkit.py:388
+#: toolkit.py:394
 msgid "its window class is {what}"
 msgstr "jego klasa okna to {what}"
 
-#: trackpad.py:234
-msgid "This NVDA does not expose its input system."
-msgstr "Ten NVDA nie udostępnia swojego systemu wejścia."
-
-#: trackpad.py:1074
+#: trackpad.py:1099
 msgid "Trackpad gestures are already on."
 msgstr "Gesty gładzika są już włączone."
 
-#: trackpad.py:1076
+#: trackpad.py:1101
 msgid "This Python has no stdcall callbacks."
 msgstr "Ten Python nie ma wywołań zwrotnych stdcall."
 
-#: trackpad.py:1096
+#: trackpad.py:1123
 msgid "the pad did not start"
 msgstr "gładzik nie wystartował"
 
-#: trackpad.py:1126
+#: trackpad.py:1153
 msgid "Trackpad gestures off."
 msgstr "Gesty gładzika wyłączone."
 
-#: trackpad.py:868
+#: trackpad.py:242
+msgid "This reader has nothing to give the gestures to."
+msgstr "Ten czytnik nie ma czemu przekazać gestów."
+
+#: trackpad.py:883
 msgid "Trackpad gestures on."
 msgstr "Gesty gładzika włączone."
 
@@ -6129,7 +6188,7 @@ msgstr "Gesty gładzika włączone."
 msgid "Windows will not answer: {why}"
 msgstr "Windows nie odpowiada: {why}"
 
-#: trackpad.py:239
+#: trackpad.py:249
 msgid "This NVDA has no touch support to drive: {why}"
 msgstr "Ten NVDA nie ma obsługi dotyku, którą można by sterować: {why}"
 
@@ -6167,7 +6226,7 @@ msgid "Simple layout"
 msgstr "Układ prosty"
 
 #. Translators: said when nothing at all could be done with a control.
-#: virtualWindow.py:2097
+#: virtualWindow.py:2155
 msgid "Nothing could be done here"
 msgstr "Nic się tu nie dało zrobić"
 
@@ -6200,55 +6259,55 @@ msgstr "Prawo góra"
 msgid "Top left"
 msgstr "Lewo góra"
 
-#: virtualWindow.py:1928
+#: virtualWindow.py:1935
 msgid "a heading, or a part of the window"
 msgstr "nagłówek albo część okna"
 
-#: virtualWindow.py:1929
+#: virtualWindow.py:1936
 msgid "a check box"
 msgstr "pole wyboru"
 
-#: virtualWindow.py:1930
+#: virtualWindow.py:1937
 msgid "a radio button"
 msgstr "przycisk opcji"
 
-#: virtualWindow.py:1932
+#: virtualWindow.py:1939
 msgid "a list"
 msgstr "lista"
 
-#: virtualWindow.py:1933
+#: virtualWindow.py:1940
 msgid "a combo box"
 msgstr "pole kombi"
 
-#: virtualWindow.py:1934
+#: virtualWindow.py:1941
 msgid "a field you type in"
 msgstr "pole edycji"
 
-#: virtualWindow.py:1935
+#: virtualWindow.py:1942
 msgid "a table"
 msgstr "tabela"
 
-#: virtualWindow.py:1936
+#: virtualWindow.py:1943
 msgid "a link"
 msgstr "link"
 
-#: virtualWindow.py:1937
+#: virtualWindow.py:1944
 msgid "a picture"
 msgstr "grafika"
 
-#: virtualWindow.py:1938
+#: virtualWindow.py:1945
 msgid "a slider or a meter"
 msgstr "suwak albo wskaźnik"
 
-#: virtualWindow.py:1939
+#: virtualWindow.py:1946
 msgid "a menu"
 msgstr "menu"
 
-#: virtualWindow.py:1940
+#: virtualWindow.py:1947
 msgid "an alert"
 msgstr "alert"
 
-#: virtualWindow.py:1941
+#: virtualWindow.py:1948
 msgid "a tab"
 msgstr "karta"
 
@@ -6273,18 +6332,18 @@ msgstr "Lewo dół"
 
 #. Translators: said after a double mouse click.
 #. Translators: said after a single mouse click.
-#: virtualWindow.py:1884
+#: virtualWindow.py:2093
 msgid "Double-clicked"
 msgstr "Kliknięto dwukrotnie"
 
 #. Translators: said after a double mouse click.
 #. Translators: said after a single mouse click.
-#: virtualWindow.py:1884
+#: virtualWindow.py:2093
 msgid "Clicked"
 msgstr "Kliknięte"
 
 #. Translators: said when the keyboard has been moved to a control.
-#: virtualWindow.py:2089
+#: virtualWindow.py:2147
 msgid "Moved to it"
 msgstr "Przeniesiono na nią"
 
@@ -6294,7 +6353,7 @@ msgstr "Tylko część"
 
 #. Translators: said when quick navigation finds nothing. {what} is the
 #. kind of control that was looked for.
-#: virtualWindow.py:2002
+#: virtualWindow.py:2009
 msgid "No more: {what}"
 msgstr "Nie ma więcej: {what}"
 
@@ -6303,9 +6362,14 @@ msgid "Widget review on"
 msgstr "Przeglądanie widżetu włączone"
 
 #. Translators: said when a widget stops being walked.
-#: widgetReview.py:89
+#: widgetReview.py:97
 msgid "Widget review off"
 msgstr "Przeglądanie widżetu wyłączone"
+
+#. Translators: said when Escape closes the widget being walked.
+#: widgetReview.py:95
+msgid "Widget closed"
+msgstr "Widżet zamknięty"
 
 #. Translators: the kind of a window - a palette or a little box
 #. that will go away again.
@@ -6486,8 +6550,14 @@ msgstr "Nie udało się przenieść tam klawiatury: {why}"
 #~ msgid "JAWS at intermediate verbosity: the name, the type and the state; the value and the place where they matter."
 #~ msgstr "JAWS przy średniej szczegółowości: nazwa, typ i stan; wartość i miejsce tam, gdzie mają znaczenie."
 
+#~ msgid "Leave the application review"
+#~ msgstr "Wyjdź z przeglądu aplikacji"
+
 #~ msgid "Leave the virtual window"
 #~ msgstr "Wyjdź z wirtualnego okna"
+
+#~ msgid "Leave the widget"
+#~ msgstr "Wyjdź z widżetu"
 
 #~ msgid "Like ChromeVox"
 #~ msgstr "Jak ChromeVox"
@@ -6599,6 +6669,9 @@ msgstr "Nie udało się przenieść tam klawiatury: {why}"
 
 #~ msgid "There is nothing about this control that would still be true next time, so it cannot be watched."
 #~ msgstr "Nic w tej kontrolce nie będzie prawdziwe następnym razem, więc nie da się jej obserwować."
+
+#~ msgid "This NVDA does not expose its input system."
+#~ msgstr "Ten NVDA nie udostępnia swojego systemu wejścia."
 
 #~ msgid "This keeps changing, so it is being watched less often."
 #~ msgstr "To ciągle się zmienia, więc jest obserwowane rzadziej."

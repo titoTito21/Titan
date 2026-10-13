@@ -336,6 +336,11 @@ def _widget_press(args):
     return {'said': press(widget=args.get('widget', ''))}
 
 
+def _widget_close(args):
+    from src.ui.main_window_actions import _widget_close as close
+    return {'said': close(widget=args.get('widget', ''))}
+
+
 def _buffers(_args):
     from src.ui.main_window_actions import _buffers as read
     return _from_json(read(), 'the buffers')
@@ -1275,6 +1280,7 @@ CALLS = {
     'widgets.read': _widget_read,
     'widgets.move': _widget_move,
     'widgets.press': _widget_press,
+    'widgets.close': _widget_close,
     'buffers.list': _buffers,
     'buffers.read': _buffer,
     'notifications.list': _notifications,
@@ -1343,8 +1349,14 @@ def bridge(request='', **_):
     try:
         data = handler(payload.get('args') or {})
     except Exception as error:                     # noqa: BLE001 - relayed
-        return json.dumps({'ok': False, 'api': API_VERSION,
-                           'error': f'{type(error).__name__}: {error}'},
+        # A RuntimeError here is a SENTENCE (`_from_json` raises one with
+        # what Titan said - "Titan has no main window open."), and a client
+        # reads it to the user: the type name in front was Python said
+        # aloud. Anything else is a fault and keeps its name.
+        said = str(error)
+        if not (type(error) is RuntimeError and said):
+            said = f'{type(error).__name__}: {error}'
+        return json.dumps({'ok': False, 'api': API_VERSION, 'error': said},
                           ensure_ascii=False)
     return json.dumps({'ok': True, 'api': API_VERSION, 'data': data},
                       ensure_ascii=False, default=str)

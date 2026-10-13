@@ -46,6 +46,10 @@ def is_active():
 
 def start_reader():
     from titan_access.engine import get_engine
+    try:
+        _hook_titan_exits()
+    except Exception as e:
+        print(f"[TitanAccess] could not hook Titan's exit: {e}")
     get_engine().start()
 
 
@@ -216,6 +220,10 @@ def initialize(app=None):
     try:
         print("[TitanAccess] initializing component...")
         _start_hotkey()
+        try:
+            _hook_titan_exits()
+        except Exception as e:
+            print(f"[TitanAccess] could not hook Titan's exit: {e}")
         # Auto-start the reader if it was left enabled (the settings checkbox /
         # the hotkey persist this under General/Enabled).
         try:
@@ -232,10 +240,95 @@ def initialize(app=None):
         traceback.print_exc()
 
 
+def titan_closing():
+    """Titan itself is closing (not just the reader): the reader says so -
+    "Trwa wyłączanie środowiska TCE", its pause, "Titan Access wyłącza się"
+    - waits until that has been heard, and stops. Safe to call twice."""
+    try:
+        from titan_access.engine import TitanAccessEngine
+        engine = TitanAccessEngine.instance
+        if engine is not None and getattr(engine, "running", False):
+            engine.stop(titan_closing=True)
+    except Exception as e:
+        print(f"[TitanAccess] titan closing: {e}")
+
+
+#: Where Titan ends its own process (`os._exit`), so a component is never
+#: told: the main window, and both Klango mode classes. Each is wrapped
+#: once, by the component, on the live class - nothing in Titan changes.
+_TITAN_EXITS = (("src.ui.gui", "TitanApp"),
+                ("src.system.klangomode", "KlangoMode"),
+                ("src.system.klangomode", "KlangoFrame"))
+
+
+#: The thread the goodbye is said on (tests join it).
+_goodbye_thread = None
+
+
+def _say_goodbye_then(original, frame, args, kwargs):
+    """Say the goodbye and stop the reader on a thread of their own, then
+    hand Titan its own exit on its GUI thread.
+
+    **Never on the GUI thread.** Stopping the reader waits for its worker,
+    and the worker's teardown reads Titan's own windows - which only the
+    GUI thread can answer. Done on the GUI thread the two waited for each
+    other until the 3 s join gave up and the teardown was forced: measured,
+    Titan took 11 s to close."""
+    global _goodbye_thread
+
+    def goodbye():
+        try:
+            titan_closing()
+        finally:
+            try:
+                import wx
+                if wx.GetApp() is None:
+                    raise RuntimeError("no wx application")
+                wx.CallAfter(original, frame, *args, **kwargs)
+            except Exception:
+                original(frame, *args, **kwargs)
+    _goodbye_thread = threading.Thread(target=goodbye, daemon=True,
+                                       name="TitanAccessGoodbye")
+    _goodbye_thread.start()
+
+
+def _hook_titan_exits():
+    """Put `titan_closing` in front of Titan's own `shutdown_app`."""
+    import sys
+    for module_name, class_name in _TITAN_EXITS:
+        module = sys.modules.get(module_name)
+        cls = getattr(module, class_name, None) if module else None
+        original = getattr(cls, "shutdown_app", None) if cls else None
+        if original is None or getattr(original, "_titan_access", False):
+            continue
+
+        def shutdown_app(self, *args, _original=original, **kwargs):
+            # Asked twice (a second Alt+F4 while the goodbye is said): the
+            # second goes straight to Titan's own exit.
+            if getattr(self, "_titan_access_closing", False):
+                return _original(self, *args, **kwargs)
+            try:
+                self._titan_access_closing = True
+            except Exception:
+                pass
+            try:
+                hide = getattr(self, "Hide", None)
+                if callable(hide):
+                    hide()
+            except Exception:
+                pass
+            _say_goodbye_then(_original, self, args, kwargs)
+        shutdown_app._titan_access = True
+        shutdown_app.__doc__ = original.__doc__
+        cls.shutdown_app = shutdown_app
+
+
 def shutdown():
-    """Called by the TCE ComponentManager on shutdown."""
+    """Called by the TCE ComponentManager on shutdown - which is Titan
+    closing (launcher mode), never the reader alone."""
     try:
         print("[TitanAccess] shutting down component...")
+        titan_closing()
         stop_reader()
         _stop_hotkey()
     except Exception as e:

@@ -44,7 +44,8 @@ ACTS = frozenset({
     'notifications.clear', 'ocr.overlay_close', 'ocr.overlay_refresh',
     'ocr.overlay_show', 'settings.cancel', 'settings.press', 'settings.save',
     'settings.set', 'sounds.play', 'sounds.theme', 'speech.rate',
-    'speech.say', 'speech.stop', 'widgets.move', 'widgets.press',
+    'speech.say', 'speech.stop', 'widgets.close', 'widgets.move',
+    'widgets.press',
 })
 
 
@@ -273,6 +274,13 @@ def read_widget(widget):
 
 def press_widget(widget):
     return _did('widgets.press', widget=widget)
+
+
+def close_widget(widget):
+    """Titan's own leaving of a widget (its `cleanup()`). A Titan older
+    than the call answers that it has no such call, which is the same as a
+    widget with nothing to clean up."""
+    return _did('widgets.close', widget=widget)
 
 
 def move_widget(widget, direction):

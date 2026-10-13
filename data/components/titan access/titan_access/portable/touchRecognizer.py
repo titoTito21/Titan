@@ -42,6 +42,27 @@ _state = {'down': {}, 'start': None, 'fingers': 0, 'last_tap': 0.0,
 #: whoever drives this reader; None means recognised and dropped.
 listener = None
 
+#: **A full tracker, when the reader underneath has one to give.** A
+#: callable making an object with NVDA's `TrackerManager` interface -
+#: ``update(ID, x, y, complete)``, ``emitTrackers()`` yielding
+#: ``(preheld, tracker)``, and ``multiTouchTrackers`` / ``curHoverStack`` /
+#: ``singleTouchTrackersByID``. Titan Access gives NVDA's own, ported
+#: (`titan_access/touch_tracker.py`): counted taps for any number of
+#: fingers, flicks by velocity, holds, tap-and-hold, hover down / hover /
+#: hover up. Left None, the small rules below decide.
+manager_factory = None
+
+#: How NVDA names a repeated action: ``double_tap``, ``triple_tap``.
+COUNT_NAMES = {2: 'double', 3: 'triple', 4: 'quadruple'}
+
+#: How often the tracker is asked what it has decided, while anything is
+#: happening on the pad; and how long nothing must happen before the pump
+#: thread stops.
+PUMP_EVERY = 0.04
+PUMP_IDLE = 1.5
+
+_tracked = {'manager': None, 'down': {}, 'pump': None}
+
 
 def report():
     with _LOCK:
@@ -51,6 +72,7 @@ def report():
 
 def forget():
     with _LOCK:
+        _tracked.update({'manager': None, 'down': {}})
         pending = _state.get('pending')
         _state.update({'down': {}, 'start': None, 'fingers': 0,
                        'last_tap': 0.0, 'pending': None, 'hovered_at': 0.0,
@@ -78,12 +100,116 @@ def _named(action, fingers):
     return action if fingers <= 1 else '%dfinger_%s' % (fingers, action)
 
 
+def gesture_name(tracker):
+    """A tracker's gesture, named the way NVDA names it: ``tap``,
+    ``double_tap``, ``2finger_flickup``, ``3finger_double_tap``."""
+    action = getattr(tracker, 'action', '')
+    action = str(getattr(action, 'value', action) or '')
+    count = int(getattr(tracker, 'actionCount', 1) or 1)
+    if count > 1:
+        action = '%s_%s' % (COUNT_NAMES.get(count, '%dtimes' % count), action)
+    fingers = int(getattr(tracker, 'numFingers', 1) or 1)
+    return action if fingers <= 1 else '%dfinger_%s' % (fingers, action)
+
+
+def _manager():
+    with _LOCK:
+        manager = _tracked['manager']
+        if manager is None and manager_factory is not None:
+            manager = _tracked['manager'] = manager_factory()
+        return manager
+
+
+def _feed_tracker(contacts):
+    """The contacts into the full tracker; the pump says what they were.
+
+    A finger missing from a report has lifted, and is completed WHERE IT
+    WAS - a final sample anywhere else is a jump the tracker would read as
+    the flick's velocity (the trackpad module learned this inside NVDA)."""
+    manager = _manager()
+    seen = set()
+    with _LOCK:
+        down = _tracked['down']
+        for identifier, x, y, is_down in contacts:
+            seen.add(identifier)
+            try:
+                manager.update(identifier, int(x), int(y), not is_down)
+            except Exception:                        # noqa: BLE001
+                continue
+            if is_down:
+                down[identifier] = (int(x), int(y))
+            else:
+                down.pop(identifier, None)
+        for gone in [one for one in down if one not in seen]:
+            x, y = down.pop(gone)
+            try:
+                manager.update(gone, x, y, True)
+            except Exception:                        # noqa: BLE001
+                pass
+    _ensure_pump()
+    return len(contacts)
+
+
+def pump():
+    """Emit whatever the tracker has decided. Answers whether it is still
+    busy (a finger down, a tap waiting to become a double tap, a hover)."""
+    manager = _tracked.get('manager')
+    if manager is None:
+        return False
+    try:
+        decided = list(manager.emitTrackers())
+    except Exception:                                # noqa: BLE001
+        decided = []
+    for preheld, tracker in decided:
+        name = gesture_name(tracker)
+        if preheld is not None:
+            # A finger held down while another acts: NVDA's "hold+" names.
+            name = '%s+%s' % (gesture_name(preheld), name)
+        _emit(name, getattr(tracker, 'x', 0), getattr(tracker, 'y', 0))
+    with _LOCK:
+        busy = bool(_tracked['down'])
+    try:
+        busy = busy or bool(manager.multiTouchTrackers) \
+            or bool(manager.curHoverStack) \
+            or bool(manager.singleTouchTrackersByID)
+    except Exception:                                # noqa: BLE001
+        pass
+    return busy
+
+
+def _ensure_pump():
+    with _LOCK:
+        thread = _tracked.get('pump')
+        if thread is not None and thread.is_alive():
+            return
+        thread = threading.Thread(target=_pump_loop, name='TitanTouchPump',
+                                  daemon=True)
+        _tracked['pump'] = thread
+    thread.start()
+
+
+def _pump_loop():
+    idle_since = None
+    while True:
+        time.sleep(PUMP_EVERY)
+        if pump():
+            idle_since = None
+            continue
+        idle_since = idle_since or time.time()
+        if time.time() - idle_since > PUMP_IDLE:
+            with _LOCK:
+                _tracked['pump'] = None
+            return
+
+
 def feed(contacts, now=None):
     """One report's worth of ``(identifier, x, y, down)``.
 
     A finger that was down and is not in this report has lifted (the pad
     stops mentioning it rather than announcing its end).
     """
+    if manager_factory is not None:
+        return _feed_tracker(contacts)
     now = time.time() if now is None else float(now)
     seen = set()
     with _LOCK:

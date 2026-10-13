@@ -15,14 +15,19 @@ under the finger - the virtual window finds the smallest control whose
 rectangle holds the point, the OCR review the word drawn there, and the
 palette, which has no geometry, maps the height of the screen onto its
 rows so the top of the pad is the first row and the bottom the last. A
-double tap presses what the finger found, and the flicks are the arrows.
+tap clicks what the finger found once and a double tap clicks it twice -
+the tracker has already told the two apart, so nothing waits - and the
+flicks are the arrows. The OCR cursor (a window read as a picture) is
+walked the same way: the finger finds a control, flicks move between them,
+a tap and a double tap press it.
 
 **More fingers are the keys the arrows are not**, and every 3- and
 4-finger swipe means something, as asked:
 
     1 finger   hover        explore (say what is under the finger)
-               tap          say the row again
-               double tap   Enter
+               tap          ONE click on it (a row of the palette: run it)
+               double tap   a DOUBLE click on it (a palette row that is
+                            not a reading's line: run once, never twice)
                flick L/R    Left / Right (by layout)
                flick U/D    Up / Down (by layout)
     2 fingers  flick L/R    Shift + Left / Right (the other way)
@@ -74,6 +79,23 @@ ACTIONS = (
 )
 
 
+#: **Gestures that mean the same everywhere** - in a list and out of one -
+#: each the reader command a key would run, by its name in `commands`:
+#: two fingers tapped twice is the virtual window on and off (Insert+W),
+#: one finger tapped three times is Titan (Insert+I), two fingers three
+#: times the screen read with OCR (Insert+O).
+EVERYWHERE = {
+    '2finger_double_tap': 'virtual_window',
+    'triple_tap': 'titan_window',
+    '2finger_triple_tap': 'ocr_review',
+}
+
+
+def command_for(action):
+    """The reader command a gesture runs wherever it is made, or ''."""
+    return EVERYWHERE.get(action_of(action), '')
+
+
 def report():
     with _LOCK:
         return dict(_state, walker=walker())
@@ -92,7 +114,7 @@ def action_of(identifier):
 # --------------------------------------------------------------------------- #
 def walker():
     """The name of the walked list that has the keys right now, or ''."""
-    for name in ('palette', 'virtualWindow', 'ocrReview'):
+    for name in ('palette', 'virtualWindow', 'ocrReview', 'smart'):
         try:
             module = _module(name)
             if module is not None and module.reviewing():
@@ -210,7 +232,8 @@ def _common(module):
 def _virtual():
     table = _common(None)
     table.update({
-        'double_tap': lambda m: m.activate(),
+        'tap': lambda m: m.click_once(),
+        'double_tap': lambda m: m.click_double(),
         'flickleft': lambda m: m.move_across(-1),
         'flickright': lambda m: m.move_across(1),
         '2finger_flickleft': lambda m: m.move_across_shift(-1),
@@ -232,7 +255,8 @@ def _virtual():
 def _palette():
     table = _common(None)
     table.update({
-        'double_tap': lambda m: m.activate(),
+        'tap': lambda m: m.activate_once(),
+        'double_tap': lambda m: m.activate_double(),
         'flickleft': lambda m: m.move_across(-1),
         'flickright': lambda m: m.move_across(1),
         '2finger_flickleft': lambda m: m.move_across_shift(-1),
@@ -250,10 +274,19 @@ def _palette():
     return table
 
 
+def _clicked(m, double):
+    """A tap or a double tap on the screen review: one click or two on the
+    words the finger found, with the sound of what it did."""
+    from . import icons
+    icons.play('reader.double-click' if double else 'reader.click')
+    return m.click(double=double)
+
+
 def _ocr():
     table = _common(None)
     table.update({
-        'double_tap': lambda m: m.click(),
+        'tap': lambda m: _clicked(m, False),
+        'double_tap': lambda m: _clicked(m, True),
         'flickleft': lambda m: m.move_word(-1),
         'flickright': lambda m: m.move_word(1),
         '2finger_flickleft': lambda m: m.move_end(False),
@@ -274,8 +307,21 @@ def _ocr():
     return table
 
 
+def _smart():
+    """The OCR cursor - controls read off a picture, each with its place."""
+    return {
+        'tap': lambda m: m.press_once(),
+        'double_tap': lambda m: m.press_double(),
+        'flickleft': lambda m: m.step(-1),
+        'flickright': lambda m: m.step(1),
+        'flickup': lambda m: m.step(-1),
+        'flickdown': lambda m: m.step(1),
+        '2finger_tap': lambda m: (m.forget(), (False, ''))[1],
+    }
+
+
 _TABLE = {'virtualWindow': _virtual(), 'palette': _palette(),
-          'ocrReview': _ocr()}
+          'ocrReview': _ocr(), 'smart': _smart()}
 
 
 def forget():

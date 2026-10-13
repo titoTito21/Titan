@@ -138,12 +138,35 @@ def key_of(window_class, role, automation_id="", control_id=0,
     return "|".join(part for part in parts if part is not None)
 
 
+def _row(application, key):
+    """The row for one control: the labels store FIRST, the merged file
+    second.
+
+    **Both readers keep their labels in one place now** - one file per
+    program under `accessibility/labels/` (`portable/labels`, the module
+    the label command, the manager and the walked lists all write). The
+    merged ``controlNames.json`` is only rewritten when the NVDA add-on
+    syncs, which Titan Access never does - so a control named in Titan
+    Access was kept, listed in the manager, and never once said: the
+    reading looked only here. The labels store is held in memory once read,
+    so asking it costs no file on the focus path."""
+    application = _text(application).lower()
+    try:
+        from .portable import labels
+        rows = labels._load().get(application) or {}
+        if key in rows:
+            return rows[key]
+    except Exception:                                # noqa: BLE001
+        pass
+    rows = _load().get(application) or {}
+    return rows.get(key)
+
+
 def name_for(application, key):
     """The name the user gave this control in either reader, or ``""``."""
     if not key:
         return ""
-    rows = _load().get(_text(application).lower()) or {}
-    row = rows.get(key)
+    row = _row(application, key)
     if isinstance(row, dict):
         return _text(row.get("label"))
     return _text(row)
@@ -153,8 +176,7 @@ def description_for(application, key):
     """What a picture was read as - remembered, so it costs one request."""
     if not key:
         return ""
-    rows = _load().get(_text(application).lower()) or {}
-    row = rows.get(key)
+    row = _row(application, key)
     return _text(row.get("description")) if isinstance(row, dict) else ""
 
 
@@ -163,8 +185,7 @@ def custom_for(application, key):
     note, a voice. ``{}`` when they decided nothing."""
     if not key:
         return {}
-    rows = _load().get(_text(application).lower()) or {}
-    row = rows.get(key)
+    row = _row(application, key)
     if not isinstance(row, dict):
         return {}
     found = {}

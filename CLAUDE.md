@@ -8255,10 +8255,244 @@ answer and 3 restarts. What held it, and what holds it no longer:
   four days). The `logHandler` stand-in writes one line per complaint per
   minute, keyed on where and what kind (not the text: the pipe name is new
   every try), with the count when the minute is up.
+- **Measured, before and after** (`tests/check_titan_access_worker_
+  stalls.py before|after` - the real engine's `_announce_focus`, 200
+  container focus events, four busy threads on the GIL - and
+  `tests/check_titan_access_hung_window.py`): the worker held per focus
+  event median 48-49 ms / worst 209-215 ms / 14-19 of 200 over 100 ms
+  before, 0.02 ms / 7-22 ms / 0 after; `object_from_handle` on a window
+  Windows calls hung 2.02 s before, 0.00 s after.
+- **Live, beside the user's own Titan** (`tests/check_titan_access_live_
+  reader.py`: the real reader on a temporary store set to eSpeak Polish,
+  SDL's dummy audio, no keyboard hook, following the desktop's real focus):
+  two 90 s runs, every eSpeak synthesis in voice `pl` (146 and 5), what it
+  said Polish ("Start / Przycisk", "iTunes / Element listy / zaznaczony"),
+  360 worker pings all answered (worst 99 ms and 1.8 ms), the supervisor
+  30 of 30 with no silence and no restart. `... [seconds] before|after`
+  reproduces the user's report in that running reader: Titan's own speech
+  sets its eSpeak voice to `en` after the reader chose Polish; with the old
+  library (`before`) what the reader said after that moment was synthesized
+  in `en`, with the fix (`after`) in `pl`. A one-off 462 s run of
+  `test_titan_access_sounds.py` (then a fixed 1.5 s wait for the reader to
+  build) did not reproduce in eight runs, under disk load or not.
 - **A key whose decision took over 100 ms is written down**
   (`keyboard_hook._note_slow`; the ten slowest in Insert+Shift+F1's
   diagnostics as `hook.slow_keys`). The DLL counted 97 late keys out of
   2664 and could not say which.
+
+#### The touchpad and Titan's actions are Titan Access's own (2026-10-13)
+
+Reported as: in Titan Access the touchpad and Titan's actions say they need
+NVDA.
+
+- **The touchpad** (`portable/trackpad.py`, shared): `available()` refused
+  with "This NVDA does not expose its input system" before the pad was
+  even read, `start()` installed NVDA's touch handler and `_tracker_manager`
+  imported NVDA's tracker on every report. Each now asks for NVDA's input
+  system only inside NVDA (`compat.inputCore` is None in Titan Access).
+- **NVDA's own tracker, ported** (`titan_access/touch_tracker.py`, from
+  nvaccess/nvda `source/touchTracker.py`, master of 2026-10-13, GNU GPL -
+  the header and the credit are kept): `SingleTouchTracker`,
+  `MultiTouchTracker`, `TrackerManager` as NVDA has them; only the
+  translated enum base and the deprecation shim (NVDA's own utilities)
+  are replaced by plain string enums. The engine hands it to the shared
+  recogniser (`touchRecognizer.manager_factory`), which feeds it, completes
+  a lifted finger where it was, pumps `emitTrackers` on a thread of its own
+  (every 40 ms while anything is happening) and names a gesture as NVDA
+  does (`double_tap`, `2finger_flickup`, `hold+tap`); the small rules stay
+  for a reader that gives no tracker. Outside a walked list the gestures
+  are NVDA's object mode (`engine.TOUCH_STEPS`): a finger reads what is
+  under it, a double tap activates, flicks right/left/up/down are
+  next/previous/parent/child, a two-finger tap stops speech, a two-finger
+  flick down is say all, up reads the object again.
+- **The touchpad in every walked list: explore, swipe, and a tap is a
+  click.** In the virtual window, the palette and a message, the OCR
+  screen review and now the OCR cursor (`smart`, a window read as a
+  picture) a finger explores and flicks move (`touchWalk`); a TAP clicks
+  once and a DOUBLE TAP twice (`reader.click` / `reader.double-click`) -
+  the virtual window and the screen review click where the finger found,
+  the OCR cursor presses its control, a line of an OCR page is a
+  `smart.Twice` (called by a key it waits for a second press; `.once()` /
+  `.double()` for a tap the tracker has already decided), and an ordinary
+  palette row runs ONCE on either - a command run twice is not what a
+  double tap means.
+- **Three gestures mean the same everywhere** (`touchWalk.EVERYWHERE`,
+  answered before any list): two fingers tapped twice - the virtual window
+  on/off; one finger three times - Titan (Insert+I, `titan_window`); two
+  fingers three times - the screen read with OCR (Insert+O, `ocr_review`).
+  In NVDA they are `ts:` bindings of `script_touchCommand`. Live, through
+  the tracker into a started engine: all three, and a tap / double tap in
+  the virtual window sending one click / two.
+- **Switching the pad off never ended its loop**, in both readers: nothing
+  answered WM_DESTROY with PostQuitMessage, so `running()` stayed True and
+  the next toggle said "off" again. Fixed.
+- **Titan's actions** ("What can Titan do?", the palette's Everything Titan
+  offers): the catalogue was filled only by the NVDA add-on's sweep over
+  the bus, so Titan Access answered "Titan has not said what it offers yet"
+  and "What can Titan do?" spoke of NVDA's Input Gestures dialog. Now
+  `gestures.fetch_catalogue()` asks Titan when the list opens (one
+  `addons.list`, the descriptions of an add-on asked when it is opened),
+  and outside NVDA "What can Titan do?" opens that list.
+- Tests: `tests/test_titan_access_touch_and_actions.py` (11: real contact
+  sequences through `trackpad.feed` into the ported tracker - tap, double
+  tap, flick by velocity, two-finger flick, hover down/hover/up). Live, in a
+  started Titan Access: the real precision touchpad switched on, off, on
+  and off; "What can Titan do?" listed 53 add-ons from the real registry.
+  Through the REAL Titan menu (built with `menu.build`, items chosen by a
+  posted `EVT_MENU`): "Co Titan potrafi?" opened the list, "Gładzik" on and
+  off. And the pad's whole input path: HID reports built with
+  `HidP_InitializeReportForID` / `HidP_SetUsageValue` / `HidP_SetUsages`
+  from the real ELAN pad's preparsed descriptor (5 contact slots, 29-byte
+  report 0x54) through `trackpad.contacts_in` -> `feed` -> the ported
+  tracker gave tap, double tap, flick right/left, two-finger flick down,
+  two-finger tap, hover down/hover/hover up - 7 of 7. Only a finger on the
+  glass was not used.
+
+#### Managers, procedures, labels, Escape and OCR, audited in Titan Access (2026-10-12)
+
+An audit probe ran every shared command (63; nothing shown, every dialog
+answered in code, a temporary APPDATA) and every manager function on an
+off-screen wx window read through Titan Access's real UIA provider: 40 of
+40 pass after these fixes.
+
+- **A name given in Titan Access was never said.** The reader looked only
+  in the merged `shared/controlNames.json`, which only the NVDA add-on's
+  sync writes; both readers keep labels in `labels/<program>/labels.json`
+  now. `shared_names._row` asks the labels store first. And the name was
+  used only when the program gave the control none: `accessible.describe`
+  now follows the add-on's `labels.applies` - a name the user TYPED always
+  wins, a guessed one only fills a nameless control.
+- **A recorded procedure only walked to controls**, in both readers:
+  nothing ever called `note_press`, `note_typing` or `note_key` (and Titan
+  Access not even `note_focus`). `procedures.note_keystroke` is the one
+  rule (Enter/Space on a non-field is a press, a character is typing, a
+  plain or Shift move is left to the focus steps, everything else - with
+  Control/Alt included - a key in NVDA's spelling); NVDA feeds it from
+  `decide_executeGesture` (not its own scripts) and `event_typedCharacter`,
+  Titan Access from the end of `on_plain_key`, `on_char_typed` and
+  `_scripts_follow_focus`. The manager's Run used NVDA's `core.callLater`;
+  outside NVDA it ran at once with the manager still in front -
+  `wx.CallLater` now.
+- **Escape in the TCE application review** (`appReview.escape`): a field,
+  an open menu, a sub-window (the application is sent Escape and closes its
+  own dialog) and, in the main window, the review ends AND the application
+  closes. **In a widget** (`widgetReview.escape`) it leaves and closes the
+  widget: new bridge call `widgets.close` runs the widget's `cleanup()` and
+  forgets the instance (an older Titan.exe answers no such call and the
+  review still ends). **Choosing a menu-bar item** drops the menu at once,
+  so the review walks the window the item opened, from its top.
+- **OCR lines press what they were read from, with Enter or NumPad 5**:
+  `palette.page(..., act=)` gives a page's lines an action; a local Windows
+  OCR reading clicks the line's rectangle (page closed first), an AI OCR
+  reading presses an element by name through Titan's `ocr.press`. NumPad 5
+  (and 8/2) added to the palette, the smart OCR cursor and the widget
+  review in both readers (the screen review and virtual window had it).
+- **One click or a double click, from Enter or NumPad 5, in every OCR
+  view** (`smart.press_twice`): the screen review, the AI OCR cursor, the
+  OCR pages and the virtual window's picture rows and NumPad 5. The click
+  waits out the user's double-click time (0.25-0.6 s) and a second press
+  on the same thing turns it into a double click; heard as `reader.click`
+  (`clicked.ogg`) or `reader.double-click` (`doubletab.ogg`). Waiting is
+  deliberate: clicking at once takes the foreground from the reader's own
+  list before the second press can reach it, and the old way (click at
+  once, double on the second) sent three clicks. A press on something
+  else sends the waiting click at once. Titan's `ocr.press` takes
+  `double` (a string over the bus), down to `actions._click(clicks=2)`.
+- **The virtual window's double click was one click**: `click_here(double=)`
+  was accepted and never acted on. Two clicks now, 40 ms apart (the reader's
+  own `smart._click` too - two clicks in the same instant are ignored by
+  some programs), and no extra `task-done` sound when `press_twice` has
+  already played the click.
+- **An open page or palette gets its keys before the OCR cursor.** A local
+  reading opens a page AND starts the cursor on the same window; with no
+  host window in front (`walkHostWindow` off) the cursor took Enter. Titan
+  Access asks `palette.walking()` first; in NVDA the cursor's bindings step
+  aside before the palette binds and come back after it lets go (they share
+  Enter, NumPad 5 and the arrows, and one unbinding removes the other's).
+- **Checked live**: a `.tas` script on a temporary APPDATA, run by the
+  rebuilt Titan.exe when its reader starts, called `ocr.press double=true`,
+  `titan.bridge` `widgets.list` / `widgets.close` ("Closed Pasek zadań.") /
+  `statusbar.read`, and the reader's own Where am I - results in the
+  reader's log under `TITAN_ACCESS_TRACE=1`. Titan Script passes `\"`
+  literally: JSON goes inside single quotes. The keys were driven through
+  the started engine's own `_walked_key` against an off-screen window read
+  by the real Windows OCR, with `mouse_event` / `SetCursorPos` captured -
+  one click and a double for the screen review, the OCR cursor, the OCR
+  page (Enter and NumPad 5) and the virtual window's NumPad 5, 17 of 17.
+  And with real clicks (the user agreed to it): a test window of its own
+  process in the screen's corner, writing down what it received, read by
+  Windows OCR and by ONE AI OCR reading (Gemini, 16 s) - NumPad 5 once
+  "button clicked", Enter twice "double-clicked Plik.txt", from the
+  screen review and from the AI page through Titan's `ocr.press`.
+  Live in-process too: tNotes opened as a described application, Plik ->
+  "Nowa notatka" put the review in that dialog at its first control,
+  Escape closed the dialog in tNotes, Escape again closed tNotes (gone
+  from `app.sessions`); a real widget closed on Escape; and the manager's
+  REAL rename dialogs (filled by code) renamed a label - then said by the
+  reader - a marker and a procedure.
+- **Where am I outside Titan's shell said nothing** in Titan Access: it
+  fell back on the add-on's command, which needs NVDA's `ancestry`.
+  `engine.where_am_i_text` walks the reader's own parents. And
+  `_palette_run` resolves a command through `commands.find`, so this
+  reader's own versions (`commands.OWN`: Where am I, the trackpad, the
+  speech system) are what the palette and the keys run.
+- **The compiled Titan had no AI OCR at all.** `src/ai/tools/__init__.py`
+  and `actions/builtin.py` import their tool modules by NAME, so
+  PyInstaller froze only `titannet_tools`: no `ocr`, `settings`, `system`,
+  `im` or `elten` provider in Titan.exe, and every AI OCR call the reader
+  makes (read, ask, press) had nothing to reach. All of them are in both
+  hidden-import lists now, and `EveryProviderTitanImportsByNameIsFrozen`
+  fails on a name either list is missing.
+- **A refusal is a sentence, not "RuntimeError: ..."**: `bridge_api.bridge`
+  relays a `RuntimeError` (what `_from_json` raises with Titan's own
+  sentence) without its type name, and both readers' links drop the prefix
+  an older Titan.exe still adds.
+- The toolkit notes ("wxWidgets controls are real Win32 controls...")
+  were never translated; the class manager's groups now create their
+  controls inside the static box (wx warned once per control).
+- Tests: `tests/test_titan_access_reviews_ocr_procedures.py` (29; Titan's
+  real `ocr.press` pressed once and twice from the lines an AI reading is
+  rendered to),
+  `tests/test_titan_access_walkers.py` updated to the Escape contract.
+  Probes (temp APPDATA, nothing in front): `C:/tmp`-style scripts built a
+  hidden manager form and pumped `app.MainLoop()` - a probe that only
+  `SafeYield`s deadlocks a UIA call into its own window and a timer never
+  fires, both artifacts; `PopupMenu` must be stubbed or it waits for input.
+
+#### A frozen window is named, not stuttered over; some sentences are never cut (2026-10-12)
+
+- **"Brak odpowiedzi w <title>"** (`titan_access/not_responding.py`): a
+  thread asks Windows twice a second, without sending the window anything
+  (`IsHungAppWindow`, `InternalGetWindowText`, a `Ghost` traced back with
+  `HungWindowFromGhostWindow`), and says it once per arrival
+  (`engine.hung_hwnd` / `hung_title`). After that the window is not asked:
+  its focus events and its ghost are not read, a key-driven read or action
+  into it is dropped and the sentence repeated at most every 3 s
+  (`_frozen_in_front`, `_say_still_frozen`), a frozen or ghost window is
+  never offered "read as a picture", and every focus announcement waits
+  until its window answers within 250 ms (`_announce_when_answering`,
+  retried 12 times 0.4 s apart, so a BUSY program is read late rather than
+  not at all; Titan's own windows are never asked). Measured live before:
+  the worker stuck 4 s in `ControlType` on a window that answered its focus
+  event and froze a moment later.
+- **Protected utterances** (`speech_adapter`, `protected=`, or recognised by
+  their text through `PROTECTED_KEYS` / `PROTECTED_SHARED`): virtual window
+  on/off, palette closed, closing the menu, scan mode on/off, Titan Access
+  on/off, not responding, the goodbye. An interrupt does not cut them and
+  does not drop them from the queue; only `stop()` does.
+- **On / off** are "Titan Access włączony / wyłączony" ("Titan Access on /
+  off"); a saved WelcomeMessage equal to an old default is ignored
+  (`settings_store.OLD_WELCOME_DEFAULTS`).
+- **Closing Titan** (not the reader) says "Trwa wyłączanie środowiska TCE",
+  pause, "Titan Access wyłącza się": `init._hook_titan_exits` wraps
+  `TitanApp.shutdown_app` and Klango's, hides the window, and says it and
+  stops the reader on a thread of its own (`_say_goodbye_then`) before
+  handing Titan its exit with `wx.CallAfter`. On the GUI thread the stop and
+  the teardown waited for each other (11 s to close, forced teardown); now
+  6 s with nothing forced. A stopping reader says nothing but that
+  (`_silenced_here` when not running).
+- Tests: `tests/test_titan_access_messages_and_hung.py` (22); probe
+  `tests/hung_window_probe.py`. Live-verified on the rebuilt Titan.exe.
 
 #### TA scripts do what JAWS, NVDA and SuperNova scripts do (2026-10-12)
 

@@ -729,6 +729,31 @@ def activate():
     return run()
 
 
+def activate_once():
+    """A tap on the touchpad: the row, run once. A row that can be clicked
+    twice (a line of a reading) is clicked once now - the tap has already
+    been decided, so nothing waits for a second."""
+    row = here()
+    if row is None:
+        return _nothing()
+    run = row.get('run')
+    if hasattr(run, 'once'):
+        return run.once()
+    return activate()
+
+
+def activate_double():
+    """A double tap: a row that can be double-clicked is; anything else is
+    run ONCE - a command run twice is not what a double tap means."""
+    row = here()
+    if row is None:
+        return _nothing()
+    run = row.get('run')
+    if hasattr(run, 'double'):
+        return run.double()
+    return activate()
+
+
 def back():
     """One level up, or close. ``(ok, said)``.
 
@@ -767,7 +792,7 @@ def stop():
     return False, _('Palette closed')
 
 
-def page(text, title='', back=None):
+def page(text, title='', back=None, act=None):
     """A long answer as something to WALK, rather than something said.
 
     **This is what stops an answer being interrupted.** Titan's own
@@ -780,9 +805,26 @@ def page(text, title='', back=None):
     arrows as everything else here, said one line at a time and re-said
     by pressing Enter. Escape closes it, or goes back a level where there
     is one.
+
+    ``act(index, line)`` may answer what Enter (and NumPad 5) DO on a
+    line - a reading of the screen is a page whose lines press the real
+    thing they were read from. ``index`` counts every line of ``text``,
+    blank ones included, so a caller can keep its own list beside it.
     """
-    lines = [one.rstrip() for one in str(text or '').splitlines()]
-    rows = [{'label': one, 'role': ''} for one in lines if one.strip()]
+    rows = []
+    for index, one in enumerate(str(text or '').splitlines()):
+        one = one.rstrip()
+        if not one.strip():
+            continue
+        row = {'label': one, 'role': ''}
+        if callable(act):
+            try:
+                run = act(index, one)
+            except Exception:                        # noqa: BLE001
+                run = None
+            if callable(run):
+                row['run'] = run
+        rows.append(row)
     if not rows:
         return _nothing()
     return show(rows, title, back=back, kind='text')

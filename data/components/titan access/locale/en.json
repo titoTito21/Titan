@@ -1,6 +1,6 @@
 {
   "app.alreadyRunning": "The screen reader is already running.",
-  "app.welcome": "Screen reader started",
+  "app.welcome": "Titan Access on",
   "common.culture": "en-US",
   "help.title": "Screen Reader - Help",
   "help.usage": "Usage: ScreenReader [options]",
@@ -93,7 +93,11 @@
   "tray.settings": "&Settings... (Insert+N, U)",
   "tray.help": "&Help (Insert+F1)",
   "tray.exit": "&Close screen reader (Alt+F4)",
-  "engine.closing": "Closing the screen reader",
+  "engine.closing": "Titan Access off",
+  "engine.notRespondingNoTitle": "The program is not responding",
+  "engine.notResponding": "{0} is not responding",
+  "engine.titanClosingReader": "Titan Access is shutting down",
+  "engine.titanClosing": "Shutting down the TCE environment",
   "engine.unsupportedApp": "The screen reader may not support external applications: System",
   "engine.windowNamed": "Window {0}",
   "engine.noCurrentElement": "No current element",
@@ -1164,5 +1168,6 @@
   "titanShell.detail.selected": "{0} of {1} selected",
   "titanShell.detail.items": "{0} items",
   "titanShell.event.opened": "Opened behind: {0}",
-  "titanShell.event.closed": "Closed: {0}"
+  "titanShell.event.closed": "Closed: {0}",
+  "whereAmI.nothing": "There is nothing above this control."
 }

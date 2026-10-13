@@ -435,6 +435,53 @@ def _for_a_person(text):
 _A_SENTENCE = 200
 
 
+def _close_then(work):
+    """Close the page and do ``work`` a moment later, on a worker - once the
+    window that was read has the keyboard again, so a click lands in it and
+    not on the reader's own list."""
+    def run():
+        import time
+        time.sleep(0.2)
+        work()
+    from . import palette
+    palette.stop()
+    _work(run)
+    return True, ''
+
+
+def _ai_line_press(index, line):
+    """What Enter on a line of an AI OCR reading does: press that element.
+
+    A reading is the title, the summary, then ``[Region]`` headings with
+    the elements indented beneath them, each said as "name, value, role,
+    state" (`src/ai/ocr/model.py`'s `Element.spoken`). Only those element
+    lines press something; Titan's `ocr.press` finds an element by its
+    name, so the name is tried first and the whole line after it."""
+    if not line.startswith('  '):
+        return None
+    spoken = line.strip()
+    if not spoken or spoken == '(empty)':
+        return None
+    names = [spoken.split(', ')[0].strip(), spoken]
+
+    def press(double):
+        answer = (False, '')
+        for name in names:
+            answer = LINK.run_action('ocr', 'press', name=name,
+                                     double=double)
+            if answer[0] and 'there is no control called' not in \
+                    str(answer[1]).lower():
+                break
+        _ocr_answer(*answer)
+        return True, ''
+    from . import smart
+    # Once, or twice quickly for a double click - by key (`press_twice`) or
+    # by a tap and a double tap on the touchpad (`.once`, `.double`).
+    return smart.twice(
+        ('ai-line', index), lambda: _close_then(lambda: press(False)),
+        lambda: _close_then(lambda: press(True)), report=None)
+
+
 def _ocr_answer(ok, text, title=None):
     """Say what came back, as the kind of thing it is.
 
@@ -453,7 +500,8 @@ def _ocr_answer(ok, text, title=None):
     if not ok or len(said) <= _A_SENTENCE and '\n' not in said:
         dialogs.report(said)
         return
-    dialogs.browse(said, title or _('AI OCR'))
+    # A reading is walked, and Enter or NumPad 5 on an element presses it.
+    dialogs.browse(said, title or _('AI OCR'), act=_ai_line_press)
 
 
 def ocr_read():
@@ -685,6 +733,13 @@ def refresh_actions(plugin):
     if not LINK.connected():
         dialogs.report(_('Titan is not running.'))
         return
+    from . import compat
+    if compat.inputCore is None or plugin is None:
+        # **Not NVDA: there is no Input Gestures dialog to fill.** Titan
+        # Access is inside Titan, so what Titan can do is simply asked and
+        # shown - the list of every action, each one run by Enter (a key of
+        # its own is a `when key` line in a reader script).
+        return titan_actions()
     dialogs.report(_('Reading what Titan can do.'))
 
     def done(count):
@@ -1202,8 +1257,24 @@ def read_locally():
         # and the arrows work and Enter clicks.
         from . import smart
         smart.take_local(hwnd, reading)
+        rows = reading.rows()
+
+        def line_click(index, _line):
+            if not 0 <= index < len(rows):
+                return None
+            text, rect = rows[index]
+            # Once, or twice quickly for a double click - by key or by tap.
+            return smart.twice(
+                ('local-line', index),
+                lambda: _close_then(
+                    lambda: dialogs.report(smart._click(rect, text)[1])),
+                lambda: _close_then(
+                    lambda: dialogs.report(
+                        smart._click(rect, text, double=True)[1])),
+                report=None)
         # Translators: the title of the window showing a local OCR reading.
-        dialogs.browse(reading.text, _('What Windows read here'))
+        dialogs.browse('\n'.join(text for text, _rect in rows),
+                       _('What Windows read here'), act=line_click)
     _work(work)
 
 
@@ -1611,7 +1682,13 @@ def titan_actions():
     """
     from . import gestures
     from . import palette
-    rows = gestures.load_catalogue()
+    # Asked of Titan now, so an add-on installed since is there; the saved
+    # catalogue only when Titan cannot be reached.
+    try:
+        rows = gestures.fetch_catalogue()
+    except Exception:                                # noqa: BLE001
+        rows = []
+    rows = rows or gestures.load_catalogue()
     if not rows:
         # Translators: said when Titan has not been asked what it offers.
         _refused(_('Titan has not said what it offers yet.'))
@@ -1640,6 +1717,19 @@ def titan_actions():
 def _titan_actions(actions, name):
     """One add-on's actions, walked. Enter runs the one chosen."""
     from . import palette
+    # What each action DOES, asked of the add-on the first time its list is
+    # opened - otherwise a row is only the action's internal name.
+    if actions and not any(row.get('summary') for row in actions):
+        try:
+            from . import gestures
+            from .link import LINK
+            ok, described = LINK.bridge('addons.actions',
+                                        addon=actions[0]['addon'])
+            if ok and isinstance(described, dict):
+                gestures._merge_summaries(actions, actions[0]['addon'],
+                                          described.get('actions'))
+        except Exception:                            # noqa: BLE001
+            pass
     rows = []
     for row in actions:
         rows.append({

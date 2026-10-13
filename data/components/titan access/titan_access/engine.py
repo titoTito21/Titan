@@ -108,6 +108,12 @@ _FIELD_KEYS = frozenset({
 REFOCUS_QUIET_S = 10.0
 
 
+#: The touchpad's flicks outside a walked list: NVDA's object-mode moves.
+TOUCH_STEPS = {'flickright': 'next', 'flickleft': 'previous',
+               'flickup': 'parent', 'flickdown': 'child',
+               '2finger_flickup': 'current'}
+
+
 class TitanAccessEngine:
     """Central screen-reader orchestrator (singleton via :data:`instance`)."""
 
@@ -308,7 +314,17 @@ class TitanAccessEngine:
                      found.get("log", "")), interrupt=True)
         return True
 
-    def stop(self):
+    #: How long the reader waits for its goodbye to be heard before its
+    #: speech is torn down. It used to be a flat 0.4 s - "Titan Access
+    #: wyłączony" was cut after its first word.
+    GOODBYE_WAIT_S = 4.0
+    TITAN_GOODBYE_WAIT_S = 7.0
+
+    def stop(self, titan_closing=False):
+        """Stop the reader. ``titan_closing``: Titan itself is closing, not
+        just the reader - it says so ("Trwa wyłączanie środowiska TCE",
+        the reader's pause, "Titan Access wyłącza się") instead of the
+        reader's own "Titan Access wyłączony"."""
         if not self.running:
             return
         self.running = False
@@ -329,14 +345,19 @@ class TitanAccessEngine:
             braille.shutdown()
         except Exception:                            # noqa: BLE001
             pass
-        # Announce shutdown before tearing down speech.
+        # Announce shutdown before tearing down speech - and wait until it
+        # has been HEARD, or the teardown cuts it.
         try:
             with self.for_titan():
                 if AnnouncementMode.plays(self.settings.startup_announcement):
                     self.play(SND_SR_OFF)
-                if AnnouncementMode.speaks(self.settings.startup_announcement):
+                speaks = AnnouncementMode.speaks(
+                    self.settings.startup_announcement)
+                if titan_closing:
+                    self._say_goodbye_to_titan()
+                elif speaks:
                     self.speak(L("engine.closing"))
-                    time.sleep(0.4)
+                    self._wait_for_goodbye(self.GOODBYE_WAIT_S)
         except Exception:
             pass
         # Post WM_QUIT to the worker thread's message loop.
@@ -785,6 +806,10 @@ class TitanAccessEngine:
         try:
             from .portable import touchRecognizer
             touchRecognizer.listener = self._on_touch
+            # NVDA's own tracker, ported (`touch_tracker`): the gestures
+            # NVDA's touch support makes, here.
+            from . import touch_tracker
+            touchRecognizer.manager_factory = touch_tracker.TrackerManager
         except Exception as e:
             log(f"[TitanAccess] touch hook: {e}")
         try:
@@ -814,6 +839,55 @@ class TitanAccessEngine:
             log(f"[TitanAccess] agent link: {e}")
         self._start_live_watch()
         self._start_shell_watch()
+        self._start_not_responding_watch()
+
+    #: The window in front that Windows says is not responding (0 for
+    #: none) and its title - set by `not_responding.Watch`, read by the
+    #: focus path and by the key-driven reads.
+    hung_hwnd = 0
+    hung_title = ""
+    #: How often a key pressed in a frozen window says so again.
+    FROZEN_REPEAT_S = 3.0
+
+    def _frozen_in_front(self):
+        """Whether the window in front is the one Windows says is frozen
+        (or its ghost). Asks nothing of that window."""
+        if not self.hung_hwnd or not _IS_WINDOWS:
+            return False
+        try:
+            from titan_access import not_responding
+            front = int(ctypes.windll.user32.GetForegroundWindow() or 0)
+            return (not_responding.belongs_to(front, self.hung_hwnd)
+                    or not_responding.window_class(front) ==
+                    not_responding.GHOST_CLASS)
+        except Exception:                            # noqa: BLE001
+            return False
+
+    def _say_still_frozen(self):
+        """A key in a frozen window: no read is sent into it (each would
+        wait out UI Automation's timeout, which is the stutter a frozen
+        program makes of a reader); its name is said again, at most every
+        `FROZEN_REPEAT_S`."""
+        now = time.monotonic()
+        if now - getattr(self, "_frozen_said", 0.0) < self.FROZEN_REPEAT_S:
+            return
+        self._frozen_said = now
+        try:
+            from titan_access import not_responding
+            self.speech.speak(not_responding.sentence(self.hung_title),
+                              interrupt=True, protected=True)
+        except Exception:                            # noqa: BLE001
+            pass
+
+    def _start_not_responding_watch(self):
+        """"Brak odpowiedzi w <okno>", said once, instead of a reader that
+        stutters asking a frozen program things (`not_responding`)."""
+        try:
+            from titan_access import not_responding
+            if getattr(self, '_hung_watch', None) is None:
+                self._hung_watch = not_responding.Watch(self).start()
+        except Exception as e:
+            log(f"[TitanAccess] not-responding watch: {e}")
 
     def _start_shell_watch(self):
         """The windows that open and close behind the user, read off the
@@ -1056,6 +1130,19 @@ class TitanAccessEngine:
         if not root or root == getattr(self, '_arrived_at', 0):
             return
         self._arrived_at = root
+        # **A frozen window is not a drawn one.** Windows' ghost stand-in
+        # for a program that stopped answering exposes nothing - and so it
+        # looked exactly like a game's surface: the reader offered to read
+        # it "as a picture". The not-responding watch has already said what
+        # it is; nothing here asks about it.
+        try:
+            from titan_access import native_hook, not_responding
+            if (not_responding.window_class(root) ==
+                    not_responding.GHOST_CLASS
+                    or not native_hook.window_answers(root, 150)):
+                return
+        except Exception:                            # noqa: BLE001
+            pass
         # **The window, not the first control in it.** `surface.looks_drawn`
         # refuses Explorer and the console by their window CLASS, and the
         # object that arrives first is a nameless pane with no class -
@@ -1229,6 +1316,17 @@ class TitanAccessEngine:
         a double tap reads it again with its context - the pad standing in
         for a pointer nobody can see.
         """
+        # **The gestures that mean the same everywhere** (`touchWalk.
+        # EVERYWHERE`): the virtual window, Titan, OCR - the commands their
+        # keys run, before any list has a say.
+        try:
+            from .portable import touchWalk
+            command = touchWalk.command_for(action)
+        except Exception:                            # noqa: BLE001
+            command = ''
+        if command:
+            self._palette_run(command)
+            return
         try:
             from .portable import touchWalk
             handled, said = touchWalk.handle(action, x, y)
@@ -1239,14 +1337,34 @@ class TitanAccessEngine:
             if said:
                 self._say(str(said))
             return
-        if action in ('hover', 'double_tap', 'tap'):
+        # **Anywhere else, NVDA's touch meanings in object mode** - the
+        # gestures come from NVDA's own tracker now (`touch_tracker`), so
+        # they mean what an NVDA user's hands already know: a finger reads
+        # what is under it, a double tap activates it, flicks walk the
+        # objects, two fingers are speech.
+        steps = TOUCH_STEPS.get(action)
+        if steps is not None:
+            self._object_nav(steps)
+            return
+        if action == '2finger_tap':
+            self.action_stop_speaking()
+            return
+        if action == '2finger_flickdown':
+            self.action_say_all()
+            return
+        if action in ('hover', 'hoverdown', 'tap', 'double_tap'):
             obj = self._object_at_point(x, y)
             if obj is None:
                 return
             key = (obj.role, obj.name, obj.bounds)
-            if action == 'hover' and key == getattr(self, '_touched', None):
+            if action in ('hover', 'hoverdown') and \
+                    key == getattr(self, '_touched', None):
                 return
             self._touched = key
+            self.current_object = obj
+            if action == 'double_tap':
+                self._object_nav('activate')
+                return
             try:
                 self.announce_object(obj, for_navigation=True)
             except Exception as e:
@@ -1309,6 +1427,13 @@ class TitanAccessEngine:
                 speech.shutdown()
             except Exception as e:                   # noqa: BLE001
                 log(f"[TitanAccess] speech shutdown: {e}")
+        hung_watch = getattr(self, "_hung_watch", None)
+        if hung_watch is not None:
+            self._hung_watch = None
+            try:
+                hung_watch.stop()
+            except Exception as e:                   # noqa: BLE001
+                log(f"[TitanAccess] not-responding watch stop: {e}")
         watch = getattr(self, "_shell_watch", None)
         if watch is not None:
             self._shell_watch = None
@@ -1347,6 +1472,8 @@ class TitanAccessEngine:
             from .portable import touchRecognizer
             if getattr(touchRecognizer, "listener", None) == self._on_touch:
                 touchRecognizer.listener = None
+                touchRecognizer.manager_factory = None
+                touchRecognizer.forget()
         except Exception:                            # noqa: BLE001
             pass
         try:
@@ -1614,6 +1741,9 @@ class TitanAccessEngine:
             # application moves its caret.
             self.post_to_worker(fn)
             return
+        if self._frozen_in_front():
+            self._say_still_frozen()
+            return
         with self._bg_lock:
             self._bg_read = fn
         self._bg_event.set()
@@ -1630,6 +1760,9 @@ class TitanAccessEngine:
         one before it, so rapid repeats can never skip/reorder a step."""
         if not _IS_WINDOWS:
             self.post_to_worker(fn)                   # in order, on the main thread
+            return
+        if self._frozen_in_front():
+            self._say_still_frozen()
             return
         self._action_queue.put(fn)
         self._bg_event.set()
@@ -1757,7 +1890,43 @@ class TitanAccessEngine:
         attention watchers, menus and every shared module still spoke."""
         if getattr(self._for_titan, 'depth', 0):
             return False
+        # **A reader that is stopping says only its goodbye.** Titan hides
+        # its window as it closes, the focus lands on whatever was behind
+        # it, and the reader - still running while the goodbye is spoken -
+        # read that too, over its own last words.
+        if not getattr(self, 'running', True):
+            return True
         return self._muted_for_foreground()
+
+    def _say_goodbye_to_titan(self):
+        """Titan is closing: "Trwa wyłączanie środowiska TCE", the reader's
+        own pause, "Titan Access wyłącza się" - one protected utterance,
+        waited out."""
+        if self.speech is None:
+            return
+        try:
+            from .portable import speechSchemes
+            gap = int(speechSchemes.active_pause() or 0)
+        except Exception:                            # noqa: BLE001
+            gap = 0
+        parts = [(L("engine.titanClosing"), 0, 0.0),
+                 (L("engine.titanClosingReader"), 0, 0.0)]
+        try:
+            self.speech.speak_segments(parts, gap_ms=max(gap, 300),
+                                       protected=True)
+        except TypeError:
+            self.speech.speak_segments(parts)
+        self._wait_for_goodbye(self.TITAN_GOODBYE_WAIT_S)
+
+    def _wait_for_goodbye(self, limit):
+        try:
+            waiter = getattr(self.speech, "wait_until_done", None)
+            if callable(waiter):
+                waiter(timeout=limit)
+            else:
+                time.sleep(min(limit, 1.5))
+        except Exception:                            # noqa: BLE001
+            pass
 
     def speak(self, text, obj=None, interrupt=True, pitch_offset=0):
         if not text or self.speech is None:
@@ -1906,6 +2075,19 @@ class TitanAccessEngine:
         """UIA focus listener. Marshalled onto our thread by the provider."""
         if obj is None:
             return
+        # **A window that is not responding is not asked anything.** Its
+        # name was said once (`not_responding`); reading it would be a
+        # cross-process call into a program that answers nothing.
+        # Windows' own "ghost" stand-in for a frozen window ("<title> (Brak
+        # odpowiedzi)") is not read either: the watch has already said it.
+        try:
+            from titan_access import not_responding
+            if (getattr(obj, "class_name", "") == not_responding.GHOST_CLASS
+                    or (self.hung_hwnd and not_responding.belongs_to(
+                        getattr(obj, "hwnd", 0), self.hung_hwnd))):
+                return
+        except Exception:                            # noqa: BLE001
+            pass
         self._scripts_follow_focus(obj)
         live = getattr(self, "live_lists", None)
         if live is not None:
@@ -2053,15 +2235,74 @@ class TitanAccessEngine:
         self._announce_token += 1
         tok = self._announce_token
         if obj.role in _CONTAINER_FOCUS_ROLES:
-            def _fire():
-                if tok == self._announce_token:
-                    self.announce_object(obj)
             # On the reader's own thread, not the timer's: the announcement
             # reads the element (its ancestors, its text), which is COM on
             # Windows and libatspi on Linux, and neither is for any thread.
-            later.call_later(0.12, lambda: self.post_to_worker(_fire))
+            later.call_later(0.12, lambda: self.post_to_worker(
+                lambda: self._announce_when_answering(obj, tok)))
         else:
-            self.announce_object(obj)
+            self._announce_when_answering(obj, tok)
+
+    #: How long a window has to answer before its control is read, how
+    #: often a busy one is asked again, and for how many tries.
+    ANSWER_WAIT_MS = 250
+    ANSWER_RETRY_S = 0.4
+    ANSWER_TRIES = 12
+
+    def _announce_when_answering(self, obj, tok, tries=0):
+        """Read the focused control - once its window answers.
+
+        Every part of an announcement is a call into the program that owns
+        the control, and a program that has stopped answering holds each
+        call for UI Automation's whole timeout: measured live, the worker
+        stuck four seconds in `ControlType` on a window that had answered
+        its focus event and stopped a moment later. So the window is asked
+        first, with a deadline and without touching UI Automation
+        (`native_hook.window_answers`). Busy is not frozen: a window that
+        does not answer in time is asked again a little later, so a program
+        doing work is read late rather than not at all; one Windows has
+        declared frozen is left to `not_responding`, which says so."""
+        if tok != self._announce_token:
+            return
+        hwnd = self._window_of(obj)
+        if hwnd and not self._answers(hwnd):
+            if tries < self.ANSWER_TRIES and not self._frozen_in_front():
+                later.call_later(self.ANSWER_RETRY_S, lambda: self.post_to_worker(
+                    lambda: self._announce_when_answering(obj, tok, tries + 1)))
+            return
+        self.announce_object(obj)
+
+    def _window_of(self, obj):
+        """The top-level window the control belongs to, or 0."""
+        if not _IS_WINDOWS:
+            return 0
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = int(getattr(obj, "hwnd", 0) or 0) or \
+                int(user32.GetForegroundWindow() or 0)
+            if not hwnd:
+                return 0
+            user32.GetAncestor.restype = ctypes.c_void_p
+            return int(user32.GetAncestor(ctypes.c_void_p(hwnd), 2) or hwnd)
+        except Exception:                            # noqa: BLE001
+            return 0
+
+    def _answers(self, hwnd):
+        """Whether ``hwnd`` answers within `ANSWER_WAIT_MS`. Titan's own
+        windows are never asked: a moment of work on Titan's GUI thread
+        must not cost an announcement, and the reader runs beside it."""
+        try:
+            import os as _os
+            from ctypes import wintypes
+            owner = wintypes.DWORD(0)
+            ctypes.windll.user32.GetWindowThreadProcessId(
+                ctypes.c_void_p(hwnd), ctypes.byref(owner))
+            if owner.value == _os.getpid():
+                return True
+            from titan_access import native_hook
+            return native_hook.window_answers(hwnd, self.ANSWER_WAIT_MS)
+        except Exception:                            # noqa: BLE001
+            return True
 
     def _update_edit_context(self, obj):
         """Tell the keyboard hook and editable handler whether focus is now in
@@ -2720,15 +2961,20 @@ class TitanAccessEngine:
         # Enter presses, Escape gives the keys back - Left and Right are
         # never taken, because in a game they are the game's.
         try:
-            from .portable import smart
-            if smart.active() and smart.window() == self._foreground_hwnd():
+            from .portable import smart, palette as _open_list
+            # An open page or palette is the user's list and takes its keys
+            # first: a local reading opens a page AND starts this cursor on
+            # the same window, and with no host window in front the cursor
+            # took Enter meant for the page.
+            if smart.active() and not _open_list.walking() \
+                    and smart.window() == self._foreground_hwnd():
                 if name in ('tab', 'down', 'numpad2') and not shift:
                     smart.say(smart.move(1))
                     return True
                 if name in ('up', 'numpad8') or (name == 'tab' and shift):
                     smart.say(smart.move(-1))
                     return True
-                if name in ('return', 'enter'):
+                if name in ('return', 'enter', 'numpad5'):
                     ok, said = smart.press()
                     if said:
                         self._say(str(said))
@@ -2782,7 +3028,7 @@ class TitanAccessEngine:
                     _ok, said = palette.layout_cycle(-1)
                 elif name == 'numpad6':
                     _ok, said = palette.layout_cycle(1)
-                elif name in ('return', 'enter'):
+                elif name in ('return', 'enter', 'numpad5'):
                     # What a row answered is only RETURNED by the module
                     # (the add-on's plugin says it); a setting flipped in
                     # place was silent here for want of this line.
@@ -2838,7 +3084,10 @@ class TitanAccessEngine:
                 elif name == 'numpad6':
                     ocrReview.layout_cycle(1)
                 elif name in ('return', 'enter', 'numpad5'):
-                    _ok, said = ocrReview.click(double=bool(shift))
+                    # One click, or a double one on a quick second press
+                    # (`smart.press_twice`); Shift+Enter double-clicks now.
+                    _ok, said = (ocrReview.click(double=True) if shift
+                                 else ocrReview.press())
                 elif name == 'f5':
                     threading.Thread(
                         target=lambda: self._say(str(ocrReview.refresh()[1])),
@@ -2997,7 +3246,7 @@ class TitanAccessEngine:
             widgetReview.press()
             return True
         if name == 'escape':
-            _on, said = widgetReview.stop()
+            _on, said = widgetReview.escape()
             if said:
                 self._say(str(said))
             return True
@@ -3076,11 +3325,9 @@ class TitanAccessEngine:
         elif name == 'f5':
             _ok, said = appReview.refresh()
         elif name == 'escape':
-            # One level at a time: a menu closes first, then the review.
-            if appReview.in_a_menu():
-                _ok, said = appReview.close_menu()
-            else:
-                _on, said = appReview.stop()
+            # One level at a time (`appReview.escape`): a menu, a
+            # sub-window, then the review and the application with it.
+            _ok, said = appReview.escape()
         else:
             return False
         if said:
@@ -3119,7 +3366,15 @@ class TitanAccessEngine:
             log(f"[TitanAccess] scripts notification: {e}")
 
     def _scripts_follow_focus(self, obj):
-        """The user's scripts hear the focus, and the window changing."""
+        """The user's scripts hear the focus, and the window changing -
+        and so does a procedure being recorded: where the user went is
+        what a procedure is made of."""
+        try:
+            from .portable import procedures
+            if procedures.recording():
+                procedures.note_focus(self._adapted(obj))
+        except Exception as e:                       # noqa: BLE001
+            log(f"[TitanAccess] procedure focus: {e}")
         try:
             from . import ta_scripts
             if not ta_scripts.scripts():
@@ -3197,6 +3452,18 @@ class TitanAccessEngine:
                     return True
         except Exception as e:
             log(f"[TitanAccess] app plain-key error: {e}")
+        # **A procedure being recorded hears the key that reached the
+        # program** (`portable/procedures.note_keystroke`) - only now, after
+        # every walked list, script and mode above has declined it.
+        try:
+            from .portable import procedures
+            if procedures.recording():
+                procedures.note_keystroke(
+                    key_name, ctrl, alt, shift,
+                    self._adapted(self.current_object)
+                    if self.current_object is not None else None)
+        except Exception as e:                       # noqa: BLE001
+            log(f"[TitanAccess] procedure key: {e}")
         # **What the shortcut does, said as it goes through** (`portable/
         # spokenShortcuts`): Control+O, "Open" - out of the program's own
         # menu. The key is not taken; the word is queued a moment later,
@@ -3229,6 +3496,12 @@ class TitanAccessEngine:
             return True
 
     def on_char_typed(self, ch):
+        try:
+            from .portable import procedures
+            if procedures.recording() and ch and str(ch).isprintable():
+                procedures.note_typing(ch)
+        except Exception:                            # noqa: BLE001
+            pass
         if self.editable is not None:
             # The text changed under the snapshot the reader keeps; a
             # Backspace now takes back what was typed (`read_deletion`).
@@ -3887,12 +4160,62 @@ class TitanAccessEngine:
         if text:
             self.speak(text)
             return True
-        try:
-            from .portable import commands
-            commands.where_am_i()
-        except Exception as e:
-            log(f"[TitanAccess] where am I: {e}")
+        text = self.where_am_i_text(obj)
+        self.speak(text or L("whereAmI.nothing"), interrupt=True)
         return True
+
+    #: How far up Where am I walks, and the roles that are only plumbing.
+    WHERE_DEPTH = 16
+    _UNSAID_ROLES = ("PANE", "UNKNOWN", "FILLER", "SCROLLPANE", "SCROLLBAR",
+                     "DESKTOPPANE", "SECTION")
+
+    def where_am_i_text(self, obj):
+        """The whole chain above the focus, top first, then the control:
+        "Notatnik, okno, Zapisz jako, okno dialogowe: Nazwa pliku".
+
+        **This reader's own walk.** The add-on's command asks NVDA's
+        `ancestry` module, which is not in Titan Access - it raised, the
+        error went to the log, and Where am I said nothing outside Titan's
+        shell. The parents come from the reader's own object tree
+        (`nvda_shape`, UI Automation or AT-SPI); a nameless pane is
+        plumbing and is not said."""
+        adapted = self._adapted(obj) if obj is not None else None
+        if adapted is None:
+            return ""
+        try:
+            from .portable import elements
+        except Exception:                            # noqa: BLE001
+            elements = None
+        chain, node, seen = [], None, 0
+        try:
+            node = adapted.parent
+        except Exception:                            # noqa: BLE001
+            node = None
+        while node is not None and seen < self.WHERE_DEPTH:
+            seen += 1
+            try:
+                role = str(getattr(getattr(node, "role", None), "name", "")
+                           or "").upper()
+                name = str(getattr(node, "name", "") or "").strip()
+            except Exception:                        # noqa: BLE001
+                break
+            if name and role not in self._UNSAID_ROLES:
+                word = elements.role_word(role) if elements else ""
+                chain.append("%s, %s" % (name, word) if word else name)
+            try:
+                node = node.parent
+            except Exception:                        # noqa: BLE001
+                break
+        # The desktop is the top of everything and says nothing.
+        chain = [one for one in chain if one]
+        if chain and "desktop" in chain[-1].lower():
+            chain.pop()
+        chain.reverse()
+        own = str(getattr(adapted, "name", "") or "").strip()
+        said = ", ".join(chain)
+        if own:
+            said = "%s: %s" % (said, own) if said else own
+        return said
 
     def _run_shared(self, name):
         """A shared command on its own key - the same path as the palette."""
@@ -3973,7 +4296,13 @@ class TitanAccessEngine:
         except Exception as error:                   # noqa: BLE001
             self._say("%s: %s" % (name, error))
             return False, ''
-        work = getattr(commands, name, None)
+        # `commands.find` answers this reader's own meaning first
+        # (`commands.OWN`): `where_am_i`, `toggle_trackpad` and
+        # `speech_system` are there and not in `MINE`, and reaching past it
+        # ran the add-on's NVDA-only version - "this reader has not got
+        # that" for Where am I from the palette and its key.
+        find = getattr(commands, 'find', None)
+        work = find(name) if callable(find) else getattr(commands, name, None)
         if not callable(work):
             self._say("%s: not in this reader" % name)
             return False, ''

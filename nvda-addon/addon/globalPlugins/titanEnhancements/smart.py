@@ -69,6 +69,7 @@ def report():
 
 
 def forget():
+    _explored['at'] = None
     with _LOCK:
         had = bool(_state['controls'])
         _state.update({'hwnd': 0, 'controls': [], 'at': -1, 'region': '',
@@ -244,6 +245,7 @@ def _take(hwnd, controls, reading):
     when something is happening. So the control the user was on is looked
     for by name, and only a control that has really gone moves them.
     """
+    _explored['at'] = None    # a new reading: a finger says it afresh
     with _LOCK:
         arrived = bool(controls) and not (_state['controls']
                                           and _state['hwnd'] == int(hwnd or 0))
@@ -354,8 +356,136 @@ def say(moved):
 # --------------------------------------------------------------------------- #
 # Pressing one
 # --------------------------------------------------------------------------- #
+#: The double-click time used when Windows cannot be asked, in seconds.
+DOUBLE_DEFAULT = 0.4
+
+_twice = {'key': None, 'timer': None, 'single': None}
+
+
+def double_click_time():
+    """How long a second press has to count as a double click: the user's
+    own Windows double-click time, kept between 0.25 and 0.6 seconds (a
+    setting of two seconds would make every single click wait two)."""
+    try:
+        import ctypes
+        seconds = ctypes.windll.user32.GetDoubleClickTime() / 1000.0
+    except Exception:                                # noqa: BLE001
+        return DOUBLE_DEFAULT
+    return min(0.6, max(0.25, seconds or DOUBLE_DEFAULT))
+
+
+def _said(answer, report):
+    try:
+        ok, said = answer
+    except Exception:                                # noqa: BLE001
+        return
+    if said and report is not None:
+        try:
+            report(str(said))
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def _report(text):
+    if compat.ui is not None:
+        try:
+            compat.ui.message(str(text))
+        except Exception:                            # noqa: BLE001
+            pass
+
+
+def press_twice(key, single, double, report=_report):
+    """Enter or NumPad 5 on something read off the screen: ONE click, or -
+    pressed again quickly on the same thing - a DOUBLE click.
+
+    Some things drawn in a picture do something on one click and others
+    (an icon, a file in a list) only on two, and from a picture nobody can
+    tell which - so both are a key away, the way they are a mouse away.
+    The click waits out the double-click time before it goes, because
+    clicking at once would take the keyboard away from the reader's own
+    list before a second press could reach it; a second press inside that
+    time on the same ``key`` cancels it and double-clicks instead. A press
+    on something ELSE sends the waiting click at once. ``single`` and
+    ``double`` answer ``(ok, said)``; ``said`` is given to ``report``.
+    A single click is heard as `reader.click`, a double as
+    `reader.double-click`. Answers ``(True, '')`` - what happens is said
+    when it happens."""
+    from . import icons
+    late = None
+    with _LOCK:
+        timer = _twice['timer']
+        same = timer is not None and _twice['key'] == key
+        if timer is not None:
+            timer.cancel()
+            if not same:
+                late = _twice['single']
+        _twice.update({'key': None, 'timer': None, 'single': None})
+        if not same:
+            def fire(wanted=key):
+                with _LOCK:
+                    if _twice['key'] != wanted:
+                        return
+                    _twice.update({'key': None, 'timer': None,
+                                   'single': None})
+                icons.play('reader.click')
+                _said(single(), report)
+            timer = threading.Timer(double_click_time(), fire)
+            timer.daemon = True
+            _twice.update({'key': key, 'timer': timer, 'single': single})
+            timer.start()
+    if late is not None:
+        icons.play('reader.click')
+        _said(late(), report)
+    if same:
+        icons.play('reader.double-click')
+        _said(double(), report)
+    return True, ''
+
+
+class Twice(object):
+    """One thing that can be clicked once or twice.
+
+    Called - by Enter or NumPad 5 - it is `press_twice`, which waits to see
+    whether a second press follows. ``once()`` and ``double()`` are for a
+    caller that already KNOWS which it was: a tap and a double tap on the
+    touchpad, decided by the tracker before they arrive. Each plays the
+    sound of what it did."""
+
+    def __init__(self, key, single, double, report=_report):
+        self.key, self.single, self.double_ = key, single, double
+        self.report = report
+
+    def __call__(self):
+        return press_twice(self.key, self.single, self.double_, self.report)
+
+    def once(self):
+        from . import icons
+        icons.play('reader.click')
+        _said(self.single(), self.report)
+        return True, ''
+
+    def double(self):
+        from . import icons
+        icons.play('reader.double-click')
+        _said(self.double_(), self.report)
+        return True, ''
+
+
+def twice(key, single, double, report=_report):
+    """A `Twice` - what a row that can be clicked twice carries as its run."""
+    return Twice(key, single, double, report)
+
+
+def waiting_click():
+    """Whether a click is waiting out the double-click time (tests)."""
+    with _LOCK:
+        return _twice['timer'] is not None
+
+
 def press():
     """Press the control the cursor is on. ``(ok, sentence)``.
+
+    Pressed twice quickly it is a double click (`press_twice`).
 
     **A control that knows where it is presses itself.** A local reading
     (Windows' own OCR) carries a real screen rectangle per line, so pressing
@@ -371,13 +501,79 @@ def press():
     if not found:
         return False, _('There is nothing to press.')
     control = found['control']
+    key = ('smart', control.get('name'), tuple(control.get('rect') or ()))
+    return press_twice(key, lambda: _press_one(control, False),
+                       lambda: _press_one(control, True))
+
+
+# --------------------------------------------------------------------------- #
+# The touchpad over the cursor (`touchWalk`)
+# --------------------------------------------------------------------------- #
+def reviewing():
+    """Whether the cursor is up - the touchpad's walkers ask this."""
+    return active()
+
+
+_explored = {'at': None, 'spoken': 0}
+
+
+def spoken():
+    return _explored['spoken']
+
+
+def explore(x, y):
+    """A finger at a point: the control drawn there, said once."""
+    with _LOCK:
+        controls = list(_state['controls'])
+    for index, control in enumerate(controls):
+        rect = control.get('rect')
+        if not rect:
+            continue
+        left, top, width, height = rect
+        if left <= x < left + width and top <= y < top + height:
+            if _explored['at'] == index:
+                return True, ''
+            _explored['at'] = index
+            with _LOCK:
+                _state['at'] = index
+            if say(here()):
+                _explored['spoken'] += 1
+            return True, ''
+    return False, ''
+
+
+def step(delta):
+    """A flick: the next or previous control, said."""
+    if say(move(delta)):
+        _explored['spoken'] += 1
+    return True, ''
+
+
+def press_once():
+    found = here()
+    if not found:
+        return False, _('There is nothing to press.')
+    return Twice(None, lambda: _press_one(found['control'], False),
+                 lambda: _press_one(found['control'], True)).once()
+
+
+def press_double():
+    found = here()
+    if not found:
+        return False, _('There is nothing to press.')
+    return Twice(None, lambda: _press_one(found['control'], False),
+                 lambda: _press_one(found['control'], True)).double()
+
+
+def _press_one(control, double):
     rect = control.get('rect')
     if rect:
-        return _click(rect, control['name'])
+        return _click(rect, control['name'], double=double)
     from .link import LINK
     if not LINK.connected():
         return False, _('Titan is not running.')
-    ok, said = LINK.run_action('ocr', 'press', name=control['name'])
+    ok, said = LINK.run_action('ocr', 'press', name=control['name'],
+                               double=bool(double))
     if not ok:
         return False, str(said or '')
     return True, str(said or '')
@@ -416,6 +612,11 @@ def _click(rect, name, double=False):
         user32.mouse_event(_MOUSE_LEFT_DOWN, 0, 0, 0, 0)
         user32.mouse_event(_MOUSE_LEFT_UP, 0, 0, 0, 0)
         if double:
+            # A moment apart, as a hand makes it - well inside any
+            # double-click time; two clicks in the same instant are ignored
+            # by some programs.
+            import time
+            time.sleep(0.04)
             user32.mouse_event(_MOUSE_LEFT_DOWN, 0, 0, 0, 0)
             user32.mouse_event(_MOUSE_LEFT_UP, 0, 0, 0, 0)
     except Exception as error:                       # noqa: BLE001

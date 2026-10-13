@@ -231,7 +231,17 @@ def available():
     except Exception as error:                       # noqa: BLE001
         return False, _('Windows will not answer: {why}').format(why=error)
     if compat.inputCore is None:
-        return False, _('This NVDA does not expose its input system.')
+        # **Not NVDA - Titan Access.** NVDA's input system is where NVDA's
+        # gestures go; this reader has its own tracker (NVDA's, ported:
+        # `titan_access/touch_tracker.py`, handed to `touchRecognizer`),
+        # so a pad is all it needs. Refusing here was "this NVDA does not
+        # expose its input system" in a reader that is not NVDA.
+        from . import touchRecognizer
+        if touchRecognizer.manager_factory is None \
+                and touchRecognizer.listener is None:
+            return False, _('This reader has nothing to give the gestures '
+                            'to.')
+        return True, ''
     try:
         import touchTracker                          # noqa: F401
         import touchHandler                          # noqa: F401
@@ -587,6 +597,11 @@ def _tracker_manager():
     contacts and the emission end up in two different places.
     """
     global _manager
+    if compat.inputCore is None:
+        # Titan Access: the contacts go to `touchRecognizer`, which drives
+        # this reader's own tracker. Asking for NVDA's here was an import
+        # that failed on every report.
+        return None
     handler = _surface()
     if handler is not None and getattr(handler, 'trackerManager', None) \
             is not None:
@@ -954,6 +969,14 @@ def _loop():
                 _handle_input(lparam)
             except Exception:                        # noqa: BLE001
                 pass
+        if message == _WM_DESTROY:
+            # **The loop has to be told to end.** `stop()` posts WM_CLOSE,
+            # which destroys this window - and nothing answered the
+            # destruction, so GetMessage never returned 0, the thread ran
+            # for ever and `running()` stayed True: switching the pad off
+            # said "off" and switching it on again said "off" a second time.
+            user32.PostQuitMessage(0)
+            return 0
         return int(user32.DefWindowProcW(ctypes.c_void_p(hwnd), message,
                                          ctypes.c_void_p(wparam),
                                          ctypes.c_void_p(lparam)))
@@ -1053,6 +1076,8 @@ def _loop():
         _state.update({'on': False, 'hwnd': 0})
 
 
+_WM_DESTROY = 0x0002
+
 _thread = None
 
 
@@ -1076,7 +1101,9 @@ def start():
         return False, _('This Python has no stdcall callbacks.')
     # NVDA's own touch scripts need a handler to exist before the first
     # gesture arrives, or every one of them raises where nobody sees it.
-    ready, why = _install_surface()
+    # Only inside NVDA: Titan Access has no NVDA scripts to feed.
+    ready, why = _install_surface() if compat.inputCore is not None \
+        else (True, '')
     if not ready:
         with _LOCK:
             _state['why'] = why

@@ -407,6 +407,17 @@ def click(double=False):
     return ok, said
 
 
+def press():
+    """Enter or NumPad 5: one click, or a double click when pressed twice
+    quickly on the same words (`smart.press_twice`)."""
+    with _LOCK:
+        key = ('ocr', _state.get('row'), _state.get('word'))
+    if here() is None:
+        return False, _('There is nothing here to click')
+    from . import smart
+    return smart.press_twice(key, lambda: click(False), lambda: click(True))
+
+
 def _beep(row):
     if compat.tones is None:
         return

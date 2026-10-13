@@ -26,9 +26,12 @@ made.
   Down** move by ten.
 * **Enter presses**: a button is pressed, a check box is toggled, a row of
   a list is opened. **Space** toggles what can be toggled.
-* **F5 reads the screen again**, **Escape leaves the review** - and
-  deliberately does not close the application, because a key that both
-  leaves and quits is a key nobody can use safely.
+* **F5 reads the screen again**. **Escape goes back one level** (`escape`):
+  out of a field, out of an open menu, out of a sub-window (the
+  application is sent Escape, so the dialog closes itself) - and in the
+  application's main window it leaves the review AND closes the
+  application, as Escape in the main window of anything walked here does.
+  Leaving without closing is the review's own toggle command.
 * **Each control is marked by a short beep pitched by where it is** in the
   screen, first high and last low - the reviews' own band, so all three
   sound like one feature.
@@ -539,6 +542,13 @@ def activate():
         return open_menu(control)
     if kind == 'menuitem':
         icons.play('button')
+        # **The menu is gone the moment an item is chosen**, as a real menu
+        # closes when it is clicked: the review then walks whatever the
+        # item opened (a dialog arrives as a new screen and is walked from
+        # its top) instead of staying on a list of menu items the
+        # application no longer shows. With nothing opened the cursor is
+        # back on the menu bar entry the item came from.
+        _leave_menu_quietly()
         _act(lambda: titan.press_described(token, identifier))
         # Translators: said when a menu item is chosen.
         return True, _('Chosen')
@@ -615,6 +625,51 @@ def close_menu():
     icons.play('close-object')
     say_here()
     return True, ''
+
+
+def _leave_menu_quietly():
+    """Drop the open menu and put the cursor on its entry of the menu
+    bar. Nothing is said - what the item does next is the news."""
+    with _LOCK:
+        menu = _state.get('menu') or {}
+        _state['menu'] = None
+        _state['inner'] = 0
+        label = menu.get('label')
+        at = 0
+        for index, row in enumerate(_controls()):
+            if row.get('kind') == 'menu' and _text(row.get('label')) == label:
+                at = index
+                break
+        _state['at'] = at
+
+
+def in_a_sub_window():
+    """Whether the screen in hand is a sub-window (a modal dialog)."""
+    with _LOCK:
+        return bool((_state.get('screen') or {}).get('modal'))
+
+
+def escape():
+    """Escape, one level at a time. ``(ok, said)``; ``ok`` is False once
+    the review has ended.
+
+    A field gives the keys back to the controls, an open menu closes, a
+    sub-window is the APPLICATION's to close (it is sent Escape, which wx
+    answers by ending the dialog, and the screen that comes back is the
+    window behind it), and the main window ends the review and closes the
+    application with it."""
+    if not reviewing():
+        return False, ''
+    if typing_mode():
+        return leave_typing()
+    if in_a_menu():
+        return close_menu()
+    if in_a_sub_window():
+        token = session()
+        icons.play('close-object')
+        _act(lambda: titan.key_described(token, 'escape'))
+        return True, ''
+    return stop(close=True)
 
 
 def in_a_menu():

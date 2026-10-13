@@ -559,8 +559,9 @@ class TheSpeechSchemesAndTheArrowsAreThisReadersToo(unittest.TestCase):
         for name in ('virtualWindow', 'ocrReview', 'palette'):
             self.assertIn("'%s'" % name, block)
         self.assertIn('smart.forget()', block)
-        self.assertIn('smart.active() and smart.window() == '
-                      'self._foreground_hwnd()', source)
+        # An open page or palette is asked first; then the window in front.
+        self.assertIn('smart.active() and not _open_list.walking()', source)
+        self.assertIn('smart.window() == self._foreground_hwnd()', source)
         for name in ('speechSchemes', 'schemeWalk'):
             self.assertTrue(os.path.isfile(os.path.join(
                 COMPONENT, 'titan_access', 'portable', name + '.py')), name)
@@ -700,18 +701,19 @@ class WidgetsAndApplicationsAreWalkedHere(unittest.TestCase):
         self._stub(self.widget, 'reviewing', lambda: True)
         for name in ('move', 'press'):
             self._record(self.widget, name)
-        self._record(self.widget, 'stop', (False, 'Widget review off'))
+        # Escape leaves the widget AND closes it (`widgetReview.escape`).
+        self._record(self.widget, 'escape', (False, 'Widget closed'))
         for key, wanted in (('up', ('move', 'up')),
                             ('down', ('move', 'down')),
                             ('left', ('move', 'left')),
                             ('right', ('move', 'right')),
                             ('return', ('press',)),
-                            ('escape', ('stop',))):
+                            ('escape', ('escape',))):
             del self.calls[:]
             self.assertTrue(self.engine._walked_key(0, key, False, False,
                                                     False), key)
             self.assertEqual(self.calls, [wanted], key)
-        self.assertEqual(self.said, ['Widget review off'])
+        self.assertEqual(self.said, ['Widget closed'])
         # A key a widget has no meaning for is not swallowed.
         self.assertFalse(self.engine._walked_key(0, 'f7', False, False,
                                                  False))
@@ -736,7 +738,9 @@ class WidgetsAndApplicationsAreWalkedHere(unittest.TestCase):
         self._record(self.app, 'toggle', (True, 'checked'))
         self._record(self.app, 'refresh', (True, 'read again'))
         self._record(self.app, 'layout_cycle', (True, 'screen layout'))
-        self._record(self.app, 'stop', (False, 'Application review off'))
+        # Escape goes back one level, and in the main window closes the
+        # application (`appReview.escape`).
+        self._record(self.app, 'escape', (False, 'Application closed'))
         cases = (('up', ('move', -1)), ('down', ('move', 1)),
                  ('left', ('move_inside', -1)),
                  ('right', ('move_inside', 1)),
@@ -747,13 +751,13 @@ class WidgetsAndApplicationsAreWalkedHere(unittest.TestCase):
                  ('numpad3', ('move_corner', 1, 1)),
                  ('numpad6', ('layout_cycle', 1)),
                  ('return', ('activate',)), ('space', ('toggle',)),
-                 ('f5', ('refresh',)), ('escape', ('stop',)))
+                 ('f5', ('refresh',)), ('escape', ('escape',)))
         for key, wanted in cases:
             del self.calls[:]
             self.assertTrue(self.engine._walked_key(0, key, False, False,
                                                     False), key)
             self.assertEqual(self.calls, [wanted], key)
-        self.assertIn('Application review off', self.said)
+        self.assertIn('Application closed', self.said)
 
     def test_escape_closes_a_menu_before_the_review(self):
         self._stub(self.widget, 'reviewing', lambda: False)

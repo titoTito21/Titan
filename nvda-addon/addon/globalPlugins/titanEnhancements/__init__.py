@@ -544,6 +544,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             key = str(getattr(gesture, 'mainKeyName', '') or '')
             if not key:
                 return True
+            # **A procedure being recorded hears the key** - unless it is
+            # one of this add-on's own (a walked list's arrow, Enter in
+            # the palette), which belongs to the reader, not the program.
+            if procedures.recording():
+                script = getattr(gesture, 'script', None)
+                if getattr(script, '__self__', None) is not self:
+                    procedures.note_keystroke(
+                        key, 'control' in modifiers, 'alt' in modifiers,
+                        'shift' in modifiers)
             hwnd = 0
             try:
                 import api
@@ -564,6 +573,15 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         except Exception:                            # noqa: BLE001
             pass
         return True
+
+    def event_typedCharacter(self, obj, nextHandler, ch):
+        """What was typed, kept by a procedure being recorded."""
+        try:
+            if procedures.recording() and ch and str(ch).isprintable():
+                procedures.note_typing(ch)
+        except Exception:                            # noqa: BLE001
+            pass
+        nextHandler()
 
     def event_focusEntered(self, obj, nextHandler):
         """NVDA says the name of each container the focus has newly entered;
@@ -732,6 +750,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:downArrow': 'smartNext',
         'kb:upArrow': 'smartPrevious',
         'kb:enter': 'smartPress',
+        'kb:numpad5': 'smartPress',
+        'kb:numpad2': 'smartNext',
+        'kb:numpad8': 'smartPrevious',
         'kb:escape': 'smartLeave',
     }
 
@@ -933,6 +954,9 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:home': 'paletteHome',
         'kb:end': 'paletteEnd',
         'kb:enter': 'paletteActivate',
+        'kb:numpad5': 'paletteActivate',
+        'kb:numpad8': 'paletteUp',
+        'kb:numpad2': 'paletteDown',
         'kb:escape': 'paletteBack',
         # Left and Right by whichever layout is on (a character, the word
         # beside, the row beside), Shift the other way round, Control by
@@ -974,8 +998,17 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             want = palette.walking()
         except Exception:                            # noqa: BLE001
             want = False
-        if want != getattr(self, '_palette_bound', False):
-            self._borrow_palette_keys(want)
+        # **The palette and the OCR cursor borrow the same keys** (Enter,
+        # NumPad 5, the arrows), and a local reading starts both on one
+        # window. So the cursor steps aside BEFORE the palette binds - its
+        # unbinding would otherwise take the palette's Enter with it - and
+        # takes its keys back only after the palette has let go.
+        if want:
+            self._keep_keys_right()
+            self._borrow_palette_keys(True)
+        elif getattr(self, '_palette_bound', False):
+            self._borrow_palette_keys(False)
+            self._keep_keys_right()
         self._keep_touch_right()
 
     # ------------------------------------------------------------ touch
@@ -1005,6 +1038,24 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             except Exception:                        # noqa: BLE001
                 pass
         self._touch_bound = want
+
+    @script(description=_('Touch: two fingers twice - the virtual window; '
+                          'one finger three times - Titan; two fingers '
+                          'three times - read the screen with OCR'),
+            category=CATEGORY,
+            gestures=['ts:2finger_double_tap', 'ts:triple_tap',
+                      'ts:2finger_triple_tap'])
+    def script_touchCommand(self, gesture):
+        from . import touchWalk
+        name = touchWalk.command_for(
+            (getattr(gesture, 'identifiers', None) or [''])[0])
+        run = commands.find(name) if name else None
+        if run is None:
+            return
+        run()
+        self._keep_virtual_keys_right()
+        self._keep_ocr_keys_right()
+        self._keep_palette_keys_right()
 
     @script(description=_('In a walked list: the trackpad - explore with a '
                           'finger, flick to move, more fingers for the '
@@ -1476,6 +1527,11 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         'kb:leftArrow': 'widgetLeft',
         'kb:rightArrow': 'widgetRight',
         'kb:enter': 'widgetPress',
+        'kb:numpad5': 'widgetPress',
+        'kb:numpad8': 'widgetUp',
+        'kb:numpad2': 'widgetDown',
+        'kb:numpad4': 'widgetLeft',
+        'kb:numpad6': 'widgetRight',
         'kb:escape': 'widgetLeave',
     }
 
@@ -1560,15 +1616,18 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         """
         try:
             mode = surface.report().get('mode')
-            want = bool(smart.active()) and mode != surface.MODE_GAME
+            want = bool(smart.active()) and mode != surface.MODE_GAME \
+                and not palette.walking()
         except Exception:                            # noqa: BLE001
             want = False
         if want != self._smart_bound:
             self._borrow_keys(want)
 
     def _smart_here(self):
-        """Whether the drawn window being read is the one in front."""
-        if not smart.active():
+        """Whether the drawn window being read is the one in front - and
+        no walked list is up over it: a page of what was read (which
+        starts this cursor too) or the palette takes Enter first."""
+        if not smart.active() or palette.walking():
             return False
         try:
             import api
@@ -1854,16 +1913,13 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             self._keep_ocr_keys_right()
             gesture.send()
             return
-        # A second Enter or Numpad 5 within a moment is a DOUBLE click -
-        # what opens an item - the way a mouse's own double click is two
-        # quick presses. Either key does it, so a second press of EITHER
-        # counts.
-        import time as _time
-        now = _time.time()
-        double = (now - getattr(self, '_ocr_last_click', 0.0)) <= 0.4
-        self._ocr_last_click = 0.0 if double else now
-        _ok, said = ocrReview.click(double=double)
-        dialogs.report(said)
+        # A second Enter or Numpad 5 within the double-click time is a
+        # DOUBLE click - what opens an item - and the first waits for it
+        # rather than clicking at once (`smart.press_twice`): clicking at
+        # once and then twice more was three clicks.
+        _ok, said = ocrReview.press()
+        if said:
+            dialogs.report(said)
 
     @script(
         # Translators: an NVDA command.
@@ -2056,13 +2112,14 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
             return
         widgetReview.press()
 
-    @script(description=_('Leave the widget'), category=CATEGORY)
+    @script(description=_('Leave the widget and close it'),
+            category=CATEGORY)
     def script_widgetLeave(self, gesture):
         if not widgetReview.reviewing():
             self._keep_widget_keys_right()
             gesture.send()
             return
-        _on, said = widgetReview.stop()
+        _on, said = widgetReview.escape()
         self._keep_widget_keys_right()
         dialogs.report(said)
 
@@ -2427,33 +2484,25 @@ class GlobalPlugin(globalPluginHandler.GlobalPlugin):
         _ok, said = appReview.refresh()
         dialogs.report(said)
 
-    @script(description=_('Leave the application review'),
+    @script(description=_('Application review: go back one level; in '
+                          'the main window, close the application'),
             category=CATEGORY)
     def script_appLeave(self, gesture):
-        # **One level at a time.** Escape in a field comes back to the
-        # controls, Escape in a menu comes back to the
-        # controls; Escape in the controls leaves the review. Closing the
-        # whole thing from inside a menu would make one keystroke undo two
-        # decisions - the same rule the virtual window's field mode
-        # follows.
-        if appReview.reviewing() and appReview.typing_mode():
-            _ok, said = appReview.leave_typing()
-            self._keep_typing_keys_right()
-            if said:
-                dialogs.report(said)
-            return
-        if appReview.reviewing() and appReview.in_a_menu():
-            _ok, said = appReview.close_menu()
-            if said:
-                dialogs.report(said)
-            return
+        # **One level at a time** (`appReview.escape`): a field, a menu, a
+        # sub-window (the application closes its own dialog), and in the
+        # main window the review ends and the application is closed.
         if not appReview.reviewing():
             self._keep_app_keys_right()
             gesture.send()
             return
-        _on, said = appReview.stop()
-        self._keep_app_keys_right()
-        dialogs.report(said)
+        typing = appReview.typing_mode()
+        on, said = appReview.escape()
+        if typing:
+            self._keep_typing_keys_right()
+        if not on:
+            self._keep_app_keys_right()
+        if said:
+            dialogs.report(said)
 
     @script(
         # Translators: an NVDA command.

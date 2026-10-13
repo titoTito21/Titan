@@ -321,6 +321,35 @@ def _activate_widget(widget='', **_):
     return spoken or f"Pressed {label}."
 
 
+def _widget_close(widget='', **_):
+    """Leave a widget the way Titan's non-visual interface leaves one: its
+    own `cleanup()` (a widget may hold a timer, a scan or a device), and
+    the instance forgotten, so the next reading starts it afresh."""
+    wanted = str(widget or '').strip().lower()
+    if not wanted:
+        return "Say which widget."
+
+    def close():
+        for name, _module, info in _widget_modules():
+            label = str(info.get('name') or name)
+            if wanted not in (label.lower(), name.lower()):
+                continue
+            instance = _widget_instances.pop(name, None)
+            if instance is not None and hasattr(instance, 'cleanup'):
+                try:
+                    instance.cleanup()
+                except Exception as error:
+                    print(f"Error cleaning up widget {name}: {error}")
+            return label
+        return None
+    label, error = run_on_gui(close)
+    if error:
+        return f"Could not close it: {error}"
+    if label is None:
+        return f"Titan has no widget called '{widget}'."
+    return f"Closed {label}."
+
+
 def _widget_read(widget='', **_):
     """What the widget's cursor is on now."""
     wanted = str(widget or '').strip().lower()

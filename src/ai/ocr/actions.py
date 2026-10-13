@@ -64,8 +64,12 @@ def _require_keyboard():
     return keyboard
 
 
-def activate(screen, element, button: str = 'left') -> str:
-    """Press ``element``. Returns a short English sentence describing what happened."""
+def activate(screen, element, button: str = 'left',
+             double: bool = False) -> str:
+    """Press ``element``. Returns a short English sentence describing what happened.
+
+    ``double`` double-clicks it: some controls drawn in a picture (an icon,
+    a file in a list) do nothing on one click and open on two."""
     _require_action()
     if element is None or element.rect is None:
         raise ActionRefused("This entry has no position on screen, so it "
@@ -77,7 +81,9 @@ def activate(screen, element, button: str = 'left') -> str:
     x, y = shot.centre_of(element.rect)
     _focus_target(shot)
     _check_point_belongs(shot, x, y)
-    _click(x, y, button)
+    _click(x, y, button, clicks=2 if double else 1)
+    if double:
+        return f"Double-clicked {element.name or element.spoken()}"
     return f"Pressed {element.name or element.spoken()}"
 
 
@@ -297,7 +303,7 @@ _parked_cursor = None
 
 
 def _click(x: int, y: int, button: str = 'left',
-           restore_cursor: bool = True) -> None:
+           restore_cursor: bool = True, clicks: int = 1) -> None:
     global _parked_cursor
     import ctypes
     user32 = ctypes.windll.user32
@@ -308,9 +314,14 @@ def _click(x: int, y: int, button: str = 'left',
     try:
         user32.SetCursorPos(int(x), int(y))
         time.sleep(0.03)
-        user32.mouse_event(down, 0, 0, 0, 0)
-        time.sleep(0.02)
-        user32.mouse_event(up, 0, 0, 0, 0)
+        for at in range(max(1, int(clicks))):
+            if at:
+                # Well inside the system's double-click time, at the same
+                # place - which is what makes two clicks one double click.
+                time.sleep(0.04)
+            user32.mouse_event(down, 0, 0, 0, 0)
+            time.sleep(0.02)
+            user32.mouse_event(up, 0, 0, 0, 0)
     finally:
         if restore_cursor:
             time.sleep(0.05)

@@ -197,6 +197,20 @@ _ = i18n.install(globals())
 #: optional and empty is the default, so the list has to be able to say so -
 #: and it has to be first, because that is the answer for every class the
 #: user has not touched.
+
+def _group(parent, label):
+    """A labelled group whose controls are CHILDREN of its box.
+
+    wx wants a static box's controls created inside it ("should be
+    created as child of its wxStaticBox", logged once per control
+    otherwise), and it is also what tells Windows - and a screen reader -
+    that the control belongs to the group."""
+    import wx
+    from . import wxkit
+    box = wx.StaticBox(parent, label=label)
+    return wxkit.helper().BoxSizerHelper(
+        box, sizer=wx.StaticBoxSizer(box, wx.VERTICAL))
+
 def _inherit():
     # Translators: the first entry of every voice list in the class manager.
     return _('(the one the reader is using)')
@@ -257,11 +271,10 @@ def build():
             if self._rows:
                 self.list.SetSelection(0)
 
-            which = helper.addItem(guiHelper.BoxSizerHelper(
-                page, sizer=wx.StaticBoxSizer(
-                    # Translators: a group in the voice class manager.
-                    wx.StaticBox(page, label=_('Which voice')),
-                    wx.VERTICAL)))
+            which = helper.addItem(_group(
+                page,
+                # Translators: a group in the voice class manager.
+                _('Which voice')))
             box = which.sizer.GetStaticBox()
             # **The speech system, where the reader has more than one.**
             # Titan Access speaks through Titan TTS, SAPI 5, eSpeak,
@@ -291,11 +304,10 @@ def build():
             # synthesizer list.
             self.note = which.addItem(wx.StaticText(box, label=''))
 
-            dials = helper.addItem(guiHelper.BoxSizerHelper(
-                page, sizer=wx.StaticBoxSizer(
-                    # Translators: a group in the voice class manager.
-                    wx.StaticBox(page, label=_('How it sounds')),
-                    wx.VERTICAL)))
+            dials = helper.addItem(_group(
+                page,
+                # Translators: a group in the voice class manager.
+                _('How it sounds')))
 
             def spin(label):
                 return dials.addLabeledControl(
@@ -477,11 +489,10 @@ def build():
             self.kinds.Bind(wx.EVT_LISTBOX, self._kind_chosen)
             self.kinds.SetSelection(0)
 
-            said = helper.addItem(guiHelper.BoxSizerHelper(
-                page, sizer=wx.StaticBoxSizer(
-                    # Translators: a group on the speech schemes page.
-                    wx.StaticBox(page, label=_('What is said')),
-                    wx.VERTICAL)))
+            said = helper.addItem(_group(
+                page,
+                # Translators: a group on the speech schemes page.
+                _('What is said')))
             box = said.sizer.GetStaticBox()
             self.rule_parts = said.addLabeledControl(
                 # Translators: the list of parts of a control's reading.
@@ -527,11 +538,10 @@ def build():
                 box, label=_('The sound stands for the type &word')))
             self.sound_only.Bind(wx.EVT_CHECKBOX, self._sound_only_toggled)
 
-            shown = helper.addItem(guiHelper.BoxSizerHelper(
-                page, sizer=wx.StaticBoxSizer(
-                    # Translators: a group on the speech schemes page.
-                    wx.StaticBox(page, label=_('In braille')),
-                    wx.VERTICAL)))
+            shown = helper.addItem(_group(
+                page,
+                # Translators: a group on the speech schemes page.
+                _('In braille')))
             self.braille_kind = shown.addLabeledControl(
                 # Translators: how a control type is shown in braille.
                 _('The type is shown as (empty: not shown; "own" for the '

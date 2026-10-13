@@ -181,6 +181,10 @@ class Link:
             return False, f'Titan answered something that is not JSON: {error}'
         if not payload.get('ok'):
             error = str(payload.get('error') or 'the call failed')
+            # An older Titan put "RuntimeError: " in front of a sentence
+            # meant for the user (`bridge_api.bridge`); it is not read out.
+            if error.startswith('RuntimeError: '):
+                error = error[len('RuntimeError: '):]
             if 'has no bridge call' in error:
                 return False, _('This Titan is older than the add-on: it does '
                                 'not have {call}.').format(call=call)

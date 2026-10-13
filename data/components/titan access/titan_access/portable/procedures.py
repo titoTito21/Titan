@@ -313,6 +313,79 @@ def note_key(name):
     return _add({'do': KEY, 'key': str(name or '')})
 
 
+#: Keys that only MOVE, pressed alone or with Shift. Where they lead is
+#: recorded as the control the focus lands on (`note_focus`), never as the
+#: key: a procedure replays where the user went, and Tab five times is not
+#: a place. With Control or Alt they DO something (Control+Tab is the next
+#: tab, Alt+Down opens a list) and are kept as keys.
+_MOVES = frozenset((
+    'up', 'down', 'left', 'right', 'uparrow', 'downarrow', 'leftarrow',
+    'rightarrow', 'tab', 'home', 'end', 'pageup', 'pagedown', 'prior',
+    'next'))
+
+#: A modifier on its own is never a step.
+_MODIFIERS = frozenset((
+    'shift', 'leftshift', 'rightshift', 'control', 'ctrl', 'leftcontrol',
+    'rightcontrol', 'alt', 'leftalt', 'rightalt', 'altgr', 'windows',
+    'leftwindows', 'rightwindows', 'insert', 'capslock', 'numlock',
+    'scrolllock'))
+
+#: The reader's spelling of a key, as `readerApi.send_key` replays it.
+_KEY_NAMES = {'return': 'enter', 'numpadenter': 'enter', 'esc': 'escape',
+              'pageup': 'pageUp', 'pagedown': 'pageDown', 'del': 'delete',
+              'back': 'backspace', 'apps': 'applications'}
+
+_EDITABLE = ('EDITABLETEXT', 'DOCUMENT', 'TERMINAL', 'PASSWORDEDIT')
+
+
+def _editable(obj):
+    try:
+        return str(getattr(getattr(obj, 'role', None), 'name', '')
+                   ).upper() in _EDITABLE
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+def note_keystroke(name, ctrl=False, alt=False, shift=False, obj=None):
+    """A key the user pressed, while a procedure is being recorded.
+
+    **What a key IS decides what is kept.** Enter or Space on a control
+    that is not a field is pressing it (a `press` step, anchored to the
+    control, so it replays as that control's own action); a character typed
+    is typing, which the reader hands to `note_typing` separately; a key
+    that only moves is left to the focus steps; anything else - Escape,
+    Delete, F5, Control+S - is a key, replayed as that key. ``obj`` is the
+    control that had the keyboard, read when the reader does not pass it.
+    Both readers call this: one rule, so a procedure recorded in one replays
+    the same in the other.
+    """
+    if not recording():
+        return False
+    key = str(name or '').strip().lower()
+    if not key or key in _MODIFIERS:
+        return False
+    if key in _MOVES and not ctrl and not alt:
+        return False
+    if key.startswith('numpad') and key != 'numpadenter':
+        return False                     # NumLock off: the reader's keys
+    key = _KEY_NAMES.get(key, key)
+    if obj is None:
+        try:
+            from . import readerApi
+            obj = readerApi.focus()
+        except Exception:                            # noqa: BLE001
+            obj = None
+    field = _editable(obj)
+    plain = not ctrl and not alt
+    if plain and (len(key) == 1 or (key == 'space' and field)):
+        return False                     # typing, recorded as typing
+    if plain and key in ('enter', 'space') and not field:
+        return note_press(obj)
+    held = [part for part, down in (('control', ctrl), ('alt', alt),
+                                    ('shift', shift)) if down]
+    return note_key('+'.join(held + [key]))
+
+
 # --------------------------------------------------------------------------- #
 # What a step says
 # --------------------------------------------------------------------------- #

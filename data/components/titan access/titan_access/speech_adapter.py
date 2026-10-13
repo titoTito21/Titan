@@ -91,11 +91,18 @@ class _Utterance(object):
     """One queued unit of speech: plain text, or pitched parts to concatenate."""
 
     __slots__ = ("text", "position", "pitch", "segments", "generation",
-                 "gap_ms", "voice")
+                 "gap_ms", "voice", "protected")
 
     def __init__(self, text="", position=0.0, pitch=0, segments=None,
-                 gap_ms=0, voice=None):
+                 gap_ms=0, voice=None, protected=False):
         self.text = text or ""
+        # **Heard whole.** A message that says what the reader just did
+        # ("Wirtualne okno wyłączone", "Paleta zamknięta") is followed at
+        # once by the focus landing back on the program, and that
+        # announcement interrupts - so the message was cut after a syllable.
+        # A protected utterance is not cut by an interrupting one: what
+        # comes next waits behind it. Only `stop` (Control, Tab) silences it.
+        self.protected = bool(protected)
         self.position = position
         self.pitch = pitch
         self.segments = segments or ()
@@ -354,7 +361,7 @@ class SpeechAdapter(object):
         self._speaking_until = time.time() + _estimate_duration(text)
 
     def speak(self, text, position=0.0, interrupt=True, pitch_offset=0,
-              voice=None):
+              voice=None, protected=None):
         """Speak ``text``.
 
         ``interrupt=True`` (the default) drops anything queued and cuts off what
@@ -367,15 +374,18 @@ class SpeechAdapter(object):
         ``rate``, ``pitch``, ``volume``): the utterance is spoken by THAT
         synthesizer in that voice, and the reader's own is put back after.
         """
+        if protected is None:
+            protected = is_protected(text)
         self._enqueue(_Utterance(text=text, position=position,
-                                 pitch=pitch_offset, voice=voice), interrupt)
+                                 pitch=pitch_offset, voice=voice,
+                                 protected=protected), interrupt)
 
     # ``speak_async`` is kept because callers all over the reader use it. It has
     # always been the same call: nothing here ever blocks, the pump does the
     # waiting.
     speak_async = speak
 
-    def speak_segments(self, segments, gap_ms=0):
+    def speak_segments(self, segments, gap_ms=0, protected=False):
         """Speak ``(text, pitch_offset, position)`` tuples as ONE announcement.
 
         Each part keeps its own pitch, and -- this is the contract -- **every**
@@ -386,7 +396,8 @@ class SpeechAdapter(object):
         segments = [tuple(s) for s in (segments or []) if s and s[0]]
         if not segments:
             return
-        self._enqueue(_Utterance(segments=segments, gap_ms=gap_ms),
+        self._enqueue(_Utterance(segments=segments, gap_ms=gap_ms,
+                                 protected=protected),
                       interrupt=True)
 
     # ------------------------------------------------------------------ #
@@ -508,17 +519,20 @@ class SpeechAdapter(object):
                 str(seg[0]) for seg in (utterance.segments or []))
             _SPOKEN.append(said)
             if _TRACE:
-                print(f"[TitanAccess] said: {said}", flush=True)
+                # Into the reader's log as well: a compiled, windowed Titan
+                # has no console for a print to reach.
+                from titan_access.log import log as _log
+                _log(f"[TitanAccess] said{' (protected)' if utterance.protected else ''}: {said}")
         except Exception:
             pass
+        cut = False
         with self._q_lock:
             if interrupt:
-                self._queue = []
-                self._generation += 1
+                cut = self._interrupt_queue()
             utterance.generation = self._generation
             self._queue.append(utterance)
             self._ensure_pump()
-        if interrupt and self._mode == self._MODE_TCE and self._engine is not None:
+        if cut and self._mode == self._MODE_TCE and self._engine is not None:
             # Cut the current audio at once; the pump picks up the new item
             # without waiting for the old one to play out.
             try:
@@ -527,6 +541,24 @@ class SpeechAdapter(object):
                 pass
         self._mark_speaking(utterance.plain_text)
         self._wake.set()
+
+    def _interrupt_queue(self):
+        """An interrupting utterance arrived (``_q_lock`` held). Everything
+        queued is dropped and what is playing is cut - except a PROTECTED
+        utterance, which is heard to the end with the new one behind it.
+        True when what is playing should be cut."""
+        survivors = [one for one in self._queue
+                     if one.protected and one.generation == self._generation]
+        current = self._current
+        if current is not None and current.protected and \
+                current.generation == self._generation:
+            self._queue = survivors
+            return False
+        self._generation += 1
+        for one in survivors:
+            one.generation = self._generation
+        self._queue = survivors
+        return True
 
     def _ensure_pump(self):
         """Start the pump thread on first use (called with ``_q_lock`` held)."""
@@ -1583,6 +1615,59 @@ def _voice_index(engine, voice):
     except (TypeError, ValueError):
         return None
     return number if 0 <= number < len(voices) else None
+
+
+#: The messages that are heard whole (see `_Utterance.protected`), as their
+#: English source: the shared walkers' own (`portable`, translated by their
+#: catalogue) and the reader's own locale keys. Kept as keys and translated
+#: when asked, so a change of language changes them too.
+PROTECTED_SHARED = ('Virtual window on', 'Virtual window off',
+                    'Palette closed', 'Closing message')
+PROTECTED_KEYS = ('menu.closed', 'browse.scanOn', 'browse.scanOff',
+                  'vscreen.enabled', 'vscreen.disabled', 'app.welcome',
+                  'engine.closing', 'engine.titanClosing',
+                  'engine.titanClosingReader', 'engine.notResponding')
+_protected_cache = {}
+
+
+def _protected_texts():
+    """``(exact, prefixes)`` of the protected messages in the language in
+    force now."""
+    from .localization import L, get_language, translate
+    try:
+        language = get_language()
+    except Exception:                                # noqa: BLE001
+        language = ''
+    kept = _protected_cache.get(language)
+    if kept is not None:
+        return kept
+    exact, prefixes = set(), set()
+    for source in PROTECTED_SHARED:
+        for text in (source, translate(source)):
+            exact.add(str(text).strip())
+    for key in PROTECTED_KEYS:
+        try:
+            text = str(L(key, '\x00')).strip()
+        except Exception:                            # noqa: BLE001
+            continue
+        if not text or text == key:
+            continue
+        if '\x00' in text:
+            prefixes.add(text.split('\x00')[0].strip())
+        else:
+            exact.add(text)
+    kept = (frozenset(exact), tuple(p for p in prefixes if len(p) > 3))
+    _protected_cache[language] = kept
+    return kept
+
+
+def is_protected(text):
+    """Whether ``text`` is one of the messages heard whole."""
+    said = str(text or '').strip()
+    if not said:
+        return False
+    exact, prefixes = _protected_texts()
+    return said in exact or any(said.startswith(p) for p in prefixes)
 
 
 def speak_segments(segments):

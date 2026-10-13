@@ -318,6 +318,22 @@ def _custom_for(obj) -> dict:
         return {}
 
 
+def _shared_label_for(obj) -> Tuple[str, str]:
+    """``(name, who gave it)`` - 'user' for a name somebody typed."""
+    try:
+        from . import shared_names
+        program, key = _shared_key(obj)
+        if not key:
+            return "", ""
+        row = shared_names._row(program, key)
+        if isinstance(row, dict):
+            return (str(row.get("label") or "").strip(),
+                    str(row.get("source") or "user"))
+        return str(row or "").strip(), "user"
+    except Exception:                                # noqa: BLE001
+        return "", ""
+
+
 def _shared_name_for(obj) -> str:
     """The name somebody gave this control, in either reader."""
     try:
@@ -382,11 +398,16 @@ def describe(obj: Optional[AccessibleObject], settings,
         field = None
 
     # 1) Name (+ value) at the neutral pitch.
+    # **A name the user TYPED wins whatever the control is called** -
+    # they renamed it on purpose, and reading the old name was a rename
+    # that said "this control is now called X" and changed nothing. A name
+    # nobody typed (a reader module's, a picture's) only fills a control
+    # that says nothing for itself. The add-on's own rule,
+    # `labels.applies`, in both readers.
     name = _name_segment(obj)
-    if not name:
-        # A control the program never named, that somebody named
-        # themselves - here or in the other reader.
-        name = _shared_name_for(obj)
+    given, given_by = _shared_label_for(obj)
+    if given and (given_by == 'user' or not name):
+        name = given
     if want_name and name:
         built['name'].append((name, 'name', NAME_PITCH))
 

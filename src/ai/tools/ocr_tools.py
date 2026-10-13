@@ -175,13 +175,19 @@ def _act(runner):
         return f"That did not work: {e}"
 
 
-def ocr_press(name, **_):
-    """Press a control that AI OCR has read."""
+def ocr_press(name, double=False, **_):
+    """Press a control that AI OCR has read; ``double`` double-clicks it.
+
+    An argument over the Action Bus arrives as a string, so "true" and
+    "1" mean yes and "false", "0" and "" mean no."""
+    if isinstance(double, str):
+        double = double.strip().lower() in ('1', 'true', 'yes', 'on')
+
     def run(screen, ocr_actions):
         element, error = _find_element(screen, name)
         if error:
             return error
-        return ocr_actions.activate(screen, element)
+        return ocr_actions.activate(screen, element, double=bool(double))
     return _act(run)
 
 
@@ -360,7 +366,10 @@ def get_ocr_tools():
         _tool('ocr_press',
               "Press a control AI OCR has read, by its name.", ocr_press,
               risk='confirm',
-              properties={'name': dict(S, description="The control's name as it was read.")},
+              properties={'name': dict(S, description="The control's name as it was read."),
+                          'double': {'type': 'boolean',
+                                     'description': "Double-click it instead "
+                                                    "of one click."}},
               required=['name']),
         _tool('ocr_type', "Type into a field AI OCR has read.", ocr_type,
               risk='confirm',

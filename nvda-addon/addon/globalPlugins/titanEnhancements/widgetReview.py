@@ -79,14 +79,27 @@ def start(name, label=''):
     return True, _('Widget review on')
 
 
-def stop():
+def stop(close=False):
+    """Stop walking the widget. ``close`` also closes the widget in Titan
+    (its own cleanup), which is what Escape does."""
     with _LOCK:
         was = _state['on']
+        name = _state['widget']
         _state.update({'on': False, 'widget': '', 'said': ''})
     if was and not icons.play('close-object'):
         _cue(False)
+    if close and was and name:
+        threading.Thread(target=lambda: titan.close_widget(name),
+                         name='TitanWidgetClose', daemon=True).start()
+        # Translators: said when Escape closes the widget being walked.
+        return False, _('Widget closed')
     # Translators: said when a widget stops being walked.
     return False, _('Widget review off')
+
+
+def escape():
+    """Escape in a widget: leave it and close it."""
+    return stop(close=True)
 
 
 def move(direction):

@@ -2329,7 +2329,7 @@ class AReadingIsNotARefusal(unittest.TestCase):
         self.said, self.pages = [], []
         self._report, self._browse = dialogs.report, dialogs.browse
         dialogs.report = self.said.append
-        dialogs.browse = lambda text, title=None: self.pages.append(text)
+        dialogs.browse = lambda text, title=None, act=None: self.pages.append(text)
         self.dialogs = dialogs
 
     def tearDown(self):
@@ -3427,6 +3427,12 @@ class TheTouchpadAsATouchScreen(unittest.TestCase):
                 return []
         self.trackpad._manager = Manager()
         self.addCleanup(lambda: setattr(self.trackpad, '_manager', None))
+        # Inside NVDA: its input system is there (outside it - Titan
+        # Access - the contacts go to `touchRecognizer` instead).
+        compat = self.trackpad.compat
+        kept = compat.inputCore
+        compat.inputCore = object()
+        self.addCleanup(lambda: setattr(compat, 'inputCore', kept))
         self.trackpad.feed([(1, 10, 10, True)])
         self.trackpad.feed([])
         self.assertEqual(seen, [(1, False), (1, True)])
@@ -5607,7 +5613,10 @@ class AGameAndAnInaccessibleApplicationAreDifferentProblems(unittest.TestCase):
     def test_pressing_needs_titan_and_says_so(self):
         self.smart.take(7, self._reading())
         self.smart.move(1)
-        ok, said = self.smart.press()
+        # The press waits out the double-click time (`press_twice`), so
+        # the single press is asked for directly.
+        control = self.smart.here()['control']
+        ok, said = self.smart._press_one(control, False)
         self.assertFalse(ok)
         self.assertTrue(said)
 

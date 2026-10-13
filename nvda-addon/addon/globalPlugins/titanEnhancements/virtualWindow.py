@@ -1872,16 +1872,23 @@ def click_mouse():
     or one whose action the toolkit does not expose. Two presses inside
     :data:`DOUBLE_CLICK` are a double click, as they are anywhere.
     """
-    now = time.time()
-    with _LOCK:
-        double = (now - float(_state.get('clicked_at') or 0.0)) < DOUBLE_CLICK
-        _state['clicked_at'] = now
-    ok, why = click_here(double=double)
-    if not ok:
-        return False, _refusal(why) if '_refusal' in globals() else why
-    # Translators: said after a double mouse click.
-    # Translators: said after a single mouse click.
-    return True, (_('Double-clicked') if double else _('Clicked'))
+    node = here()
+    if node is None:
+        return _nothing()
+
+    def once(double):
+        ok, why = click_here(double=double, sound=False)
+        if not ok:
+            return False, _refusal(why) if '_refusal' in globals() else why
+        # Translators: said after a double mouse click.
+        # Translators: said after a single mouse click.
+        return True, (_('Double-clicked') if double else _('Clicked'))
+    # **The first click waits for a second press** (`smart.press_twice`):
+    # this clicked at once and then sent a double click on the second
+    # press - three clicks, which is a triple click to a program.
+    from . import smart
+    return smart.press_twice(('virtual', id(node)), lambda: once(False),
+                             lambda: once(True))
 
 
 #: Two Numpad-5 presses closer together than this are a double click.
@@ -2041,26 +2048,77 @@ def activate():
             return ok, said
     if obj is None:
         # A row read off the screen: there is no control to ask what it
-        # can do, so Enter is a click at the place the words are.
-        ok, why = click_here()
-        if ok:
-            # **And if the click put a text caret there, it was a field.**
-            # A window read as a picture - Tkinter before Tk 9.1, GTK on
-            # Windows - has no control to say "I am an edit field", but
-            # Windows knows where the program's caret is, and a program
-            # shows one only where text is typed. So the row becomes a
-            # field written with the user's own keys; without this a
-            # Tkinter entry could be found and never typed into.
-            if _caret_appeared():
-                return enter_typing(clicked=True)
-            return True, _('Clicked')
-        # **And when it could not, it says which of the four reasons it
-        # was.** "Nothing could be done here" is the least useful true
-        # sentence there is - it wears a rectangle that was never read,
-        # a control off the screen, an NVDA with no mouse handler and a
-        # click that really failed, and each of those is a different
-        # thing to do about it.
-        return False, _refusal(why)
+        # can do, so Enter is a click at the place the words are - and
+        # a second Enter on it quickly is a double click
+        # (`smart.press_twice`), because an icon in a picture opens on two.
+        from . import smart, dialogs
+
+        def once():
+            said = _clicked_row()
+            dialogs.keys_changed()
+            return said
+
+        def twice():
+            ok, why = click_here(double=True, sound=False)
+            return (True, _('Double-clicked')) if ok \
+                else (False, _refusal(why))
+        return smart.press_twice(('virtual', id(node)), once, twice,
+                                 report=dialogs.report)
+    return _activate_control(node, obj)
+
+
+def click_once():
+    """A tap: one click on the control the finger found, or - when it has
+    no place on the screen - its own action."""
+    return _touch_click(False)
+
+
+def click_double():
+    """A double tap: a double click on it."""
+    return _touch_click(True)
+
+
+def _touch_click(double):
+    node = here()
+    if node is None:
+        return _nothing()
+    ok, why = click_here(double=double, sound=False)
+    if not ok:
+        if double:
+            return False, _refusal(why)
+        return activate()
+    icons.play('reader.double-click' if double else 'reader.click')
+    # Translators: said after a double mouse click.
+    # Translators: said after a single mouse click.
+    return True, (_('Double-clicked') if double else _('Clicked'))
+
+
+def _clicked_row():
+    """Enter's single click on a row read off the screen. ``(ok, said)``."""
+    ok, why = click_here(sound=False)
+    if ok:
+        # **And if the click put a text caret there, it was a field.**
+        # A window read as a picture - Tkinter before Tk 9.1, GTK on
+        # Windows - has no control to say "I am an edit field", but
+        # Windows knows where the program's caret is, and a program
+        # shows one only where text is typed. So the row becomes a
+        # field written with the user's own keys; without this a
+        # Tkinter entry could be found and never typed into.
+        if _caret_appeared():
+            return enter_typing(clicked=True)
+        return True, _('Clicked')
+    # **And when it could not, it says which of the four reasons it
+    # was.** "Nothing could be done here" is the least useful true
+    # sentence there is - it wears a rectangle that was never read,
+    # a control off the screen, an NVDA with no mouse handler and a
+    # click that really failed, and each of those is a different
+    # thing to do about it.
+    return False, _refusal(why)
+
+
+def _activate_control(node, obj):
+    """Enter on a real control: its own action, else a click, else the
+    keyboard moved to it."""
     try:
         count = int(getattr(obj, 'actionCount', 0) or 0)
     except Exception:                                # noqa: BLE001
@@ -2118,7 +2176,7 @@ def _in_a_virtual_machine():
         return False
 
 
-def click_here(double=False):
+def click_here(double=False, sound=True):
     """Click the middle of the control the cursor is on, then put the
     mouse back where it was. ``double`` clicks twice.
 
@@ -2208,7 +2266,15 @@ def click_here(double=False):
         # about why. `smart.py` had it right beside it the whole time.
         winUser.mouse_event(winUser.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
         winUser.mouse_event(winUser.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-        icons.play('task-done')
+        if double:
+            # **The second click.** `double` was accepted and never acted
+            # on, so a "double click" here was one click. A moment apart,
+            # as a hand makes it, at the same place.
+            time.sleep(0.04)
+            winUser.mouse_event(winUser.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            winUser.mouse_event(winUser.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        if sound:
+            icons.play('task-done')
         return True, ''
     except Exception as error:                       # noqa: BLE001
         return False, 'the click itself failed: %s' % error

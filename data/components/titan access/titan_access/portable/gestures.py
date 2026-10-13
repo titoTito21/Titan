@@ -131,6 +131,37 @@ def load_catalogue():
             and row.get('addon') and row.get('action')]
 
 
+def fetch_catalogue():
+    """What Titan can do NOW, asked of Titan. ``[]`` when it cannot say.
+
+    One call (`addons.list`), plus the macros; the descriptions already
+    known from the saved catalogue are kept, and the catalogue is saved
+    again. **Titan Access needs this**: the saved catalogue is filled by
+    the NVDA add-on's sweep when it joins Titan's bus, which Titan Access
+    (inside Titan) never does - so "Titan's actions" answered "Titan has
+    not said what it offers yet" for ever."""
+    ok, data = LINK.bridge('addons.list')
+    if not ok or not isinstance(data, dict):
+        return []
+    rows = catalogue_from_addons(data.get('addons'))
+    try:
+        rows += macro_rows()
+    except Exception:                                # noqa: BLE001
+        pass
+    if not rows:
+        return []
+    known = {(row.get('addon'), row.get('action')): row
+             for row in load_catalogue()}
+    for row in rows:
+        before = known.get((row['addon'], row['action']))
+        if before:
+            for name in ('summary', 'risk', 'params', 'needs_ai'):
+                if before.get(name) and not row.get(name):
+                    row[name] = before[name]
+    save_catalogue(rows)
+    return rows
+
+
 def save_catalogue(rows):
     try:
         with open(_catalogue_path(), 'w', encoding='utf-8') as handle:

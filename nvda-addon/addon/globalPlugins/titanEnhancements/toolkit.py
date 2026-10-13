@@ -143,30 +143,36 @@ WORDS = {
 #: What a reader has to know about each, in one sentence. This is the part
 #: that is worth having: it is the difference between naming a toolkit and
 #: knowing what to do about it.
-NOTES = {
-    'java': 'Java Access Bridge has to be on, or nothing is answered at all.',
-    'javafx': 'Java Access Bridge has to be on.',
-    'qt': 'Qt answers UI Automation only when its accessibility plugin is '
-          'loaded; a list often reports no columns.',
-    'wx': 'wxWidgets controls are real Win32 controls, so MSAA answers even '
-          'where UI Automation does not.',
-    'gtk': 'GTK on Windows exposes little; the picture is often the only '
-           'way in.',
-    'tk': 'Tk draws its own widgets and names almost nothing.',
-    'vcl': 'Delphi answers MSAA for the standard controls and nothing for '
-           'its own.',
-    'vb6': 'Windows proxies the standard controls, so MSAA answers even '
-           'for a program from 1998.',
-    'unity': 'A game that paints its own screen: there is nothing to walk.',
-    'godot': 'Paints its own screen: there is nothing to walk.',
-    'sdl': 'Paints its own screen: there is nothing to walk.',
-    'console': 'A console: the text is the interface, and it is reviewed '
-               'rather than walked.',
-    'directui': 'DirectUI draws its own controls; UI Automation is the only '
-                'way in and it is often thin.',
-    'flutter': 'Flutter paints its own screen and answers a tree of its own '
-               'only when semantics are switched on.',
-}
+def _notes():
+    """The notes, in the user's language - built when asked, because
+    the translation is not loaded when the module is."""
+    return {
+        'java': _('Java Access Bridge has to be on, or nothing is '
+                  'answered at all.'),
+        'javafx': _('Java Access Bridge has to be on.'),
+        'qt': _('Qt answers UI Automation only when its '
+                'accessibility plugin is loaded; a list often '
+                'reports no columns.'),
+        'wx': _('wxWidgets controls are real Win32 controls, so '
+                'MSAA answers even where UI Automation does not.'),
+        'gtk': _('GTK on Windows exposes little; the picture is '
+                 'often the only way in.'),
+        'tk': _('Tk draws its own widgets and names almost nothing.'),
+        'vcl': _('Delphi answers MSAA for the standard controls and '
+                 'nothing for its own.'),
+        'vb6': _('Windows proxies the standard controls, so MSAA '
+                 'answers even for a program from 1998.'),
+        'unity': _('A game that paints its own screen: there is '
+                   'nothing to walk.'),
+        'godot': _('Paints its own screen: there is nothing to walk.'),
+        'sdl': _('Paints its own screen: there is nothing to walk.'),
+        'console': _('A console: the text is the interface, and it is '
+                     'reviewed rather than walked.'),
+        'directui': _('DirectUI draws its own controls; UI Automation is '
+                      'the only way in and it is often thin.'),
+        'flutter': _('Flutter paints its own screen and answers a tree '
+                     'of its own only when semantics are switched on.'),
+    }
 
 
 def _text(value):
@@ -181,7 +187,7 @@ def word(framework):
 
 def note(framework):
     """What a reader has to know about it, or ''."""
-    return NOTES.get(_text(framework), '')
+    return _notes().get(_text(framework), '')
 
 
 # --------------------------------------------------------------------------- #

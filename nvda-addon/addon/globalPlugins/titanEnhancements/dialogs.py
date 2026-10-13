@@ -132,7 +132,7 @@ def report(text, voice_class='notification'):
         pass
 
 
-def browse(text, title=None):
+def browse(text, title=None, act=None):
     """A long answer as something to WALK. Never something said once.
 
     **An answer that is spoken is an answer that gets interrupted.** A
@@ -152,7 +152,7 @@ def browse(text, title=None):
     """
     from . import palette
     try:
-        ok, _said = palette.page(text, title or _('Titan'))
+        ok, _said = palette.page(text, title or _('Titan'), act=act)
         if ok:
             _keep_keys_right()
             return
@@ -183,6 +183,25 @@ def _keep_keys_right():
     except Exception:                                # noqa: BLE001
         pass
     return False
+
+
+def keys_changed():
+    """Ask the plugin to bring every walker's borrowed keys up to date.
+
+    For work that finishes LATER than the key that started it - a click
+    sent once the double-click time is over, which may turn a row into a
+    field - so no script is running to do it. Outside NVDA nothing is
+    borrowed and this does nothing."""
+    try:
+        import globalPluginHandler
+        for plugin in getattr(globalPluginHandler, 'runningPlugins', []):
+            for name in ('_keep_virtual_keys_right', '_keep_ocr_keys_right',
+                         '_keep_palette_keys_right'):
+                keep = getattr(plugin, name, None)
+                if callable(keep):
+                    keep()
+    except Exception:                                # noqa: BLE001
+        pass
 
 
 def choose(rows, title, prompt=None, on_chosen=None, on_cancel=None):

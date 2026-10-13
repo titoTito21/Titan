@@ -470,6 +470,16 @@ def build():
             try:
                 import core
                 core.callLater(400, go)
+                return
+            except Exception:                        # noqa: BLE001
+                pass
+            # **Outside NVDA there is no `core`** (Titan Access): wx's own
+            # timer, which runs `go` on the GUI thread as NVDA's does - and
+            # `go` touches nothing of this dialog's. Calling it at once
+            # started the procedure while the manager was still in front.
+            try:
+                import wx
+                wx.CallLater(400, go)
             except Exception:                        # noqa: BLE001
                 go()
 

@@ -1,0 +1,705 @@
+# -*- coding: utf-8 -*-
+# Ported from NonVisual Desktop Access (NVDA), source/touchTracker.py
+# (nvaccess/nvda, master, fetched 2026-10-13).
+# A part of NonVisual Desktop Access (NVDA)
+# This file is covered by the GNU General Public License.
+# See the file COPYING for more details.
+# Copyright (C) 2012-2026 NV Access Limited, Kefas Lungu
+"""NVDA's touch tracker, for Titan Access.
+
+The trackpad (`portable/trackpad.py`) turns a laptop's precision touchpad
+into a touch screen: it reads every contact off the HID digitizer and maps
+the pad onto the screen. Inside NVDA those contacts go into NVDA's own
+`touchTracker`, whose recogniser makes the gestures NVDA's scripts are
+written for. Titan Access had no such tracker - only a small recogniser of
+its own (`portable/touchRecognizer.py`) - so this is NVDA's, taken whole:
+taps counted per finger and per repeat (double, triple), flicks decided by
+the VELOCITY of the last tenth of a second, holds, tap-and-hold, hover
+down / hover / hover up, pinches and two-stroke flicks.
+
+Changed from NVDA's file, and nothing else: `TouchAction` and `TouchEdge`
+are plain string enums (NVDA's carry translated display strings through
+`utils.displayString`, which is NVDA's), and the module-level deprecation
+shim for the old ``action_*`` names is gone (nothing here ever used them).
+Everything from `SingleTouchTracker` down is NVDA's code as it stands.
+"""
+
+from __future__ import annotations
+
+import enum
+import math  # noqa: I001
+import threading
+import time
+from collections import OrderedDict
+
+
+class TouchAction(str, enum.Enum):
+	"""All recognised touch screen actions."""
+
+	TAP = "tap"
+	HOLD = "hold"
+	TAP_AND_HOLD = "tapandhold"
+	FLICK_UP = "flickup"
+	FLICK_DOWN = "flickdown"
+	FLICK_LEFT = "flickleft"
+	FLICK_RIGHT = "flickright"
+	HOVER_DOWN = "hoverdown"
+	HOVER = "hover"
+	HOVER_UP = "hoverup"
+	UNKNOWN = "unknown"
+	PINCH_IN = "pinchin"
+	PINCH_OUT = "pinchout"
+	FLICK_RIGHT_THEN_LEFT = "flickrightthenleft"
+	FLICK_LEFT_THEN_RIGHT = "flickleftthenright"
+	FLICK_UP_THEN_DOWN = "flickupthendown"
+	FLICK_DOWN_THEN_UP = "flickdownthenup"
+	FLICK_RIGHT_THEN_UP = "flickrightthenup"
+	FLICK_RIGHT_THEN_DOWN = "flickrightthendown"
+	FLICK_LEFT_THEN_UP = "flickleftthenup"
+	FLICK_LEFT_THEN_DOWN = "flickleftthendown"
+	FLICK_UP_THEN_RIGHT = "flickupthenright"
+	FLICK_UP_THEN_LEFT = "flickupthenleft"
+	FLICK_DOWN_THEN_RIGHT = "flickdownthenright"
+	FLICK_DOWN_THEN_LEFT = "flickdownthenleft"
+
+	def __str__(self):
+		return self.value
+
+
+hoverActions = (TouchAction.HOVER_DOWN, TouchAction.HOVER, TouchAction.HOVER_UP)
+
+_EDGE_MARGIN_MM: float = 15.0
+"""Width of the screen edge margin in millimetres within which a touch is considered an edge gesture."""
+
+
+class TouchEdge(str, enum.Enum):
+	"""Screen edges from which a touch gesture can originate."""
+
+	LEFT = "left"
+	RIGHT = "right"
+	TOP = "top"
+	BOTTOM = "bottom"
+
+
+# timeout for detection of flicks and plural trackers
+multitouchTimeout = 0.25
+# The distance a finger must travel to be treeted as a flick
+minFlickDistance = 50
+# How far a finger is allowed to drift purpandicular to a flick direction to make the flick impossible
+maxAccidentalDrift = 10
+minPinchDistance: int = 50
+"""Minimum change in distance between two fingers (in pixels) required to classify a pinch gesture."""
+
+_VELOCITY_SAMPLE_WINDOW: float = 0.1
+"""Time window in seconds of touch samples used for velocity calculation."""
+
+minFlickVelocity: float = 100.0
+"""Minimum speed in pixels per second for a gesture to be classified as a flick.
+Kept low so deliberate-but-slow swipes still register; velocity is used mainly for direction.
+"""
+
+continuousFlickTimeout: float = 0.6
+"""Time in seconds allowed for the full first stroke of a continuous sequential flick.
+Longer than multitouchTimeout so users aren't forced to rush the gesture.
+"""
+
+
+class SingleTouchTracker:
+	"""
+	Represents the lifetime of one single finger while its in contact with the touch device, tracking start and current coordinates, start and end times, and whether its complete (broken contact yet).
+	It also calculates what kind of single action (tap, flick, hover) this finger is performing, once it has enough data.
+	@ivar ID: the ID this finger has been assigned by the Operating System.
+	@type ID: int
+	@ivar x: The last known x screen coordinate of this finger
+	@type x: int
+	@ivar y: The last known y screen coordinate of this finger
+	@type y: int
+	@ivar startX: The x screen coordinate  where the finger first made contact
+	@type startX: int
+	@ivar startY: The y screen coordinate  where the finger first made contact
+	@type startY: int
+	@ivar startTime: the time at which the finger first made contact
+	@type startTime: float
+	@ivar endTime: the time at which the finger broke contact. Before breaking contact the value is -1
+	@type endTime: float
+	@ivar maxAbsDeltaX: the maximum distance this finger has traveled on the x access while making contact
+	@type maxAbsDeltaX: int
+	@ivar maxAbsDeltaY: the maximum distance this finger has traveled on the y access while making contact
+	@type maxAbsDeltaY: int
+	@ivar action: the action this finger has performed (a L{TouchAction} value, e.g. TouchAction.TAP, TouchAction.FLICK_RIGHT, TouchAction.HOVER etc). If not enough data has been collected yet the action will be TouchAction.UNKNOWN.
+	@type action: string
+	@ivar complete: If true then this finger has broken contact
+	@type complete: bool
+	"""
+
+	__slots__ = [
+		"ID",
+		"_samples",
+		"action",
+		"complete",
+		"endTime",
+		"maxAbsDeltaX",
+		"maxAbsDeltaY",
+		"peakX",
+		"peakY",
+		"startTime",
+		"startX",
+		"startY",
+		"x",
+		"y",
+	]
+
+	def __init__(self, ID: int, x: int, y: int) -> None:
+		self.ID = ID
+		self.x = self.startX = self.peakX = x
+		self.y = self.startY = self.peakY = y
+		self.startTime = time.time()
+		self.endTime = -1
+		self.maxAbsDeltaX = 0
+		self.maxAbsDeltaY = 0
+		self.action = TouchAction.UNKNOWN
+		self.complete = False
+		self._samples: list[tuple[int, int, float]] = []
+
+	def update(self, x: int, y: int, complete: bool = False) -> None:
+		"""Called to alert this single tracker that the finger has moved or broken contact."""
+		self.x = x
+		self.y = y
+		absDeltaX = abs(x - self.startX)
+		absDeltaY = abs(y - self.startY)
+		if absDeltaX > self.maxAbsDeltaX:
+			self.maxAbsDeltaX = absDeltaX
+			self.peakX = x
+		if absDeltaY > self.maxAbsDeltaY:
+			self.maxAbsDeltaY = absDeltaY
+			self.peakY = y
+		curTime = time.time()
+		# Record sample and prune the rolling window
+		self._samples.append((x, y, curTime))
+		cutoff = curTime - _VELOCITY_SAMPLE_WINDOW
+		while self._samples and self._samples[0][2] < cutoff:
+			self._samples.pop(0)
+		deltaTime = curTime - self.startTime
+		if deltaTime < multitouchTimeout:  # not timed out yet
+			if complete:
+				if self.maxAbsDeltaX < maxAccidentalDrift and self.maxAbsDeltaY < maxAccidentalDrift:
+					# The completed quick touch never drifted too far from its initial contact point therefore its a tap
+					self.action = TouchAction.TAP
+				else:
+					vx, vy = self.getVelocity()
+					speed = math.hypot(vx, vy)
+					hasFlickDistance = (
+						self.maxAbsDeltaX >= minFlickDistance or self.maxAbsDeltaY >= minFlickDistance
+					)
+					if speed >= minFlickVelocity and hasFlickDistance:
+						# Use velocity direction rather than total displacement direction,
+						# so late-stroke direction changes are reflected correctly.
+						if abs(vx) >= abs(vy):
+							self.action = TouchAction.FLICK_RIGHT if vx > 0 else TouchAction.FLICK_LEFT
+						else:
+							self.action = TouchAction.FLICK_DOWN if vy > 0 else TouchAction.FLICK_UP
+		else:  # timeout exceeded, must be a kind of hover
+			self.action = TouchAction.HOVER
+		self.complete = complete
+		if complete:
+			self.endTime = curTime
+
+	def getVelocity(self) -> tuple[float, float]:
+		"""Return ``(vx, vy)`` in pixels per second using least-squares linear regression over recent samples.
+
+		Only samples recorded at or after :attr:`startTime` are used,
+		so resets in :meth:`TrackerManager._checkContinuousFlick` are respected automatically.
+
+		:return: A ``(vx, vy)`` tuple of velocity components in pixels per second.
+			Returns ``(0.0, 0.0)`` if fewer than two usable samples are available.
+		"""
+		samples = [(sx, sy, st) for sx, sy, st in self._samples if st >= self.startTime]
+		n = len(samples)
+		if n < 2:
+			return 0.0, 0.0
+		t0 = samples[0][2]
+		ts = [st - t0 for _, _, st in samples]
+		xs = [sx for sx, _, _ in samples]
+		ys = [sy for _, sy, _ in samples]
+		sum_t = sum(ts)
+		sum_t2 = sum(t * t for t in ts)
+		denom = n * sum_t2 - sum_t * sum_t
+		if denom == 0.0:
+			return 0.0, 0.0
+		vx = (n * sum(t * x for t, x in zip(ts, xs)) - sum_t * sum(xs)) / denom
+		vy = (n * sum(t * y for t, y in zip(ts, ys)) - sum_t * sum(ys)) / denom
+		return vx, vy
+
+
+class MultiTouchTracker:
+	__slots__ = [
+		"action",
+		"actionCount",
+		"childTrackers",
+		"endTime",
+		"numFingers",
+		"pluralTimeout",
+		"rawSingleTouchTracker",
+		"startTime",
+		"x",
+		"y",
+	]
+
+	def __init__(
+		self,
+		action: str,
+		x: int,
+		y: int,
+		startTime: float,
+		endTime: float,
+		numFingers: int = 1,
+		actionCount: int = 1,
+		rawSingleTouchTracker: SingleTouchTracker | None = None,
+		pluralTimeout: float | None = None,
+	):
+		"""Represents an action jointly performed by 1 or more fingers.
+
+		:param action: the action this finger has performed.
+		A L{TouchAction} value, e.g. TouchAction.TAP, TouchAction.FLICK_RIGHT, TouchAction.HOVER etc.
+		:param x: the x screen coordinate where the action was performed.
+		For multi-finger actions it is the average position of each of the fingers.
+		For plural actions it is based on the first occurrence
+		:param y: the y screen coordinate where the action was performed.
+		For multi-finger actions it is the average position of each of the fingers.
+		For plural actions it is based on the first occurrence
+		:param startTime: the time the action began
+		:param endTime: the time the action was complete
+		:param numFingers: the number of fingers that performed this action
+		:param actionCount: the number of times this action was performed in quick succession
+		(e.g. 2 for a double tap)
+		:param rawSingleTouchTracker: if this tracker represents a 1-fingered non-plural action,
+		then this will be the L{SingleTouchTracker} object for that 1 finger.
+		If not then it is None.
+		:param pluralTimeout: the time at which this tracker could no longer possibly be merged
+		with another to be pluralized, thus it is allowed to be emitted
+		"""
+		self.action = action
+		self.x = x
+		self.y = y
+		self.startTime = startTime
+		self.endTime = endTime
+		self.numFingers = numFingers
+		self.actionCount = actionCount
+		self.childTrackers: list[MultiTouchTracker] = []
+		"""a list of L{MultiTouchTracker} objects which represent the direct sub-actions of this action.
+		e.g. a 2-finger triple tap's childTrackers will contain 3 2-finger taps.
+		Each of the 2-finger taps' childTrackers will contain 2 taps.
+		"""
+		self.rawSingleTouchTracker = rawSingleTouchTracker
+		# We only allow pluralizing of taps, no other action.
+		if pluralTimeout is None and action == TouchAction.TAP:
+			pluralTimeout = startTime + multitouchTimeout
+		self.pluralTimeout = pluralTimeout
+
+	def iterAllRawSingleTouchTrackers(self):
+		if self.rawSingleTouchTracker:
+			yield self.rawSingleTouchTracker
+		for child in self.childTrackers:
+			for i in child.iterAllRawSingleTouchTrackers():  # noqa: UP028
+				yield i
+
+	def __repr__(self):
+		return f"<MultiTouchTracker {self.numFingers}finger {self.action} {self.actionCount} times at position {self.x},{self.y}>"
+
+	def getDevInfoString(self):
+		msg = "%s\n" % self  # noqa: UP031
+		if self.childTrackers:
+			msg += "--- made of ---\n"
+			for t in self.childTrackers:
+				msg += t.getDevInfoString()
+			msg += "--- end ---\n"
+		return msg
+
+
+class TrackerManager:
+	"""
+	Tracks touch input by managing L{SingleTouchTracker} instances and emitting L{MultiTouchTracker} instances representing high-level multiFingered plural trackers.
+	"""
+
+	def __init__(self):
+		self.singleTouchTrackersByID = OrderedDict()
+		self.multiTouchTrackers: list[MultiTouchTracker] = []
+		self.curHoverStack = []
+		self.numUnknownTrackers = 0
+		self._lock = threading.Lock()
+		self._pinchStartDistance: float | None = None
+		self._pinchStartMidX: int = 0
+		self._pinchStartMidY: int = 0
+		self._pinchStartTime: float = 0.0
+		#: Last known (x, y) for each finger ID, used to compute final pinch distance after both fingers lift.
+		self._pinchLastPositions: dict[int, tuple[int, int]] = {}
+
+	def makePreheldTrackerFromSingleTouchTrackers(self, trackers):
+		childTrackers = [
+			MultiTouchTracker(TouchAction.HOLD, tracker.x, tracker.y, tracker.startTime, time.time())
+			for tracker in trackers
+			if tracker.action == TouchAction.HOVER
+		]
+		numFingers = len(childTrackers)
+		if numFingers == 0:
+			return
+		if numFingers == 1:
+			return childTrackers[0]
+		avgX: int = sum(t.x for t in childTrackers) // numFingers
+		avgY: int = sum(t.y for t in childTrackers) // numFingers
+		tracker = MultiTouchTracker(
+			TouchAction.HOLD,
+			avgX,
+			avgY,
+			childTrackers[0].startTime,
+			time.time(),
+			numFingers,
+		)
+		tracker.childTrackers = childTrackers
+		return tracker
+
+	def makePreheldTrackerForTracker(self, tracker):
+		curHoverSet = {x for x in self.singleTouchTrackersByID.values() if x.action == TouchAction.HOVER}
+		excludeHoverSet = {
+			x for x in tracker.iterAllRawSingleTouchTrackers() if x.action == TouchAction.HOVER
+		}
+		return self.makePreheldTrackerFromSingleTouchTrackers(curHoverSet - excludeHoverSet)
+
+	def update(self, ID, x, y, complete=False):
+		"""
+		Called to Alert the multiTouch tracker of a new, moved or completed contact (finger touch).
+		It creates new single trackers or updates existing ones, and queues/processes multi trackers for later emition.
+		"""
+		with self._lock:
+			# See if we know about this finger
+			tracker = self.singleTouchTrackersByID.get(ID)
+			if not tracker:
+				if not complete:
+					# This is a new contact (finger) so start tracking it
+					self.singleTouchTrackersByID[ID] = SingleTouchTracker(ID, x, y)
+					self.numUnknownTrackers += 1
+				return
+			# We already know about this finger
+			# Update its position and completion status
+			# But also find out its action before and after the update to decide what to do with it
+			oldAction = tracker.action
+			tracker.update(x, y, complete)
+			newAction = tracker.action
+			if oldAction == TouchAction.UNKNOWN and newAction != TouchAction.UNKNOWN:
+				self.numUnknownTrackers -= 1
+			if complete:  # This finger has broken contact
+				# Record final position before deletion for pinch distance calculation
+				self._pinchLastPositions[ID] = (tracker.x, tracker.y)
+				# Forget about this finger
+				del self.singleTouchTrackersByID[ID]
+				if tracker.action == TouchAction.UNKNOWN:
+					self.numUnknownTrackers -= 1
+			# Update pinch tracking whenever any finger moves or lifts
+			self._updatePinch(complete)
+			# Check for continuous (no finger lift) sequential flick direction reversal.
+			# Run even after hover kicks in, as continuousFlickTimeout is longer than multitouchTimeout.
+			if not complete:
+				self._checkContinuousFlick(tracker)
+			# if the action changed and its not unknown, then we will be queuing it
+			if newAction != oldAction and newAction != TouchAction.UNKNOWN:
+				if newAction == TouchAction.HOVER:
+					# New hovers must be queued as holds
+					newAction = TouchAction.HOLD
+				# for most  gestures the start coordinates are what we want to emit with trackers
+				# But hovers should always use their current coordinates
+				x, y = (
+					(tracker.x, tracker.y) if newAction in hoverActions else (tracker.startX, tracker.startY)
+				)
+				# Queue the tracker for processing or emition
+				self.processAndQueueMultiTouchTracker(
+					MultiTouchTracker(
+						newAction,
+						x,
+						y,
+						tracker.startTime,
+						time.time(),
+						rawSingleTouchTracker=tracker,
+					),
+				)
+
+	def _updatePinch(self, complete: bool) -> None:
+		"""Track two-finger pinch gestures by monitoring the distance between two fingers.
+
+		Records the initial distance when two fingers are first on screen together,
+		and emits a pinch in or pinch out gesture when both fingers have lifted
+		if the change in distance exceeds :data:`minPinchDistance`.
+
+		:param complete: Whether a finger has just broken contact.
+		"""
+		trackers = list(self.singleTouchTrackersByID.values())
+		numActive = len(trackers)
+		if numActive == 2 and not complete:
+			# Two fingers on screen: record start distance the first time
+			if self._pinchStartDistance is None:
+				t1, t2 = trackers
+				self._pinchStartDistance = math.hypot(t2.x - t1.x, t2.y - t1.y)
+				self._pinchStartMidX = (t1.x + t2.x) // 2
+				self._pinchStartMidY = (t1.y + t2.y) // 2
+				self._pinchStartTime = time.time()
+				# Clear any stale positions from a previous gesture before recording new ones
+				self._pinchLastPositions.clear()
+		elif numActive == 0 and complete and self._pinchStartDistance is not None:
+			# Both fingers have lifted: compute final distance from stored last positions
+			if len(self._pinchLastPositions) == 2:
+				positions = list(self._pinchLastPositions.values())
+				finalDist = math.hypot(
+					positions[1][0] - positions[0][0],
+					positions[1][1] - positions[0][1],
+				)
+				distChange = finalDist - self._pinchStartDistance
+				if abs(distChange) >= minPinchDistance:
+					pinchAction = TouchAction.PINCH_OUT if distChange > 0 else TouchAction.PINCH_IN
+					self.processAndQueueMultiTouchTracker(
+						MultiTouchTracker(
+							pinchAction,
+							self._pinchStartMidX,
+							self._pinchStartMidY,
+							self._pinchStartTime,
+							time.time(),
+							numFingers=2,
+						),
+					)
+			self._pinchStartDistance = None
+			self._pinchLastPositions.clear()
+		elif numActive == 0 and complete:
+			# Single finger lifted with no active pinch — reset stored positions
+			self._pinchLastPositions.clear()
+
+	def _checkContinuousFlick(self, tracker: SingleTouchTracker) -> None:
+		"""Detect a continuous (no finger lift) sequential flick by checking for significant movement away from the peak.
+
+		If the finger traveled far enough to form a first flick and has now moved far enough away from
+		the peak position in any direction (including perpendicular), the first flick is queued and
+		the tracker is reset so the return stroke is tracked as the second gesture.
+
+		:param tracker: The single touch tracker to inspect.
+		"""
+		curTime = time.time()
+		if curTime - tracker.startTime >= continuousFlickTimeout:
+			return
+		# Determine the first flick direction from start → peak displacement
+		peakDeltaX = tracker.peakX - tracker.startX
+		peakDeltaY = tracker.peakY - tracker.startY
+		absPeakDeltaX = abs(peakDeltaX)
+		absPeakDeltaY = abs(peakDeltaY)
+		if absPeakDeltaX < minFlickDistance and absPeakDeltaY < minFlickDistance:
+			return  # hasn't built up enough displacement for a first flick yet
+		if absPeakDeltaX >= absPeakDeltaY:
+			firstAction = TouchAction.FLICK_RIGHT if peakDeltaX > 0 else TouchAction.FLICK_LEFT
+		else:
+			firstAction = TouchAction.FLICK_DOWN if peakDeltaY > 0 else TouchAction.FLICK_UP
+		# Check how far the finger has traveled from the peak in any direction
+		if (
+			abs(tracker.x - tracker.peakX) < minFlickDistance
+			and abs(tracker.y - tracker.peakY) < minFlickDistance
+		):
+			return  # hasn't moved far enough from peak for a second stroke yet
+		self.processAndQueueMultiTouchTracker(
+			MultiTouchTracker(
+				firstAction,
+				tracker.startX,
+				tracker.startY,
+				tracker.startTime,
+				curTime,
+				rawSingleTouchTracker=tracker,
+			),
+		)
+		# Reset the tracker so it accumulates displacement for the return stroke.
+		# Reset action to unknown so the second stroke can be classified as a flick even if the
+		# first stroke had already timed out into a hover.
+		tracker.startX = tracker.peakX
+		tracker.startY = tracker.peakY
+		tracker.startTime = curTime
+		tracker.maxAbsDeltaX = 0
+		tracker.maxAbsDeltaY = 0
+		tracker.peakX = tracker.x
+		tracker.peakY = tracker.y
+		if tracker.action != TouchAction.UNKNOWN:
+			tracker.action = TouchAction.UNKNOWN
+			self.numUnknownTrackers += 1
+
+	def makeMergedTrackerIfPossible(self, oldTracker, newTracker):
+		if (
+			newTracker.action == oldTracker.action
+			and newTracker.startTime < oldTracker.endTime
+			and oldTracker.startTime < newTracker.endTime
+			and oldTracker.actionCount == newTracker.actionCount == 1
+		):
+			# The old and new tracker are the same kind of action, they are not themselves plural actions, and their start and end times overlap
+			# Therefore they should be treeted as one multiFingered action
+			childTrackers = []
+			childTrackers.extend(
+				oldTracker.childTrackers,
+			) if oldTracker.numFingers > 1 else childTrackers.append(oldTracker)
+			childTrackers.extend(
+				newTracker.childTrackers,
+			) if newTracker.numFingers > 1 else childTrackers.append(newTracker)
+			numFingers = oldTracker.numFingers + newTracker.numFingers
+			avgX: int = sum(t.x for t in childTrackers) // numFingers
+			avgY: int = sum(t.y for t in childTrackers) // numFingers
+			mergedTracker = MultiTouchTracker(
+				newTracker.action,
+				avgX,
+				avgY,
+				oldTracker.startTime,
+				newTracker.endTime,
+				numFingers,
+				newTracker.actionCount,
+				pluralTimeout=newTracker.pluralTimeout,
+			)
+			mergedTracker.childTrackers = childTrackers
+		elif (
+			self.numUnknownTrackers == 0
+			and newTracker.pluralTimeout is not None
+			and newTracker.startTime >= oldTracker.endTime
+			and newTracker.startTime < oldTracker.pluralTimeout
+			and newTracker.action == oldTracker.action
+			and oldTracker.numFingers == newTracker.numFingers
+		):
+			# The new and old action are   the same and allow pluralising and have the same number of fingers and there are no other unknown trackers left and they do not overlap in time
+			# Therefore they should be treeted as 1 plural action (e.g. double tap)
+			mergedTracker = MultiTouchTracker(
+				newTracker.action,
+				oldTracker.x,
+				oldTracker.y,
+				oldTracker.startTime,
+				newTracker.endTime,
+				newTracker.numFingers,
+				oldTracker.actionCount + newTracker.actionCount,
+				pluralTimeout=newTracker.pluralTimeout,
+			)
+			mergedTracker.childTrackers.extend(
+				oldTracker.childTrackers,
+			) if oldTracker.actionCount > 1 else mergedTracker.childTrackers.append(oldTracker)
+			mergedTracker.childTrackers.extend(
+				newTracker.childTrackers,
+			) if newTracker.actionCount > 1 else mergedTracker.childTrackers.append(newTracker)
+		elif (
+			self.numUnknownTrackers == 0
+			and newTracker.action == TouchAction.HOLD
+			and oldTracker.action == TouchAction.TAP
+			and newTracker.numFingers == oldTracker.numFingers
+			and newTracker.startTime > oldTracker.endTime
+		):
+			# A tap and then a hover down  is a tapAndHold
+			mergedTracker = MultiTouchTracker(
+				TouchAction.TAP_AND_HOLD,
+				oldTracker.x,
+				oldTracker.y,
+				oldTracker.startTime,
+				newTracker.endTime,
+				newTracker.numFingers,
+				oldTracker.actionCount,
+				pluralTimeout=newTracker.pluralTimeout,
+			)
+			mergedTracker.childTrackers.append(oldTracker)
+			mergedTracker.childTrackers.append(newTracker)
+		else:  # They don't match, go to the next one
+			return
+		return mergedTracker
+
+	def processAndQueueMultiTouchTracker(self, tracker):
+		"""Queues the given tracker, replacing old trackers with a multiFingered plural action where possible"""
+		# Reverse iterate through the existing queued trackers comparing the given tracker to each of them
+		# as L{emitTrackers} constantly dequeues, the queue only contains trackers newer than multiTouchTimeout, though may contain more if there are still unknown singleTouchTrackers around.
+		for index in range(len(self.multiTouchTrackers)):
+			index = len(self.multiTouchTrackers) - 1 - index
+			delayedTracker = self.multiTouchTrackers[index]
+			mergedTracker = self.makeMergedTrackerIfPossible(delayedTracker, tracker)
+			if mergedTracker:
+				# The trackers were successfully merged
+				# remove the old one from the queue, and queue the merged one for possible further matching
+				del self.multiTouchTrackers[index]
+				self.processAndQueueMultiTouchTracker(mergedTracker)
+				return
+		self.multiTouchTrackers.append(tracker)
+
+	pendingEmitInterval: float | None = None
+	"""If set: how long to wait before calling emitTrackers again as trackers are still in the queue"""
+
+	def emitTrackers(self):
+		"""
+		Yields queued trackers that have existed in the queue for long enough to not be connected with other trackers.
+		A part from a timeout, trackers are also not emitted if there are other fingers touching that still have an unknown action.
+		If there are no queued trackers to yield but there is a hover tracker, a hover action is yielded instead.
+		"""
+		with self._lock:
+			self.pendingEmitInterval = None
+			t = time.time()
+			# yield hover ups for complete hovers from most recent backwards
+			for singleTouchTracker in list(self.curHoverStack):
+				if singleTouchTracker.complete:
+					self.curHoverStack.remove(singleTouchTracker)
+					tracker = MultiTouchTracker(
+						TouchAction.HOVER_UP,
+						singleTouchTracker.x,
+						singleTouchTracker.y,
+						singleTouchTracker.startTime,
+						time.time(),
+					)
+					preheldTracker = self.makePreheldTrackerFromSingleTouchTrackers(self.curHoverStack)
+					yield preheldTracker, tracker
+			# Only emit trackers if there are not unknown actions
+			hasUnknownTrackers = self.numUnknownTrackers
+			if not hasUnknownTrackers:
+				for tracker in self.multiTouchTrackers.copy():
+					# isolated holds can be dropped as we only care when they are tapAndHolds (and preheld is handled later)
+					# All trackers can be emitted with no delay except for tap which must wait for the timeout (to detect plural taps)
+					trackerTimeout = tracker.pluralTimeout - t if tracker.pluralTimeout is not None else 0
+					if trackerTimeout <= 0:
+						self.multiTouchTrackers.remove(tracker)
+						# isolated holds should not be emitted as they are covered by hover downs later
+						if tracker.action == TouchAction.HOLD:
+							continue
+						preheldTracker = self.makePreheldTrackerFromSingleTouchTrackers(self.curHoverStack)
+						# If this tracker was made up of any new hovers (e.g. a tapAndHold) they should be quietly added to the current hover stack so that hover downs are not produced
+						for singleTouchTracker in tracker.iterAllRawSingleTouchTrackers():
+							if (
+								singleTouchTracker.action == TouchAction.HOVER
+								and singleTouchTracker not in self.curHoverStack
+							):
+								self.curHoverStack.append(singleTouchTracker)
+						yield preheldTracker, tracker
+					else:
+						self.pendingEmitInterval = (
+							min(self.pendingEmitInterval, trackerTimeout)
+							if self.pendingEmitInterval
+							else trackerTimeout
+						)
+			# yield hover downs for any new hovers
+			# But only once  there are no more trackers in the queue waiting to timeout (E.g. a hold for a tapAndHold)
+			if len(self.multiTouchTrackers) == 0:
+				for singleTouchTracker in self.singleTouchTrackersByID.values():
+					if (
+						singleTouchTracker.action == TouchAction.HOVER
+						and singleTouchTracker not in self.curHoverStack
+					):
+						self.curHoverStack.append(singleTouchTracker)
+						tracker = MultiTouchTracker(
+							TouchAction.HOVER_DOWN,
+							singleTouchTracker.x,
+							singleTouchTracker.y,
+							singleTouchTracker.startTime,
+							time.time(),
+						)
+						preheldTracker = self.makePreheldTrackerFromSingleTouchTrackers(
+							self.curHoverStack[:-1],
+						)
+						yield preheldTracker, tracker
+			# yield a hover for the most recent hover
+			if len(self.curHoverStack) > 0:
+				singleTouchTracker = self.curHoverStack[-1]
+				tracker = MultiTouchTracker(
+					TouchAction.HOVER,
+					singleTouchTracker.x,
+					singleTouchTracker.y,
+					singleTouchTracker.startTime,
+					time.time(),
+				)
+				preheldTracker = self.makePreheldTrackerFromSingleTouchTrackers(self.curHoverStack[:-1])
+				yield preheldTracker, tracker

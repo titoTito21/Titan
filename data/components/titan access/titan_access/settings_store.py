@@ -16,10 +16,21 @@ import os
 import platform
 import threading
 
+#: What the welcome message defaulted to before it followed the language.
+OLD_WELCOME_DEFAULTS = ("Czytnik ekranu uruchomiony", "Screen reader started")
+
+
+def _own_words(said):
+    """A saved welcome message, or '' when it is one of the old defaults."""
+    said = str(said or "").strip()
+    return "" if said in OLD_WELCOME_DEFAULTS else said
+
 
 # --------------------------------------------------------------------------- #
 # Enums (mirror C# enums; encoded as their PascalCase names in the INI)
 # --------------------------------------------------------------------------- #
+
+
 class AnnouncementMode:
     NONE = "None"
     SOUND = "Sound"
@@ -120,7 +131,9 @@ DEFAULTS = {
     (SEC_GENERAL, "StartupAnnouncement"): "SpeechAndSound",
     (SEC_GENERAL, "TCEEntrySound"): "true",
     (SEC_GENERAL, "Modifier"): "InsertAndCapsLock",
-    (SEC_GENERAL, "WelcomeMessage"): "Czytnik ekranu uruchomiony",
+    # Empty: the reader's own words for being switched on, in the user's
+    # language ("Titan Access włączony" / "Titan Access on").
+    (SEC_GENERAL, "WelcomeMessage"): "",
     (SEC_GENERAL, "SpeakHints"): "true",
     (SEC_GENERAL, "Language"): "pl",
     # Titan-specific additions (not in C#) — positional audio / virtual screen.
@@ -390,8 +403,12 @@ class SettingsStore:
     def modifier(self, v): self.set(SEC_GENERAL, "Modifier", v)
 
     @property
+    # The user's own words for the reader starting, or '' for the reader's
+    # own. The old defaults were saved into every store that was ever
+    # written, so they count as unset - or no store would ever hear
+    # "Titan Access włączony".
     def welcome_message(self):
-        return self.get(SEC_GENERAL, "WelcomeMessage", "Czytnik ekranu uruchomiony")
+        return _own_words(self.get(SEC_GENERAL, "WelcomeMessage", ""))
     @welcome_message.setter
     def welcome_message(self, v): self.set(SEC_GENERAL, "WelcomeMessage", v)
 
