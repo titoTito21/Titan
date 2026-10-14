@@ -15,6 +15,32 @@ from src.titan_core.skin_manager import apply_skin_to_window
 from src.platform_utils import IS_WINDOWS, IS_LINUX, IS_MACOS, get_subprocess_kwargs
 import concurrent.futures
 
+
+def _decoded(completed):
+    """A netsh run's output as text, whatever code page it was written in.
+
+    From Python 3.15 ``text=True`` decodes as UTF-8 (PEP 686), and an SSID or
+    a Polish netsh message in the console's OEM code page then raised
+    UnicodeDecodeError - which the callers caught and read as "not
+    connected". UTF-8 is tried strictly first, then the OEM code page, and
+    a stray byte becomes U+FFFD rather than an exception.
+    """
+    def text(data):
+        if not isinstance(data, bytes):
+            return data
+        try:
+            return data.decode('utf-8')
+        except UnicodeDecodeError:
+            pass
+        try:
+            import ctypes
+            return data.decode(f'cp{ctypes.windll.kernel32.GetOEMCP()}', errors='replace')
+        except Exception:
+            return data.decode('cp852', errors='replace')
+    completed.stdout = text(completed.stdout)
+    completed.stderr = text(completed.stderr)
+    return completed
+
 try:
     import pywifi
     from pywifi import const
@@ -173,10 +199,10 @@ class NetworkManager:
     def _get_windows_connected_ssid(self):
         """Return the SSID of the currently associated WiFi network on Windows, or None."""
         try:
-            result = subprocess.run(
+            result = _decoded(subprocess.run(
                 ['netsh', 'wlan', 'show', 'interfaces'],
-                capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
-            )
+                capture_output=True, timeout=5, **get_subprocess_kwargs()
+            ))
             if result.returncode != 0:
                 return None
             state_connected = False
@@ -332,18 +358,18 @@ class NetworkManager:
                     f.write(xml)
                     profile_path = f.name
 
-                add = subprocess.run(
+                add = _decoded(subprocess.run(
                     ['netsh', 'wlan', 'add', 'profile', f'filename={profile_path}', 'user=current'],
-                    capture_output=True, text=True, timeout=10, **get_subprocess_kwargs()
-                )
+                    capture_output=True, timeout=10, **get_subprocess_kwargs()
+                ))
                 if add.returncode != 0:
                     print(f"netsh add profile ({sec}) failed: {add.stdout} {add.stderr}")
                     continue
 
-                conn = subprocess.run(
+                conn = _decoded(subprocess.run(
                     ['netsh', 'wlan', 'connect', f'name={ssid}', f'ssid={ssid}'],
-                    capture_output=True, text=True, timeout=10, **get_subprocess_kwargs()
-                )
+                    capture_output=True, timeout=10, **get_subprocess_kwargs()
+                ))
                 if conn.returncode != 0:
                     print(f"netsh connect ({sec}) failed: {conn.stdout} {conn.stderr}")
                     continue
@@ -498,10 +524,10 @@ class NetworkManager:
         try:
             if IS_WINDOWS:
                 try:
-                    result = subprocess.run(
+                    result = _decoded(subprocess.run(
                         ['netsh', 'wlan', 'disconnect'],
-                        capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
-                    )
+                        capture_output=True, timeout=5, **get_subprocess_kwargs()
+                    ))
                     if result.returncode == 0:
                         self.connected_network = None
                         return True
@@ -582,10 +608,10 @@ class NetworkManager:
                 else:
                     # Soft "off" - disconnect from any associated network
                     try:
-                        subprocess.run(
+                        _decoded(subprocess.run(
                             ['netsh', 'wlan', 'disconnect'],
-                            capture_output=True, text=True, timeout=5, **get_subprocess_kwargs()
-                        )
+                            capture_output=True, timeout=5, **get_subprocess_kwargs()
+                        ))
                     except Exception as e:
                         print(f"netsh disconnect failed: {e}")
                     self.connected_network = None

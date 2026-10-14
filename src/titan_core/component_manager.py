@@ -332,9 +332,9 @@ class ComponentManager:
                     # load, on a machine where every source file was fine.
                     try:
                         pyc_path = init_path + 'c'
-                        stale = (not os.path.exists(pyc_path)
-                                 or os.path.getmtime(init_path) > os.path.getmtime(pyc_path)
-                                 or not self._pyc_is_ours(pyc_path))
+                        # A .pyc's own date says nothing after a git pull or a
+                        # copy: it is asked which SOURCE it was compiled from.
+                        stale = not self._pyc_matches_source(pyc_path, init_path)
                         if stale:
                             pyc_path = self.compile_to_pyc(init_path)
                         if pyc_path and self._pyc_is_ours(pyc_path):
@@ -655,6 +655,40 @@ class ComponentManager:
                 return f.read(4) == importlib.util.MAGIC_NUMBER
         except OSError:
             return False
+
+    @classmethod
+    def _pyc_matches_source(cls, pyc_path, py_path):
+        """Was this .pyc compiled, by this Python, from THIS init.py?
+
+        The header of a timestamp-based .pyc records the source's mtime and
+        size. Comparing the two files' own dates is not enough: git sets every
+        file it writes to "now", so a .pyc tracked in the repository and built
+        from an older init.py looks newer than the source and was loaded in
+        its place.
+        """
+        if not cls._pyc_is_ours(pyc_path):
+            return False
+        try:
+            with open(pyc_path, 'rb') as f:
+                header = f.read(16)
+            st = os.stat(py_path)
+        except OSError:
+            return False
+        if len(header) < 16:
+            return False
+        flags = int.from_bytes(header[4:8], 'little')
+        if flags & 0b1:
+            # Hash-based .pyc: compare the source hash it was built from.
+            try:
+                with open(py_path, 'rb') as f:
+                    source_hash = importlib.util.source_hash(f.read())
+                return header[8:16] == source_hash
+            except Exception:
+                return False
+        mtime = int.from_bytes(header[8:12], 'little')
+        size = int.from_bytes(header[12:16], 'little')
+        return (mtime == (int(st.st_mtime) & 0xFFFFFFFF)
+                and size == (st.st_size & 0xFFFFFFFF))
 
     def compile_to_pyc(self, py_path):
         """Compiles a Python file to .pyc and returns its path."""

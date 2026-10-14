@@ -42,6 +42,50 @@ import struct
 import threading
 import traceback
 
+
+
+def _ansi_line(line, encoding):
+    """One bridge command as bytes in the ANSI code page, losing nothing.
+
+    A character that code page has not got (Cyrillic on a Polish Windows, an
+    emoji anywhere) would become '?'. It is sent as Chr(1) + its UTF-16 code
+    unit in hex + ';', which the VBScript's Unmark() turns back with ChrW.
+    """
+    out = []
+    for ch in line:
+        try:
+            if ch == '\x01':
+                raise UnicodeEncodeError(encoding, ch, 0, 1, 'marker')
+            ch.encode(encoding)
+            out.append(ch)
+        except UnicodeEncodeError:
+            units = ch.encode('utf-16-le')
+            for k in range(0, len(units), 2):
+                out.append('\x01%X;' % int.from_bytes(units[k:k + 2], 'little'))
+    return ''.join(out).encode(encoding, errors='replace')
+
+def _ansi_encoding():
+    """The code page cscript's WScript.StdIn/StdOut really use: Windows' ANSI one.
+
+    NOT locale.getpreferredencoding(): from Python 3.15 UTF-8 mode is on by
+    default (PEP 686) and that answers 'utf-8', so every Polish letter was
+    sent to the VBScript bridge as UTF-8 and read back as cp1250 - "zażółć"
+    arrived as "zaĹĽĂłĹ‚Ä‡" and was spoken as gibberish. Measured.
+    """
+    import locale
+    try:
+        enc = locale.getencoding()          # 3.11+, ignores UTF-8 mode
+    except AttributeError:
+        enc = locale.getpreferredencoding(False)
+    if not enc or enc.lower().replace('-', '') in ('utf8', 'cp65001'):
+        try:
+            import ctypes
+            acp = ctypes.windll.kernel32.GetACP()
+            enc = 'utf-8' if acp == 65001 else f'cp{acp}'
+        except Exception:
+            enc = enc or 'cp1250'
+    return enc
+
 PIPE_NAME = r'\\.\pipe\TitanTTS'
 _TARGET_SAMPLE_RATE = 22050
 _TARGET_CHANNELS = 1
@@ -123,6 +167,30 @@ class _Sapi5Adapter:
     # Persistent VBScript for fallback WAV generation via cscript.exe.
     # Handles VOICE, RATE, VOLUME, GENFILE, QUIT commands over stdin/stdout.
     _VBS_FALLBACK = r'''On Error Resume Next
+Function Unmark(s)
+    ' A character the ANSI code page has not got arrives as Chr(1) hex ";"
+    ' (UTF-16 code units), so Cyrillic, Greek or emoji reach SAPI intact.
+    If InStr(s, Chr(1)) = 0 Then
+        Unmark = s
+        Exit Function
+    End If
+    Dim r, i, j, c
+    r = ""
+    i = 1
+    Do While i <= Len(s)
+        c = Mid(s, i, 1)
+        j = 0
+        If c = Chr(1) Then j = InStr(i + 1, s, ";")
+        If j > 0 Then
+            r = r & ChrW(CLng("&H" & Mid(s, i + 1, j - i - 1)))
+            i = j + 1
+        Else
+            r = r & c
+            i = i + 1
+        End If
+    Loop
+    Unmark = r
+End Function
 Set voice = CreateObject("SAPI.SpVoice")
 If Err.Number <> 0 Then
     WScript.StdOut.WriteLine "INIT_FAIL"
@@ -131,7 +199,7 @@ End If
 Err.Clear
 WScript.StdOut.WriteLine "READY"
 Do While Not WScript.StdIn.AtEndOfStream
-    line = WScript.StdIn.ReadLine
+    line = Unmark(WScript.StdIn.ReadLine)
     If Len(line) = 0 Then
         ' skip empty lines
     Else
@@ -367,8 +435,7 @@ Loop
                 return False
 
         import subprocess
-        import locale
-        encoding = locale.getpreferredencoding() or 'cp1250'
+        encoding = _ansi_encoding()
         vbs_path = os.path.join(
             os.environ.get('TEMP', os.path.expanduser('~')),
             'tce_sapi_pipe_bridge.vbs')
@@ -418,9 +485,8 @@ Loop
         if not proc or proc.poll() is not None:
             return
         try:
-            import locale
-            encoding = locale.getpreferredencoding() or 'cp1250'
-            proc.stdin.write((cmd + '\n').encode(encoding, errors='replace'))
+            encoding = _ansi_encoding()
+            proc.stdin.write(_ansi_line(cmd + '\n', encoding))
             proc.stdin.flush()
         except Exception as e:
             _log(f'[Sapi5Adapter] VBS send error: {e}')
@@ -437,8 +503,7 @@ Loop
         if not proc or proc.poll() is not None:
             return None
         try:
-            import locale
-            encoding = locale.getpreferredencoding() or 'cp1250'
+            encoding = _ansi_encoding()
             line = proc.stdout.readline()
             if not line:
                 return None
