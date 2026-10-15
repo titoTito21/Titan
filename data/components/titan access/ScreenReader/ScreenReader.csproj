@@ -1,0 +1,118 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <DisableImplicitNamespaceImports>false</DisableImplicitNamespaceImports>
+
+    <!-- Single-file publikacja -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Trimming włączone tylko przy publikacji: dotnet publish -p:PublishTrimmed=true -->
+    <TrimMode>partial</TrimMode>
+    <DebugType>none</DebugType>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UIAutomationClient">
+      <HintPath>C:\Windows\Microsoft.NET\assembly\GAC_MSIL\UIAutomationClient\v4.0_4.0.0.0__31bf3856ad364e35\UIAutomationClient.dll</HintPath>
+    </Reference>
+    <Reference Include="UIAutomationTypes">
+      <HintPath>C:\Windows\Microsoft.NET\assembly\GAC_MSIL\UIAutomationTypes\v4.0_4.0.0.0__31bf3856ad364e35\UIAutomationTypes.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio.Vorbis" Version="1.5.0" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Osadzone zasoby dźwiękowe -->
+  <ItemGroup>
+    <EmbeddedResource Include="SFX\*.ogg" />
+  </ItemGroup>
+
+  <!-- Osadzone pliki .KEY z opisami skrótów klawiszowych -->
+  <ItemGroup>
+    <EmbeddedResource Include="key files\*.KEY">
+      <LogicalName>key_files.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- BestSpeech engine - bridge exe + language DLLs -->
+  <ItemGroup>
+    <None Include="Speech\bestspeech\bst_bridge.exe" CopyToOutputDirectory="PreserveNewest" Link="Speech\bestspeech\bst_bridge.exe" />
+    <None Include="Speech\bestspeech\dll_*.dll" CopyToOutputDirectory="PreserveNewest" Link="Speech\bestspeech\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Exclude BestSpeech .py and .cs source files from compilation -->
+  <ItemGroup>
+    <Compile Remove="Speech\bestspeech\bst_bridge.cs" />
+    <None Remove="Speech\bestspeech\*.py" />
+    <None Remove="Speech\bestspeech\*.TCE" />
+  </ItemGroup>
+
+  <!-- Lokalizacja: pliki locale/*.json kopiowane obok exe -->
+  <ItemGroup>
+    <None Include="locale\*.json" CopyToOutputDirectory="PreserveNewest" Link="locale\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!--
+    Natywny helper (ScreenReaderHelper.dll) - niskopoziomowe hooki klawiatury/myszy,
+    SetWinEventHook, synteza wejscia. Budowany przez MSVC przed kompilacja zarzadzana.
+    Inputs/Outputs zapewniaja kompilacje przyrostowa - cl uruchamia sie tylko gdy
+    zrodla sie zmienily.
+  -->
+  <Target Name="BuildNativeHelper"
+          BeforeTargets="BeforeBuild"
+          Inputs="native\ScreenReaderHelper\src\srhelper.cpp;native\ScreenReaderHelper\include\srhelper.h;native\shared\srdisplay_shared.h;native\ScreenReaderHelper\build.bat"
+          Outputs="native\ScreenReaderHelper\bin\ScreenReaderHelper.dll">
+    <Message Importance="high" Text="Building native ScreenReaderHelper.dll ..." />
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\native\ScreenReaderHelper\build.bat&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)\native\ScreenReaderHelper" />
+  </Target>
+
+  <!--
+    Wstrzykiwana srremote.dll - model wyswietlania GDI. Hookuje ExtTextOutW
+    wewnatrz procesow docelowych i zapisuje tekst ekranowy do pamieci
+    wspoldzielonej. Budowana przez MSVC przed kompilacja zarzadzana.
+  -->
+  <Target Name="BuildNativeRemote"
+          BeforeTargets="BeforeBuild"
+          Inputs="native\ScreenReaderRemote\src\srremote.cpp;native\shared\srdisplay_shared.h;native\ScreenReaderRemote\build.bat"
+          Outputs="native\ScreenReaderRemote\bin\srremote.dll">
+    <Message Importance="high" Text="Building native srremote.dll ..." />
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\native\ScreenReaderRemote\build.bat&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)\native\ScreenReaderRemote" />
+  </Target>
+
+  <!-- Kopiuje natywne DLL do katalogu wyjsciowego (zawsze, nawet gdy build pominiety) -->
+  <Target Name="CopyNativeHelper"
+          AfterTargets="BuildNativeHelper"
+          BeforeTargets="Build;Run"
+          Condition="Exists('native\ScreenReaderHelper\bin\ScreenReaderHelper.dll')">
+    <Copy SourceFiles="native\ScreenReaderHelper\bin\ScreenReaderHelper.dll"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyNativeRemote"
+          AfterTargets="BuildNativeRemote"
+          BeforeTargets="Build;Run"
+          Condition="Exists('native\ScreenReaderRemote\bin\srremote.dll')">
+    <Copy SourceFiles="native\ScreenReaderRemote\bin\srremote.dll"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

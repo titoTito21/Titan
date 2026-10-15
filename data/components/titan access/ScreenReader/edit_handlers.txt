@@ -1,0 +1,87 @@
+    // Edit field navigation handlers
+    private void OnMoveToPreviousCharacter()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveByCharacter(-1);
+        }
+    }
+
+    private void OnMoveToNextCharacter()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveByCharacter(1);
+        }
+    }
+
+    private void OnMoveToPreviousWord()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveByWord(-1);
+        }
+    }
+
+    private void OnMoveToNextWord()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveByWord(1);
+        }
+    }
+
+    private void OnMoveToStart()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveToStart();
+        }
+    }
+
+    private void OnMoveToEnd()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            _editNavigator.MoveToEnd();
+        }
+    }
+
+    private void OnReadCurrentChar()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            string ch = _editNavigator.GetCurrentCharacter();
+            if (!string.IsNullOrEmpty(ch))
+                _speechManager.Speak(ch);
+        }
+    }
+
+    private void OnReadCurrentWord()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            string word = _editNavigator.GetCurrentWord();
+            if (!string.IsNullOrEmpty(word))
+                _speechManager.Speak(word);
+        }
+    }
+
+    private void OnReadCurrentLine()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            string line = _editNavigator.GetCurrentLine();
+            if (!string.IsNullOrEmpty(line))
+                _speechManager.Speak(line);
+        }
+    }
+
+    private void OnReadPosition()
+    {
+        if (_editNavigator.IsInEditField(_currentElement))
+        {
+            string info = _editNavigator.GetPositionInfo();
+            _speechManager.Speak(info);
+        }
+    }
