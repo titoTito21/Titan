@@ -1,0 +1,5 @@
+name_pl="Witaj z JavaScriptu"
+name_en="Hello from JavaScript"
+description="A Titan application written in JavaScript (Polyglot example)."
+openfile="main.js"
+shortname="javascript_hello"

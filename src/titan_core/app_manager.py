@@ -18,6 +18,48 @@ if not os.path.exists(SITEPACKAGES_DIR):
     os.makedirs(SITEPACKAGES_DIR)
 
 
+_warm_started = False
+
+
+def warm_interpreter(delay=20.0):
+    """Unpack the libraries every application imports, ahead of the first one.
+
+    A compiled Titan keeps the applications' site-packages in
+    _internal/TInterpreter.TDL (src/titan_core/tdl.py), unpacked on first
+    import. Unpacked in the middle of opening an application, wx alone is
+    several seconds of nothing happening; done here, on a low-priority
+    process a while after Titan has started, it is nothing the user waits
+    for. Once per Titan; a TDL already unpacked makes it a no-op.
+    """
+    global _warm_started
+    if _warm_started or not is_frozen():
+        return
+    _warm_started = True
+    internal_dir = os.path.join(os.path.dirname(sys.executable), '_internal')
+    if not os.path.isfile(os.path.join(internal_dir, 'TInterpreter.TDL')):
+        return
+    python_executable, _error = get_python_executable()
+    if not python_executable:
+        return
+
+    def work():
+        import time
+        time.sleep(delay)
+        kwargs = {}
+        if IS_WINDOWS:
+            kwargs['creationflags'] = (subprocess.CREATE_NO_WINDOW
+                                       | getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0))
+        try:
+            subprocess.run([python_executable, '-c',
+                            'import titan_tdl; titan_tdl.warm()'],
+                           cwd=internal_dir, timeout=900,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           **kwargs)
+        except Exception as e:
+            _debug_log(f"Interpreter warm-up failed: {e}")
+    threading.Thread(target=work, daemon=True, name='InterpreterWarm').start()
+
+
 def _iter_app_folders():
     """Yield (folder_name, abs_path) for every application folder in the
     bundled data/applications/ and the user overlay under
@@ -33,6 +75,7 @@ def get_applications():
     """Get list of all visible applications."""
     lang = language_code
     applications = []
+    warm_interpreter()
 
     for app_folder, app_path in _iter_app_folders():
         app_info = read_app_info(app_path, lang)

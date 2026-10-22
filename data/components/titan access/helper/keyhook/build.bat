@@ -20,7 +20,7 @@ cl /nologo /LD /O2 /W4 /DWIN32 /D_WINDOWS /DUNICODE /D_UNICODE ^
    titan_keyhook.c user32.lib kernel32.lib ^
    /Fe:titan_keyhook.dll /link /DEF:titan_keyhook.def || goto :fail
 if not exist "..\..\lib" mkdir "..\..\lib"
-copy /y titan_keyhook.dll "..\..\lib\titan_keyhook.dll" >nul || goto :fail
+move /y titan_keyhook.dll "..\..\lib\titan_keyhook.dll" >nul || goto :fail
 del /q titan_keyhook.obj titan_keyhook.exp titan_keyhook.lib 2>nul
 echo Built lib\titan_keyhook.dll
 exit /b 0

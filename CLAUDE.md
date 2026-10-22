@@ -20,6 +20,85 @@ python compiletorelease.py
 ```
 This uses PyInstaller to compile the application to a standalone executable in the `dist` directory. Requires PyInstaller: `pip install pyinstaller`
 
+**No file twice.** The build of 2026-10-16 shipped 35 binaries twice
+(19.6 MB): the stdlib extensions in both `_internal/` and `_internal/DLLs/`,
+pygame's SDL DLLs at the top of `_internal/` as well as in `pygame/`, and
+tMedia's `libvlc`/`libvlccore` in `_internal/` although tMedia loads its own
+by full path. `DLLs/` is now copied without what `_internal/` already has,
+and the last step is `src/scripts/dedupe_dist.py` (also runnable on any
+build: `python src/scripts/dedupe_dist.py dist/Titan --dry-run`), which
+removes the copy nothing reaches - decided from the PE import tables and the
+Python that names a DLL, never by guessing; a non-PE binary is left alone.
+Titan-Net voice (`voice_codec.py`) also looks in `sys._MEIPASS`, so
+`data/lib/libopus-0.dll` goes too, and the identical `data/lib/opus.dll` is
+gone from the tree. `data/components/titan access/ScreenReader/` (the C#
+reader Titan Access was ported from - its own copies of eSpeak, Festival
+and BeSTspeech, plus local `bin`/`obj`; 241 MB here) is not shipped
+(`NOT_SHIPPED`), and `helper/keyhook/build.bat` MOVES its DLL into `lib/`.
+Identical bytes at different paths owned by different add-ons (a sound two
+themes share, each Festival voice's licence, the UI Automation client two
+add-ons vendor) are not doubles and stay. Verified by a real build
+(PyInstaller 6.22.3, Python 3.15): the step removed 15 files, a second run
+finds 0, and pygame/SDL/ssl/sqlite load from the one copy left. Tests:
+`tests/test_dedupe_dist.py` (20).
+
+**The interpreter is compressed: `TInterpreter.TDL` and `python3XX.zip`.**
+Applications and games run on `_internal/python.exe`, which needs every
+library one of them might import - 616 MB of site-packages on the build
+machine. `src/scripts/build_interpreter.py` (the last step of
+`compiletorelease.py`; `TITAN_SITE_PACKAGES=t|f|n` answers its question,
+`t` the default) makes that small:
+- **site-packages -> `_internal/TInterpreter.TDL`** (`src/titan_core/tdl.py`,
+  "TCE dynamic library"): one file, one LZMA unit per distribution (x86
+  branch filter in front of the executables). Nothing is unpacked until it
+  is imported: `Lib/site-packages/titan_tdl.pth` runs
+  `titan_tdl.install()`, which puts a finder IN FRONT of the path finder;
+  it looks the name up, unpacks that distribution into
+  `%LOCALAPPDATA%/titosoft/Titan/interpreter/<build>/site-packages` (lock
+  file per unit, marker when complete, `__init__`s written last) and lets
+  the path finder find it as an ordinary file - `__file__`, `.pyd`, package
+  data and `importlib.metadata` behave as in a plain site-packages.
+  **In front, not last**: PyInstaller leaves `_internal/wx/` holding only
+  .pyd files and no `__init__`, `_internal` is first on python.exe's path,
+  and a folder without `__init__` is a namespace package - answered last,
+  `import wx` would be an empty namespace. `.pth` files are honoured (path
+  lines are roots, import lines run once their unit is unpacked); build
+  tools (setuptools, nuitka, pyinstaller, cython...) are not shipped; pip
+  is, and `python.exe -m pip install` still installs into the real
+  `Lib/site-packages`, which comes first.
+  Measured: 616 MB of site-packages -> an 86.7 MB TDL (112 units, built in
+  ~3 min on four threads; `lzma` lets go of the GIL), and all of numpy, wx,
+  win32api, pythoncom, google.genai, anthropic, openai, pygame,
+  cryptography, enchant, yt_dlp, av, aiohttp, telethon, selenium, comtypes
+  and pycaw import from it through the built python.exe. A start costs
+  ~25 ms more than without it (the index is `marshal`, and json/lzma/
+  threading are imported only when something is unpacked - they were
+  30 ms of every start from the zip). `titan_tdl.warm()` unpacks wx,
+  pygame, numpy... without importing them; `app_manager.warm_interpreter`
+  runs it on a low-priority process 20 s after Titan starts, so the first
+  application after an install does not wait seconds in silence.
+  `python src/titan_core/tdl.py list|check <file>` inspects one.
+- **The standard library -> `_internal/python3XX.zip`**, compiled, as
+  python.org's embeddable package ships it, first in `python3XX._pth`
+  (idlelib, turtledemo, ensurepip, venv left out): 5.5 MB. `titan_tdl.py`
+  is NOT in it - the zip is first on the path, and a copy there shadowed
+  every newer loader in `Lib/`. A second run never re-zips a `Lib/` that
+  only holds the loader any more.
+- **Pruned** in the frozen tree and the TDL alike (`tdl.prune_rules`):
+  speech_recognition's pocketsphinx models (no pocketsphinx is shipped) and
+  its Linux/macOS flac binaries, selenium's Linux/macOS selenium-manager -
+  54 MB - and `data/bin/ffprobe.exe` (94.5 MB, `build_interpreter.DIST_PRUNE`):
+  its one caller, `elten_player._get_duration`, reads the duration off
+  `ffmpeg -i`'s "Duration:" line when there is no ffprobe.
+- `pack_release.py` makes TWO archives: `titan.main.7z` leaves the
+  interpreter out (`--with-interpreter` keeps it), `--interpreter` writes
+  `titan.interpreter.7z` (python.exe, pythonw.exe, the `_pth`, the zip,
+  `Lib/`, `DLLs/`, the TDL) - the one the updater downloads for a version
+  ending in `i`. Titan.exe's own python3XX.dll stays in the program.
+  Measured: titan.interpreter.7z 97.9 MB, the installed interpreter
+  ~108 MB where the folder was ~700 MB.
+- Tests: `tests/test_tdl.py` (19; the imports each in a fresh interpreter).
+
 ### Packaging Add-ons (.TCA / .TCD)
 
 Any app, game, component, launcher, Titan IM module, gamepad mode, TTS
@@ -896,6 +975,67 @@ each was a layer underneath answering nothing, measured in WSLg (Debian
   modes, TTS engines, and statusbar applets) can also ship as a single
   packaged `.TCA`/`.TCD` file instead of a directory — see "Packaging
   Add-ons" under Development Commands and `src/titan_core/titan_package.py`
+
+### The Component Manager: every module of Titan, on or off
+
+`src/ui/componentmanagergui.py` (the window) over `src/titan_core/modules.py`
+(the model). Before this it listed components only, and its Actions menu
+raised (`get_component_display_name` called with one argument of two).
+
+- **What it switches**: the twelve add-on kinds in `data/<subdir>/`
+  (components, applications, games, Titan IM modules, TTS engines, gamepad
+  modes, widgets, statusbar applets, shell add-ons, settings interfaces,
+  launchers, macros - directories and packaged `.TCA`/`.TCD` alike) and
+  Titan's **built-in services** (`modules.SERVICES`): Telegram, Messenger,
+  WhatsApp, Titan-Net, EltenLink, AI features, TCE sounds, the system
+  monitor, Steam and Battle.net games.
+- **Where the switch is kept**: a kind whose manifest has `status` keeps
+  using it whenever the manifest can be written (`_write_status` changes that
+  one line and nothing else). Everything else - apps, games, widgets,
+  statusbar applets, macros, a packaged add-on, a read-only folder, the
+  services - is in `%APPDATA%/titosoft/Titan/modules.json`
+  (`{"disabled": {"applications": [...], "services": [...]}}`). AI and TCE
+  sounds are their existing settings (`ai/enabled`,
+  `environment/enable_tce_sounds`), so there is one answer.
+- **One filter covers every consumer**: `platform_utils.discover_data_entries`
+  drops what the store switched off (`include_disabled=True` for the manager
+  itself), so every list, loader and action is without it. The services are
+  asked where they appear: `gui.populate_network_list` / `_options` and the
+  activation (`_drop_switched_off_services`, `modules.im_row_shown`), the
+  Invisible UI's and both Klango classes' Titan IM lists, the Start menu's
+  `BUILTIN_IM`, `game_manager.get_games` (Steam / Battle.net),
+  `initialize_system_monitor` and Titan-Net's auto-connect in `main.py`.
+  The macro manager skips `disabled_names('macros')`.
+- **Live where it can be, said where it cannot**: `set_enabled` answers a
+  `Change` with `applies` 'live' (apps, games, shell add-ons, settings
+  interfaces, macros, most services - the main window's lists are re-read
+  by `refresh_faces`; the system monitor is stopped/started on a thread) or
+  'restart' (components, TTS engines, IM modules, gamepad modes, widgets,
+  statusbar applets, launchers, TCE sounds, Titan-Net while signed in). A
+  change switched back is no longer pending (`_session_changes`). The row
+  says "after restart", and closing the window offers to restart Titan
+  (`restart_titan`: start a new Titan, whose single-instance check announces
+  the restart and ends this one).
+- **The window is Titan's main window** (a modal `wx.Dialog`, so the menu
+  bar, Invisible UI and Klango keep standing their keyboard down round
+  `ShowModal`): row 0 is the tab bar (Left/Right, Ctrl+Tab; components first,
+  empty kinds left out), the panned focus cue and end-of-list sound on every
+  move, `messages.announce_tab_bar` / `announce_view_switched`, Space
+  switches, Enter / Applications key / Shift+F10 open the actions (switch,
+  Run / Settings of a loaded component, Open / Play, the add-on's own Action
+  API actions, Details, Open folder, Restart), F5 re-reads, Escape closes. A
+  read-only Details field and a "N of M switched on" line under the list.
+  Also in Start menu -> Settings.
+- **Actions**: built-in provider `modules` (`modules_actions.py`):
+  `list_modules`, `module_status`, `enable_module`, `disable_module`,
+  `pending_changes`, `open_manager`, `restart_titan` - the AI, macros, Titan
+  Script and external clients reach it without the window.
+- Also fixed on the way: `im_ui_common` imported feedback_hub's
+  argument-less `_announce_tab_bar` as `announce_tab_bar` and called it with
+  the tab, so arriving on a Titan IM client's tab bar raised `TypeError`.
+- Translation domain `components` (now with `modules.py`).
+- Tests: `tests/test_component_manager.py` (15; temporary APPDATA, add-ons
+  made in the user overlay, nothing shown).
 
 ### Core Managers
 - `src/titan_core/app_manager.py`: Handles loading/running applications from `data/applications/`
@@ -3459,6 +3599,74 @@ between the levels, which arrived as the text "<!--", the comment's own
 tags, and "-->" - so comments, the XML declaration and a DOCTYPE are taken
 out before anything is parsed, and a CDATA section is its text. Everything
 else came back clean.
+
+### Polyglot: applications, games and components in other languages
+
+`data/components/polyglot/` (package `polyglotkit`, not `polyglot` - the
+component manager registers the folder name in `sys.modules`). An app's or
+game's `openfile=`, or a component's `init.<ext>`, may be Lua, JavaScript,
+Ruby, C#, PowerShell - or anything in the user's
+`%APPDATA%/titosoft/Titan/polyglot/runtimes.json`.
+
+- **Nothing in Titan is changed, on purpose**: it must install from
+  Titan-Net into a Titan built before it. Both managers look up
+  `find_executable_file` and `_run_executable` by NAME at launch, so
+  `hooks.install()` (run at component import) replaces those two names: a
+  source in a known language is answered as `'exe'`, and `_run_executable`
+  starts the host instead and returns its pid (so `note_process` still
+  works). Everything else falls through to Titan's own. A test reads both
+  managers' source and fails if those names or that flow change.
+- **Nothing has to be installed** (asked for in as many words): Lua is
+  `polyglotkit/lua` (a copy of Cling's interpreter - Cling ships as a
+  package of its own), JavaScript is QuickJS-ng 0.17
+  (`interpreters/quickjs/qjs.exe`, `qjs-linux`, MIT, checksums verified
+  against the GitHub release digests), Ruby 4.0.6 is a 28 MB copy of the
+  Elten bridge's interpreter WITHOUT its gems (`interpreters/ruby`), C# is
+  compiled by .NET Framework 4's `csc.exe`, which is part of Windows 10/11
+  (C# 5 only: the SDK `sdk/Titan.cs` uses `JavaScriptSerializer` and is
+  compiled in beside every `.cs` in the program's folder; output cached
+  under `polyglot/build/` by source mtime), PowerShell is Windows'.
+  `NothingHasToBeInstalled` checks each is found with only Windows on PATH.
+  `.gitignore` re-includes `interpreters/**` (the global `*.so`/`*.pem` rules
+  would leave a clone's Ruby without digest and TLS).
+- **The host process** (`host.py`): Titan's own Python
+  (`app_manager.get_python_executable`, `-c` bootstrap, as Titan runs Python
+  apps) with wx for the dialogs and the game window, joined to the Action
+  Bus with `connect()` (it declares `__alive__`, so it is an add-on, not an
+  announced external client). Speech and sound are `titan.speak` /
+  `titan.play_sound` over the bus - the user's voice and mixer. wx's
+  `MainLoop` returns AT ONCE with no top-level window, which ended the host
+  mid-program: a never-shown anchor frame keeps it alive.
+- **One API, one table** (`api.TitanAPI.CALLS`): info, speak, play (app
+  folder, `sounds/`, `sfx/`, or the user's theme like `ui/notify.ogg`; `to`
+  travels), message, ask, confirm, choose (0-based; Lua 1-based), text,
+  open_window / next_event (key, char, focus, menu, close - held keys are
+  released when the window loses focus), wait, action (any add-on;
+  `{ok, text}`, never raises), data_dir, log
+  (`polyglot/logs/<id>.log`), title, exit, add_menu (components).
+- **The protocol** (`guests.ProcessGuest`): one JSON object per line on the
+  guest's stdin/stdout, `{"id","call","args"}` -> `{"id","ok","value"|"error"}`;
+  synchronous, events are pulled. A non-JSON line is the program's own
+  output and goes to the log. SDKs: `titan.rb` (RUBYLIB), `titan_qjs.js`
+  (`qjs --std -I`, a global `titan`), `titan.js` (Node), `Titan/Titan.psm1`
+  (PSModulePath), `Titan.cs`. Windows PowerShell 5.1 needs the `.ps1` saved
+  with a BOM.
+- **Lua** runs in-process (`LuaGuest`); the step ceiling is reset by every
+  `next_event`/`wait`, so a game loop that waits is never stopped; an
+  `ApiError` becomes a `LuaError` so `pcall` catches it.
+- **Components** in other languages (`components.py`) are started in the
+  component's `add_menu` hook - menus must exist before Titan builds the
+  menu bar. Lua runs on one worker thread of its own (`titan.add_menu(label,
+  fn)`, `initialize()`, `shutdown()`); other languages are child processes
+  and get menu presses as events; manifest `menu = A; B` / `menu_pl`.
+- Guide: `data/docu/programming_guide/polyglot_guide_{en,pl}.md`.
+  Translation domain `polyglot` (component's `languages/`). Actions:
+  `polyglot.list_languages`, `run_file`, `install_examples`, `components`.
+  Examples in `examples/` (Lua app, game, component; JS, Ruby, C#,
+  PowerShell apps), installed into the user's overlay on request.
+- Tests: `tests/test_polyglot.py` (44; temporary APPDATA, Titan replaced by
+  a recorder, dialogs built for real and answered in code, the examples run
+  on the real carried interpreters).
 
 ### SMP says the whole label
 
@@ -7949,6 +8157,73 @@ menu, focus the menu without an arrow; Insert+C says 'Titan Access'
   by `sleep_now`. JAWS or Narrator cannot be silenced that way.
 - Tests: `tests/test_titan_access_off_means_off.py` (21),
   `InsideTceOnlyTitanAccessSpeaks` in the add-on suite.
+
+#### Switching the reader, the touchpad or another reader no longer hangs Titan (2026-10-16)
+
+Reported as "Titan and Titan Access hang when I turn the screen reader on
+or off, or the touch gestures, or use it with another screen reader".
+Measured with a probe shaped like Titan (a wx main loop, the real
+component, a watchdog pinging the GUI thread and dumping every stack when
+it stalls), with NVDA running:
+
+- **Titan's GUI thread waited for the reader's worker, and the worker for
+  the GUI thread.** The settings window's "Enable screen reader" and every
+  action marshalled onto the GUI thread called `engine.start()` /
+  `stop()` there; the worker's `AddFocusChangedEventHandler`, its first
+  focus read and its teardown are UIA calls into Titan's OWN windows,
+  answered by that very thread. Measured: 5.0 s frozen per start (the full
+  `_ready` wait), 2.9 s per stop. `engine._on_titan_gui_thread()` now sends
+  both to a thread of their own (`TitanAccessStart` / `TitanAccessStop`);
+  the reader is on / off at once as far as `is_running` goes. A new reader
+  waits for the previous one's teardown (`TitanAccessEngine._stopping`,
+  `_stopped`) - the hook, the controller and the screen-reader flag are
+  one each per machine - and `get_engine()` never hands out a reader that
+  is being stopped. Titan's own exit (`titan_closing`) stays synchronous.
+  After: GUI stall 0.00 s; five on/off bursts end with one worker and one
+  hook.
+- **Real NVDA ended Titan.** Starting, NVDA looks for
+  `FindWindow("wxWindowClassNR", "NVDA")` - the hidden window the helper
+  keeps for Tolk - posts it WM_QUIT, waits for its PROCESS to exit and then
+  calls TerminateProcess (`terminateRunningNVDA`, read out of nvda.exe), or
+  abandons its own start. Starting or restarting NVDA while Titan Access
+  held the endpoint froze Titan for the wait and then killed it.
+  `nvda_controller_server._start_watch` now polls for NVDA's processes
+  every 0.1 s (`psutil.pids()`, a name only per new pid) and takes the
+  window down the moment one appears (`TitanAccessHelper_setNvdaWindow`,
+  new in the helper), puts it back 3 s after NVDA has gone, and takes the
+  endpoint over only after 10 s - an NVDA restart is an exit and a start a
+  moment apart, and taking the endpoint in between left the NVDA that came
+  back without its controller. The window thread NVDA ended is forgotten,
+  so the window can come back. Not fixed: an endpoint registered by
+  `RpcServerUseProtseqEp` cannot be unregistered, so an NVDA started for
+  the first time after Titan Access took the endpoint has no controller of
+  its own until Titan exits.
+- **A touch gesture ran on the touch pump thread** (or inside the pad's
+  window procedure), reading UIA and announcing beside the worker.
+  `_on_touch` posts to the worker; hovers are coalesced to the latest one;
+  the logic is `_handle_touch`. Switching the reader off switches the pad
+  off too.
+- **No unbounded SendMessage into another program**: `win_msg.send`
+  (SendMessageTimeout, SMTO_ABORTIFHUNG) / `win_msg.post`. The Win32 edit
+  reads in `editable_text` held the worker on a hung program (a user's
+  log: 14 s on "Arcadelux", then a supervisor restart); `BM_CLICK` is
+  posted (sent, it waits for any dialog the click opens to close); the
+  dialog-icon questions in `context_presenter` and the shared
+  `dialog_kind` have a 300 ms limit.
+- `helper/build.bat` also finds Visual Studio 18 Community.
+- **Live**: `tests/check_titan_access_nvda_start.py` runs the controller
+  on a Windows desktop of its own (so the user's real NVDA is neither seen
+  nor touched) and starts `nvda.exe` built from `tests/nvda_like_start.c`,
+  which does what NVDA does starting. Before: the process was frozen 4 s
+  and then TERMINATED. After: the window was down in time even 120 ms after
+  the start, the process lived, and the window came back once "NVDA" had
+  gone. `check_titan_access_toggles.py touch`: hovers, a double tap and a
+  flick fed through `trackpad.feed` into the running reader were all
+  handled on `TitanAccessEngine`, GUI stall 0.01 s, the pad off after the
+  reader.
+- Tests: `tests/test_titan_access_no_hang.py` (15). Probe:
+  `tests/check_titan_access_toggles.py` (real component, a copy of the
+  stores; prints each switch's time and the worst GUI stall).
 
 #### The taskbar said each button twice; an external synthesizer lost its voice (2026-10-06)
 

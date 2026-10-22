@@ -140,6 +140,37 @@ def forget():
             _counted[key] = 0
 
 
+#: How long a dialog may take to answer a question about its icon.
+_ASK_MS = 300
+
+
+def _ask(hwnd, message, wparam):
+    """``SendMessageTimeout`` with ``SMTO_ABORTIFHUNG``: the handle the
+    window answers, or 0. A plain ``SendMessage`` into a program that has
+    hung - or that is inside a modal loop - waits for ever, and the reader
+    with it. Its own WinDLL, so these argument types reach nobody else's
+    ``user32``."""
+    try:
+        from ctypes import wintypes
+        user32 = _ask.user32 if hasattr(_ask, 'user32') else None
+        if user32 is None:
+            user32 = ctypes.WinDLL('user32')
+            user32.SendMessageTimeoutW.restype = ctypes.c_ssize_t
+            user32.SendMessageTimeoutW.argtypes = [
+                wintypes.HWND, wintypes.UINT, ctypes.c_size_t,
+                ctypes.c_size_t, wintypes.UINT, wintypes.UINT,
+                ctypes.POINTER(ctypes.c_size_t)]
+            _ask.user32 = user32
+        out = ctypes.c_size_t(0)
+        if not user32.SendMessageTimeoutW(int(hwnd), int(message),
+                                          int(wparam), 0, 0x0002, _ASK_MS,
+                                          ctypes.byref(out)):
+            return 0
+        return int(out.value or 0)
+    except Exception:                                # noqa: BLE001
+        return 0
+
+
 def _user32():
     try:
         return ctypes.windll.user32
@@ -345,10 +376,8 @@ def window_icon(hwnd):
     if user32 is None or not hwnd:
         return 0
     try:
-        user32.SendMessageW.restype = ctypes.c_void_p
         for which in (1, 0, 2):          # BIG, SMALL, SMALL2
-            handle = int(user32.SendMessageW(ctypes.c_void_p(int(hwnd)),
-                                             0x007F, which, 0) or 0)
+            handle = _ask(hwnd, 0x007F, which)
             if handle:
                 return handle
     except Exception:                                # noqa: BLE001
@@ -446,9 +475,7 @@ def _icon_kind(hwnd):
         return ''
     for window in _icon_windows(hwnd)[:4]:
         try:
-            user32.SendMessageW.restype = ctypes.c_void_p
-            handle = int(user32.SendMessageW(ctypes.c_void_p(window),
-                                             _STM_GETICON, 0, 0) or 0)
+            handle = _ask(window, _STM_GETICON, 0)
         except Exception:                            # noqa: BLE001
             continue
         if not handle:

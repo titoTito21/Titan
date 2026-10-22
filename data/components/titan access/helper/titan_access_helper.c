@@ -200,6 +200,14 @@ static DWORD WINAPI nvdaWindowThread(LPVOID arg)
 static void showNvdaWindow(void)
 {
     HANDLE ready;
+    /* A window thread that has ended (somebody posted its window WM_QUIT -
+     * NVDA does, starting) is not a window: forget it, or the window
+     * could never be put back. */
+    if (g_winThread && WaitForSingleObject(g_winThread, 0) == WAIT_OBJECT_0) {
+        CloseHandle(g_winThread);
+        g_winThread = NULL;
+        g_winThreadId = 0;
+    }
     if (g_winThread) return;
     /* Real NVDA's own window is there already: do not stand beside it. */
     if (FindWindowW(L"wxWindowClassNR", L"NVDA")) return;
@@ -223,6 +231,28 @@ static void hideNvdaWindow(void)
 
 __declspec(dllexport) int __stdcall TitanAccessHelper_hasNvdaWindow(void)
 {
+    return g_nvdaWindow != NULL;
+}
+
+/* Whether the NVDA window may be up at all. **Real NVDA, starting, looks
+ * for this very window** (FindWindowW(L"wxWindowClassNR", L"NVDA") in
+ * nvda.pyw), takes it for an NVDA already running, posts it WM_QUIT, waits
+ * for the PROCESS that owns it to exit and then calls TerminateProcess on
+ * it - or abandons its own start when it cannot. That process is Titan.
+ * So the Python side watches for NVDA's processes and takes the window
+ * down the moment one appears (0), and puts it back once NVDA has gone (1). */
+static volatile LONG g_windowWanted = 1;
+
+__declspec(dllexport) int __stdcall TitanAccessHelper_setNvdaWindow(int show)
+{
+    if (!show) {
+        g_windowWanted = 0;
+        hideNvdaWindow();
+        return 0;
+    }
+    g_windowWanted = 1;
+    if (g_running && g_ownsEndpoint)
+        showNvdaWindow();
     return g_nvdaWindow != NULL;
 }
 
@@ -284,7 +314,7 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_start(
         return (int)status;
 
     g_running = 1;
-    if (g_ownsEndpoint)
+    if (g_ownsEndpoint && g_windowWanted)
         showNvdaWindow();
     return 0;
 }
@@ -324,7 +354,8 @@ __declspec(dllexport) int __stdcall TitanAccessHelper_retryEndpoint(void)
     if (status == RPC_S_OK) {
         g_endpointIsOurs = 1;
         g_ownsEndpoint = 1;
-        showNvdaWindow();
+        if (g_windowWanted)
+            showNvdaWindow();
     }
     return g_ownsEndpoint;
 }

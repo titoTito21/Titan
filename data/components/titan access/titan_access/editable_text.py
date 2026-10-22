@@ -117,8 +117,13 @@ def _win32_caret_pos(hwnd):
     try:
         start = _wt.DWORD()
         end = _wt.DWORD()
-        _user32.SendMessageW(hwnd, _EM_GETSEL, _ctypes.addressof(start),
-                             _ctypes.addressof(end))
+        # **Never an unbounded SendMessage into another program.** A
+        # program that has hung (measured: "Arcadelux" in a user's log)
+        # held the reader's worker here until the supervisor restarted
+        # the reader - 14 s of a reader that said nothing.
+        if _send(hwnd, _EM_GETSEL, _ctypes.addressof(start),
+                 _ctypes.addressof(end), _WIN32_WAIT_MS) is None:
+            return None
         return int(start.value)
     except Exception:
         return None
@@ -130,16 +135,22 @@ def _win32_caret_text(hwnd):
     if pos is None:
         return None
     try:
-        n = _user32.SendMessageW(hwnd, _WM_GETTEXTLENGTH, 0, 0)
+        n = _send(hwnd, _WM_GETTEXTLENGTH, 0, 0, _WIN32_WAIT_MS)
+        if n is None:
+            return None
         n = int(n) if n and int(n) > 0 else 0
         buf = _ctypes.create_unicode_buffer(n + 1)
-        _user32.SendMessageW(hwnd, _WM_GETTEXT, n + 1, _ctypes.addressof(buf))
+        if _send(hwnd, _WM_GETTEXT, n + 1, _ctypes.addressof(buf),
+                 _WIN32_WAIT_MS) is None:
+            return None
         return (pos, buf.value)
     except Exception:
         return None
 
 
 _SMTO_ABORTIFHUNG = 0x0002
+#: The longest the reader waits for a Win32 edit to answer one message.
+_WIN32_WAIT_MS = 1000
 #: A field longer than this is not copied on every Backspace.
 _SNAPSHOT_LIMIT = 200000
 
@@ -149,7 +160,9 @@ def _send(hwnd, msg, wparam, lparam, timeout_ms):
     keyboard hook's thread may not wait on a program that has hung).
     ``None`` when the program did not answer in time."""
     if timeout_ms is None:
-        return _user32.SendMessageW(hwnd, msg, wparam, lparam)
+        # Not "wait for ever": a program that stops answering must cost
+        # the reader a moment, not the reader.
+        timeout_ms = _WIN32_WAIT_MS
     out = _ctypes.c_size_t(0)
     if not _user32.SendMessageTimeoutW(hwnd, msg, wparam, lparam,
                                        _SMTO_ABORTIFHUNG, int(timeout_ms),
@@ -1117,8 +1130,9 @@ class EditableTextHandler:
             try:
                 start = _ctypes.c_int(0)
                 end = _ctypes.c_int(0)
-                _user32.SendMessageW(hwnd, _EM_GETSEL, _ctypes.addressof(start),
-                                     _ctypes.addressof(end))
+                if _send(hwnd, _EM_GETSEL, _ctypes.addressof(start),
+                         _ctypes.addressof(end), _WIN32_WAIT_MS) is None:
+                    return None
                 info = _win32_caret_text(hwnd)
                 if info is None:
                     return None

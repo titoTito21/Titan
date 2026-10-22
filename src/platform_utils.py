@@ -234,7 +234,7 @@ def iter_data_roots(subdir):
         yield user
 
 
-def discover_data_entries(subdir, predicate=None):
+def discover_data_entries(subdir, predicate=None, include_disabled=False):
     """
     Discover entries in `data/<subdir>/` across bundled + user roots.
 
@@ -251,6 +251,11 @@ def discover_data_entries(subdir, predicate=None):
     Returns:
         dict[str, str] preserving discovery order (bundled first, user wins on
         name collision).
+
+    An entry the user switched off in the Component Manager
+    (``src/titan_core/modules.py``) is left out, so every list, loader and
+    action in Titan is without it; ``include_disabled=True`` is for the few
+    callers that must see everything - the manager itself.
     """
     from collections import OrderedDict
     found = OrderedDict()
@@ -290,6 +295,14 @@ def discover_data_entries(subdir, predicate=None):
                     found[entry_name] = full
             except Exception:
                 continue
+    if not include_disabled and found:
+        try:
+            from src.titan_core.modules import disabled_names
+            switched_off = disabled_names(subdir)
+            for entry_name in [n for n in found if n in switched_off]:
+                del found[entry_name]
+        except Exception as e:
+            print(f"[platform_utils] Could not ask which entries are switched off: {e}")
     return found
 
 

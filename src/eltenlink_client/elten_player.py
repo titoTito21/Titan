@@ -65,6 +65,24 @@ def _find_ffprobe():
 _FFMPEG = _find_ffmpeg()
 _FFPROBE = _find_ffprobe()
 
+
+def _ffmpeg_duration(filepath):
+    """Seconds, read off the "Duration:" line `ffmpeg -i` prints; 0 if none."""
+    import re
+    try:
+        result = subprocess.run(
+            [_FFMPEG, '-hide_banner', '-i', filepath],
+            capture_output=True, timeout=10, text=True, errors='replace',
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+    except Exception:
+        return 0
+    match = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', result.stderr or '')
+    if not match:
+        return 0
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
 # Shared download pool and HTTP session for fast parallel downloads
 _download_pool = ThreadPoolExecutor(max_workers=50)
 _http_session = requests.Session()
@@ -296,6 +314,12 @@ class EltenPlayer(wx.Panel):
                     return dur
         except Exception:
             pass
+
+        # ffmpeg says the duration too, on stderr ("Duration: 00:03:12.45").
+        # A compiled Titan ships ffmpeg and not ffprobe - 99 MB for one number.
+        dur = _ffmpeg_duration(filepath)
+        if dur > 0:
+            return dur
 
         # Try pydub
         try:

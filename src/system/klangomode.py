@@ -22,6 +22,16 @@ from src.controller.controller_ui import initialize_controller_system
 from src.network.titan_net import TitanNetClient
 from src.titan_core.skin_manager import apply_skin_to_window
 
+
+def _im_row_shown(name):
+    """False for a built-in Titan IM service switched off in the Component
+    Manager (src/titan_core/modules.py)."""
+    try:
+        from src.titan_core.modules import im_row_shown
+        return im_row_shown(name)
+    except Exception:
+        return True
+
 # Import Titan-Net GUI functions
 try:
     from src.network.titan_net_gui import show_login_dialog, show_titan_net_window
@@ -190,13 +200,13 @@ class KlangoMode:
         self.main_menu = [
             {"name": _("Applications"), "type": "submenu", "items": [], "expanded": False},
             {"name": _("Games"), "type": "submenu", "items": [], "expanded": False},
-            {"name": _("Titan IM"), "type": "submenu", "items": [
+            {"name": _("Titan IM"), "type": "submenu", "items": [item for item in [
                 {"name": _("Telegram"), "type": "action", "action": self.open_telegram},
                 {"name": _("Messenger"), "type": "action", "action": self.open_messenger},
                 {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp},
                 {"name": _("Titan-Net (Beta)"), "type": "action", "action": self.open_titannet},
                 {"name": _("EltenLink (Beta)"), "type": "action", "action": self.open_eltenlink}
-            ] + self._get_external_im_items(), "expanded": False},
+            ] if _im_row_shown(item["name"])] + self._get_external_im_items(), "expanded": False},
             {"name": _("Status Bar"), "type": "submenu", "items": [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},
@@ -1463,13 +1473,13 @@ class KlangoFrame(wx.Frame):
         self.main_menu = [
             {"name": _("Applications"), "type": "submenu", "items": [], "expanded": False},
             {"name": _("Games"), "type": "submenu", "items": [], "expanded": False},
-            {"name": _("Titan IM"), "type": "submenu", "items": [
+            {"name": _("Titan IM"), "type": "submenu", "items": [item for item in [
                 {"name": _("Telegram"), "type": "action", "action": self.open_telegram},
                 {"name": _("Messenger"), "type": "action", "action": self.open_messenger},
                 {"name": _("WhatsApp"), "type": "action", "action": self.open_whatsapp},
                 {"name": _("Titan-Net (Beta)"), "type": "action", "action": self.open_titannet},
                 {"name": _("EltenLink (Beta)"), "type": "action", "action": self.open_eltenlink}
-            ] + self._get_external_im_items(), "expanded": False},
+            ] if _im_row_shown(item["name"])] + self._get_external_im_items(), "expanded": False},
             {"name": _("Status Bar"), "type": "submenu", "items": [
                 {"name": _("Current Time"), "type": "action", "action": self.announce_time},
                 {"name": _("Battery Status"), "type": "action", "action": self.announce_battery},

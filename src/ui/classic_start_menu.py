@@ -470,6 +470,11 @@ class ClassicStartMenu(StartMenuContent, wx.Frame):
                 self.Hide()
             elif action == "titan_settings":
                 self.show_titan_settings()
+            elif action == "component_manager":
+                # Every module of Titan, switched on and off.
+                self.Hide()
+                from src.titan_core.modules_actions import open_manager
+                open_manager()
             elif action == "my_documents":
                 self.open_documents_folder()
             elif action == "shutdown":

@@ -1,0 +1,250 @@
+# Programs in Other Languages (Polyglot)
+
+A Titan application, game or component does not have to be Python. With the
+**Polyglot** component installed (`data/components/polyglot/`, also available
+from the Titan-Net repository), the file named by `openfile=` - or a
+component's `init.<ext>` - may be written in another language, and Titan
+opens it the way it opens a Python program: from the main window, the
+Invisible UI, Klango mode, the Start menu, the AI and the Action API.
+
+Nothing has to be installed. Polyglot carries its interpreters:
+
+| Language | File | Where it runs |
+|---|---|---|
+| Lua 5.1 | `.lua` | Polyglot's own interpreter, inside the process |
+| JavaScript | `.js`, `.mjs` | QuickJS-ng 0.17, carried in `interpreters/quickjs` |
+| Ruby 4.0 | `.rb` | carried in `interpreters/ruby` (Windows) |
+| C# 5 | `.cs` | compiled by `csc.exe`, the .NET Framework 4 compiler that is part of Windows |
+| PowerShell | `.ps1` | part of Windows |
+
+Other languages are used when their tools are on the computer: Node.js
+(`.cjs`), TypeScript through Deno (`.ts`), Go, C, C++, Rust, Perl, PHP. Any
+other language with a command line can be added in the user's
+`%APPDATA%/titosoft/Titan/polyglot/runtimes.json` (Components -> Programming
+languages -> Open the languages file).
+
+Nothing in Titan is changed by Polyglot: it reaches Titan's application and
+game managers from outside, so it works in a Titan built before it existed.
+
+## An application in Lua
+
+```
+data/applications/my_app/
+    __app.TCE
+    main.lua
+```
+
+`__app.TCE` is an ordinary application manifest:
+
+```
+name_en="My application"
+name_pl="Moja aplikacja"
+openfile="main.lua"
+shortname="my_app"
+```
+
+`main.lua`:
+
+```lua
+local name = titan.ask("What is your name?")
+if name then
+  titan.speak("Hello, " .. name)
+  local i = titan.choose("Pick one", {"Tea", "Coffee"})   -- 1-based, or nil
+  if i then titan.message("You chose option " .. i) end
+end
+```
+
+Every Lua program gets the global `titan`. A function called `main`, if the
+script defines one, is called after the script has run. An error in a Lua
+program ends it and Titan says where; a call Titan refuses is a Lua error too,
+so `pcall` catches it.
+
+## A game
+
+A game opens a window that takes the keyboard, and reads its keys as events:
+
+```lua
+titan.open_window("My game")
+while true do
+  local e = titan.next_event(0.05)      -- seconds; nil when nothing came
+  if e then
+    if e.type == "close" then break end
+    if e.type == "key" and e.down then
+      if e.key == "escape" then break end
+      if e.key == "left" then titan.speak("left", true, -1) end
+    end
+  end
+end
+```
+
+Events:
+
+| type | fields |
+|---|---|
+| `key` | `key` (`left`, `a`, `5`, `f1`, `space`, `enter`...), `down`, `repeat`, `shift`, `ctrl`, `alt` |
+| `char` | `char` - the character the layout typed (Polish letters included) |
+| `focus` | `active` - the window gained or lost the keyboard; held keys are released on leaving |
+| `menu` | `label` - a component's menu entry was chosen |
+| `close` | the window was closed, or Titan is stopping the program |
+
+A game's manifest is `__game.TCE` with `openfile="game.lua"`.
+
+## The calls
+
+The same calls exist in every language.
+
+| Call | Arguments | Answer |
+|---|---|---|
+| `info` | | `{protocol, title, kind, runtime, app_dir, data_dir, language, calls}` |
+| `speak` | `text, interrupt=true, position, rate, pitch, wait` | in the user's own Titan voice; `position` -1 left .. 1 right |
+| `stop_speech` | | |
+| `play` | `file, position=0, wait, to, duration` | a sound from the program's folder (also `sounds/`, `sfx/`) or the user's theme (`ui/notify.ogg`); `to` makes it travel |
+| `stop_sounds` | | |
+| `message` | `text, title` | |
+| `ask` | `prompt, default, title, multiline, password` | the text, or nothing when cancelled |
+| `confirm` | `text, title` | true or false |
+| `choose` | `prompt, options, title, selected` | the index (from 0; from 1 in Lua), or nothing |
+| `text` | `text, title` | a page to read, in a read-only field |
+| `open_window` / `close_window` | `title` | the game window |
+| `next_event` | `timeout` (seconds; omitted or negative waits) | an event, or nothing |
+| `wait` | `seconds` | |
+| `action` | `addon, action, args` | any Titan add-on's action: `{ok, text}` (in Lua: `ok, text`) |
+| `data_dir` | | a folder for the program's own files |
+| `log` | `text` | written to `%APPDATA%/titosoft/Titan/polyglot/logs/<program>.log` |
+| `title` | `text` | renames the program (and its window) |
+| `exit` | `code` | |
+| `add_menu` | `label` (Lua: and a function) | components only: a Components-menu entry |
+
+Dialogs are Titan's native windows, so a screen reader reads them. Speech and
+sound go through Titan itself, with the user's voice, mixer and theme volume.
+
+## JavaScript, Ruby, C#, PowerShell
+
+JavaScript (QuickJS) - `titan` is a global:
+
+```js
+const name = titan.ask('What is your name?');
+if (name !== null) titan.speak('Hello, ' + name);
+```
+
+Ruby:
+
+```ruby
+require 'titan'
+name = Titan.ask('What is your name?')
+Titan.speak("Hello, #{name}") unless name.nil?
+```
+
+C# - the program and every `.cs` file in its folder are compiled together
+with the SDK's `Titan` class, the first time it is opened and again only when
+a file changes. C# 5 (what Windows' own compiler accepts):
+
+```csharp
+static class Program
+{
+    static void Main()
+    {
+        string name = Titan.Ask("What is your name?");
+        if (name != null) Titan.Speak("Hello, " + name);
+    }
+}
+```
+
+PowerShell - save the script as UTF-8 **with a BOM**, or Windows PowerShell
+5.1 reads it in the ANSI code page:
+
+```powershell
+Import-Module Titan
+$name = Invoke-Titan ask 'What is your name?'
+if ($null -ne $name) { Invoke-Titan speak "Hello, $name" | Out-Null }
+```
+
+`print`, `puts`, `console.log` and `Write-Host` go to the program's log, never
+to Titan.
+
+## Any other language: the protocol
+
+A program in any language talks to Titan on its standard input and output,
+one JSON object per line, UTF-8:
+
+```
+program -> Titan   {"id": 1, "call": "speak", "args": {"text": "Hello"}}
+Titan -> program   {"id": 1, "ok": true, "value": true}
+                   {"id": 1, "ok": false, "error": "a sentence"}
+```
+
+`args` may be an object (named) or an array (positional). A call without an
+`id` is not answered. A line that is not a JSON object is the program's own
+output and goes to the log. The protocol is synchronous: write a call, read its
+answer - a client in a new language is a dozen lines, with no threads.
+
+To add a language, put an entry in `runtimes.json`:
+
+```json
+{"runtimes": [
+  {"id": "nim", "name": "Nim", "extensions": [".nim"],
+   "compile": ["{exe}", "c", "-o:{out}", "{file}"], "find": ["nim"]},
+  {"id": "javascript", "find": ["C:/Program Files/nodejs/node.exe"],
+   "command": ["{exe}", "{file}"]}
+]}
+```
+
+Placeholders: `{file}` the source, `{dir}` its folder, `{name}` the file name
+without extension, `{out}` what the compile step wrote (cached until a source
+in the folder changes), `{exe}` the first of `find` that exists, `{sdk}`
+Polyglot's SDK folder. An entry with the id of a built-in language changes only
+what it names.
+
+## A component
+
+A component folder with `init.lua` (or `init.rb`, `init.js`...) instead of
+`init.py` is started by Polyglot and runs as long as Titan runs.
+
+```
+data/components/my_clock/
+    __component__.TCE
+    init.lua
+```
+
+```lua
+titan.add_menu("My clock: say the time", function()
+  titan.speak(os.date("%H:%M"))
+end)
+
+function initialize() titan.log("ready") end   -- optional
+function shutdown() end                        -- optional
+```
+
+A component in another language runs as a child process and reads its menu
+entries as events:
+
+```ruby
+require 'titan'
+loop do
+  e = Titan.next_event(nil)
+  break if e.nil? || e['type'] == 'close'
+  Titan.speak('It is ' + Time.now.strftime('%H:%M')) if e['type'] == 'menu'
+end
+```
+
+Its entries are declared in the manifest, which is the only way to be sure
+they exist before Titan builds its menu bar:
+
+```
+[component]
+name = My clock
+status = 0
+menu = My clock: say the time
+menu_pl = Mój zegar: powiedz godzinę
+```
+
+## Examples
+
+Components -> Programming languages -> Install the examples copies a Lua
+application, a Lua game, a Lua component and applications in JavaScript, Ruby,
+C# and PowerShell into the user's own folders (`examples/` in the component).
+
+## Action API
+
+`polyglot.list_languages`, `polyglot.run_file` (`path`, `kind`),
+`polyglot.install_examples`, `polyglot.components`.

@@ -990,19 +990,34 @@ def _loop():
                     ('lpszMenuName', ctypes.c_wchar_p),
                     ('lpszClassName', ctypes.c_wchar_p)]
 
-    _held['proc'] = _WNDPROC(procedure)
+    # **The window procedure and its class live as long as the process.**
+    # Windows keeps the procedure's ADDRESS in the class, and a class
+    # outlives every window made from it. This used to make a new ctypes
+    # callback per run and drop it when the run ended: the class went on
+    # pointing at the freed callback, the second `RegisterClassW` failed
+    # (the class already exists) and the next window was created with the
+    # dead procedure. Measured in Titan: touch gestures on, reader off,
+    # reader on, touch gestures on - an access violation in VCRUNTIME140
+    # and Titan gone.
+    if _PERMANENT.get('proc') is None:
+        _PERMANENT['proc'] = _WNDPROC(procedure)
+    _held['proc'] = _PERMANENT['proc']
     name = 'TitanEnhancementsTrackpad'
-    wanted = WNDCLASS()
-    wanted.lpfnWndProc = _held['proc']
-    wanted.lpszClassName = name
-    try:
-        wanted.hInstance = ctypes.c_void_p(
-            ctypes.windll.kernel32.GetModuleHandleW(None))
-    except Exception:                                # noqa: BLE001
-        wanted.hInstance = None
+    wanted = _PERMANENT.get('class')
+    if wanted is None:
+        wanted = WNDCLASS()
+        wanted.lpfnWndProc = _PERMANENT['proc']
+        wanted.lpszClassName = name
+        try:
+            wanted.hInstance = ctypes.c_void_p(
+                ctypes.windll.kernel32.GetModuleHandleW(None))
+        except Exception:                            # noqa: BLE001
+            wanted.hInstance = None
     _held['class'] = wanted
     try:
-        user32.RegisterClassW(ctypes.byref(wanted))
+        if not _PERMANENT.get('class'):
+            user32.RegisterClassW(ctypes.byref(wanted))
+            _PERMANENT['class'] = wanted
         user32.CreateWindowExW.restype = ctypes.c_void_p
             # **`hInstance` must go back as a POINTER.** Reading it off
             # the class structure gives a plain Python int, and a module
@@ -1048,7 +1063,6 @@ def _loop():
                              '(error %d)' % code)
         _log(_state['why'], error=True)
         user32.DestroyWindow(ctypes.c_void_p(hwnd))
-        _held['proc'] = None
         return
     with _LOCK:
         _state.update({'on': True, 'why': '', 'hwnd': hwnd,
@@ -1070,13 +1084,13 @@ def _loop():
         user32.DestroyWindow(ctypes.c_void_p(hwnd))
     except Exception:                                # noqa: BLE001
         pass
-    _held['proc'] = None
-    _held['class'] = None
     with _LOCK:
         _state.update({'on': False, 'hwnd': 0})
 
 
 _WM_DESTROY = 0x0002
+#: The pad window's procedure and class, made once per process.
+_PERMANENT = {}
 
 _thread = None
 

@@ -919,6 +919,13 @@ def initialize_system_monitor():
     """Initialize and start the system monitor"""
     global _system_monitor
     try:
+        from src.titan_core.modules import service_enabled
+        if not service_enabled('system_monitor'):
+            print("System monitor is switched off in the Component Manager")
+            return None
+    except Exception:
+        pass
+    try:
         if _system_monitor is None:
             _system_monitor = SystemMonitor()
             _system_monitor.start()

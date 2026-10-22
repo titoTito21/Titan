@@ -38,19 +38,28 @@ def get_games():
             game_info['platform'] = game_info.get('platform', 'Titan-Games')
             games.append(game_info)
 
-    # 2. Steam games (from registry)
+    # Either platform may be switched off in the Component Manager.
     try:
-        steam_games = get_steam_games()
-        games.extend(steam_games)
-    except Exception as e:
-        print(f"Error loading Steam games: {e}")
+        from src.titan_core.modules import service_enabled
+    except Exception:
+        def service_enabled(_service):
+            return True
+
+    # 2. Steam games (from registry)
+    if service_enabled('steam'):
+        try:
+            steam_games = get_steam_games()
+            games.extend(steam_games)
+        except Exception as e:
+            print(f"Error loading Steam games: {e}")
 
     # 3. Battle.net games (from registry)
-    try:
-        battlenet_games = get_battlenet_games()
-        games.extend(battlenet_games)
-    except Exception as e:
-        print(f"Error loading Battle.net games: {e}")
+    if service_enabled('battlenet'):
+        try:
+            battlenet_games = get_battlenet_games()
+            games.extend(battlenet_games)
+        except Exception as e:
+            print(f"Error loading Battle.net games: {e}")
 
     return games
 

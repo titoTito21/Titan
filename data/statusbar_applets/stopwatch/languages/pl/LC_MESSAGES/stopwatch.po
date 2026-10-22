@@ -1,0 +1,71 @@
+# pl translations for Stopwatch statusbar applet.
+
+msgid ""
+msgstr "Project-Id-Version: Stopwatch Applet 1.0.0\nLanguage: pl\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n"
+
+msgid "Stopwatch"
+msgstr "Stoper"
+
+msgid "running"
+msgstr "działa"
+
+msgid "paused"
+msgstr "wstrzymany"
+
+msgid "ready"
+msgstr "gotowy"
+
+msgid ", laps: {count}"
+msgstr ", międzyczasy: {count}"
+
+msgid "Stopwatch: error"
+msgstr "Stoper: błąd"
+
+msgid "Stopwatch started: {time}"
+msgstr "Stoper uruchomiony: {time}"
+
+msgid "Stopwatch paused: {time}"
+msgstr "Stoper wstrzymany: {time}"
+
+msgid "Current stopwatch time:"
+msgstr "Aktualny czas stopera:"
+
+msgid "Stopwatch time"
+msgstr "Czas stopera"
+
+msgid "&Start"
+msgstr "&Start"
+
+msgid "&Lap"
+msgstr "&Międzyczas"
+
+msgid "&Reset"
+msgstr "&Resetuj"
+
+msgid "&Close"
+msgstr "&Zamknij"
+
+msgid "Recorded laps:"
+msgstr "Zapisane międzyczasy:"
+
+msgid "Lap list"
+msgstr "Lista międzyczasów"
+
+msgid "&Pause"
+msgstr "&Pauza"
+
+msgid "&Resume"
+msgstr "&Wznów"
+
+msgid "Started: {time}"
+msgstr "Start: {time}"
+
+msgid "Paused: {time}"
+msgstr "Pauza: {time}"
+
+msgid "Lap {lap}"
+msgstr "Międzyczas {lap}"
+
+msgid "Stopwatch reset"
+msgstr "Stoper wyzerowany"
+

@@ -134,7 +134,7 @@ class TheSharedModulesAreReachedHere(unittest.TestCase):
 
     def test_a_gesture_goes_to_a_walked_list_first_and_the_screen_second(self):
         source = _engine_source()
-        at = source.index('def _on_touch(')
+        at = source.index('def _handle_touch(')
         block = source[at:source.index('\n    def ', at + 10)]
         self.assertIn('touchWalk.handle(action, x, y)', block)
         self.assertIn('self._object_at_point(x, y)', block)

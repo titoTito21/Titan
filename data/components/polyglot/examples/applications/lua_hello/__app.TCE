@@ -1,0 +1,5 @@
+name_pl="Witaj z Lua"
+name_en="Hello from Lua"
+description="A Titan application written in Lua (Polyglot example)."
+openfile="main.lua"
+shortname="lua_hello"

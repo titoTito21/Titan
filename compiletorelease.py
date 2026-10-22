@@ -572,16 +572,27 @@ def compile_to_release():
         site_packages_dir.mkdir(parents=True, exist_ok=True)
         print(f"  Created: _internal/Lib/site-packages/")
 
-        # Ask whether to copy site-packages
-        copy_site_packages = input("Do you want to copy site-packages? (y/n): ").strip().lower() == 'y'
+        # site-packages for the applications' interpreter. 't' (the default)
+        # packs it into _internal/TInterpreter.TDL - one compressed file,
+        # unpacked per library on first import (src/titan_core/tdl.py);
+        # 'f' copies the folder as it is, as builds before the TDL did;
+        # 'n' ships none. TITAN_SITE_PACKAGES=t|f|n answers without asking.
+        import site
+        site_package_dirs = [p for p in site.getsitepackages()
+                             if os.path.basename(p.rstrip('\\/')).lower() == 'site-packages'
+                             and os.path.isdir(p)]
+        mode = os.environ.get('TITAN_SITE_PACKAGES', '').strip().lower()[:1]
+        if mode not in ('t', 'f', 'n'):
+            mode = input("site-packages for apps: pack into TInterpreter.TDL (t), "
+                         "copy the folder (f) or none (n)? [t]: ").strip().lower()[:1] or 't'
+        copy_site_packages = mode == 'f'
+        pack_site_packages = mode == 't'
 
         if copy_site_packages:
             # Copy entire site-packages from Python installation
             print("Copying site-packages from Python installation...")
-            import site
-            python_site_packages = site.getsitepackages()
             copied_count = 0
-            for sp_path in python_site_packages:
+            for sp_path in site_package_dirs:
                 sp_path = Path(sp_path)
                 if sp_path.exists() and sp_path.is_dir():
                     print(f"  Copying from: {sp_path}")
@@ -598,8 +609,11 @@ def compile_to_release():
                         except Exception as e:
                             print(f"    Warning: Could not copy {item.name}: {e}")
             print(f"  Copied {copied_count} items to Lib/site-packages/")
+        elif pack_site_packages:
+            print("site-packages will be packed into TInterpreter.TDL after the "
+                  "standard library is in place.")
         else:
-            print("Skipping site-packages copy.")
+            print("Skipping site-packages.")
 
         # Also copy standard library (Lib folder) from Python installation
         print("Copying standard library from Python installation...")
@@ -634,8 +648,15 @@ def compile_to_release():
             if python_dlls_dir.exists():
                 if dlls_dest.exists():
                     shutil.rmtree(dlls_dest)
-                shutil.copytree(str(python_dlls_dir), str(dlls_dest))
-                print(f"  Copied DLLs/ directory")
+                # PyInstaller has already put most of these into _internal/
+                # (_ssl.pyd, libcrypto-3.dll, sqlite3.dll...), and _internal/
+                # is '.' in python.exe's _pth, ahead of DLLs - a second copy
+                # would be shipped and never reached.
+                already = {p.name.lower() for p in internal_dir.iterdir()}
+                shutil.copytree(str(python_dlls_dir), str(dlls_dest),
+                                ignore=lambda d, names: [n for n in names
+                                                         if n.lower() in already])
+                print(f"  Copied DLLs/ directory (without what _internal/ already has)")
 
         # Create path configuration file
         if IS_WINDOWS:
@@ -717,6 +738,29 @@ import site
                         py_removed += 1
             print(f"  Compiled {py_removed} .py files, moved {pyc_moved} .pyc to package dirs")
 
+        # No file twice: PyInstaller's dependency analysis copies a package's
+        # DLLs to the top of _internal/ as well, and an add-on's private
+        # library (tMedia's libvlc) along with them.
+        print("Removing files the build put in twice...")
+        sys.path.insert(0, str(root_dir / "src" / "scripts"))
+        import dedupe_dist
+        dedupe_dist.dedupe(str(output_dir))
+
+        # Small interpreter: what cannot run here pruned, the standard
+        # library compiled into python3XX.zip, site-packages packed into
+        # TInterpreter.TDL (src/scripts/build_interpreter.py).
+        print("Compressing the interpreter...")
+        import build_interpreter
+        build_interpreter.build(
+            str(output_dir),
+            sources=site_package_dirs if pack_site_packages else [],
+            stdlib_zip=os.environ.get('TITAN_STDLIB_ZIP', '1') != '0')
+        if not build_interpreter.verify(
+                str(output_dir),
+                third_party=('numpy', 'requests', 'wx') if pack_site_packages else ()):
+            print("WARNING: the compiled interpreter could not import what it "
+                  "should - see the lines above.")
+
         print()
         print("=" * 70)
         print("COMPILATION SUCCESSFUL!")
@@ -746,7 +790,8 @@ import site
         print()
         print("Features:")
         print(f"  - Applications/games run via {python_names} subprocess (proper isolation)")
-        print("  - All libraries available to Python scripts from _internal/Lib/site-packages")
+        print("  - All libraries available to Python scripts from _internal/TInterpreter.TDL")
+        print("    (unpacked per library on first import into %LOCALAPPDATA%/titosoft/Titan/interpreter)")
         print("  - No external Python installation required")
         print()
         print("To run the compiled application:")

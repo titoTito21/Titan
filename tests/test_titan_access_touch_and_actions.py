@@ -157,7 +157,7 @@ class TheGesturesMeanWhatTheyMeanInNvda(unittest.TestCase):
         for action in ('flickright', 'flickleft', 'flickup', 'flickdown',
                        '2finger_tap', '2finger_flickdown', 'tap',
                        'double_tap'):
-            e._on_touch(action, 10, 10)
+            e._handle_touch(action, 10, 10)
         self.assertEqual(self.done, [
             ('nav', 'next'), ('nav', 'previous'), ('nav', 'parent'),
             ('nav', 'child'), ('stop',), ('sayall',), ('read', 'Zapisz'),
@@ -244,7 +244,7 @@ class TheGesturesThatMeanTheSameEverywhere(_Fingers):
         e._palette_run = lambda name: ran.append(name) or (True, '')
         for action in ('2finger_double_tap', 'triple_tap',
                        '2finger_triple_tap'):
-            e._on_touch(action, 10, 10)
+            e._handle_touch(action, 10, 10)
         self.assertEqual(ran, ['virtual_window', 'titan_window',
                                'ocr_review'])
 

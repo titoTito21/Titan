@@ -1056,7 +1056,8 @@ def _win32_states(hwnd, cls) -> tuple:
             # BM_GETCHECK = 0x00F0; BST_CHECKED = 1, BST_INDETERMINATE = 2.
             role = _button_role(hwnd)
             if role in (C.ROLE_CHECKBOX, C.ROLE_RADIO):
-                checked = int(_user32.SendMessageW(hwnd, 0x00F0, 0, 0))
+                from . import win_msg
+                checked = int(win_msg.send(hwnd, 0x00F0, 0, 0, 300) or 0)
                 states.append({0: C.STATE_UNCHECKED, 1: C.STATE_CHECKED}.get(
                     checked, C.STATE_PARTIAL))
         except Exception:
@@ -1552,7 +1553,12 @@ def _activate_win32(node, _screen=None):
                      C.ROLE_SPLIT_BUTTON):
         try:
             _user32.SetFocus(hwnd)
-            _user32.SendMessageW(hwnd, 0x00F5, 0, 0)   # BM_CLICK
+            # BM_CLICK POSTED: sent, it returns only when the program has
+            # finished handling the click - and a button that opens a
+            # dialog finishes when the dialog is closed, with the reader's
+            # thread waiting the whole time.
+            from . import win_msg
+            win_msg.post(hwnd, 0x00F5, 0, 0)   # BM_CLICK
             return True
         except Exception:
             pass

@@ -1,0 +1,11 @@
+{
+    "name": "Stopwatch",
+    "name_pl": "Stoper",
+    "name_en": "Stopwatch",
+    "description": "Stopwatch with lap timer on the status bar",
+    "description_pl": "Stoper z pomiarem międzyczasów na pasku stanu",
+    "description_en": "Stopwatch with lap timer on the status bar",
+    "version": "1.0.0",
+    "author": "Melitele",
+    "update_interval": 1
+}

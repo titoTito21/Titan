@@ -286,6 +286,10 @@ def _flashed(hwnd):
         pass
 
 
+#: The watcher window's procedure and class, made once per process.
+_PERMANENT = {}
+
+
 def _shell_loop():
     """A message-only window on a thread of its own, on the shell hook."""
     user32 = _user32()
@@ -320,7 +324,18 @@ def _shell_loop():
         with _LOCK:
             _state['why'] = 'this Python has no stdcall callbacks'
         return
-    _held['proc'] = _WNDPROC(procedure)
+    # **The window procedure and its class live as long as the process.**
+    # Windows keeps the procedure's ADDRESS in the class, and a class
+    # outlives every window made from it. This used to make a new ctypes
+    # callback per run and drop it when the run ended: the class went on
+    # pointing at the freed callback, the second `RegisterClassW` failed
+    # (the class already exists) and the next window was created with the
+    # dead procedure. Here the second registration
+    # failed, and the attention watcher silently never ran again after the
+    # reader was switched off and on.
+    if _PERMANENT.get('proc') is None:
+        _PERMANENT['proc'] = _WNDPROC(procedure)
+    _held['proc'] = _PERMANENT['proc']
 
     class WNDCLASS(ctypes.Structure):
         _fields_ = [('style', ctypes.c_uint), ('lpfnWndProc', _WNDPROC),
@@ -340,10 +355,14 @@ def _shell_loop():
             ctypes.windll.kernel32.GetModuleHandleW(None))
     except Exception:                                # noqa: BLE001
         wanted.hInstance = None
+    if _PERMANENT.get('class') is not None:
+        wanted = _PERMANENT['class']
     _held['class'] = wanted
     try:
-        if not user32.RegisterClassW(ctypes.byref(wanted)):
-            raise OSError(ctypes.get_last_error() if hasattr(ctypes, 'get_last_error') else 0)
+        if _PERMANENT.get('class') is None:
+            if not user32.RegisterClassW(ctypes.byref(wanted)):
+                raise OSError(ctypes.get_last_error() if hasattr(ctypes, 'get_last_error') else 0)
+            _PERMANENT['class'] = wanted
     except Exception as error:                       # noqa: BLE001
         with _LOCK:
             _state['why'] = 'the window class would not register: %s' % error
@@ -417,8 +436,8 @@ def _destroy():
         except Exception:                            # noqa: BLE001
             pass
     _held['hwnd'] = 0
-    # Only now may the callback go: Windows holds its address until the
-    # window it belongs to is really gone.
+    # The callback itself stays in `_PERMANENT`: the class keeps its
+    # address for the life of the process.
     _held['proc'] = None
     _held['class'] = None
     with _LOCK:

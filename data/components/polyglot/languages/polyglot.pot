@@ -1,0 +1,104 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: \n"
+
+msgid "Languages"
+msgstr ""
+
+msgid "&Close"
+msgstr ""
+
+msgid "The new applications and games appear in Titan's lists after Titan is restarted; the component example is started then too."
+msgstr ""
+
+msgid "Programming languages"
+msgstr ""
+
+msgid "No component in another language is running."
+msgstr ""
+
+msgid "ready"
+msgstr ""
+
+msgid "not found"
+msgstr ""
+
+msgid "Applications, games and components may be written in these languages. Lua needs nothing; the others need their interpreter or compiler on this computer."
+msgstr ""
+
+msgid "Language"
+msgstr ""
+
+msgid "Files"
+msgstr ""
+
+msgid "State"
+msgstr ""
+
+msgid "Interpreter"
+msgstr ""
+
+msgid "&Install the examples"
+msgstr ""
+
+msgid "&Open the languages file"
+msgstr ""
+
+msgid "There are no examples to install."
+msgstr ""
+
+msgid "Languages Titan programs may be written in:"
+msgstr ""
+
+msgid "running"
+msgstr ""
+
+msgid "built in"
+msgstr ""
+
+msgid "There is no file at {}."
+msgstr ""
+
+msgid "No language is registered for {}."
+msgstr ""
+
+msgid "Started {} ({})."
+msgstr ""
+
+msgid "{} could not be started."
+msgstr ""
+
+msgid "Installed: {}."
+msgstr ""
+
+msgid "Already there, left as they were: {}."
+msgstr ""
+
+msgid "Titan is not running."
+msgstr ""
+
+msgid "Nothing to choose from."
+msgstr ""
+
+msgid "Close"
+msgstr ""
+
+msgid "Only a component can add a menu entry."
+msgstr ""
+
+msgid "There is no call named '{}'."
+msgstr ""
+
+msgid "There is no sound called '{}'."
+msgstr ""
+
+msgid "{} stopped with an error (code {}).\n\n{}"
+msgstr ""
+
+msgid "It said nothing about why."
+msgstr ""
+
+msgid "No interpreter or compiler for {} was found (looked for: {}). Install it, or name its path in {}."
+msgstr ""
+

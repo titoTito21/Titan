@@ -1,0 +1,5 @@
+name_pl="Witaj z Ruby"
+name_en="Hello from Ruby"
+description="A Titan application written in Ruby (Polyglot example)."
+openfile="main.rb"
+shortname="ruby_hello"

@@ -3443,6 +3443,7 @@ class TitanApp(wx.Frame):
         self.network_listbox.Append(_("WhatsApp"))
         self.network_listbox.Append(_("Titan-Net (Beta)"))
         self.network_listbox.Append(_("EltenLink (Beta)"))
+        self._drop_switched_off_services(self.network_listbox)
         # Future messaging platforms:
         # self.network_listbox.Append(_("Mastodon"))
         # self.network_listbox.Append(_("Matrix"))
@@ -3456,6 +3457,12 @@ class TitanApp(wx.Frame):
         
         # Handle different contexts
         if self.current_list == "network":
+            try:
+                from src.titan_core.modules import im_row_shown
+                if not im_row_shown(selected_text):
+                    return
+            except Exception:
+                pass
             # Main network menu
             play_select_sound()  # Play select sound for network options
             vibrate_selection()  # Add vibration for network option selection
@@ -4476,10 +4483,23 @@ class TitanApp(wx.Frame):
             except Exception as _e:
                 print(f"[GUI] IM modules: {_e}")
 
+        self._drop_switched_off_services(self.network_listbox)
+
         # Restore the user's saved drag-and-drop order, then prepend the
         # virtual tab bar row as the first item.
         self._apply_saved_order_to_listbox('network', self.network_listbox)
         self._inject_tab_bar_into_listbox(self.network_listbox)
+
+    def _drop_switched_off_services(self, listbox):
+        """Take out the rows of Titan IM services switched off in the
+        Component Manager (src/titan_core/modules.py)."""
+        try:
+            from src.titan_core.modules import im_row_shown
+        except Exception:
+            return
+        for index in range(listbox.GetCount() - 1, -1, -1):
+            if not im_row_shown(listbox.GetString(index)):
+                listbox.Delete(index)
 
     def on_toggle_list(self):
         """Legacy entry point — now focuses the virtual tab bar."""

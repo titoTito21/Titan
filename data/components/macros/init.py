@@ -501,6 +501,15 @@ class MacroManager:
             except OSError:
                 continue
 
+        # A macro switched off in Titan's Component Manager is not loaded:
+        # no list entry, no shortcut, no trigger.
+        try:
+            from src.titan_core.modules import disabled_names
+            for folder_name in disabled_names('macros'):
+                collected.pop(folder_name, None)
+        except Exception:
+            pass
+
         for folder_name in sorted(collected.keys()):
             folder_path, root = collected[folder_name]
             config_path = os.path.join(folder_path, '__macro__.TCE')

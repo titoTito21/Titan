@@ -386,9 +386,16 @@ class StartMenuContent:
 
     def _im_entries(self):
         """Titan IM: the services Titan has built in, then the modules."""
+        try:
+            from src.titan_core.modules import service_enabled
+        except Exception:
+            def service_enabled(_identifier):
+                return True
         entries = [MenuEntry(label, 'im_builtin', identifier,
                              description=_("Titan IM"))
-                   for identifier, label in self.BUILTIN_IM]
+                   for identifier, label in self.BUILTIN_IM
+                   if service_enabled('eltenlink' if identifier == 'elten'
+                                      else identifier)]
         try:
             from src.network.im_module_manager import im_module_manager
             if not getattr(im_module_manager, 'modules', None)                     and wx.IsMainThread():
@@ -564,6 +571,8 @@ class StartMenuContent:
         """
         entries = [
             MenuEntry(_("Titan settings"), 'action', 'titan_settings',
+                      description=_("Settings")),
+            MenuEntry(_("Component Manager"), 'action', 'component_manager',
                       description=_("Settings")),
             MenuEntry(_("Control Panel"), 'action', 'control_panel',
                       description=_("Settings")),

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Programs in Other Languages (Polyglot) - TCE Launcher Programming Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #ffffff;
+            --text-color: #1f2937;
+            --code-bg: #f3f4f6;
+            --sidebar-bg: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 2rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-size: 1.25rem;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+        }
+
+        .sidebar nav li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar nav a:hover {
+            background-color: var(--code-bg);
+        }
+
+        .sidebar nav a.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 2rem 3rem;
+            max-width: 1200px;
+        }
+
+        .content h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            font-size: 2.5rem;
+        }
+
+        .content h2 {
+            color: var(--secondary-color);
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        .content h3 {
+            color: var(--text-color);
+            margin-top: 2rem;
+            margin-bottom: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .content h4 {
+            color: var(--text-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .content p {
+            margin-bottom: 1rem;
+        }
+
+        .content ul, .content ol {
+            margin-bottom: 1rem;
+            margin-left: 2rem;
+        }
+
+        .content li {
+            margin-bottom: 0.5rem;
+        }
+
+        .content code {
+            background: var(--code-bg);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: var(--code-bg);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .content pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.875rem;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .doc-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .doc-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .doc-table tr:hover {
+            background: var(--code-bg);
+        }
+
+        .content a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .content a:hover {
+            text-decoration: underline;
+        }
+
+        .content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #6b7280;
+            font-style: italic;
+        }
+
+        .header-banner {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 1rem 3rem;
+            margin: -2rem -3rem 2rem -3rem;
+        }
+
+        .header-banner h1 {
+            color: white;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--primary-color);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .back-to-top:hover {
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+
+            .header-banner {
+                margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>TCE Launcher<br>Programming Guide</h2>
+            <nav>
+                <ul>
+                    <li style="border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.5rem;"><a href="index_pl.html">Polski version</a></li>
+<li><a href="component_creation_guide_en.html">Creating Components</a></li>
+<li><a href="widget_creation_guide_en.html">Creating Widgets</a></li>
+<li><a href="statusbar_applet_guide_en.html">Statusbar Applets</a></li>
+<li><a href="titanim_module_guide_en.html">Titan IM Modules</a></li>
+<li><a href="app_creation_guide_en.html">Creating Applications</a></li>
+<li><a href="game_creation_guide_en.html">Creating Games</a></li>
+<li><a href="launcher_creation_guide_en.html">Creating Launchers</a></li>
+<li><a href="tts_engine_guide_en.html">TitanTTS Engines</a></li>
+<li><a href="gamepad_mode_guide_en.html">Gamepad Modes</a></li>
+<li><a href="shell_addon_guide_en.html">Shell Add-ons</a></li>
+<li><a href="settings_interface_guide_en.html">Settings Interfaces</a></li>
+<li><a href="cling_guide_en.html">Cling Applications (Klango)</a></li>
+<li><a href="polyglot_guide_en.html" class="active">Programs in Other Languages (Polyglot)</a></li>
+<li><a href="action_api_guide_en.html">Action API</a></li>
+<li><a href="client_api_guide_en.html">Titan clients (your own program)</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="header-banner">
+                <h1>Programs in Other Languages (Polyglot)</h1>
+            </div>
+            <h1>Programs in Other Languages (Polyglot)</h1>
+
+<p>A Titan application, game or component does not have to be Python. With the
+<strong>Polyglot</strong> component installed (<code>data/components/polyglot/</code>, also available
+from the Titan-Net repository), the file named by <code>openfile=</code> - or a
+component's <code>init.&lt;ext&gt;</code> - may be written in another language, and Titan
+opens it the way it opens a Python program: from the main window, the
+Invisible UI, Klango mode, the Start menu, the AI and the Action API.</p>
+
+<p>Nothing has to be installed. Polyglot carries its interpreters:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Language</th>
+<th>File</th>
+<th>Where it runs</th>
+</tr></thead><tbody>
+<tr>
+<td>Lua 5.1</td>
+<td><code>.lua</code></td>
+<td>Polyglot's own interpreter, inside the process</td>
+</tr>
+<tr>
+<td>JavaScript</td>
+<td><code>.js</code>, <code>.mjs</code></td>
+<td>QuickJS-ng 0.17, carried in <code>interpreters/quickjs</code></td>
+</tr>
+<tr>
+<td>Ruby 4.0</td>
+<td><code>.rb</code></td>
+<td>carried in <code>interpreters/ruby</code> (Windows)</td>
+</tr>
+<tr>
+<td>C# 5</td>
+<td><code>.cs</code></td>
+<td>compiled by <code>csc.exe</code>, the .NET Framework 4 compiler that is part of Windows</td>
+</tr>
+<tr>
+<td>PowerShell</td>
+<td><code>.ps1</code></td>
+<td>part of Windows</td>
+</tr>
+</tbody></table>
+
+<p>Other languages are used when their tools are on the computer: Node.js
+(<code>.cjs</code>), TypeScript through Deno (<code>.ts</code>), Go, C, C++, Rust, Perl, PHP. Any
+other language with a command line can be added in the user's
+<code>%APPDATA%/titosoft/Titan/polyglot/runtimes.json</code> (Components -> Programming
+languages -> Open the languages file).</p>
+
+<p>Nothing in Titan is changed by Polyglot: it reaches Titan's application and
+game managers from outside, so it works in a Titan built before it existed.</p>
+
+<h2>An application in Lua</h2>
+
+<pre><code>data/applications/my_app/
+    __app.TCE
+    main.lua</code></pre>
+
+<p><code>__app.TCE</code> is an ordinary application manifest:</p>
+
+<pre><code>name_en=&quot;My application&quot;
+name_pl=&quot;Moja aplikacja&quot;
+openfile=&quot;main.lua&quot;
+shortname=&quot;my_app&quot;</code></pre>
+
+<p><code>main.lua</code>:</p>
+
+<pre><code class="language-lua">local name = titan.ask(&quot;What is your name?&quot;)
+if name then
+  titan.speak(&quot;Hello, &quot; .. name)
+  local i = titan.choose(&quot;Pick one&quot;, {&quot;Tea&quot;, &quot;Coffee&quot;})   -- 1-based, or nil
+  if i then titan.message(&quot;You chose option &quot; .. i) end
+end</code></pre>
+
+<p>Every Lua program gets the global <code>titan</code>. A function called <code>main</code>, if the
+script defines one, is called after the script has run. An error in a Lua
+program ends it and Titan says where; a call Titan refuses is a Lua error too,
+so <code>pcall</code> catches it.</p>
+
+<h2>A game</h2>
+
+<p>A game opens a window that takes the keyboard, and reads its keys as events:</p>
+
+<pre><code class="language-lua">titan.open_window(&quot;My game&quot;)
+while true do
+  local e = titan.next_event(0.05)      -- seconds; nil when nothing came
+  if e then
+    if e.type == &quot;close&quot; then break end
+    if e.type == &quot;key&quot; and e.down then
+      if e.key == &quot;escape&quot; then break end
+      if e.key == &quot;left&quot; then titan.speak(&quot;left&quot;, true, -1) end
+    end
+  end
+end</code></pre>
+
+<p>Events:</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>type</th>
+<th>fields</th>
+</tr></thead><tbody>
+<tr>
+<td><code>key</code></td>
+<td><code>key</code> (<code>left</code>, <code>a</code>, <code>5</code>, <code>f1</code>, <code>space</code>, <code>enter</code>...), <code>down</code>, <code>repeat</code>, <code>shift</code>, <code>ctrl</code>, <code>alt</code></td>
+</tr>
+<tr>
+<td><code>char</code></td>
+<td><code>char</code> - the character the layout typed (Polish letters included)</td>
+</tr>
+<tr>
+<td><code>focus</code></td>
+<td><code>active</code> - the window gained or lost the keyboard; held keys are released on leaving</td>
+</tr>
+<tr>
+<td><code>menu</code></td>
+<td><code>label</code> - a component's menu entry was chosen</td>
+</tr>
+<tr>
+<td><code>close</code></td>
+<td>the window was closed, or Titan is stopping the program</td>
+</tr>
+</tbody></table>
+
+<p>A game's manifest is <code>__game.TCE</code> with <code>openfile=&quot;game.lua&quot;</code>.</p>
+
+<h2>The calls</h2>
+
+<p>The same calls exist in every language.</p>
+
+<table class="doc-table">
+<thead><tr>
+<th>Call</th>
+<th>Arguments</th>
+<th>Answer</th>
+</tr></thead><tbody>
+<tr>
+<td><code>info</code></td>
+<td><code>{protocol, title, kind, runtime, app_dir, data_dir, language, calls}</code></td>
+</tr>
+<tr>
+<td><code>speak</code></td>
+<td><code>text, interrupt=true, position, rate, pitch, wait</code></td>
+<td>in the user's own Titan voice; <code>position</code> -1 left .. 1 right</td>
+</tr>
+<tr>
+<td><code>stop_speech</code></td>
+</tr>
+<tr>
+<td><code>play</code></td>
+<td><code>file, position=0, wait, to, duration</code></td>
+<td>a sound from the program's folder (also <code>sounds/</code>, <code>sfx/</code>) or the user's theme (<code>ui/notify.ogg</code>); <code>to</code> makes it travel</td>
+</tr>
+<tr>
+<td><code>stop_sounds</code></td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>text, title</code></td>
+</tr>
+<tr>
+<td><code>ask</code></td>
+<td><code>prompt, default, title, multiline, password</code></td>
+<td>the text, or nothing when cancelled</td>
+</tr>
+<tr>
+<td><code>confirm</code></td>
+<td><code>text, title</code></td>
+<td>true or false</td>
+</tr>
+<tr>
+<td><code>choose</code></td>
+<td><code>prompt, options, title, selected</code></td>
+<td>the index (from 0; from 1 in Lua), or nothing</td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>text, title</code></td>
+<td>a page to read, in a read-only field</td>
+</tr>
+<tr>
+<td><code>open_window</code> / <code>close_window</code></td>
+<td><code>title</code></td>
+<td>the game window</td>
+</tr>
+<tr>
+<td><code>next_event</code></td>
+<td><code>timeout</code> (seconds; omitted or negative waits)</td>
+<td>an event, or nothing</td>
+</tr>
+<tr>
+<td><code>wait</code></td>
+<td><code>seconds</code></td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td><code>addon, action, args</code></td>
+<td>any Titan add-on's action: <code>{ok, text}</code> (in Lua: <code>ok, text</code>)</td>
+</tr>
+<tr>
+<td><code>data_dir</code></td>
+<td>a folder for the program's own files</td>
+</tr>
+<tr>
+<td><code>log</code></td>
+<td><code>text</code></td>
+<td>written to <code>%APPDATA%/titosoft/Titan/polyglot/logs/&lt;program&gt;.log</code></td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td><code>text</code></td>
+<td>renames the program (and its window)</td>
+</tr>
+<tr>
+<td><code>exit</code></td>
+<td><code>code</code></td>
+</tr>
+<tr>
+<td><code>add_menu</code></td>
+<td><code>label</code> (Lua: and a function)</td>
+<td>components only: a Components-menu entry</td>
+</tr>
+</tbody></table>
+
+<p>Dialogs are Titan's native windows, so a screen reader reads them. Speech and
+sound go through Titan itself, with the user's voice, mixer and theme volume.</p>
+
+<h2>JavaScript, Ruby, C#, PowerShell</h2>
+
+<p>JavaScript (QuickJS) - <code>titan</code> is a global:</p>
+
+<pre><code class="language-js">const name = titan.ask(&#x27;What is your name?&#x27;);
+if (name !== null) titan.speak(&#x27;Hello, &#x27; + name);</code></pre>
+
+<p>Ruby:</p>
+
+<pre><code class="language-ruby">require &#x27;titan&#x27;
+name = Titan.ask(&#x27;What is your name?&#x27;)
+Titan.speak(&quot;Hello, #{name}&quot;) unless name.nil?</code></pre>
+
+<p>C# - the program and every <code>.cs</code> file in its folder are compiled together
+with the SDK's <code>Titan</code> class, the first time it is opened and again only when
+a file changes. C# 5 (what Windows' own compiler accepts):</p>
+
+<pre><code class="language-csharp">static class Program
+{
+    static void Main()
+    {
+        string name = Titan.Ask(&quot;What is your name?&quot;);
+        if (name != null) Titan.Speak(&quot;Hello, &quot; + name);
+    }
+}</code></pre>
+
+<p>PowerShell - save the script as UTF-8 <strong>with a BOM</strong>, or Windows PowerShell
+5.1 reads it in the ANSI code page:</p>
+
+<pre><code class="language-powershell">Import-Module Titan
+$name = Invoke-Titan ask &#x27;What is your name?&#x27;
+if ($null -ne $name) { Invoke-Titan speak &quot;Hello, $name&quot; | Out-Null }</code></pre>
+
+<p><code>print</code>, <code>puts</code>, <code>console.log</code> and <code>Write-Host</code> go to the program's log, never
+to Titan.</p>
+
+<h2>Any other language: the protocol</h2>
+
+<p>A program in any language talks to Titan on its standard input and output,
+one JSON object per line, UTF-8:</p>
+
+<pre><code>program -&gt; Titan   {&quot;id&quot;: 1, &quot;call&quot;: &quot;speak&quot;, &quot;args&quot;: {&quot;text&quot;: &quot;Hello&quot;}}
+Titan -&gt; program   {&quot;id&quot;: 1, &quot;ok&quot;: true, &quot;value&quot;: true}
+                   {&quot;id&quot;: 1, &quot;ok&quot;: false, &quot;error&quot;: &quot;a sentence&quot;}</code></pre>
+
+<p><code>args</code> may be an object (named) or an array (positional). A call without an
+<code>id</code> is not answered. A line that is not a JSON object is the program's own
+output and goes to the log. The protocol is synchronous: write a call, read its
+answer - a client in a new language is a dozen lines, with no threads.</p>
+
+<p>To add a language, put an entry in <code>runtimes.json</code>:</p>
+
+<pre><code class="language-json">{&quot;runtimes&quot;: [
+  {&quot;id&quot;: &quot;nim&quot;, &quot;name&quot;: &quot;Nim&quot;, &quot;extensions&quot;: [&quot;.nim&quot;],
+   &quot;compile&quot;: [&quot;{exe}&quot;, &quot;c&quot;, &quot;-o:{out}&quot;, &quot;{file}&quot;], &quot;find&quot;: [&quot;nim&quot;]},
+  {&quot;id&quot;: &quot;javascript&quot;, &quot;find&quot;: [&quot;C:/Program Files/nodejs/node.exe&quot;],
+   &quot;command&quot;: [&quot;{exe}&quot;, &quot;{file}&quot;]}
+]}</code></pre>
+
+<p>Placeholders: <code>{file}</code> the source, <code>{dir}</code> its folder, <code>{name}</code> the file name
+without extension, <code>{out}</code> what the compile step wrote (cached until a source
+in the folder changes), <code>{exe}</code> the first of <code>find</code> that exists, <code>{sdk}</code>
+Polyglot's SDK folder. An entry with the id of a built-in language changes only
+what it names.</p>
+
+<h2>A component</h2>
+
+<p>A component folder with <code>init.lua</code> (or <code>init.rb</code>, <code>init.js</code>...) instead of
+<code>init.py</code> is started by Polyglot and runs as long as Titan runs.</p>
+
+<pre><code>data/components/my_clock/
+    __component__.TCE
+    init.lua</code></pre>
+
+<pre><code class="language-lua">titan.add_menu(&quot;My clock: say the time&quot;, function()
+  titan.speak(os.date(&quot;%H:%M&quot;))
+end)
+
+function initialize() titan.log(&quot;ready&quot;) end   -- optional
+function shutdown() end                        -- optional</code></pre>
+
+<p>A component in another language runs as a child process and reads its menu
+entries as events:</p>
+
+<pre><code class="language-ruby">require &#x27;titan&#x27;
+loop do
+  e = Titan.next_event(nil)
+  break if e.nil? || e[&#x27;type&#x27;] == &#x27;close&#x27;
+  Titan.speak(&#x27;It is &#x27; + Time.now.strftime(&#x27;%H:%M&#x27;)) if e[&#x27;type&#x27;] == &#x27;menu&#x27;
+end</code></pre>
+
+<p>Its entries are declared in the manifest, which is the only way to be sure
+they exist before Titan builds its menu bar:</p>
+
+<pre><code>[component]
+name = My clock
+status = 0
+menu = My clock: say the time
+menu_pl = Mój zegar: powiedz godzinę</code></pre>
+
+<h2>Examples</h2>
+
+<p>Components -> Programming languages -> Install the examples copies a Lua
+application, a Lua game, a Lua component and applications in JavaScript, Ruby,
+C# and PowerShell into the user's own folders (<code>examples/</code> in the component).</p>
+
+<h2>Action API</h2>
+
+<p><code>polyglot.list_languages</code>, <code>polyglot.run_file</code> (<code>path</code>, <code>kind</code>),
+<code>polyglot.install_examples</code>, <code>polyglot.components</code>.</p>
+            <a href="#" class="back-to-top" title="Powrót na górę">↑</a>
+        </main>
+    </div>
+</body>
+</html>

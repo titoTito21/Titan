@@ -1550,6 +1550,11 @@ class InvisibleUI:
         titan_im_elements.append(_("Titan-Net (Beta)"))
         titan_im_elements.append(_("EltenLink (Beta)"))
         try:
+            from src.titan_core.modules import im_row_shown
+            titan_im_elements = [e for e in titan_im_elements if im_row_shown(e)]
+        except Exception as _e:
+            print(f"[IUI] switched-off services: {_e}")
+        try:
             from src.network.im_module_manager import im_module_manager
             for name in im_module_manager.get_module_names():
                 titan_im_elements.append(name)

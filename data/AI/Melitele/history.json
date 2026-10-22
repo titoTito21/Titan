@@ -673,5 +673,100 @@
     "role": "assistant",
     "content": "**Tak, Titan Access jest w pełni dynamicznym czytnikiem ekranu, ale reprezentuje zupełnie nową kategorię – hybrydowy czytnik wielowarstwowy sterowany zdarzeniami (Event-driven Multi-layer Hybrid Screen Reader z warstwą AI).**\n\nOto jak dokładnie jest zbudowany i jakiego to rodzaju narzędzie:\n\n---\n\n### 1. Dlaczego jest dynamiczny?\nTradycyjne czytniki bywają „statyczne” w miejscach, gdzie interfejs nie zgłasza standardowych zdarzeń (np. programy rysowane na GPU, instalatory, niestandardowe gry dźwiękowe), co wymuszało ręczne odświeżanie lub włączanie płaskiego podglądu OCR.\n* **W Titan Access bufor jest żywy (Live Virtualization):** Kiedy zawartość okna lub strony internetowej zmienia się w tle (np. aktualizacja paska postępu, dynamiczne ładowanie treści AJAX/DOM, zmiana statusu pobierania), wirtualny bufor i drzewo kontrolek aktualizują się automatycznie w czasie rzeczywistym.\n* **Dynamiczne regiony (Live Regions):** Monitoruje paski stanu i zmiany w oknach, dawkując komunikaty tak, by nie blokować mowy przy natłoku danych (tzw. inteligentna regulacja potoku mowy).\n\n---\n\n### 2. Jakiego rodzaju to czytnik ekranu?\n\nMożna go scharakteryzować przez cztery główne warstwy:\n\n#### A. Hybryda obiektowo-ekranowa (Object-based & Visual Hybrid)\n* **Warstwa natywna (Accessibility APIs):** W pierwszej kolejności łączy się bezpośrednio z głębokimi interfejsami systemowymi: **UI Automation (UIA)**, **IAccessible2 (IA2)**, **MSAA**, **Java Access Bridge** oraz **Win32**. Rozumie hierarchię obiektów, ich stany i role.\n* **Warstwa wizualno-tekstowa (Direct Text & OCR Fallback):** Gdy aplikacja (np. instalator gry, aplikacja w niestandardowym silniku graficznym) nie udostępnia żadnego drzewa dostępności, Titan Access nie poddaje się – automatycznie uruchamia rozpoznawanie wizualne (OCR) i tworzy z niego **interaktywną nakładkę (Accessible Overlay)**, przekształcając martwy obraz w dostępne obiekty.\n\n#### B. Czytnik oparty na deklaratywnych danych (Data-driven)\nW przeciwieństwie do klasycznych czytników, gdzie do każdego nietypowego programu trzeba pisać skomplikowany kod proceduralny w Pythonie czy C++, Titan Access stosuje **deklaratywne moduły JSON**:\n* Reguły okien, zastępowanie ról, nazywanie nieopisanych kontrolek i definiowanie kolumn w tabelach to czyste struktury danych, które system potrafi modyfikować, przeładowywać w locie bez restartu, a nawet generować automatycznie przy użyciu asystenta.\n\n#### C. Czytnik zorientowany na skrypty zdarzeniowe (Event-driven / Reactive)\nW swoim języku skryptowym (`.tas`) działa na zasadzie **reaktywnej**:\n* Nie wymaga ciągłego odpytywania (polling) w pętli – reaguje na wyzwalacze: wejście w okno, zdarzenie powiadomienia, zmianę fokusu, naciśnięcie klawisza modyfikatora czy upływ czasu.\n\n#### D. Czytnik zintegrowany ze środowiskiem dźwięku przestrzennego (3D Spatial-aware)\nNie ogranicza się do wysyłania tekstu do syntezatora:\n* Jest ściśle zintegrowany z silnikiem audio Titana – pozycjonuje dźwiękowe sygnały nawigacyjne (audio cues) w trójwymiarowej panoramie stereo/3D w zależności od tego, gdzie dana kontrolka znajduje się fizycznie na ekranie.\n\n---\n\n### Podsumowując:\nTo **nowoczesny, dynamiczny czytnik hybrydowy**, który łączy precyzję tradycyjnego czytania drzew obiektów systemowych (jak w NVDA/JAWS) z dynamicznym generowaniem dostępności w locie (AI OCR) i deklaratywną konfiguracją.",
     "timestamp": 1791802684.9599793
+  },
+  {
+    "role": "user",
+    "content": "jakie są akcje Titana, i innych dodatków, opisz mi to w ludzkim języku",
+    "timestamp": 1792315117.4102657
+  },
+  {
+    "role": "assistant",
+    "content": "W Titanie wszystko żyje w harmonii jak gałęzie jednego drzewa – sam program i jego dodatki potrafią wykonywać dla ciebie mnóstwo codziennych czynności, o które wystarczy poprosić. Opowiem ci o nich po ludzku, dzieląc je na to, do czego służą.\n\nPo pierwsze, **sam Titan, multimedia i komunikacja**:\nMożesz prosić o zmianę dowolnych ustawień Titana, przełączanie głosu, odtwarzanie muzyki, audiobooków, radia internetowego oraz twoich filmów i nagrań z biblioteki z zapamiętywaniem miejsca, w którym skończyłeś. Titan łączy się też ze światem: obsługuje Titan-Net, pocztę, czaty i forum, a także Elten, Telegrama, WhatsAppa i Messengera – możesz sprawdzać wiadomości, czytać wątki i odpisywać znajomym.\n\nPo drugie, **aplikacje Titana**:\n- **Menedżer plików** potrafi przeglądać foldery, szukać plików, sprawdzać wolne miejsce oraz kopiować, przenosić, tworzyć i usuwać katalogi.\n- **Edytor tekstu i Notatnik** pozwalają otwierać, pisać, dopisywać, przeszukiwać i zapisywać teksty oraz szybkie notatki.\n- **Terminarz** pilnuje twojego czasu – dodaje, odczytuje i odhacza przypomnienia.\n- **Przeglądarka internetowa i Menedżer pobierania** otwierają strony, zarządzają kartami, zakładkami i historią oraz pobierają pliki z sieci.\n- **Klient ElevenLabs** potrafi mówić wybranym głosem i zapisywać nagrania mowy do pliku.\n\nPo trzecie, **komponenty, czyli pomocnicy działający w tle**:\n- **Titan Access**, czyli wbudowany czytnik ekranu, potrafi odczytać każde okno i stronę, kliknąć wskazany przycisk, zarządzać syntezatorami, dodatkami z NVDA, brajlem oraz własnymi skryptami.\n- **Menedżer makr** pozwala tworzyć, edytować i uruchamiać makra oraz skrypty automatyzujące pracę pod wybranym skrótem klawiszowym.\n- **Zegarynka** wypowiada aktualną godzinę i pozwala ustawić, jak często ma się odzywać.\n- **Czytnik artykułów** pobiera i czyta na głos czysty tekst artykułów ze stron internetowych.\n- **Cling oraz mostek Eltena** uruchamiają i obsługują gry oraz programy z tych platform, a **Terminal** wykonuje polecenia systemowe.\n\nPo czwarte, **syntezatory mowy i wygląd**:\nMasz cały zestaw silników mowy – takich jak Milena, Eloquence, DECTalk, SMP czy Festival – w których można zmieniać głosy i parametry, a także dodatki zmieniające wygląd menu, ustawień czy tryby kontrolera.\n\nJeśli któryś z tych obszarów szczególnie cię interesuje, powiedz mi tylko słowo, a opowiem o nim dokładniej lub od razu coś dla ciebie wykonam.",
+    "timestamp": 1792315270.5386117
+  },
+  {
+    "role": "user",
+    "content": "co potrafiłbyś zrobić z titan antivirus, o ile masz do niego jakieś akcje? Jak wyglądałoby np jakieś makro?",
+    "timestamp": 1792315315.9667633
+  },
+  {
+    "role": "user",
+    "content": "co potrafisz z Titan antivirus? Jakie byłoby przykładowe macro, z jakimiś dźwiękami, formularzem, etc etc ?",
+    "timestamp": 1792315664.6806073
+  },
+  {
+    "role": "assistant",
+    "content": "Już wszystko wiem, mój drogi. Opowiem ci o obu rzeczach po kolei.\n\n### 1. Co potrafię z dodatkiem Titan Antivirus?\n**Scan with antivirus** to dodatek powłoki Titana. Z mojego poziomu mogę:\n- **sprawdzić jego status** – czyli zobaczyć, czy jest włączony i w które miejsca powłoki się wpina,\n- **włączyć go lub wyłączyć** na twoją prośbę.\n\nGdy jest aktywny, dodaje w powłoce i menu możliwość szybkiego przeskanowania wybranych elementów programem antywirusowym.\n\n---\n\n### 2. Przykładowe makro z dźwiękami, mową i formularzem\nW języku skryptowym Titana (`.tcs`) można łączyć dźwięki przesuwające się w przestrzeni, zmianę głosu, okienka dialogowe z polami i przyciskami oraz akcje wszystkich aplikacji. \n\nOto przykład makra **„Szybki dziennik i przypomnienie”**, które wita cię dźwiękiem wędrującym z lewej na prawą stronę, otwiera formularz z polami i przyciskami, a potem zapisuje notatkę i opcjonalnie ustawia przypomnienie:\n\n```tcs\n# Dźwięk przemieszczający się z lewej (-1) na prawą (1) stronę przez 2 sekundy\nplay \"intro.ogg\" position=-1 to=1 duration=2s\n\n# Powitanie lekko z lewej strony\nsay \"Otwieram twój dziennik\" position=-0.5 wait=true\n\n# Formularz z kilkoma kontrolkami i własnymi przyciskami\ndialog \"Nowy wpis\"\n    field tytul = \"Tytuł wpisu\"\n    multiline tresc = \"Co chcesz zapisać?\"\n    choice kategoria = \"Kategoria\" options \"prywatne\", \"praca\", \"pomysł\"\n    check przypomnij = \"Ustawić też przypomnienie na jutro?\"\n    buttons akcja = \"Zapisz\", \"Przeczytaj na głos\", \"Anuluj\"\n\n    # Ten przycisk działa bez zamykania okna\n    on \"Przeczytaj na głos\"\n        say \"Tytuł: {{tytul}}. Treść: {{tresc}}\"\n    end\nend\n\n# Jeśli wybrano pierwszy przycisk (\"Zapisz\")\nif akcja = \"1\"\n    tnotes.create_note title=\"{{tytul}} ({{kategoria}})\" text=\"{{tresc}}\"\n    play \"sukces.ogg\" position=0.5\n\n    if przypomnij = \"true\"\n        treminder.create_reminder name=\"{{tytul}}\" date=\"tomorrow\" time=\"09:00\"\n        say \"Zapisałam notatkę i ustawiłam przypomnienie na jutro na dziewiątą.\" wait=true\n    else\n        say \"Zapisałam twoją notatkę.\" wait=true\n    end\nend\n```\n\nW takim makrze:\n- **`play`** odtwarza dźwięk i może go płynnie przesuwać między słuchawkami (a w trybie 3D nawet góra–dół przez `elevation`),\n- **`say`** mówi z wybranego miejsca, z wybraną szybkością (`rate`) lub wysokością głosu (`pitch`),\n- **`dialog`** tworzy prawdziwe, dostępne okienko z polami tekstowymi, listą wyboru, polem zaznaczenia i przyciskami,\n- **`on \"Przeczytaj na głos\"`** pozwala wykonać akcję po kliknięciu przycisku bez zamykania formularza.\n\nJeśli zechcesz, mogę od razu stworzyć i zapisać dla ciebie takie makro w twoim Menedżerze makr – powiedz tylko, co miałoby robić.",
+    "timestamp": 1792315902.7363162
+  },
+  {
+    "role": "user",
+    "content": "a nie ma w ogule akcji Titan antivirus?",
+    "timestamp": 1792315946.4595563
+  },
+  {
+    "role": "assistant",
+    "content": "Sprawdziłam to dokładnie: aplikacja **tAntivirus** (czyli Titan Antivirus) jest zainstalowana na liście twoich aplikacji Titana, ale **nie udostępnia jeszcze własnych bezpośrednich akcji** do wywołania w tle (takich jak mają na przykład Notatnik, Edytor tekstu czy Menedżer plików).\n\nCo to oznacza w praktyce?\n1. **Nie ma osobnej komendy skryptowej** w rodzaju bezpośredniego wywołania skanowania bez otwierania okna.\n2. **Mogę jednak normalnie uruchomić aplikację tAntivirus** (`titan_launch`) i obsłużyć jej okno – odczytać wszystkie przyciski i opcje na ekranie, a następnie kliknąć wybrane skanowanie po nazwie kontrolki.\n3. Oprócz samej aplikacji **tAntivirus** istnieje też mały dodatek do czytnika NVDA o nazwie **Scan with antivirus**, którym zarządza Titan Access – stąd wzięła się moja wcześniejsza wzmianka o włączaniu i sprawdzaniu statusu.\n\nJeśli chcesz, mogę w tej chwili uruchomić dla ciebie **tAntivirus** i zobaczyć, jakie opcje ma w swoim oknie.",
+    "timestamp": 1792316202.1506455
+  },
+  {
+    "role": "user",
+    "content": "napisz do użytkownika Tito w titan-necie treść notatek, godzinę, treść pulpitu, status titan access screenreader, a za minutę napisz do użytkownika Tito, lub tito, w każdym bądź razie w titan necie godzinę. Następnie ustaw temat dźwiękowy windows XP, potem napisz mi po dwuch minutach obecnie ustawiony temat dźwiękowy",
+    "timestamp": 1792394125.8991263
+  },
+  {
+    "role": "assistant",
+    "content": "Wszystko gotowe, mój drogi. Obie wiadomości do użytkownika tito w Titan-Necie zostały wysłane, a po odczekaniu dwóch minut sprawdziłam ustawienia: obecnie ustawiony temat dźwiękowy to **windows xp theme**.",
+    "timestamp": 1792394730.2416687
+  },
+  {
+    "role": "user",
+    "content": "potrafiłbyś stworzyć tylko takie mininarzędzie dla mnie, stoper?",
+    "timestamp": 1792405950.5127006
+  },
+  {
+    "role": "assistant",
+    "content": "Stworzyłam i zapisałam dla ciebie mininarzędzie **Stoper** w twoim Menedżerze makr.\n\nJak działa twój nowy stoper:\n- Od razu po uruchomieniu zaczyna odliczać czas i otwiera okienko o tytule **Stoper**.\n- Przycisk **Start od nowa** (z sygnałem z lewej strony) zeruje licznik i zaczyna pomiar od początku.\n- Przycisk **Sprawdź czas** (z sygnałem na środku) odczytuje na głos, ile sekund upłynęło, nie przerywając działania stopera i nie zamykając okna.\n- Przycisk **Zapisz międzyczas** (z sygnałem z prawej strony) dopisuje wynik razem z godziną i opcjonalną nazwą pomiaru do twojej notatki **„Stoper - pomiary”**.\n- Przycisk **Zakończ** zatrzymuje stoper, zamyka okno i podaje łączny czas.\n\nMożesz go uruchomić w każdej chwili z Menedżera makr albo poprosić mnie: „uruchom makro Stoper”. Chcesz, żebym go teraz dla ciebie włączyła albo przypisała mu skrót klawiszowy?",
+    "timestamp": 1792406041.0651832
+  },
+  {
+    "role": "user",
+    "content": "a potrafiłabyś tworzyć komponenty, aplikacje, aplety paska stanu?",
+    "timestamp": 1792406055.1129239
+  },
+  {
+    "role": "assistant",
+    "content": "Chwileczkę, już ci wszystko wyjaśniam.\n\nTak, jak najbardziej potrafię tworzyć pełnoprawne **aplikacje Titana**, **komponenty** oraz **aplety paska stanu** (a także widżety, gry czy skrypty czytnika).\n\nMam bezpośredni dostęp do plików w twoim katalogu `data/`, więc mogę od podstaw zbudować dla ciebie taki dodatek w Pythonie i umieścić go w odpowiednim miejscu:\n\n1. **Aplety paska stanu (`data/statusbar_applets/`)**\n   To lekkie elementy widoczne na pasku stanu Titana – mogą na bieżąco pokazywać tekst (np. stoper, licznik czasu pracy, kurs walut, temperaturę, stan baterii czy własny wskaźnik) i reagować na kliknięcie lub naciśnięcie Enter.\n\n2. **Komponenty (`data/components/`)**\n   Działają w tle razem z Titanem, dodają własne pozycje do menu komponentów, mogą mieć skróty klawiszowe, odtwarzać dźwięki, mówić przez syntezator, a nawet wystawiać własne akcje (dzięki czemu ja również będę mogła nimi sterować na twoje polecenie).\n\n3. **Aplikacje (`data/applications/`)**\n   To osobne programy widoczne na liście aplikacji Titana (w TCE), z własnym oknem w `wxPython`, menu, udźwiękowieniem, tłumaczeniami i pełną dostępnością.\n\nJeśli chcesz, mogę choćby teraz przerobić ten nasz **Stoper** na wygodny **aplet paska stanu** albo na osobną **aplikację Titana** – powiedz tylko, jaką formę wolisz.",
+    "timestamp": 1792406105.3434782
+  },
+  {
+    "role": "user",
+    "content": "aplet paska stanu (i sprawdź czy nie będzie błędów)",
+    "timestamp": 1792406118.3021057
+  },
+  {
+    "role": "assistant",
+    "content": "Stworzyłam dla ciebie aplet paska stanu **Stoper** (`data/statusbar_applets/stopwatch/`) i przetestowałam go bezpośrednio w menedżerze apletów Titana – ładuje się i działa bez żadnych błędów.\n\nCo potrafi nowy aplet:\n- **Na pasku stanu** odświeża się co sekundę i pokazuje aktualny czas, stan stopera oraz liczbę zapisanych międzyczasów, na przykład:\n  - `Stoper: 00:00 (gotowy)`\n  - `Stoper: 00:15 (działa, międzyczasy: 1)`\n  - `Stoper: 00:15 (wstrzymany, międzyczasy: 1)`\n- **Po aktywowaniu na pasku stanu** otwiera dostępne okienko sterowania z odświeżanym na żywo czasem, listą międzyczasów, udźwiękowieniem stereo i przyciskami: **Start / Pauza / Wznów**, **Międzyczas**, **Resetuj** oraz **Zamknij** (zamknięcie okienka nie przerywa odliczania na pasku stanu).\n\nAby aplet pojawił się na pasku stanu w aktualnie otwartej sesji, wystarczy przeładować lub uruchomić ponownie Titana (i zaznaczyć **Stoper** w ustawieniach paska stanu, jeśli wybierasz tam widoczne elementy).",
+    "timestamp": 1792406279.6099305
+  },
+  {
+    "role": "user",
+    "content": "ale nie ma tłumaczeń",
+    "timestamp": 1792406290.8144374
+  },
+  {
+    "role": "assistant",
+    "content": "Masz zupełną rację – wcześniej napisy były zaszyte tylko w kodzie, bez właściwego katalogu tłumaczeń `languages/`, z którego korzysta menedżer apletów Titana.\n\nDodałam pełną obsługę tłumaczeń (`gettext`) w `data/statusbar_applets/stopwatch/languages/`:\n- szablon tłumaczeń `stopwatch.pot`,\n- pliki źródłowe i skompilowane katalogi dla języka polskiego (`pl/LC_MESSAGES/stopwatch.po` i `stopwatch.mo`),\n- pliki źródłowe i skompilowane katalogi dla języka angielskiego (`en/LC_MESSAGES/stopwatch.po` i `stopwatch.mo`),\n- a sam kod apletu (`main.py`) korzysta teraz bezpośrednio z domeny `stopwatch` w katalogu `languages/`.\n\nPrzetestowałam ładowanie zarówno po polsku, jak i po angielsku w menedżerze apletów paska stanu – wszystkie napisy na pasku i w okienku tłumaczą się czysto i bez błędów.",
+    "timestamp": 1792406481.0019917
+  },
+  {
+    "role": "user",
+    "content": "popraw stoper, aplet paska stanu, niech odtwarza co sekundę dźwięk click.ogg o ile istnieje w motywie titana: dokładniej, motywie dźwiękowym/core/click.ogg",
+    "timestamp": 1792406647.302201
+  },
+  {
+    "role": "assistant",
+    "content": "Poprawiłam aplet paska stanu **Stoper** i przetestowałam jego działanie.\n\nGdy stoper odlicza czas, w tle działa lekki wątek, który co każdą pełną sekundę sprawdza, czy w aktualnie aktywnym motywie dźwiękowym Titana istnieje plik `core/click.ogg` (lub w motywie domyślnym, jeśli włączone jest zastępowanie brakujących dźwięków), i jeśli plik istnieje, odtwarza go przez system dźwiękowy Titana. Gdy stoper zostanie wstrzymany lub zresetowany, tykanie od razu ustaje.",
+    "timestamp": 1792406758.921944
   }
 ]

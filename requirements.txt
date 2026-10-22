@@ -28,7 +28,6 @@ SpeechRecognition
 aiortc
 telethon
 cryptography
-py-tgcalls
 pydub
 
 # 3D positional audio (OpenAL Soft HRTF) for the "3d" sound mode

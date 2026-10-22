@@ -8,70 +8,190 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-22 18:52+0200\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
-"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/componentmanagergui.py:47
-msgid "Installed components:"
-msgstr "Zainstalowane komponenty:"
+#: src/ui/componentmanagergui.py:97
+msgid "Modules of Titan:"
+msgstr "Moduły Titana:"
 
-#: src/ui/componentmanagergui.py:53
+#: src/ui/componentmanagergui.py:101
+msgid "Modules of Titan"
+msgstr "Moduły Titana"
+
+#: src/ui/componentmanagergui.py:104
+msgid "Details:"
+msgstr "Szczegóły:"
+
+#: src/ui/componentmanagergui.py:109 src/ui/componentmanagergui.py:454
+msgid "Details"
+msgstr "Szczegóły"
+
+#: src/ui/componentmanagergui.py:116 src/ui/componentmanagergui.py:250
+#: src/ui/componentmanagergui.py:254
+msgid "&Switch off"
+msgstr "&Wyłącz"
+
+#: src/ui/componentmanagergui.py:117
 msgid "&Actions"
 msgstr "&Akcje"
 
-#: src/ui/componentmanagergui.py:74
-msgid "Component manager not available."
-msgstr "Menedżer komponentów niedostępny."
+#: src/ui/componentmanagergui.py:118
+msgid "&Restart Titan"
+msgstr "Uruchom &ponownie Titana"
 
-#: src/ui/componentmanagergui.py:97 src/ui/componentmanagergui.py:227
+#: src/ui/componentmanagergui.py:119
+msgid "&Close"
+msgstr "&Zamknij"
+
+#: src/ui/componentmanagergui.py:179
+msgid "Tab bar"
+msgstr "Pasek kart"
+
+#: src/ui/componentmanagergui.py:180
+#, python-brace-format
+msgid "{}, {} of {}"
+msgstr "{}, {} z {}"
+
+#: src/ui/componentmanagergui.py:186 src/ui/componentmanagergui.py:262
 msgid "Enabled"
 msgstr "Włączone"
 
-#: src/ui/componentmanagergui.py:97 src/ui/componentmanagergui.py:227
+#: src/ui/componentmanagergui.py:186 src/ui/componentmanagergui.py:263
 msgid "Disabled"
 msgstr "Wyłączone"
 
-#: src/ui/componentmanagergui.py:166
+#: src/ui/componentmanagergui.py:189
+msgid "after restart"
+msgstr "po ponownym uruchomieniu"
+
+#: src/ui/componentmanagergui.py:199
+msgid "Nothing to manage."
+msgstr "Nie ma czym zarządzać."
+
+#: src/ui/componentmanagergui.py:226
+msgid "Refreshed"
+msgstr "Odświeżono"
+
+#: src/ui/componentmanagergui.py:251
 #, python-brace-format
-msgid "Component '{}' is not loaded."
-msgstr "Komponent '{}' nie jest załadowany."
+msgid "{}: {} modules"
+msgstr "{}: modułów: {}"
 
-#: src/ui/componentmanagergui.py:166 src/ui/componentmanagergui.py:174
-msgid "Information"
-msgstr "Informacja"
+#: src/ui/componentmanagergui.py:255
+msgid "&Switch on"
+msgstr "&Włącz"
 
-#: src/ui/componentmanagergui.py:174
+#: src/ui/componentmanagergui.py:261
 #, python-brace-format
-msgid "No available actions for component '{}'."
-msgstr "Brak dostępnych akcji dla komponentu '{}'."
+msgid "Kind: {}"
+msgstr "Rodzaj: {}"
 
-#: src/ui/componentmanagergui.py:178
-msgid "Context menu"
-msgstr "Menu kontekstowe"
+#: src/ui/componentmanagergui.py:262
+#, python-brace-format
+msgid "State: {}"
+msgstr "Stan: {}"
 
-#: src/ui/componentmanagergui.py:181
+#: src/ui/componentmanagergui.py:265
+msgid "The change takes effect after Titan restarts."
+msgstr "Zmiana zadziała po ponownym uruchomieniu Titana."
+
+#: src/ui/componentmanagergui.py:267
+#, python-brace-format
+msgid "Description: {}"
+msgstr "Opis: {}"
+
+#: src/ui/componentmanagergui.py:269
+#, python-brace-format
+msgid "Identifier: {}"
+msgstr "Identyfikator: {}"
+
+#: src/ui/componentmanagergui.py:271
+msgid "Installed as a package."
+msgstr "Zainstalowany jako pakiet."
+
+#: src/ui/componentmanagergui.py:273
+#, python-brace-format
+msgid "Folder: {}"
+msgstr "Folder: {}"
+
+#: src/ui/componentmanagergui.py:281
+#, python-brace-format
+msgid "{} of {} switched on"
+msgstr "Włączone: {} z {}"
+
+#: src/ui/componentmanagergui.py:417
+msgid "The change could not be made."
+msgstr "Nie udało się wprowadzić zmiany."
+
+#: src/ui/componentmanagergui.py:418 src/ui/componentmanagergui.py:596
+#: src/ui/componentmanagergui.py:631 src/ui/componentmanagergui.py:696
+msgid "Component Manager"
+msgstr "Menedżer komponentów"
+
+#: src/ui/componentmanagergui.py:427
+msgid "switched on"
+msgstr "włączono"
+
+#: src/ui/componentmanagergui.py:427
+msgid "switched off"
+msgstr "wyłączono"
+
+#: src/ui/componentmanagergui.py:428
+#, python-brace-format
+msgid "{} {}"
+msgstr "{}: {}"
+
+#: src/ui/componentmanagergui.py:430
+msgid "Takes effect after Titan restarts."
+msgstr "Zadziała po ponownym uruchomieniu Titana."
+
+#: src/ui/componentmanagergui.py:449
+msgid "Switch off"
+msgstr "Wyłącz"
+
+#: src/ui/componentmanagergui.py:449
+msgid "Switch on"
+msgstr "Włącz"
+
+#: src/ui/componentmanagergui.py:456
+msgid "Open folder"
+msgstr "Otwórz folder"
+
+#: src/ui/componentmanagergui.py:458
+msgid "Restart Titan now"
+msgstr "Uruchom ponownie Titana teraz"
+
+#: src/ui/componentmanagergui.py:476
 msgid "Run"
 msgstr "Uruchom"
 
-#: src/ui/componentmanagergui.py:185
+#: src/ui/componentmanagergui.py:478
 msgid "Settings"
 msgstr "Ustawienia"
 
-#: src/ui/componentmanagergui.py:193
-#, python-brace-format
-msgid "Running component {}"
-msgstr "Uruchamianie komponentu {}"
+#: src/ui/componentmanagergui.py:481 src/ui/componentmanagergui.py:485
+msgid "Open"
+msgstr "Otwórz"
 
-#: src/ui/componentmanagergui.py:205
+#: src/ui/componentmanagergui.py:483
+msgid "Play"
+msgstr "Graj"
+
+#: src/ui/componentmanagergui.py:505
+#, python-brace-format
+msgid "Action: {}"
+msgstr "Akcja: {}"
+
+#: src/ui/componentmanagergui.py:551 src/ui/componentmanagergui.py:554
 #, python-brace-format
 msgid ""
 "Error running component '{}':\n"
@@ -80,16 +200,14 @@ msgstr ""
 "Błąd uruchamiania komponentu '{}':\n"
 "{}"
 
-#: src/ui/componentmanagergui.py:205 src/ui/componentmanagergui.py:216
+#: src/ui/componentmanagergui.py:552 src/ui/componentmanagergui.py:555
+#: src/ui/componentmanagergui.py:564 src/ui/componentmanagergui.py:573
+#: src/ui/componentmanagergui.py:582 src/ui/componentmanagergui.py:589
+#: src/ui/componentmanagergui.py:618 src/ui/componentmanagergui.py:637
 msgid "Error"
 msgstr "Błąd"
 
-#: src/ui/componentmanagergui.py:209
-#, python-brace-format
-msgid "Opening settings for component {}"
-msgstr "Otwieranie ustawień komponentu {}"
-
-#: src/ui/componentmanagergui.py:216
+#: src/ui/componentmanagergui.py:563
 #, python-brace-format
 msgid ""
 "Error opening settings for '{}':\n"
@@ -98,8 +216,170 @@ msgstr ""
 "Błąd otwierania ustawień dla '{}':\n"
 "{}"
 
-#: src/ui/componentmanagergui.py:230
+#: src/ui/componentmanagergui.py:595
 #, python-brace-format
-msgid "Component {} {}"
-msgstr "Komponent {} {}"
+msgid "Run '{}' of {}?"
+msgstr "Wykonać „{}” z {}?"
+
+#: src/ui/componentmanagergui.py:629
+#, python-brace-format
+msgid "{} changes take effect only after Titan restarts. Restart Titan now?"
+msgstr "Zmiany zadziałają dopiero po ponownym uruchomieniu Titana (liczba zmian: {}). Uruchomić Titana ponownie teraz?"
+
+#: src/ui/componentmanagergui.py:636
+msgid "Titan could not be restarted."
+msgstr "Nie udało się ponownie uruchomić Titana."
+
+#: src/titan_core/modules.py:81
+msgid "Titan services"
+msgstr "Usługi Titana"
+
+#: src/titan_core/modules.py:82
+msgid "Components"
+msgstr "Komponenty"
+
+#: src/titan_core/modules.py:83
+msgid "Applications"
+msgstr "Aplikacje"
+
+#: src/titan_core/modules.py:84
+msgid "Games"
+msgstr "Gry"
+
+#: src/titan_core/modules.py:85
+msgid "Titan IM modules"
+msgstr "Moduły Titan IM"
+
+#: src/titan_core/modules.py:86
+msgid "TTS engines"
+msgstr "Silniki mowy"
+
+#: src/titan_core/modules.py:87
+msgid "Gamepad modes"
+msgstr "Tryby pada"
+
+#: src/titan_core/modules.py:88
+msgid "Widgets"
+msgstr "Widżety"
+
+#: src/titan_core/modules.py:89
+msgid "Statusbar applets"
+msgstr "Aplety paska stanu"
+
+#: src/titan_core/modules.py:90
+msgid "Shell add-ons"
+msgstr "Dodatki powłoki"
+
+#: src/titan_core/modules.py:91
+msgid "Settings interfaces"
+msgstr "Interfejsy ustawień"
+
+#: src/titan_core/modules.py:92
+msgid "Launchers"
+msgstr "Launchery"
+
+#: src/titan_core/modules.py:93
+msgid "Macros"
+msgstr "Makra"
+
+#: src/titan_core/modules.py:208
+msgid "The Telegram client in Titan IM."
+msgstr "Klient Telegrama w Titan IM."
+
+#: src/titan_core/modules.py:210
+msgid "The Messenger client in Titan IM."
+msgstr "Klient Messengera w Titan IM."
+
+#: src/titan_core/modules.py:212
+msgid "The WhatsApp client in Titan IM."
+msgstr "Klient WhatsAppa w Titan IM."
+
+#: src/titan_core/modules.py:214
+msgid "Titan's own network: chat, forum, mail, repository. Switched off, Titan does not sign in to it at startup."
+msgstr "Własna sieć Titana: czat, forum, poczta, repozytorium. Wyłączona - Titan nie loguje się do niej przy starcie."
+
+#: src/titan_core/modules.py:217
+msgid "The EltenLink client in Titan IM."
+msgstr "Klient EltenLink w Titan IM."
+
+#: src/titan_core/modules.py:218
+msgid "AI features"
+msgstr "Funkcje sztucznej inteligencji"
+
+#: src/titan_core/modules.py:219
+msgid "The AI assistant, the AI agent, AI OCR and the creation kit."
+msgstr "Asystent SI, agent SI, AI OCR i zestaw do tworzenia."
+
+#: src/titan_core/modules.py:221
+msgid "TCE sounds"
+msgstr "Dźwięki TCE"
+
+#: src/titan_core/modules.py:222
+msgid "Sounds for windows opening and closing outside Titan."
+msgstr "Dźwięki otwierania i zamykania okien poza Titanem."
+
+#: src/titan_core/modules.py:224
+msgid "System monitor"
+msgstr "Monitor systemu"
+
+#: src/titan_core/modules.py:225
+msgid "Announces battery, charger, network and volume changes."
+msgstr "Ogłasza zmiany baterii, ładowarki, sieci i głośności."
+
+#: src/titan_core/modules.py:226
+msgid "Steam games"
+msgstr "Gry ze Steama"
+
+#: src/titan_core/modules.py:227
+msgid "Installed Steam games in the game list."
+msgstr "Zainstalowane gry ze Steama na liście gier."
+
+#: src/titan_core/modules.py:228
+msgid "Battle.net games"
+msgstr "Gry z Battle.net"
+
+#: src/titan_core/modules.py:229
+msgid "Installed Battle.net games in the game list."
+msgstr "Zainstalowane gry z Battle.net na liście gier."
+
+#: src/titan_core/modules.py:245
+msgid "Telegram"
+msgstr "Telegram"
+
+#: src/titan_core/modules.py:246
+msgid "Facebook Messenger"
+msgstr "Facebook Messenger"
+
+#: src/titan_core/modules.py:246
+msgid "Messenger"
+msgstr "Messenger"
+
+#: src/titan_core/modules.py:247
+msgid "WhatsApp"
+msgstr "WhatsApp"
+
+#: src/titan_core/modules.py:248
+msgid "Titan-Net (Beta)"
+msgstr "Titan-Net (Beta)"
+
+#: src/titan_core/modules.py:249
+msgid "EltenLink (Beta)"
+msgstr "EltenLink (Beta)"
+
+#: src/titan_core/modules.py:526
+msgid "There is no such service."
+msgstr "Nie ma takiej usługi."
+
+#: src/titan_core/modules.py:532 src/titan_core/modules.py:603
+#: src/titan_core/modules.py:605
+msgid "The change could not be saved."
+msgstr "Nie udało się zapisać zmiany."
+
+#: src/titan_core/modules.py:576
+msgid "Unknown kind of module."
+msgstr "Nieznany rodzaj modułu."
+
+#: src/titan_core/modules.py:600
+msgid "This add-on is switched off in its own manifest, which cannot be written here."
+msgstr "Ten dodatek jest wyłączony we własnym manifeście, którego nie można tu zapisać."
 

@@ -1,0 +1,5 @@
+name_pl="Witaj z C#"
+name_en="Hello from C#"
+description="A Titan application written in C# (Polyglot example)."
+openfile="main.cs"
+shortname="csharp_hello"

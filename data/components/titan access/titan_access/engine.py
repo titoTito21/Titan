@@ -118,6 +118,21 @@ class TitanAccessEngine:
     """Central screen-reader orchestrator (singleton via :data:`instance`)."""
 
     instance: "Optional[TitanAccessEngine]" = None
+    #: The reader being switched off right now, while its teardown runs
+    #: on another thread; a new reader waits for it (`_start_now`).
+    _stopping: "Optional[TitanAccessEngine]" = None
+
+    @property
+    def _stopped(self) -> threading.Event:
+        """Set once a stop has finished tearing everything down (and for a
+        reader that was never started). Made on first use, so an engine
+        built without `__init__` - as tests build one - has it too."""
+        event = self.__dict__.get("_stopped_event")
+        if event is None:
+            event = threading.Event()
+            event.set()
+            self.__dict__["_stopped_event"] = event
+        return event
 
     def __init__(self):
         self.settings = get_settings()
@@ -127,6 +142,9 @@ class TitanAccessEngine:
         self._thread: Optional[threading.Thread] = None
         self._thread_id = 0
         self._ready = threading.Event()
+        self._touch_lock = threading.Lock()
+        self._touch_hover = None
+        self._start_thread: Optional[threading.Thread] = None
 
         self.current_object: Optional[AccessibleObject] = None
         self._last_focus_key = None
@@ -205,21 +223,72 @@ class TitanAccessEngine:
     # ==================================================================== #
     # Lifecycle
     # ==================================================================== #
+    @staticmethod
+    def _on_titan_gui_thread():
+        """True on the thread running Titan's wx main loop.
+
+        **Nothing slow may happen there.** The worker's UI Automation
+        registration, its first focus read and its teardown all reach
+        Titan's OWN windows, and a UIA call into a window of this process
+        is answered by the thread that owns that window - this one. So
+        the GUI thread waiting for the worker is two threads waiting for
+        each other until a timeout gives: measured, the settings window's
+        "Enable screen reader" froze Titan for 5.0 s on every start and
+        2.9 s on every stop, and an action marshalled onto the GUI thread
+        the same. On Linux the reader IS the main thread (`_posix_start`),
+        so this never answers True there."""
+        if not _IS_WINDOWS:
+            return False
+        try:
+            import wx
+            app = wx.GetApp()
+            return bool(app is not None and wx.IsMainThread()
+                        and app.IsMainLoopRunning())
+        except Exception:                            # noqa: BLE001
+            return False
+
     def start(self) -> bool:
         if self.running:
             return True
         self.running = True
         self._ready.clear()
+        self._stopped.clear()
         if not _IS_WINDOWS:
             started = self._posix_start()
             self._offer_welcome()
             return started
+        TitanAccessEngine.instance = self
+        if self._on_titan_gui_thread():
+            # Started from the settings window or an action: the reader is
+            # ON as of now (`is_running`), and comes up on a thread of its
+            # own while this thread goes on answering its windows.
+            self._start_thread = threading.Thread(
+                target=self._start_now, name="TitanAccessStart", daemon=True)
+            self._start_thread.start()
+            return True
+        return self._start_now()
+
+    def _start_now(self) -> bool:
+        # A reader switched off a moment ago may still be tearing down -
+        # its keyboard hook, the NVDA controller, the screen reader flag
+        # are the machine's, one each. Wait for it rather than start a
+        # second set beside the first.
+        previous = TitanAccessEngine._stopping
+        if previous is not None and previous is not self:
+            if not previous._stopped.wait(timeout=15.0):
+                log("[TitanAccess] the previous reader has not finished "
+                    "stopping - starting anyway")
+        if not self.running:
+            # Switched off again before it ever came up.
+            self._stopped.set()
+            return False
         self._thread = threading.Thread(target=self._run, name="TitanAccessEngine",
                                         daemon=True)
         self._thread.start()
         # Wait briefly for subsystems to come up so the toggle announcement is sane.
         self._ready.wait(timeout=5.0)
-        TitanAccessEngine.instance = self
+        if TitanAccessEngine.instance is None:
+            TitanAccessEngine.instance = self
         self._start_supervisor()
         log("[TitanAccess] engine started (worker thread %s)", self._thread_id)
         self._offer_welcome()
@@ -328,6 +397,34 @@ class TitanAccessEngine:
         if not self.running:
             return
         self.running = False
+        self._stopped.clear()
+        TitanAccessEngine._stopping = self
+        if not titan_closing and self._on_titan_gui_thread():
+            # Switched off from Titan's GUI thread (the settings window, an
+            # action): off as of now, torn down on a thread of its own -
+            # the teardown needs this thread to answer Titan's windows.
+            threading.Thread(target=self._stop_now, args=(titan_closing,),
+                             name="TitanAccessStop", daemon=True).start()
+            return
+        self._stop_now(titan_closing)
+
+    def _stop_now(self, titan_closing=False):
+        try:
+            self._stop_steps(titan_closing)
+        finally:
+            if TitanAccessEngine.instance is self:
+                TitanAccessEngine.instance = None
+            if TitanAccessEngine._stopping is self:
+                TitanAccessEngine._stopping = None
+            self._stopped.set()
+
+    def _stop_steps(self, titan_closing=False):
+        # Asked to stop while still coming up (on its start thread): let
+        # it finish coming up, so there is one complete set to take down.
+        starting = getattr(self, "_start_thread", None)
+        if starting is not None and starting.is_alive() and \
+                starting is not threading.current_thread():
+            starting.join(timeout=20.0)
         try:
             if getattr(self, "supervisor", None) is not None:
                 self.supervisor.stop()
@@ -363,7 +460,6 @@ class TitanAccessEngine:
         # Post WM_QUIT to the worker thread's message loop.
         if not _IS_WINDOWS:
             self._on_main_thread(self._teardown_subsystems, wait=3.0)
-            TitanAccessEngine.instance = None
             return
         elif self._thread_id:
             try:
@@ -385,7 +481,6 @@ class TitanAccessEngine:
                 self._teardown_subsystems()
             except Exception as e:
                 log(f"[TitanAccess] forced teardown: {e}")
-        TitanAccessEngine.instance = None
 
     def _run(self):
         """Worker thread: build subsystems then pump Win32 messages."""
@@ -1307,7 +1402,45 @@ class TitanAccessEngine:
             log(f"[TitanAccess] reader module: {e}")
         return extra
 
+    #: Hovers are coalesced: a finger moving over the pad reports one every
+    #: 40 ms, and only where it is NOW is worth reading.
+    _HOVERS = ('hover', 'hoverdown')
+
     def _on_touch(self, action, x, y):
+        """A gesture off the pad, handed to the reader's own thread.
+
+        **It used to run where it arrived** - on the touch pump thread, or
+        inside the pad's own window procedure - and a gesture reads the
+        object under the finger through UI Automation, announces it and
+        moves the reader's cursor. Two threads doing that at once is two
+        readers fighting over one state, and a UIA read into Titan's own
+        window from there waited on Titan's GUI thread with the pad's
+        input stuck behind it. On the worker it is one thread, in the
+        apartment that owns the elements, after whatever it is doing.
+        """
+        if not self.running:
+            return
+        if not _IS_WINDOWS or not self._thread_id:
+            self._handle_touch(action, x, y)
+            return
+        if action in self._HOVERS:
+            with self._touch_lock:
+                queued = self._touch_hover is not None
+                self._touch_hover = (action, x, y)
+            if queued:
+                return
+
+            def hover():
+                with self._touch_lock:
+                    pending, self._touch_hover = self._touch_hover, None
+                if pending is not None and self.running:
+                    self._handle_touch(*pending)
+            self.post_to_worker(hover)
+            return
+        self.post_to_worker(
+            lambda: self.running and self._handle_touch(action, x, y))
+
+    def _handle_touch(self, action, x, y):
         """A gesture off the pad: a walked list first, the screen otherwise.
 
         Inside the virtual window, the palette or a message the gesture is
@@ -1474,6 +1607,13 @@ class TitanAccessEngine:
                 touchRecognizer.listener = None
                 touchRecognizer.manager_factory = None
                 touchRecognizer.forget()
+                # **Off means the pad too.** The pad's own thread and its
+                # raw-input window went on running after the reader was
+                # switched off, reading every touch for a reader that was
+                # no longer there.
+                from .portable import trackpad
+                if trackpad.running():
+                    trackpad.stop()
         except Exception:                            # noqa: BLE001
             pass
         try:
@@ -4750,7 +4890,12 @@ class TitanAccessEngine:
 # Module-level singleton helpers
 # --------------------------------------------------------------------------- #
 def get_engine() -> TitanAccessEngine:
-    if TitanAccessEngine.instance is None:
+    current = TitanAccessEngine.instance
+    # A reader that is being switched off is not handed out to be started
+    # again: its teardown is still running on another thread. A new one
+    # is made, and it waits for that teardown before it starts.
+    if current is None or (not current.running
+                           and TitanAccessEngine._stopping is current):
         TitanAccessEngine.instance = TitanAccessEngine()
     return TitanAccessEngine.instance
 

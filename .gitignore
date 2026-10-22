@@ -164,3 +164,7 @@ sfx/windows 9x theme/
 # by titan_access/local_model.install) - hundreds of MB, not source.
 data/components/titan access/lib/python/
 data/components/titan access/lib/ocr_models/
+
+# Polyglot carries its interpreters whole: a .so or the CA bundle missing
+# from a clone is a Ruby that cannot load digest or open a TLS connection.
+!data/components/polyglot/interpreters/**

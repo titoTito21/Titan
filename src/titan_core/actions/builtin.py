@@ -78,7 +78,7 @@ _TOOL_PROVIDERS = (
 )
 
 BUILTIN_IDS = (tuple(entry[0] for entry in _TOOL_PROVIDERS)
-               + ('gamepad', 'shell', 'elten_client', 'reader'))
+               + ('gamepad', 'shell', 'elten_client', 'reader', 'modules'))
 
 # The actions that are actually DONE BY A MODEL - the ones that send something
 # to an AI provider. Only these need Titan's AI features switched on, and
@@ -701,6 +701,11 @@ def build():
         addons.append(_gamepad_addon())
     except Exception as e:
         print(f"[actions] Built-in 'gamepad' unavailable: {e}")
+    try:
+        from src.titan_core.modules_actions import modules_addon
+        addons.append(modules_addon())
+    except Exception as e:
+        print(f"[actions] Built-in 'modules' unavailable: {e}")
     try:
         addons.append(_shell_addon())
     except Exception as e:

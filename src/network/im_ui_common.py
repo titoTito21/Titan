@@ -44,9 +44,11 @@ _ = set_language(get_setting('language', 'pl'))
 # can never keep a messaging client from opening.
 # ---------------------------------------------------------------------------
 try:
-    from src.network.feedback_hub import (
-        speak_titannet, speak_notification, _announce_tab_bar as announce_tab_bar,
-    )
+    from src.network.feedback_hub import speak_titannet, speak_notification
+    # The one that says WHICH tab: feedback_hub's own _announce_tab_bar takes
+    # no arguments, and handing it the tab raised TypeError on every arrival
+    # at the bar.
+    from src.accessibility.messages import announce_tab_bar
 except Exception as _exc:  # pragma: no cover - only on a broken install
     print(f"[Titan IM UI] announcement helpers unavailable: {_exc}")
 

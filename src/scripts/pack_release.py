@@ -2,6 +2,15 @@
 
     python src/scripts/pack_release.py [dist/Titan] [-o titan.main.7z] [--level 9]
     python src/scripts/pack_release.py --check titan.main.7z
+    python src/scripts/pack_release.py --interpreter [dist/Titan] [-o titan.interpreter.7z]
+
+**The program and the interpreter are two archives.** The interpreter the
+applications run on - ``_internal/python.exe``, its ``_pth``, the standard
+library zip, ``DLLs/`` and ``TInterpreter.TDL`` (site-packages, see
+``src/titan_core/tdl.py``) - is ``titan.interpreter.7z``, downloaded only
+when the published version ends in ``i``. ``titan.main.7z`` leaves it out
+(``--with-interpreter`` puts it back); Titan.exe's own python3XX.dll and
+vcruntime stay in the program, which cannot start without them.
 
 The archive on the server is unpacked by the Titan ALREADY INSTALLED on the
 user's machine - and that one unpacks in-process with py7zr, which has no
@@ -49,6 +58,29 @@ DEFAULT_EXCLUDES = (
 #: engines but is not one of them: it is the platform voice Titan's own
 #: speech and Titan Access fall back on (``stereo_speech``'s eSpeak DLL),
 #: and a Titan updated without it had no eSpeak to choose at all.
+#: The applications' interpreter, relative to the compiled folder; ``*``
+#: matches one path component. Shipped in titan.interpreter.7z.
+INTERPRETER_PATHS = (
+    '_internal/python.exe',
+    '_internal/pythonw.exe',
+    '_internal/python3*._pth',
+    '_internal/python3*.zip',
+    '_internal/Lib',
+    '_internal/DLLs',
+    '_internal/TInterpreter.TDL',
+)
+
+
+def interpreter_entries(source):
+    """The INTERPRETER_PATHS this build really has, '/'-separated."""
+    import glob
+    found = []
+    for pattern in INTERPRETER_PATHS:
+        for path in sorted(glob.glob(os.path.join(source, pattern.replace('/', os.sep)))):
+            found.append(os.path.relpath(path, source).replace(os.sep, '/'))
+    return found
+
+
 KEEP_INSIDE = {
     'data/titantts engines': ('espeak',),
 }
@@ -128,7 +160,7 @@ def check(archive):
     return 0
 
 
-def pack(source, output, level, excludes):
+def pack(source, output, level, excludes, only=None):
     source = os.path.abspath(source)
     if not os.path.isfile(os.path.join(source, 'Titan.exe')):
         sys.exit(f"{source} does not hold a compiled Titan (no Titan.exe).")
@@ -146,14 +178,19 @@ def pack(source, output, level, excludes):
     # src); they are nobody's business in an update.
     command += ['-xr!*_debug*.log', '-xr!*.old',
                 '-x!titan_update.7z', '-x!titan_interpreter.7z']
-    for rel in expand_excludes(source, excludes):
+    for rel in ([] if only else expand_excludes(source, excludes)):
         rel = rel.replace('/', os.sep).rstrip(os.sep)
         if os.path.exists(os.path.join(source, rel)):
             command.append(f'-x!{rel}')
             print(f"Leaving out: {rel}")
         else:
             print(f"(not in this build, nothing to leave out: {rel})")
-    command += [output, '*']
+    if only:
+        for rel in only:
+            print(f"Packing: {rel}")
+        command += [output] + [rel.replace('/', os.sep) for rel in only]
+    else:
+        command += [output, '*']
     print(' '.join(command))
     print(f"(in {source})")
     result = subprocess.run(command, cwd=source)
@@ -182,17 +219,30 @@ def main(argv=None):
                         help="a folder or file (relative to the compiled "
                              "folder) to leave out, besides the defaults: "
                              + ', '.join(DEFAULT_EXCLUDES))
+    parser.add_argument('--interpreter', action='store_true',
+                        help="pack only the applications' interpreter into "
+                             "titan.interpreter.7z")
+    parser.add_argument('--with-interpreter', action='store_true',
+                        help="keep the interpreter inside titan.main.7z too")
     parser.add_argument('--include-all', action='store_true',
                         help="ship the TTS engines and the big components "
                              "too (no default exclusions)")
     args = parser.parse_args(argv)
     if args.check:
         return check(args.check)
-    output = args.output or os.path.join(os.path.dirname(args.source.rstrip('\\/')),
-                                         'titan.main.7z')
+    folder = os.path.dirname(os.path.abspath(args.source).rstrip('\\/'))
+    if args.interpreter:
+        output = args.output or os.path.join(folder, 'titan.interpreter.7z')
+        only = interpreter_entries(os.path.abspath(args.source))
+        if not only:
+            sys.exit(f"{args.source} has no interpreter to pack.")
+        return pack(args.source, output, args.level, [], only=only)
+    output = args.output or os.path.join(folder, 'titan.main.7z')
     excludes = list(args.exclude)
     if not args.include_all:
         excludes = list(DEFAULT_EXCLUDES) + excludes
+    if not (args.with_interpreter or args.include_all):
+        excludes += interpreter_entries(os.path.abspath(args.source))
     return pack(args.source, output, args.level, excludes)
 
 

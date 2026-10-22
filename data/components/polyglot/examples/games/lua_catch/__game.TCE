@@ -1,0 +1,5 @@
+name_pl="Łapanie piłek (Lua)"
+name_en="Catch the balls (Lua)"
+description="An audio game written in Lua (Polyglot example)."
+openfile="game.lua"
+shortname="lua_catch"

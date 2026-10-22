@@ -60,6 +60,96 @@ def _find_dll():
     return None
 
 
+#: The executables real NVDA runs as (installed, portable, with and without
+#: UI Access). ``nvda_probe*.exe`` - this component's own probes - are not.
+NVDA_PROCESSES = frozenset(("nvda.exe", "nvda_uiaccess.exe",
+                            "nvda_nouiaccess.exe"))
+#: How often the guard looks for NVDA starting. NVDA reaches its "is NVDA
+#: already running" check after importing a good part of itself - several
+#: hundred milliseconds after its process appears - so a tenth of a second
+#: is in time with room to spare. A look is `psutil.pids()` (~0.03 ms) and
+#: a name only for a pid not seen before.
+GUARD_POLL_S = 0.1
+#: How long NVDA must have been gone before the NVDA window comes back.
+WINDOW_BACK_AFTER_S = 3.0
+#: How long NVDA must have been gone before the endpoint is taken over:
+#: NVDA restarting (NVDA+Q, an add-on installed) is an exit and a start a
+#: moment apart, and taking the endpoint in between would leave the NVDA
+#: that comes back without its own controller for the whole session.
+ENDPOINT_AFTER_S = 10.0
+RETRY_EVERY_S = 5.0
+
+
+class _NvdaProcesses:
+    """Which of the machine's processes are NVDA, kept up to date cheaply."""
+
+    def __init__(self):
+        self._known = {}            # pid -> is NVDA
+        try:
+            import psutil
+            self._psutil = psutil
+        except Exception:                            # noqa: BLE001
+            self._psutil = None
+
+    def _name_of(self, pid):
+        try:
+            return (self._psutil.Process(pid).name() or "").lower()
+        except Exception:                            # noqa: BLE001
+            return ""
+
+    def _snapshot(self):
+        """``{pid: name}`` of every process, without psutil (Toolhelp)."""
+        found = {}
+        try:
+            import ctypes.wintypes as wt
+
+            class PROCESSENTRY32W(ctypes.Structure):
+                _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD),
+                            ("th32ProcessID", wt.DWORD),
+                            ("th32DefaultHeapID", ctypes.c_void_p),
+                            ("th32ModuleID", wt.DWORD),
+                            ("cntThreads", wt.DWORD),
+                            ("th32ParentProcessID", wt.DWORD),
+                            ("pcPriClassBase", ctypes.c_long),
+                            ("dwFlags", wt.DWORD),
+                            ("szExeFile", ctypes.c_wchar * 260)]
+            k32 = ctypes.windll.kernel32
+            k32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+            snap = k32.CreateToolhelp32Snapshot(0x2, 0)
+            if not snap or snap == ctypes.c_void_p(-1).value:
+                return found
+            try:
+                entry = PROCESSENTRY32W()
+                entry.dwSize = ctypes.sizeof(entry)
+                ok = k32.Process32FirstW(ctypes.c_void_p(snap),
+                                         ctypes.byref(entry))
+                while ok:
+                    found[int(entry.th32ProcessID)] = entry.szExeFile.lower()
+                    ok = k32.Process32NextW(ctypes.c_void_p(snap),
+                                            ctypes.byref(entry))
+            finally:
+                k32.CloseHandle(ctypes.c_void_p(snap))
+        except Exception:                            # noqa: BLE001
+            pass
+        return found
+
+    def running(self):
+        """True while any NVDA process is alive."""
+        if self._psutil is None:
+            return any(name in NVDA_PROCESSES
+                       for name in self._snapshot().values())
+        try:
+            pids = set(self._psutil.pids())
+        except Exception:                            # noqa: BLE001
+            return False
+        for gone in [pid for pid in self._known if pid not in pids]:
+            del self._known[gone]
+        for pid in pids:
+            if pid not in self._known:
+                self._known[pid] = self._name_of(pid) in NVDA_PROCESSES
+        return any(self._known.values())
+
+
 class NvdaControllerServer:
     """Loads the helper DLL and routes NVDA-controller calls to the engine."""
 
@@ -140,6 +230,11 @@ class NvdaControllerServer:
             except Exception:
                 self._get_pid = None
             # Newer helper exports; an older DLL simply lacks them.
+            try:
+                dll.TitanAccessHelper_setNvdaWindow.argtypes = [ctypes.c_int]
+                dll.TitanAccessHelper_setNvdaWindow.restype = ctypes.c_int
+            except Exception:
+                pass
             for name, restype in (("TitanAccessHelper_ownsEndpoint", ctypes.c_int),
                                   ("TitanAccessHelper_hasNvdaWindow", ctypes.c_int),
                                   ("TitanAccessHelper_retryEndpoint", ctypes.c_int),
@@ -149,6 +244,10 @@ class NvdaControllerServer:
                     getattr(dll, name).restype = restype
                 except Exception:
                     pass
+            self._nvda = _NvdaProcesses()
+            if self._nvda.running():
+                # NVDA is here (or starting): no NVDA window of ours at all.
+                self._set_window(dll, False)
             rc = dll.TitanAccessHelper_start(
                 self._cb_speak, self._cb_cancel, self._cb_braille)
         except Exception as e:
@@ -163,6 +262,7 @@ class NvdaControllerServer:
         self._dll = dll
         self._started = True
         self._owns_endpoint = self._read_owns()
+        self._start_watch()
         if self._owns_endpoint:
             print("[TitanAccess] NVDA controller server active -- applications "
                   "using nvdaControllerClient32.dll or ...64.dll (either bitness) "
@@ -174,7 +274,6 @@ class NvdaControllerServer:
             print("[TitanAccess] NVDA controller: another screen reader owns the "
                   "controller endpoint, so applications speak through it, not "
                   "Titan Access" + self._who_owns())
-            self._start_watch()
         return self
 
     # ------------------------------------------------------------------ #
@@ -206,32 +305,96 @@ class NvdaControllerServer:
             pass
         return ""
 
-    def _start_watch(self):
-        """Take the endpoint over the moment its current owner lets go.
+    def _set_window(self, dll, show):
+        """Put the hidden NVDA window up or take it down.
 
-        A slow poll, running only while we do NOT own it, so a user who closes
-        the other screen reader gets a working bridge without restarting Titan.
+        A helper built before `TitanAccessHelper_setNvdaWindow` existed can
+        still have its window closed (by message); it cannot be told to put
+        it back, which only costs Tolk-based games the window until the
+        reader is next started."""
+        try:
+            return bool(dll.TitanAccessHelper_setNvdaWindow(1 if show else 0))
+        except AttributeError:
+            pass
+        except Exception:                            # noqa: BLE001
+            return False
+        if show:
+            return False
+        try:
+            user32 = ctypes.windll.user32
+            user32.FindWindowW.restype = ctypes.c_void_p
+            hwnd = user32.FindWindowW("wxWindowClassNR", "NVDA")
+            pid = ctypes.c_ulong(0)
+            if hwnd:
+                user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd),
+                                                ctypes.byref(pid))
+                if pid.value == os.getpid():
+                    user32.PostMessageW(ctypes.c_void_p(hwnd), 0x0010, 0, 0)
+        except Exception:                            # noqa: BLE001
+            pass
+        return False
+
+    def _start_watch(self):
+        """Keep out of real NVDA's way, and take the endpoint once it is gone.
+
+        **Real NVDA kills the process holding an "NVDA" window.** Starting,
+        NVDA looks for ``FindWindow("wxWindowClassNR", "NVDA")`` - the very
+        window this bridge keeps for Tolk - takes it for an NVDA already
+        running, posts it WM_QUIT, waits for its PROCESS to exit and then
+        calls TerminateProcess on it (read out of nvda.exe:
+        `terminateRunningNVDA`). That process is Titan: starting or
+        restarting NVDA while Titan Access was running froze Titan for the
+        wait and then ended it - or NVDA gave up on its own start. So the
+        window is taken down the moment an NVDA process appears and put
+        back only once NVDA has been gone a while; and the endpoint is not
+        taken over while NVDA is merely restarting.
         """
         import threading
         if self._watch_thread is not None and self._watch_thread.is_alive():
             return
         self._watch_stop = threading.Event()
         stop = self._watch_stop
+        nvda = getattr(self, "_nvda", None) or _NvdaProcesses()
 
         def _watch():
-            while not stop.wait(5.0):
-                if self._dll is None or not self._started:
+            import time
+            window_wanted = not nvda.running()
+            gone_since = None if not window_wanted else time.monotonic()
+            last_retry = 0.0
+            while not stop.wait(GUARD_POLL_S):
+                dll = self._dll
+                if dll is None or not self._started:
                     return
+                now = time.monotonic()
                 try:
-                    if self._dll.TitanAccessHelper_retryEndpoint():
-                        self._owns_endpoint = True
-                        print("[TitanAccess] NVDA controller server active -- the "
-                              "endpoint was released and Titan Access has taken "
-                              "it over (applications of either bitness reach us "
-                              "now)")
-                        return
-                except Exception:
-                    return
+                    present = nvda.running()
+                except Exception:                    # noqa: BLE001
+                    present = False
+                if present:
+                    gone_since = None
+                    if window_wanted:
+                        window_wanted = False
+                        self._set_window(dll, False)
+                        print("[TitanAccess] NVDA is starting - the NVDA "
+                              "window is taken down, or NVDA would end Titan")
+                    continue
+                if gone_since is None:
+                    gone_since = now
+                away = now - gone_since
+                if not window_wanted and away >= WINDOW_BACK_AFTER_S:
+                    window_wanted = True
+                    self._set_window(dll, True)
+                if not self._owns_endpoint and away >= ENDPOINT_AFTER_S \
+                        and now - last_retry >= RETRY_EVERY_S:
+                    last_retry = now
+                    try:
+                        if dll.TitanAccessHelper_retryEndpoint():
+                            self._owns_endpoint = True
+                            print("[TitanAccess] NVDA controller server active "
+                                  "-- the endpoint was released and Titan "
+                                  "Access has taken it over")
+                    except Exception:                # noqa: BLE001
+                        pass
 
         self._watch_thread = threading.Thread(target=_watch, daemon=True,
                                               name="TitanAccessCtlrWatch")

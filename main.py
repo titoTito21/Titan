@@ -1598,6 +1598,15 @@ if __name__ == "__main__":
                     print("Frame not ready for Titan-Net auto-connect, skipping")
                     return
 
+                # Titan-Net may be switched off in the Component Manager.
+                try:
+                    from src.titan_core.modules import service_enabled
+                    if not service_enabled('titannet'):
+                        print("Titan-Net is switched off, not connecting")
+                        return
+                except Exception:
+                    pass
+
                 # Check if auto-connect is enabled in settings
                 auto_connect = titan_net_settings.get('auto_connect', False)
 

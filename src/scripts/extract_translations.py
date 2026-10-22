@@ -21,7 +21,7 @@ DOMAIN_FILES = {
     'main': ['main.py'],
     'apps': ['src/titan_core/app_manager.py'],
     'games': ['src/titan_core/game_manager.py'],
-    'components': ['src/titan_core/component_manager.py', 'src/ui/componentmanagergui.py'],
+    'components': ['src/titan_core/component_manager.py', 'src/ui/componentmanagergui.py', 'src/titan_core/modules.py'],
     'notifications': ['src/system/notifications.py', 'src/ui/notificationcenter.py'],
     'network': [
         'src/network/messenger_client.py', 'src/network/messenger_gui.py', 'src/network/messenger_webview.py',

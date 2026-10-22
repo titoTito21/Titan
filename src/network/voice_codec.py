@@ -30,9 +30,14 @@ try:
             _base_dir = os.path.dirname(sys.executable)
         else:
             _base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        _lib_dir = os.path.join(_base_dir, 'data', 'lib')
-        for _dll_name in ('libopus-0.dll', 'opus.dll', 'libopus.dll'):
-            _path = os.path.join(_lib_dir, _dll_name)
+        _lib_dirs = [os.path.join(_base_dir, 'data', 'lib')]
+        # The compiled build ships libopus-0.dll once, in _internal/ (pygame
+        # needs it there), rather than a second identical copy in data/lib
+        # - src/scripts/dedupe_dist.py.
+        if getattr(sys, '_MEIPASS', None):
+            _lib_dirs.append(sys._MEIPASS)
+        for _path in (os.path.join(_d, _n) for _d in _lib_dirs
+                      for _n in ('libopus-0.dll', 'opus.dll', 'libopus.dll')):
             if os.path.exists(_path):
                 try:
                     ctypes.CDLL(_path)

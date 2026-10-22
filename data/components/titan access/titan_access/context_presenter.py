@@ -266,7 +266,8 @@ def _dialog_icon_handle(hwnd):
         if not st:
             continue
         for msg, wp in ((_STM_GETICON, 0), (_STM_GETIMAGE, _IMAGE_ICON)):
-            h = _user32.SendMessageW(st, msg, ctypes.c_void_p(wp), None)
+            from . import win_msg
+            h = win_msg.send(st, msg, wp, 0, 300)
             if h:
                 return int(h)
     return 0

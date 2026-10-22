@@ -1,0 +1,5 @@
+name_pl="Witaj z PowerShella"
+name_en="Hello from PowerShell"
+description="A Titan application written in PowerShell (Polyglot example)."
+openfile="main.ps1"
+shortname="powershell_hello"
