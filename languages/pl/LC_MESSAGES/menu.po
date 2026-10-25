@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,108 +20,61 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/menu.py:52
+#: src/ui/menu.py:52 src/ui/program_menu.py:278
 msgid "Install data package..."
 msgstr "Zainstaluj pakiet danych..."
 
 #: src/ui/menu.py:59
-msgid "Component Manager..."
-msgstr "Menedżer komponentów..."
+msgid "TCE Environment Manager..."
+msgstr "Menedżer środowiska TCE..."
 
 #: src/ui/menu.py:73
 msgid "Program settings"
 msgstr "Ustawienia programu"
 
-#: src/ui/menu.py:87
-msgid "AI Agent..."
-msgstr "Agent AI..."
-
-#: src/ui/menu.py:89
-msgid "AI Assistant..."
-msgstr "Asystent AI..."
-
-#: src/ui/menu.py:93
-msgid "AI Assistant (Live mode)..."
-msgstr "Asystent AI (tryb live)..."
-
-#: src/ui/menu.py:106
-msgid "AI OCR (read this screen)..."
-msgstr "AI OCR (odczytaj ten ekran)..."
-
-#: src/ui/menu.py:112
+#: src/ui/menu.py:91
 msgid "Help"
 msgstr "Pomoc"
 
-#: src/ui/menu.py:121
+#: src/ui/menu.py:100
 msgid "Minimize"
 msgstr "Minimalizuj"
 
-#: src/ui/menu.py:128
+#: src/ui/menu.py:107
 msgid "Exit"
 msgstr "Wyjście"
 
-#: src/ui/menu.py:142
+#: src/ui/menu.py:121
 msgid "Program"
 msgstr "Program"
 
-#: src/ui/menu.py:147
+#: src/ui/menu.py:126
 msgid "Switch to"
 msgstr "Przełącz na"
 
-#: src/ui/menu.py:162
+#: src/ui/menu.py:141
 msgid "Components"
 msgstr "Komponenty"
 
-#: src/ui/menu.py:188
-#, python-brace-format
-msgid "Create {kind}..."
-msgstr "Utwórz: {kind}..."
-
-#: src/ui/menu.py:193
+#: src/ui/menu.py:165
 msgid "Enable AI features in Settings, AI features"
-msgstr "Włącz funkcje SI w Ustawieniach, w kategorii Funkcje SI"
-"Włącz składniki sztucznej inteligencji w Ustawieniach, Składniki "
-"sztucznej inteligencji"
+msgstr ""
+"Włącz funkcje SI w Ustawieniach, w kategorii Funkcje SIWłącz składniki "
+"sztucznej inteligencji w Ustawieniach, Składniki sztucznej inteligencji"
 
-#: src/ui/menu.py:195
+#: src/ui/menu.py:167 src/ui/program_menu.py:299
 msgid "AI"
 msgstr "AI"
 
-#: src/ui/menu.py:197
+#: src/ui/menu.py:169 src/ui/program_menu.py:302
 msgid "Programmer"
 msgstr "Programista"
 
-#: src/ui/menu.py:212
-#, python-brace-format
-msgid "Could not open the AI creator: {error}"
-msgstr "Nie można otworzyć kreatora AI: {error}"
-
-#: src/ui/menu.py:213 src/ui/menu.py:230 src/ui/menu.py:244 src/ui/menu.py:260
-#: src/ui/menu.py:282 src/ui/menu.py:284 src/ui/menu.py:399 src/ui/menu.py:406
-#: src/ui/menu.py:411
-msgid "Error"
-msgstr "Błąd"
-
-#: src/ui/menu.py:229
-#, python-brace-format
-msgid "Could not open the AI Agent: {error}"
-msgstr "Nie można otworzyć Agenta AI: {error}"
-
-#: src/ui/menu.py:243
-#, python-brace-format
-msgid "Could not open AI OCR: {error}"
-msgstr "Nie można otworzyć AI OCR: {error}"
-
-#: src/ui/menu.py:259
-#, python-brace-format
-msgid "Could not open the AI Assistant: {error}"
-msgstr "Nie można otworzyć Asystenta AI: {error}"
-
-#: src/ui/menu.py:263
+#: src/ui/menu.py:184
 msgid "Select data package"
 msgstr "Wybierz pakiet danych"
 
-#: src/ui/menu.py:263
+#: src/ui/menu.py:184
 msgid ""
 "Data packages "
 "(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
@@ -129,37 +82,42 @@ msgstr ""
 "Pakiety danych "
 "(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
 
-#: src/ui/menu.py:268
+#: src/ui/menu.py:189
 msgid "Package installation"
 msgstr "Instalacja pakietu"
 
-#: src/ui/menu.py:268
+#: src/ui/menu.py:189
 msgid "Preparing for installation..."
 msgstr "Przygotowywanie do instalacji..."
 
-#: src/ui/menu.py:278
-msgid "Component Manager"
-msgstr "Menedżer komponentów"
+#: src/ui/menu.py:199
+msgid "TCE Environment Manager"
+msgstr "Menedżer środowiska TCE"
 
-#: src/ui/menu.py:282
-msgid "Cannot load Component Manager (componentmanagergui.py not found)"
-msgstr "Nie można wczytać Menedżera komponentów (nie znaleziono componentmanagergui.py)"
-"Nie można załadować Menedżera komponentów (nie znaleziono "
+#: src/ui/menu.py:203
+msgid "Cannot load TCE Environment Manager (componentmanagergui.py not found)"
+msgstr ""
+"Nie można wczytać Menedżera środowiska TCE (nie znaleziono "
 "componentmanagergui.py)"
 
-#: src/ui/menu.py:284
-msgid "Component Manager has not been initialized."
-msgstr "Menedżer komponentów nie został zainicjalizowany."
+#: src/ui/menu.py:203 src/ui/menu.py:205 src/ui/menu.py:320 src/ui/menu.py:327
+#: src/ui/menu.py:332 src/ui/program_menu.py:49
+msgid "Error"
+msgstr "Błąd"
 
-#: src/ui/menu.py:363
+#: src/ui/menu.py:205
+msgid "TCE Environment Manager has not been initialized."
+msgstr "Menedżer środowiska TCE nie został zainicjowany."
+
+#: src/ui/menu.py:284
 msgid "Unpacking .tcepackage package..."
 msgstr "Rozpakowywanie pakietu .tcepackage..."
 
-#: src/ui/menu.py:365
+#: src/ui/menu.py:286
 msgid "Unpacking ZIP package..."
 msgstr "Rozpakowywanie pakietu ZIP..."
 
-#: src/ui/menu.py:386
+#: src/ui/menu.py:307
 msgid ""
 "Error: 7z executable not found. Make sure it is installed or in the "
 "'data/bin/' directory."
@@ -167,19 +125,19 @@ msgstr ""
 "Błąd: Nie znaleziono pliku wykonywalnego 7z. Upewnij się, że znajduje się"
 " w katalogu 'data/bin/'."
 
-#: src/ui/menu.py:386
+#: src/ui/menu.py:307
 msgid "Executable file error"
 msgstr "Błąd pliku wykonywalnego"
 
-#: src/ui/menu.py:391
+#: src/ui/menu.py:312
 msgid "Unpacking 7z package..."
 msgstr "Rozpakowywanie pakietu 7z..."
 
-#: src/ui/menu.py:393
+#: src/ui/menu.py:314
 msgid "Starting 7z process..."
 msgstr "Uruchamianie procesu 7z..."
 
-#: src/ui/menu.py:399
+#: src/ui/menu.py:320
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
@@ -188,20 +146,20 @@ msgstr ""
 "Błąd podczas instalacji pakietu:\n"
 "{}"
 
-#: src/ui/menu.py:402
+#: src/ui/menu.py:323
 msgid "Finished unpacking 7z."
 msgstr "Zakończono rozpakowywanie 7z."
 
-#: src/ui/menu.py:406
+#: src/ui/menu.py:327
 #, python-brace-format
 msgid "Unsupported file format: {}"
 msgstr "Nieobsługiwany format pliku: {}"
 
-#: src/ui/menu.py:406
+#: src/ui/menu.py:327
 msgid "(no extension)"
 msgstr "(brak rozszerzenia)"
 
-#: src/ui/menu.py:411
+#: src/ui/menu.py:332
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
@@ -214,20 +172,68 @@ msgstr ""
 "Szczegóły:\n"
 "{}"
 
-#: src/ui/menu.py:416
+#: src/ui/menu.py:337
 msgid "Data package has been installed!"
 msgstr "Pakiet danych został zainstalowany!"
 
-#: src/ui/menu.py:416
+#: src/ui/menu.py:337
 msgid "Success"
 msgstr "Sukces"
 
-#: src/ui/menu.py:424
-msgid "Settings"
-msgstr "Ustawienia"
+#: src/ui/program_menu.py:101
+#, python-brace-format
+msgid "Could not open the AI Agent: {error}"
+msgstr "Nie można otworzyć Agenta AI: {error}"
 
+#: src/ui/program_menu.py:113
+#, python-brace-format
+msgid "Could not open the AI Assistant: {error}"
+msgstr "Nie można otworzyć Asystenta AI: {error}"
+
+#: src/ui/program_menu.py:126
+#, python-brace-format
+msgid "Could not open AI OCR: {error}"
+msgstr "Nie można otworzyć AI OCR: {error}"
+
+#: src/ui/program_menu.py:138
+#, python-brace-format
+msgid "Could not open the AI creator: {error}"
+msgstr "Nie można otworzyć kreatora AI: {error}"
+
+#: src/ui/program_menu.py:151
+#, python-brace-format
+msgid "Could not open the AI projects: {error}"
+msgstr "Nie udało się otworzyć projektów AI: {error}"
+
+#: src/ui/program_menu.py:179
+#, python-brace-format
 msgid "Could not install the data package: {error}"
 msgstr "Nie można zainstalować pakietu danych: {error}"
+
+#: src/ui/program_menu.py:215
+msgid "AI Agent..."
+msgstr "Agent AI..."
+
+#: src/ui/program_menu.py:219
+msgid "AI Assistant..."
+msgstr "Asystent AI..."
+
+#: src/ui/program_menu.py:223
+msgid "AI Assistant (Live mode)..."
+msgstr "Asystent AI (tryb live)..."
+
+#: src/ui/program_menu.py:232
+msgid "AI OCR (read this screen)..."
+msgstr "AI OCR (odczytaj ten ekran)..."
+
+#: src/ui/program_menu.py:256
+#, python-brace-format
+msgid "Create {kind}..."
+msgstr "Utwórz: {kind}..."
+
+#: src/ui/program_menu.py:263
+msgid "Projects (continue building)..."
+msgstr "Projekty (kontynuuj budowanie)..."
 
 #~ msgid "Log in to Titan-Network..."
 #~ msgstr "Zaloguj się do Titan-Network..."
@@ -256,9 +262,6 @@ msgstr "Nie można zainstalować pakietu danych: {error}"
 #~ msgid "Finished unpacking .tcepackage."
 #~ msgstr "Zakończono rozpakowywanie .tcepackage."
 
+#~ msgid "Settings"
+#~ msgstr "Ustawienia"
 
-msgid "Could not open the AI projects: {error}"
-msgstr "Nie udało się otworzyć projektów AI: {error}"
-
-msgid "Projects (continue building)..."
-msgstr "Projekty (kontynuuj budowanie)..."

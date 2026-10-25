@@ -1,0 +1,7 @@
+{
+  "name": "Ruby dice",
+  "name_pl": "Kości w Ruby",
+  "type": "button",
+  "description": "A widget written in Ruby: Enter throws two dice.",
+  "polyglot": "main.rb"
+}

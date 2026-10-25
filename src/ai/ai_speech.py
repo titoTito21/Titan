@@ -26,22 +26,34 @@ asynchronously) and never raises.
 #: theme the user chose.
 SOUND_QUESTION = 'ui/statusbar.ogg'
 
+#: The sound of the AGENT or an ASSISTANT asking - its follow-up questions and
+#: "may I do this?". Asked for in as many words. It is the AI's own sound, so
+#: a theme without it falls back to `SOUND_QUESTION`: a question that makes
+#: no sound at all is one nobody knows is there.
+SOUND_AGENT_QUESTION = 'ai/agent_question.ogg'
 
-def play_question_sound():
+
+def _play(name):
+    from src.titan_core import sound
+    if '/' not in name or name.startswith('ai/'):
+        return bool(sound.play_ai_sound(name))
+    sound.play_sound(name)
+    return True
+
+
+def play_question_sound(agent=False):
     """Play it. Never raises, never blocks.
 
-    A name inside the AI's own folder (`ai/...`) goes through
+    ``agent=True`` is the agent's and the assistants' own cue
+    (`SOUND_AGENT_QUESTION`), with `SOUND_QUESTION` behind it where the theme
+    has not got it. A name inside the AI's own folder (`ai/...`) goes through
     `play_ai_sound`, which knows that set belongs to the feature; anything
-    else is an ordinary theme sound and is played as one - so pointing
-    `SOUND_QUESTION` at either kind is all it takes to change the cue.
+    else is an ordinary theme sound and is played as one.
     """
-    name = SOUND_QUESTION
     try:
-        from src.titan_core import sound
-        if '/' not in name or name.startswith('ai/'):
-            return bool(sound.play_ai_sound(name))
-        sound.play_sound(name)
-        return True
+        if agent and _play(SOUND_AGENT_QUESTION):
+            return True
+        return _play(SOUND_QUESTION)
     except Exception:
         return False
 

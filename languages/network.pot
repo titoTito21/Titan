@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,90 +17,90 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/network/messenger_client.py:299 src/network/whatsapp_client.py:284
+#: src/network/messenger_client.py:301 src/network/whatsapp_client.py:286
 msgid "Thanks for the message!"
 msgstr ""
 
-#: src/network/messenger_client.py:300 src/network/whatsapp_client.py:285
+#: src/network/messenger_client.py:302 src/network/whatsapp_client.py:287
 msgid "OK, understood"
 msgstr ""
 
-#: src/network/messenger_client.py:301 src/network/whatsapp_client.py:286
+#: src/network/messenger_client.py:303 src/network/whatsapp_client.py:288
 msgid "Sounds good"
 msgstr ""
 
-#: src/network/messenger_client.py:302 src/network/whatsapp_client.py:287
+#: src/network/messenger_client.py:304 src/network/whatsapp_client.py:289
 msgid "Yes, I agree"
 msgstr ""
 
-#: src/network/messenger_client.py:303 src/network/whatsapp_client.py:288
+#: src/network/messenger_client.py:305 src/network/whatsapp_client.py:290
 msgid "No problem"
 msgstr ""
 
-#: src/network/messenger_client.py:304 src/network/whatsapp_client.py:289
+#: src/network/messenger_client.py:306 src/network/whatsapp_client.py:291
 msgid "Great!"
 msgstr ""
 
-#: src/network/messenger_client.py:361 src/network/whatsapp_client.py:344
+#: src/network/messenger_client.py:363 src/network/whatsapp_client.py:346
 #, python-brace-format
 msgid "New message at {}"
 msgstr ""
 
-#: src/network/messenger_client.py:407 src/network/whatsapp_client.py:390
+#: src/network/messenger_client.py:409 src/network/whatsapp_client.py:392
 msgid "Hi! How are you?"
 msgstr ""
 
-#: src/network/messenger_client.py:418 src/network/whatsapp_client.py:401
+#: src/network/messenger_client.py:420 src/network/whatsapp_client.py:403
 msgid "Are we meeting today?"
 msgstr ""
 
-#: src/network/messenger_client.py:425 src/network/messenger_client.py:426
-#: src/network/whatsapp_client.py:408 src/network/whatsapp_client.py:409
+#: src/network/messenger_client.py:427 src/network/messenger_client.py:428
+#: src/network/whatsapp_client.py:410 src/network/whatsapp_client.py:411
 msgid "Work Group"
 msgstr ""
 
-#: src/network/messenger_client.py:429 src/network/whatsapp_client.py:412
+#: src/network/messenger_client.py:431 src/network/whatsapp_client.py:414
 msgid "Projects for tomorrow"
 msgstr ""
 
-#: src/network/messenger_client.py:440 src/network/whatsapp_client.py:423
+#: src/network/messenger_client.py:442 src/network/whatsapp_client.py:425
 msgid "Thanks for the help!"
 msgstr ""
 
-#: src/network/messenger_client.py:441 src/network/whatsapp_client.py:424
+#: src/network/messenger_client.py:443 src/network/whatsapp_client.py:426
 msgid "yesterday"
 msgstr ""
 
-#: src/network/messenger_client.py:451 src/network/whatsapp_client.py:434
+#: src/network/messenger_client.py:453 src/network/whatsapp_client.py:436
 msgid "Great, thanks!"
 msgstr ""
 
-#: src/network/messenger_client.py:458 src/network/messenger_client.py:459
-#: src/network/whatsapp_client.py:441 src/network/whatsapp_client.py:442
+#: src/network/messenger_client.py:460 src/network/messenger_client.py:461
+#: src/network/whatsapp_client.py:443 src/network/whatsapp_client.py:444
 msgid "Work Friends"
 msgstr ""
 
-#: src/network/messenger_client.py:462 src/network/whatsapp_client.py:445
+#: src/network/messenger_client.py:464 src/network/whatsapp_client.py:447
 msgid "Who's going for coffee?"
 msgstr ""
 
-#: src/network/messenger_client.py:492 src/network/whatsapp_client.py:475
+#: src/network/messenger_client.py:494 src/network/whatsapp_client.py:477
 msgid "Connected to Titan IM server"
 msgstr ""
 
-#: src/network/messenger_client.py:498 src/network/whatsapp_client.py:481
+#: src/network/messenger_client.py:500 src/network/whatsapp_client.py:483
 msgid "Connected to Titan IM"
 msgstr ""
 
-#: src/network/messenger_client.py:513 src/network/messenger_client.py:519
+#: src/network/messenger_client.py:515 src/network/messenger_client.py:521
 msgid "Opened Facebook Messenger in web browser"
 msgstr ""
 
-#: src/network/messenger_client.py:536
+#: src/network/messenger_client.py:538
 msgid "Messenger Error"
 msgstr ""
 
-#: src/network/messenger_client.py:549
+#: src/network/messenger_client.py:551
 msgid "Disconnected from Facebook Messenger"
 msgstr ""
 
@@ -232,7 +232,8 @@ msgstr ""
 msgid "No Chat Selected"
 msgstr ""
 
-#: src/network/messenger_gui.py:448 src/network/telegram_windows.py:904
+#: src/network/messenger_gui.py:448 src/network/telegram_windows.py:340
+#: src/network/telegram_windows.py:904
 msgid "Failed to send message"
 msgstr ""
 
@@ -593,8 +594,9 @@ msgstr ""
 msgid "Połączenie zakończone. Czas trwania: {}"
 msgstr ""
 
-#: src/network/messenger_webview.py:1612 src/network/messenger_webview.py:1626
-msgid "Połączenie zakończone"
+#: src/network/im_call_ui.py:223 src/network/messenger_webview.py:1612
+#: src/network/messenger_webview.py:1626
+msgid "Call ended"
 msgstr ""
 
 #: src/network/messenger_webview.py:1637 src/network/messenger_webview.py:1678
@@ -656,8 +658,8 @@ msgstr ""
 
 #: src/network/messenger_webview.py:1772 src/network/telegram_gui.py:569
 #: src/network/telegram_gui.py:584 src/network/telegram_gui.py:768
-#: src/network/telegram_gui.py:786 src/network/telegram_windows.py:608
-#: src/network/telegram_windows.py:904
+#: src/network/telegram_gui.py:786 src/network/telegram_windows.py:340
+#: src/network/telegram_windows.py:608 src/network/telegram_windows.py:904
 msgid "Error"
 msgstr ""
 
@@ -761,8 +763,7 @@ msgstr ""
 
 #: src/network/messenger_webview.py:1840 src/network/messenger_webview.py:1870
 #: src/network/messenger_webview.py:1900 src/network/messenger_webview.py:1908
-#: src/network/messenger_webview.py:2997 src/network/telegram_windows.py:340
-#: src/network/whatsapp_webview.py:1877
+#: src/network/messenger_webview.py:3004 src/network/whatsapp_webview.py:1877
 msgid "Błąd"
 msgstr ""
 
@@ -841,120 +842,120 @@ msgstr ""
 msgid "Messenger: new message"
 msgstr ""
 
-#: src/network/messenger_webview.py:2968
+#: src/network/messenger_webview.py:2975
 msgid "Rozłączono z Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:2970
+#: src/network/messenger_webview.py:2977
 msgid "Zamykanie Messenger"
 msgstr ""
 
-#: src/network/messenger_webview.py:2995
+#: src/network/messenger_webview.py:3002
 msgid ""
 "Nie można otworzyć Messenger WebView.\n"
 "Sprawdź czy WebView2 jest zainstalowany."
 msgstr ""
 
-#: src/network/messenger_webview.py:3110 src/network/whatsapp_webview.py:2021
+#: src/network/messenger_webview.py:3117 src/network/whatsapp_webview.py:2021
 msgid ""
 "WebView nie jest dostępny na tym systemie.\n"
 "Zainstaluj Microsoft Edge WebView2 Runtime."
 msgstr ""
 
-#: src/network/messenger_webview.py:3112 src/network/whatsapp_webview.py:2023
+#: src/network/messenger_webview.py:3119 src/network/whatsapp_webview.py:2023
 msgid "Błąd WebView"
 msgstr ""
 
-#: src/network/telegram_client.py:169 src/network/telegram_gui.py:784
+#: src/network/telegram_client.py:171 src/network/telegram_gui.py:784
 msgid "Connection error"
 msgstr ""
 
-#: src/network/telegram_client.py:237
+#: src/network/telegram_client.py:239
 msgid "Invalid phone number"
 msgstr ""
 
-#: src/network/telegram_client.py:239
+#: src/network/telegram_client.py:241
 msgid "Invalid verification code"
 msgstr ""
 
-#: src/network/telegram_client.py:241
+#: src/network/telegram_client.py:243
 msgid "Login error"
 msgstr ""
 
-#: src/network/telegram_client.py:249
+#: src/network/telegram_client.py:251
 msgid "Enter the verification code received by SMS or Telegram:"
 msgstr ""
 
-#: src/network/telegram_client.py:250
+#: src/network/telegram_client.py:252
 msgid "Verification code"
 msgstr ""
 
-#: src/network/telegram_client.py:273
+#: src/network/telegram_client.py:275
 msgid "Enter two-factor authentication password:"
 msgstr ""
 
-#: src/network/telegram_client.py:274
+#: src/network/telegram_client.py:276
 msgid "2FA Password"
 msgstr ""
 
 #: src/network/im_call_ui.py:129 src/network/im_call_ui.py:161
 #: src/network/im_client_base.py:184 src/network/im_client_base.py:453
-#: src/network/im_web/base.py:1020 src/network/telegram_client.py:348
-#: src/network/telegram_client.py:409 src/network/telegram_client.py:800
+#: src/network/im_web/base.py:1020 src/network/telegram_client.py:350
+#: src/network/telegram_client.py:411 src/network/telegram_client.py:802
 #: src/network/telegram_windows.py:416 src/network/telegram_windows.py:981
 msgid "Unknown"
 msgstr ""
 
-#: src/network/telegram_client.py:602 src/network/telegram_client.py:614
+#: src/network/telegram_client.py:604 src/network/telegram_client.py:616
 #, python-brace-format
 msgid "Connected to Telegram as {}"
 msgstr ""
 
-#: src/network/telegram_client.py:633
+#: src/network/telegram_client.py:635
 msgid "Telegram Error"
 msgstr ""
 
-#: src/network/telegram_client.py:1003
+#: src/network/telegram_client.py:1005
 msgid "Disconnecting from Telegram..."
 msgstr ""
 
-#: src/network/telegram_client.py:1037
+#: src/network/telegram_client.py:1039
 msgid "Event loop stopped, forcing client cleanup"
 msgstr ""
 
-#: src/network/telegram_client.py:1053
+#: src/network/telegram_client.py:1055
 msgid "Waiting for connection thread to finish..."
 msgstr ""
 
-#: src/network/telegram_client.py:1057
+#: src/network/telegram_client.py:1059
 msgid "Warning: Connection thread did not stop cleanly"
 msgstr ""
 
-#: src/network/telegram_client.py:1059
+#: src/network/telegram_client.py:1061
 msgid "Connection thread stopped"
 msgstr ""
 
-#: src/network/telegram_client.py:1069
+#: src/network/telegram_client.py:1071
 msgid "Successfully disconnected from Telegram"
 msgstr ""
 
-#: src/network/telegram_client.py:1075
+#: src/network/telegram_client.py:1077
 msgid "Disconnected from Telegram (with errors)"
 msgstr ""
 
-#: src/network/telegram_client.py:1082
+#: src/network/telegram_client.py:1084
 msgid "Telegram client disconnected"
 msgstr ""
 
-#: src/network/telegram_client.py:1091
+#: src/network/telegram_client.py:1093
 msgid "Start login by providing phone number"
 msgstr ""
 
-#: src/network/telegram_client.py:1096
+#: src/network/telegram_client.py:1098
 msgid "Phone number is required"
 msgstr ""
 
-#: src/network/telegram_client.py:1097
+#: src/network/telegram_client.py:1099
 msgid "Preparing connection to Telegram..."
 msgstr ""
 
@@ -1018,8 +1019,8 @@ msgstr ""
 msgid "Voice Call"
 msgstr ""
 
-#: src/network/telegram_gui.py:535 src/network/telegram_voice.py:364
-#: src/network/telegram_voice.py:580 src/network/telegram_windows.py:434
+#: src/network/telegram_gui.py:535 src/network/telegram_voice.py:366
+#: src/network/telegram_voice.py:582 src/network/telegram_windows.py:434
 msgid "Call already in progress"
 msgstr ""
 
@@ -1064,95 +1065,95 @@ msgstr ""
 msgid "Failed to start connection. Please try again."
 msgstr ""
 
-#: src/network/telegram_voice.py:276
+#: src/network/telegram_voice.py:278
 msgid "The other person is busy"
 msgstr ""
 
-#: src/network/telegram_voice.py:312
+#: src/network/telegram_voice.py:314
 msgid "The microphone is not available."
 msgstr ""
 
-#: src/network/telegram_voice.py:324 src/network/telegram_voice.py:369
-#: src/network/telegram_voice.py:531 src/network/telegram_voice.py:585
+#: src/network/telegram_voice.py:326 src/network/telegram_voice.py:371
+#: src/network/telegram_voice.py:533 src/network/telegram_voice.py:587
 msgid "Voice calls require py-tgcalls. Install it with: pip install py-tgcalls"
 msgstr ""
 
-#: src/network/telegram_voice.py:331
+#: src/network/telegram_voice.py:333
 #, python-brace-format
 msgid "The microphone list could not be read: {error}"
 msgstr ""
 
-#: src/network/telegram_voice.py:334
+#: src/network/telegram_voice.py:336
 msgid "No microphone was found."
 msgstr ""
 
-#: src/network/telegram_voice.py:345
+#: src/network/telegram_voice.py:347
 #, python-brace-format
 msgid "The microphone could not be opened: {error}"
 msgstr ""
 
-#: src/network/telegram_voice.py:388 src/network/telegram_voice.py:551
-#: src/network/telegram_voice.py:608
+#: src/network/telegram_voice.py:390 src/network/telegram_voice.py:553
+#: src/network/telegram_voice.py:610
 msgid "Could not start voice system"
 msgstr ""
 
-#: src/network/telegram_voice.py:439
+#: src/network/telegram_voice.py:441
 #, python-brace-format
 msgid "{name} could not be found on Telegram"
 msgstr ""
 
-#: src/network/telegram_voice.py:460
+#: src/network/telegram_voice.py:462
 #, python-brace-format
 msgid "{name} did not answer"
 msgstr ""
 
-#: src/network/telegram_voice.py:464
+#: src/network/telegram_voice.py:466
 #, python-brace-format
 msgid "{name} declined the call"
 msgstr ""
 
-#: src/network/telegram_voice.py:468
+#: src/network/telegram_voice.py:470
 #, python-brace-format
 msgid "{name} is busy"
 msgstr ""
 
-#: src/network/telegram_voice.py:501
+#: src/network/telegram_voice.py:503
 msgid "There is no voice chat in this group"
 msgstr ""
 
-#: src/network/telegram_voice.py:503
+#: src/network/telegram_voice.py:505
 msgid "There is no call in progress"
 msgstr ""
 
-#: src/network/telegram_voice.py:505
+#: src/network/telegram_voice.py:507
 msgid "Telegram is rate-limiting calls. Try again in a moment."
 msgstr ""
 
-#: src/network/telegram_voice.py:507
+#: src/network/telegram_voice.py:509
 msgid "This person does not accept calls from you"
 msgstr ""
 
-#: src/network/telegram_voice.py:509
+#: src/network/telegram_voice.py:511
 msgid "The other side's Telegram cannot take this call"
 msgstr ""
 
-#: src/network/im_web/base.py:993 src/network/telegram_voice.py:510
+#: src/network/im_web/base.py:993 src/network/telegram_voice.py:512
 msgid "The call could not be started"
 msgstr ""
 
-#: src/network/telegram_voice.py:526
+#: src/network/telegram_voice.py:528
 msgid "There is no call to answer"
 msgstr ""
 
-#: src/network/telegram_voice.py:892 src/network/telegram_windows.py:539
+#: src/network/telegram_voice.py:894 src/network/telegram_windows.py:539
 msgid "Audio: unavailable (py-tgcalls is not installed)"
 msgstr ""
 
-#: src/network/telegram_voice.py:895
+#: src/network/telegram_voice.py:897
 msgid "Audio: group voice chat"
 msgstr ""
 
-#: src/network/telegram_voice.py:896 src/network/telegram_windows.py:537
+#: src/network/telegram_voice.py:898 src/network/telegram_windows.py:537
 msgid "Audio: Telegram call"
 msgstr ""
 
@@ -1166,10 +1167,6 @@ msgstr ""
 
 #: src/network/telegram_windows.py:170
 msgid "Wyślij"
-msgstr ""
-
-#: src/network/telegram_windows.py:340
-msgid "Nie udało się wysłać wiadomości"
 msgstr ""
 
 #: src/network/im_web/base.py:1002 src/network/telegram_windows.py:360
@@ -1290,15 +1287,15 @@ msgstr ""
 msgid "Accept"
 msgstr ""
 
-#: src/network/whatsapp_client.py:496 src/network/whatsapp_client.py:502
+#: src/network/whatsapp_client.py:498 src/network/whatsapp_client.py:504
 msgid "Opened WhatsApp Web in web browser"
 msgstr ""
 
-#: src/network/whatsapp_client.py:519
+#: src/network/whatsapp_client.py:521
 msgid "WhatsApp Error"
 msgstr ""
 
-#: src/network/whatsapp_client.py:531 src/network/whatsapp_webview.py:1966
+#: src/network/whatsapp_client.py:533 src/network/whatsapp_webview.py:1966
 msgid "Disconnected from WhatsApp Web"
 msgstr ""
 
@@ -1487,12 +1484,12 @@ msgstr ""
 msgid "Błąd WhatsApp WebView"
 msgstr ""
 
-#: src/network/im_conversation.py:296 src/network/im_ui_common.py:227
+#: src/network/im_conversation.py:296 src/network/im_ui_common.py:256
 #, python-brace-format
 msgid "{tab}: {n} entries"
 msgstr ""
 
-#: src/network/im_ui_common.py:244
+#: src/network/im_ui_common.py:273
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr ""
@@ -1636,13 +1633,13 @@ msgstr ""
 msgid "Cannot start the call"
 msgstr ""
 
-#: src/network/im_client_base.py:277 src/network/im_conversation.py:554
+#: src/network/im_client_base.py:277 src/network/im_conversation.py:555
 msgid ""
 "The call was requested but the service has not started it. Open the "
 "service page to see what happened."
 msgstr ""
 
-#: src/network/im_client_base.py:280 src/network/im_conversation.py:557
+#: src/network/im_client_base.py:280 src/network/im_conversation.py:558
 #, python-brace-format
 msgid "Calling {name}"
 msgstr ""
@@ -2068,29 +2065,29 @@ msgstr ""
 msgid "Saved as {path}"
 msgstr ""
 
-#: src/network/im_conversation.py:518
+#: src/network/im_conversation.py:519
 #, python-brace-format
 msgid "Cannot open the file: {error}"
 msgstr ""
 
-#: src/network/im_conversation.py:523 src/network/im_conversation.py:536
+#: src/network/im_conversation.py:524 src/network/im_conversation.py:537
 msgid "No earlier messages"
 msgstr ""
 
-#: src/network/im_conversation.py:525
+#: src/network/im_conversation.py:526
 msgid "Loading earlier messages"
 msgstr ""
 
-#: src/network/im_conversation.py:529
+#: src/network/im_conversation.py:530
 msgid "Could not load history"
 msgstr ""
 
-#: src/network/im_conversation.py:542
+#: src/network/im_conversation.py:543
 #, python-brace-format
 msgid "Loaded {n} earlier messages"
 msgstr ""
 
-#: src/network/im_conversation.py:603
+#: src/network/im_conversation.py:604
 #, python-brace-format
 msgid "Attachment ready: {name}"
 msgstr ""
@@ -2143,10 +2140,6 @@ msgstr ""
 #: src/network/im_call_ui.py:221
 #, python-brace-format
 msgid "Call ended, {duration}"
-msgstr ""
-
-#: src/network/im_call_ui.py:223
-msgid "Call ended"
 msgstr ""
 
 #: src/network/whatsapp_titan_gui.py:39

@@ -647,8 +647,10 @@ def _repository_item(app='', **_):
 
 
 def _repository_download(app='', **_):
-    """Download a package. It lands where Titan puts downloads, because
-    Titan is where it will be installed."""
+    """Download a package into the folder chosen in Settings -> Titan-Net
+    (the user's Downloads folder by default) - the same place the Titan-Net
+    window saves one.  It used to be downloaded into memory and thrown away:
+    the answer said "Downloaded." and nothing was ever written."""
     client, error = _client()
     if error:
         return error
@@ -656,11 +658,23 @@ def _repository_download(app='', **_):
     if not text.isdigit():
         return "Say the package's number."
     try:
-        result = client.download_app(int(text))
+        from src.network.package_downloads import save_path_for
+        details = {}
+        try:
+            answer = client.get_app_details(int(text))
+            if isinstance(answer, dict):
+                details = answer.get('app') or answer.get('package') or {}
+        except Exception:
+            details = {}
+        if not isinstance(details, dict) or not details.get('name'):
+            details = {'name': f"package_{text}"}
+        save_path = save_path_for(details)
+        result = client.download_app(int(text), save_path=save_path)
     except Exception as e:
         return f"Could not download it: {e}"
     if isinstance(result, dict) and result.get('success'):
-        where = result.get('path') or result.get('file') or ''
+        where = (result.get('file_path') or result.get('path')
+                 or result.get('file') or '')
         return f"Downloaded." + (f" It is at {where}." if where else '')
     return _did(result, "Downloading it")
 

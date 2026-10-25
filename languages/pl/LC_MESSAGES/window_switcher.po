@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TCE Launcher\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2026-03-21 12:00+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,20 +20,20 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/window_switcher.py:424
+#: src/ui/window_switcher.py:422
 msgid "Switch To"
 msgstr "Przełącz na"
 
-#: src/ui/window_switcher.py:432
+#: src/ui/window_switcher.py:430
 msgid "Switch To:"
 msgstr "Przełącz na:"
 
-#: src/ui/window_switcher.py:458
+#: src/ui/window_switcher.py:456
 #, python-brace-format
 msgid "Switch To, {} items"
 msgstr "Przełącz na, {} elementów"
 
-#: src/ui/window_switcher.py:460
+#: src/ui/window_switcher.py:458
 msgid "Switch To, no windows"
 msgstr "Przełącz na, brak okien"
 

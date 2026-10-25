@@ -140,7 +140,7 @@ class LuaGuest(Guest):
         try:
             self.runtime.run_file(self.path)
             main = self.runtime.get_global('main')
-            if main is not None and self.api.kind in ('app', 'game'):
+            if main is not None and self.api.kind in ('app', 'game', 'macro'):
                 self.runtime.call(main)
         except Exception as error:
             self.log(traceback.format_exc())

@@ -114,7 +114,7 @@ def open_manager(**_):
     try:
         import wx
         if wx.GetApp() is None:
-            return "Titan has no window to open the Component Manager in."
+            return "Titan has no window to open the TCE Environment Manager in."
 
         def show():
             from src.ui.componentmanagergui import show_component_manager
@@ -126,9 +126,9 @@ def open_manager(**_):
             show_component_manager(None, manager)
 
         wx.CallAfter(show)
-        return "The Component Manager is open."
+        return "The TCE Environment Manager is open."
     except Exception as error:
-        return f"The Component Manager could not be opened: {error}"
+        return f"The TCE Environment Manager could not be opened: {error}"
 
 
 def restart_titan(**_):
@@ -140,7 +140,7 @@ def restart_titan(**_):
 def modules_addon():
     from src.titan_core.actions.manifest import ActionSpec, AddonActions
     addon = AddonActions(kind='builtin', addon_id='modules', name='modules',
-                         path='', label="Component Manager",
+                         path='', label="TCE Environment Manager",
                          description="Switch any part of Titan on or off: its "
                                      "built-in services (Telegram, Titan-Net, "
                                      "AI features, ...) and every installed "
@@ -172,7 +172,7 @@ def modules_addon():
          {'name': name, 'kind': kind}, 'confirm', disable_module),
         ('pending_changes', "Say which changes wait for Titan to restart.",
          {}, 'auto', pending_changes),
-        ('open_manager', "Open the Component Manager window.",
+        ('open_manager', "Open the TCE Environment Manager window.",
          {}, 'auto', open_manager),
         ('restart_titan', "Restart Titan so waiting changes take effect.",
          {}, 'always_confirm', restart_titan),

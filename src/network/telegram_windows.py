@@ -337,7 +337,7 @@ class TelegramPrivateMessageWindow(wx.Frame):
             self.message_input.SetFocus()
         else:
             play_sound('error.ogg')
-            _show_skinned_message(self, _("Nie udało się wysłać wiadomości"), _("Błąd"), wx.OK | wx.ICON_ERROR)
+            _show_skinned_message(self, _("Failed to send message"), _("Error"), wx.OK | wx.ICON_ERROR)
     
     def append_message(self, sender, message, timestamp, is_own=False, voice_file=None):
         """Add message to chat display"""

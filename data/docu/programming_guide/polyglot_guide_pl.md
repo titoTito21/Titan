@@ -19,9 +19,15 @@ Niczego nie trzeba instalować. Polyglot ma własne interpretery:
 
 Inne języki są używane, gdy ich narzędzia są na komputerze: Node.js (`.cjs`),
 TypeScript przez Deno (`.ts`), Go, C, C++, Rust, Perl, PHP. Każdy inny język
-z wierszem poleceń można dodać w pliku użytkownika
-`%APPDATA%/titosoft/Titan/polyglot/runtimes.json` (Komponenty -> Języki
-programowania -> Otwórz plik języków).
+z wierszem poleceń można dodać w **Ustawienia -> Polyglot**: Dodaj język pyta
+o nazwę, rozszerzenia, interpreter lub kompilator (z przyciskiem Wskaż
+program), polecenia uruchomienia i kompilacji, plik wynikowy, zmienne
+środowiskowe i o to, czy dodać SDK Titana do ścieżek wyszukiwania. Tam też
+można zmienić język wbudowany (na przykład wskazać mu inny interpreter),
+wyłączyć go i przywrócić przyciskiem Przywróć domyślne; Sprawdź mówi, czy
+program został znaleziony i jaką wersję podaje. Wszystko jest trzymane
+w `%APPDATA%/titosoft/Titan/polyglot/runtimes.json`, zapisywane razem
+z ustawieniami, a plik nadal można edytować ręcznie.
 
 Polyglot niczego w Titanie nie zmienia: dociera do menedżera aplikacji i gier
 z zewnątrz, więc działa też w Titanie zbudowanym, zanim powstał.
@@ -179,7 +185,7 @@ wyjście programu i trafia do dziennika. Protokół jest synchroniczny: wpisz
 wywołanie, przeczytaj odpowiedź - klient w nowym języku to kilkanaście linii
 bez wątków.
 
-Nowy język dodaje się wpisem w `runtimes.json`:
+Ustawienia -> Polyglot zapisują do `runtimes.json` wpisy takie jak te:
 
 ```json
 {"runtimes": [
@@ -193,8 +199,10 @@ Nowy język dodaje się wpisem w `runtimes.json`:
 Symbole: `{file}` plik źródłowy, `{dir}` jego folder, `{name}` nazwa pliku bez
 rozszerzenia, `{out}` wynik kompilacji (zapamiętywany, dopóki żaden plik
 w folderze się nie zmieni), `{exe}` pierwszy istniejący z `find`, `{sdk}`
-folder SDK Polyglota. Wpis z identyfikatorem języka wbudowanego zmienia tylko
-to, co w nim podano.
+folder SDK Polyglota, `{python}` własny Python Titana. Wpis z identyfikatorem
+języka wbudowanego zmienia tylko to, co w nim podano; `"disabled": true`
+wyłącza język. Język dodany przez użytkownika wygrywa rozszerzenie, które
+dzieli z językiem wbudowanym.
 
 ## Komponent
 
@@ -239,13 +247,133 @@ menu = My clock: say the time
 menu_pl = Mój zegar: powiedz godzinę
 ```
 
+## Każdy inny rodzaj dodatku
+
+Aplikację, grę i komponent Titan URUCHAMIA. Każdy inny rodzaj dodatku Titan
+WYWOŁUJE - aplet paska stanu jest pytany o swój tekst, widżet dostaje polecenie
+ruchu, silnik mowy dostaje zdanie - i każdy z nich też może być napisany w
+innym języku:
+
+| Rodzaj | Folder | Manifest | Funkcje, które Titan wywołuje |
+|---|---|---|---|
+| Moduł Titan IM | `data/titanIM_modules/` | `__im.TCE` | `open(parent)`, `get_status_text()` |
+| Widżet | `data/applets/` | `applet.json` | `get_widget_info()`, `create()`, `navigate(direction)`, `get_current_element()`, `activate_current_element()` |
+| Aplet paska stanu | `data/statusbar_applets/` | `applet.json` | `get_statusbar_item_text()`, `get_statusbar_item_info()`, `on_statusbar_item_activate(parent)` |
+| Launcher | `data/launchers/` | `__launcher__.TCE` | `start(api)` |
+| Interfejs ustawień | `data/settings interfaces/` | `__settings_ui__.TCE` | `open_settings(api)` |
+| Dodatek powłoki | `data/shell addons/` | `__shell_addon__.TCE` | haki dodatku powłoki w Pythonie: `start_menu_items(api, menu)`, `explorer_columns(...)`... |
+| Tryb pada | `data/gamepad/modes/` | `__mode__.TCE` z `main = mode.py` | `on_activate(manager)`, `handle_button(id)`, `handle_axis(id, value)`, `handle_hat(x, y)`, `handle_bumper(is_left)`, `get_display_name()` |
+| Silnik mowy | `data/titantts engines/` | `__engine__.TCE` | `generate(text, pitch)` zwracające ścieżkę pliku WAV, `get_voices()`, `set_voice(id)`, `set_rate(n)`, `is_available()` |
+
+**Makro** to program uruchamiany raz, jak aplikacja: w `__macro__.TCE`
+`openfile = main.lua` (albo `.rb`, `.js`...), a Menedżer makr uruchamia je
+przez Polyglota z listy, skrótem i akcją `macros.run_macro`. Lua wywołuje
+`main()`, jeśli plik ją definiuje.
+
+To te same funkcje, pod tymi samymi nazwami, co w dodatku danego rodzaju w
+Pythonie, więc przewodnik każdego rodzaju obowiązuje bez zmian. O funkcję,
+której program nie definiuje, Titan po prostu nie pyta.
+
+Programem jest `main.<rozszerzenie>` (albo manifest mówi `polyglot = plik`).
+Loader każdego rodzaju szuka pliku w Pythonie, więc Polyglot pisze go obok
+programu - kilka wierszy oznaczonych `# Polyglot entry`, które przekazują
+folder Polyglotowi. Plik powstaje przy starcie Polyglota, przy instalowaniu
+przykładów i przez Komponenty -> Polyglot -> Przygotuj dodatki w
+innych językach - to trzeba uruchomić przed spakowaniem takiego dodatku.
+Dodatek z własnym plikiem w Pythonie jest dodatkiem w Pythonie i nie jest
+ruszany.
+
+### W Lua
+
+Zdefiniuj funkcje. Funkcję, którą zwrócisz (`action` pozycji menu), Titan
+zachowuje i wywołuje później:
+
+```lua
+function get_statusbar_item_text()
+  return "Sesja: " .. math.floor((os.time() - started) / 60) .. " min"
+end
+
+function start_menu_items(api, menu)
+  return {{id = "hello", label = "Witaj",
+           action = function() titan.speak("Witaj") end}}
+end
+```
+
+### W każdym innym języku: serve
+
+Program kończy się wywołaniem `serve`, które mówi Titanowi, jakie funkcje
+istnieją, i odpowiada na wywołania Titana, dopóki Titan go potrzebuje:
+
+```ruby
+require 'titan'
+Titan.serve('get_statusbar_item_text' => -> { Time.now.strftime('%H:%M') })
+```
+
+```javascript
+titan.serve({ get_statusbar_item_text: () => new Date().toTimeString() });
+```
+
+```powershell
+Import-Module Titan
+Start-TitanServe @{ get_statusbar_item_text = { (Get-Date).ToString('HH:mm') } }
+```
+
+```csharp
+var h = new Dictionary<string, Func<object[], object>>();
+h["get_statusbar_item_text"] = a => DateTime.Now.ToString("HH:mm");
+Titan.Serve(h);
+```
+
+W protokole wywołanie od Titana to zdarzenie z `next_event`,
+`{"type": "call", "id": 7, "name": "...", "args": [...]}`, na które program
+odpowiada `reply(7, wartość)` (albo `reply(7, null, "co poszło źle")`);
+`provide([nazwy])` mówi, jakie funkcje istnieją. Funkcję, którą Titan ma
+zachować, zwraca się jako `{"__function": "nazwa"}` (`Titan.fn("nazwa")`,
+`titan.fn`, `New-TitanFunction`, `Titan.Fn`).
+
+### Obiekty Titana: host
+
+To, co Titan przekazuje dodatkowi - API launchera, API interfejsu ustawień,
+API dodatku powłoki, okno nadrzędne - przychodzi jako uchwyt,
+`{"__handle": 3, "__type": "LauncherAPI"}`, a jego metody wywołuje się przez
+`host`:
+
+```lua
+local apps = titan.host(api, "get_applications")
+titan.host(api, "open_application", {apps[1]})
+```
+
+Obiekty, które ma każdy dodatek danego rodzaju, są też dostępne po nazwie:
+`sounds`, `config`, `ui` i `buffers` modułu Titan IM (`titan.host("sounds",
+"new_message")`) oraz pomocniki `gamepad` trybu pada
+(`titan.host("gamepad", "tap", {"ctrl+c"})`).
+
+### Launchery i interfejsy ustawień
+
+`start(api)` launchera trwa tak długo jak launcher; gdy się skończy, Titan się
+zamyka. `open_settings(api)` interfejsu ustawień może zadawać pytania tak
+długo, jak chce - Titan na niego nie czeka.
+
+### Silniki mowy
+
+`generate(text, pitch)` zapisuje mowę do pliku WAV i zwraca jego ścieżkę
+(względną wobec folderu silnika albo bezwzględną); odpowiedź
+`{"base64": "...", "format": "wav"}` też działa. Dobrym miejscem na plik jest
+`Titan.data_dir`.
+
 ## Przykłady
 
-Komponenty -> Języki programowania -> Zainstaluj przykłady kopiuje do folderów
-użytkownika aplikację, grę i komponent w Lua oraz aplikacje w JavaScripcie,
-Ruby, C# i PowerShellu (folder `examples/` komponentu).
+Komponenty -> Polyglot -> Zainstaluj przykłady kopiuje do folderów
+użytkownika (folder `examples/` komponentu): aplikację, grę i komponent w Lua;
+aplikacje w JavaScripcie, Ruby, C# i PowerShellu; oraz po jednym dodatku
+każdego innego rodzaju - moduł Titan IM, widżet, aplet paska stanu, makro,
+launcher,
+interfejs ustawień, dodatek powłoki i tryb pada w Lua, aplet paska stanu w
+JavaScripcie, widżet w Ruby i silnik mowy w Ruby.
 
 ## Action API
 
 `polyglot.list_languages`, `polyglot.run_file` (`path`, `kind`),
-`polyglot.install_examples`, `polyglot.components`.
+`polyglot.install_examples`, `polyglot.prepare_addons` (pisze wejścia w
+Pythonie), `polyglot.addons` (każdy dodatek w innym języku i czy działa),
+`polyglot.components`.

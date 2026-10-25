@@ -146,28 +146,12 @@ class _HeadlessAssistant:
         wx.CallAfter(speaker, label)
 
     def _confirm(self, tool, args):
-        """Ask the user to allow a risky agent action (worker thread -> GUI)."""
-        result = {}
-        done = threading.Event()
-
-        def ask():
-            from src.ai.agent_tools import describe_action
-            desc = (describe_action(tool['name'], args)
-                    or tool.get('description') or tool['name'])
-            _speak(_("Confirm action: {action}").format(action=desc))
-            dlg = wx.MessageDialog(
-                self._parent,
-                _("The assistant wants to run:\n\n{action}\n\n{desc}\n\n"
-                  "Allow it?").format(action=desc,
-                                      desc=tool.get('description', '')),
-                _("Confirm action"), wx.YES_NO | wx.ICON_QUESTION)
-            result['ok'] = (dlg.ShowModal() == wx.ID_YES)
-            dlg.Destroy()
-            done.set()
-
-        wx.CallAfter(ask)
-        done.wait()
-        return result.get('ok', False)
+        """Ask the user to allow a risky agent action. The windowless
+        assistant's parent is usually hidden in the tray, so the question is
+        a window of its own, put in front with the keyboard handed to it."""
+        from src.ai import confirmation
+        return confirmation.ask(tool, args, parent=None,
+                                cancel_event=self._cancel, who='assistant')
 
     def _finish(self, error):
         self._unregister_shift_esc()

@@ -26,10 +26,10 @@ except Exception:
 
 
 def _question_sound():
-    """The sound of the AI asking something - see `ai_speech.SOUND_QUESTION`."""
+    """The agent's question sound - see `ai_speech.SOUND_AGENT_QUESTION`."""
     try:
         from src.ai.ai_speech import play_question_sound
-        play_question_sound()
+        play_question_sound(agent=True)
     except Exception:
         pass
 
@@ -138,13 +138,17 @@ class AIAgentFrame(wx.Frame):
         done = threading.Event()
 
         def ask():
-            self._append(_("Agent"), question)
-            _speak(question)
-            _question_sound()
-            dlg = wx.TextEntryDialog(self, question, _("The agent is asking"))
-            box['answer'] = dlg.GetValue() if dlg.ShowModal() == wx.ID_OK else ''
-            dlg.Destroy()
-            done.set()
+            try:
+                self._append(_("Agent"), question)
+                _speak(question)
+                _question_sound()
+                dlg = wx.TextEntryDialog(self, question, _("The agent is asking"))
+                box['answer'] = dlg.GetValue() if dlg.ShowModal() == wx.ID_OK else ''
+                dlg.Destroy()
+            except Exception as e:
+                print(f"[ai_agent_gui] the question could not be shown: {e}")
+            finally:
+                done.set()
 
         wx.CallAfter(ask)
         # No timeout: the user is being asked a question and may take as long
@@ -158,30 +162,12 @@ class AIAgentFrame(wx.Frame):
         return answer
 
     def _confirm(self, tool, args):
-        policy = ai_provider.get_agent_confirm()
-        # Autonomous means autonomous: never interrupt the user with a
-        # confirmation dialog, not even for always-confirm tools. Picking this
-        # level is an explicit opt-out of every prompt.
-        if policy == 'none':
-            return True
-        result = {}
-        done = threading.Event()
-
-        def ask():
-            desc = (self._describe_action(tool['name'], args)
-                    or tool.get('description') or tool['name'])
-            msg = _("The agent wants to run this action:\n\n{action}\n\n{desc}\n\nAllow it?").format(
-                action=desc, desc=tool.get('description', ''))
-            _speak(_("Confirm action: {action}").format(action=desc))
-            dlg = wx.MessageDialog(self, msg, _("Confirm agent action"),
-                                   wx.YES_NO | wx.ICON_QUESTION)
-            result['ok'] = (dlg.ShowModal() == wx.ID_YES)
-            dlg.Destroy()
-            done.set()
-
-        wx.CallAfter(ask)
-        done.wait()
-        return result.get('ok', False)
+        # One implementation for every AI window: the policy, "allow for
+        # this session", a dialog that is put in front and a wait that ends
+        # when the run is cancelled (src/ai/confirmation.py).
+        from src.ai import confirmation
+        return confirmation.ask(tool, args, parent=self,
+                                cancel_event=self._cancel, who='agent')
 
     # -- run / cancel ---------------------------------------------------- #
     def on_send(self, event):

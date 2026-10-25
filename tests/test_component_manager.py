@@ -217,6 +217,121 @@ class TheWindow(unittest.TestCase):
         self.assertEqual(len(self.messages), 1)   # answered No: nothing restarts
 
 
+class ExternalClientsHaveATab(unittest.TestCase):
+    """Titan asks whether an external client (the Elten bridge, the NVDA
+    add-on) may control it, and says when one arrives - and the refusal told
+    the user to look "in Settings, General, under External clients", which
+    did not exist. It is a tab of this window now."""
+
+    def setUp(self):
+        _reset()
+        from src.titan_core import client_consent, external_clients
+        self.consent = client_consent
+        self.clients = external_clients
+        from src.settings.settings import load_settings, save_settings
+        settings = load_settings()
+        settings.pop(client_consent.SECTION, None)
+        settings.pop(client_consent.OPTIONS_SECTION, None)
+        save_settings(settings)
+        client_consent.remember('elten_tce_bridge', True)
+        client_consent.remember('nvda', False)
+        from src.ui import componentmanagergui as gui
+        self.gui = gui
+        self.dialog = gui.ComponentManagerDialog(None, "CM")
+        self.spoken = []
+        self.dialog.tts = type('S', (), {'output': lambda _s, t, **k: self.spoken.append(t)})()
+        self.asked = []
+        self._ask = client_consent._ask_now
+        client_consent._ask_now = lambda cid, label: self.asked.append(cid)
+
+    def tearDown(self):
+        self.consent._ask_now = self._ask
+        self.dialog._asked_restart = True
+        self.dialog.Destroy()
+
+    def _open_tab(self):
+        self.dialog.current_tab = 'client'
+        self.dialog.populate_component_list()
+        return self.dialog.items
+
+    def _select(self, ident):
+        position = next(i for i, m in enumerate(self.dialog.items) if m.id == ident)
+        self.dialog.component_listbox.SetSelection(position + 1)
+        return position
+
+    def test_the_tab_is_there_with_its_settings_and_every_client(self):
+        self.assertIn('client', [kind for kind, _l in self.dialog.tabs])
+        ids = [m.id for m in self._open_tab()]
+        self.assertEqual(ids[:2], [self.clients.POLICY_ROW, self.clients.ANNOUNCE_ROW])
+        self.assertIn('elten_tce_bridge', ids)
+        self.assertIn('nvda', ids)
+        text = self.dialog.component_listbox.GetString(ids.index('nvda') + 1)
+        self.assertIn(self.gui._("not allowed to control Titan"), text)
+
+    def test_space_allows_a_client_and_says_so(self):
+        self._open_tab()
+        position = self._select('nvda')
+        self.dialog.toggle_selected()
+        self.assertTrue(self.consent.known('nvda'))
+        self.assertTrue(self.consent.may_drive('nvda'))
+        self.assertIn(self.gui._("allowed to control Titan"),
+                      self.dialog.component_listbox.GetString(position + 1))
+        self.assertTrue(self.spoken)
+
+    def test_ask_again_forgets_the_answer(self):
+        self._open_tab()
+        self._select('elten_tce_bridge')
+        module = self.dialog.selected_module()
+        entries = dict(self.dialog.menu_entries(module))
+        entries[self.gui._("Ask again when it next connects")]()
+        self.assertIsNone(self.consent.known('elten_tce_bridge'))
+
+    def test_the_rule_for_new_clients_is_used_and_nothing_is_asked(self):
+        self._open_tab()
+        self._select(self.clients.POLICY_ROW)
+        self.dialog.toggle_selected()                  # ask -> allow
+        self.assertEqual(self.consent.new_client_policy(), 'allow')
+        self.assertTrue(self.consent.may_drive('somebody_new'))
+        self.dialog.toggle_selected()                  # allow -> deny
+        self.assertFalse(self.consent.may_drive('somebody_new'))
+        self.consent.ask('somebody_new')
+        self.assertEqual(self.asked, [])
+        self.dialog.toggle_selected()                  # deny -> ask
+        self.assertEqual(self.consent.new_client_policy(), 'ask')
+
+    def test_announcing_can_be_switched_off(self):
+        from src.titan_core.actions import bus
+        said = []
+        saved = bus.threading.Thread
+        def record(target=None, **k):
+            if getattr(target, '__name__', '') == 'say':
+                said.append(target)
+                return type('T', (), {'start': lambda _s: None})()
+            return saved(target=target, **k)
+        bus.threading.Thread = record
+        peer = type('P', (), {'addon_id': 'zz_client', 'client': True,
+                              'kind': 'app', 'actions': [], 'label': 'Z'})()
+        try:
+            self._open_tab()
+            self._select(self.clients.ANNOUNCE_ROW)
+            self.dialog.toggle_selected()
+            self.assertFalse(self.consent.announce_clients())
+            bus._announced.clear()
+            bus._announce_client(peer, True)
+            self.assertEqual(said, [])
+            self.consent.set_announce_clients(True)
+            bus._announced.clear()
+            bus._announce_client(peer, True)
+            self.assertEqual(len(said), 1)
+        finally:
+            bus.threading.Thread = saved
+
+    def test_the_refusal_points_at_the_tab(self):
+        text = self.consent.refusal('nvda', 'NVDA')
+        self.assertNotIn('Settings, General', text)
+        self.assertIn('NVDA', text)
+
+
 class TheActions(unittest.TestCase):
     def setUp(self):
         _reset()

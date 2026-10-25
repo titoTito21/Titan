@@ -1130,6 +1130,42 @@ class SettingsFrame(wx.Frame):
         self.developer_tools_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
         vbox.Add(self.developer_tools_cb, flag=wx.LEFT | wx.TOP, border=10)
 
+        # The usage tips: "to switch between lists, use left or right arrow
+        # keys" on the tab bar, how to reach the invisible interface after
+        # minimising, turning Titan UI off in a window that wants its keys
+        # (src/accessibility/messages.usage_tips_enabled).
+        self.usage_tips_cb = wx.CheckBox(self.general_panel, label=_("Speak tips on using TCE"))
+        self.usage_tips_cb.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.usage_tips_cb.Bind(wx.EVT_CHECKBOX, self.OnCheckBox)
+        vbox.Add(self.usage_tips_cb, flag=wx.LEFT | wx.TOP, border=10)
+
+        # Where a package downloaded from the Titan-Net repository is saved
+        # (src/network/package_downloads.py).  Here rather than in the
+        # Titan-Net category, which only exists once an account is saved -
+        # and a folder is worth choosing before the first download, not
+        # after.  Empty means the user's own Downloads folder, which the
+        # field shows as its hint so the default is never a blank box.
+        packages_label = wx.StaticText(
+            self.general_panel,
+            label=_("Titan-Net: folder for downloaded packages:"))
+        vbox.Add(packages_label, flag=wx.LEFT | wx.TOP, border=10)
+        packages_hbox = wx.BoxSizer(wx.HORIZONTAL)
+        self.packages_folder_ctrl = wx.TextCtrl(self.general_panel)
+        self.packages_folder_ctrl.SetName(_("Titan-Net: folder for downloaded packages"))
+        self.packages_folder_ctrl.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        try:
+            from src.network.package_downloads import user_downloads_folder
+            self.packages_folder_ctrl.SetHint(user_downloads_folder())
+        except Exception:
+            pass
+        packages_hbox.Add(self.packages_folder_ctrl, 1, wx.EXPAND | wx.RIGHT, 5)
+        self.packages_folder_btn = wx.Button(
+            self.general_panel, label=_("Browse for the package folder..."))
+        self.packages_folder_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.packages_folder_btn.Bind(wx.EVT_BUTTON, self.OnBrowsePackagesFolder)
+        packages_hbox.Add(self.packages_folder_btn, 0)
+        vbox.Add(packages_hbox, flag=wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, border=10)
+
         vbox.AddSpacer(10)
 
         # When TCE is minimized
@@ -1636,6 +1672,21 @@ class SettingsFrame(wx.Frame):
         self.ai_agent_confirm_radio.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
         vbox.Add(_dep(self.ai_agent_confirm_radio), flag=wx.LEFT | wx.TOP | wx.EXPAND, border=10)
 
+        # "Allow for this session" answers are kept until Titan closes; this
+        # is how they are taken back sooner (src/ai/confirmation.py).
+        self.ai_forget_approvals_btn = wx.Button(panel, label=_(
+            "Ask again about actions allowed for this session"))
+        self.ai_forget_approvals_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_forget_approvals_btn.Bind(wx.EVT_BUTTON, self._on_ai_forget_approvals)
+        vbox.Add(_dep(self.ai_forget_approvals_btn), flag=wx.LEFT | wx.TOP, border=10)
+
+        # Subagents: separate AI runs the agent and the assistants hand part
+        # of a task to (src/ai/subagents.py); the user may add their own.
+        self.ai_subagents_btn = wx.Button(panel, label=_("Subagents..."))
+        self.ai_subagents_btn.Bind(wx.EVT_SET_FOCUS, self.OnFocus)
+        self.ai_subagents_btn.Bind(wx.EVT_BUTTON, self._on_ai_subagents)
+        vbox.Add(_dep(self.ai_subagents_btn), flag=wx.LEFT | wx.TOP, border=10)
+
         # --- What the AI may reach ---------------------------------------- #
         # Add-ons declare their own functions (the Titan Action API), so the
         # list below is built from what is actually installed rather than from
@@ -1996,6 +2047,26 @@ class SettingsFrame(wx.Frame):
         self.ai_addon_list.Set(labels)
         for index, addon_id in enumerate(self._ai_addon_ids):
             self.ai_addon_list.Check(index, addon_id not in blocked_ids)
+
+    def _on_ai_forget_approvals(self, event):
+        try:
+            from src.ai import confirmation
+            count = confirmation.forget_approvals()
+        except Exception as e:
+            wx.MessageBox(str(e), _("AI features"), wx.OK | wx.ICON_ERROR, self)
+            return
+        wx.MessageBox(
+            _("The AI will ask again before every risky action ({count} "
+              "allowed for this session forgotten).").format(count=count),
+            _("AI features"), wx.OK | wx.ICON_INFORMATION, self)
+
+    def _on_ai_subagents(self, event):
+        try:
+            from src.ai import subagents_gui
+            subagents_gui.show(self)
+        except Exception as e:
+            wx.MessageBox(_("The subagents could not be shown: {error}").format(
+                error=e), _("AI features"), wx.OK | wx.ICON_ERROR, self)
 
     def _on_ai_memory_forget(self, event):
         """Throw away the remembered conversation. Notes are kept: the user
@@ -2550,6 +2621,12 @@ class SettingsFrame(wx.Frame):
 
         developer_tools_value = general_settings.get('developer_tools', 'False')
         self.developer_tools_cb.SetValue(str(developer_tools_value).lower() in ['true', '1'])
+
+        usage_tips_value = general_settings.get('speak_usage_tips', 'True')
+        self.usage_tips_cb.SetValue(str(usage_tips_value).lower() in ['true', '1'])
+
+        self.packages_folder_ctrl.ChangeValue(
+            str(self.settings.get('titannet', {}).get('packages_folder', '') or ''))
 
         startup_mode_value = general_settings.get('startup_mode', 'normal')
         if startup_mode_value == 'minimized':
@@ -3234,6 +3311,27 @@ class SettingsFrame(wx.Frame):
                 display_parts.append(p)
         return '+'.join(display_parts)
 
+    def OnBrowsePackagesFolder(self, event):
+        """Choose the folder Titan-Net packages are downloaded into."""
+        try:
+            from src.network.package_downloads import packages_folder
+            start = self.packages_folder_ctrl.GetValue().strip() or packages_folder(create=False)
+        except Exception:
+            start = ''
+        dialog = wx.DirDialog(self, _("Choose the folder for downloaded Titan-Net packages"),
+                              defaultPath=start,
+                              style=wx.DD_DEFAULT_STYLE)
+        try:
+            if dialog.ShowModal() == wx.ID_OK:
+                self.packages_folder_ctrl.ChangeValue(dialog.GetPath())
+                try:
+                    play_sound('core/SELECT.ogg')
+                except Exception:
+                    pass
+        finally:
+            dialog.Destroy()
+            self.packages_folder_ctrl.SetFocus()
+
     def OnCaptureTitanUIKey(self, event):
         """Open a dialog that captures the next key combination from the user."""
         dlg = KeyCaptureDialog(self, current_label=self._format_titan_ui_key(self._titan_ui_key_value))
@@ -3471,6 +3569,7 @@ class SettingsFrame(wx.Frame):
             'quick_start': str(self.quick_start_cb.GetValue()),
             'confirm_exit': str(self.confirm_exit_cb.GetValue()),
             'developer_tools': str(self.developer_tools_cb.GetValue()),
+            'speak_usage_tips': str(self.usage_tips_cb.GetValue()),
             'startup_mode': startup_mode,
             'language': selected_language,
             'launcher': launcher_folder,
@@ -3480,6 +3579,11 @@ class SettingsFrame(wx.Frame):
             'gamepad_detection': gamepad_detection_value,
             'titan_ui_key': self._titan_ui_key_value or 'grave',
         }
+
+        # Its own section, beside the other Titan-Net keys: only this one
+        # key is written, so nothing else kept under 'titannet' is lost.
+        self.settings.setdefault('titannet', {})['packages_folder'] = (
+            self.packages_folder_ctrl.GetValue().strip())
 
         if 'interface' not in self.settings:
             self.settings['interface'] = {}

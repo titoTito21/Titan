@@ -1609,7 +1609,7 @@ class MessengerWebViewFrame(wx.Frame):
                 duration_text = f"{minutes} minut {seconds} sekund" if minutes > 0 else f"{seconds} sekund"
                 speaker.speak(_("Połączenie zakończone. Czas trwania: {}").format(duration_text))
             else:
-                speaker.speak(_("Połączenie zakończone"))
+                speaker.speak(_("Call ended"))
         
         # Disable call status menu
         if hasattr(self, 'call_status_item'):
@@ -1623,7 +1623,7 @@ class MessengerWebViewFrame(wx.Frame):
         self.call_type = None
         
         # Update status bar
-        self.SetStatusText(_("Połączenie zakończone"))
+        self.SetStatusText(_("Call ended"))
         
         # Notify callbacks
         self._notify_call_event('call_ended', {

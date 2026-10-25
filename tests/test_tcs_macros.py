@@ -765,7 +765,12 @@ class OnlyWhatAModelDoesNeedsTheAI(unittest.TestCase):
     def test_only_the_vision_actions_need_the_ai(self):
         gated = sorted(name for name, spec in self._actions().items()
                        if spec.needs_ai)
-        self.assertEqual(['ocr.ask', 'ocr.read_window'], gated)
+        # A subagent is a whole AI run, so it needs the AI as much as a
+        # reading does.
+        self.assertEqual(['ocr.ask', 'ocr.read_window',
+                          'subagents.run_subagent', 'subagents.run_subagents',
+                          'subagents.start_subagent'],
+                         gated)
 
     def test_pressing_what_ocr_already_read_does_not(self):
         actions = self._actions()

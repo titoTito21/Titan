@@ -1,0 +1,2 @@
+2026-10-22 20:28:14.040 drive_shell.py[47] <module> -> Find Control Timeout(10s): {Name: 'Hello from Lua', ControlType: TreeItemControl}
+2026-10-22 20:29:30.783 drive_shell.py[47] <module> -> Find Control Timeout(10s): {Name: 'Hello from Lua', ControlType: TreeItemControl}

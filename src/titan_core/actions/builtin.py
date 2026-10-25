@@ -58,6 +58,11 @@ _TOOL_PROVIDERS = (
     ('memory', "AI memory",
      "What the AI remembers between conversations.",
      'src.ai.memory', 'get_memory_tools', 'ai_'),
+    ('subagents', "AI subagents",
+     "Handing a task to a subagent - a separate AI run with its own "
+     "instructions and tools - one at a time or several at once, and "
+     "adding the user's own kinds of subagent.",
+     'src.ai.subagents', 'get_subagent_tools', 'ai_'),
     # Driving the computer itself. Without these the Action API could reach
     # every add-on and every Titan subsystem but could not press a key, so
     # "automate anything" stopped at the edge of Titan - and a macro had to go
@@ -95,6 +100,9 @@ BUILTIN_IDS = (tuple(entry[0] for entry in _TOOL_PROVIDERS)
 _AI_ACTIONS = frozenset({
     'ocr.read_window',      # takes a picture of the window and asks a model
     'ocr.ask',              # the same, with a question about it
+    'subagents.run_subagent',    # a whole AI run
+    'subagents.run_subagents',
+    'subagents.start_subagent',
 })
 
 # The actions that must NOT be run on Titan's GUI thread. Every in-process
@@ -114,6 +122,10 @@ _AI_ACTIONS = frozenset({
 _NO_GUI_ACTIONS = frozenset({
     'ocr.read_window',
     'ocr.ask',
+    # A subagent is minutes of requests; on the GUI thread that is minutes of
+    # a Titan answering nothing - and its confirmation could never be shown.
+    'subagents.run_subagent',
+    'subagents.run_subagents',
 })
 
 

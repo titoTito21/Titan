@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,339 +17,490 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ai/ai_creation_kit.py:84
+#: src/ai/ai_creation_kit.py:94
 msgid "Creation kit"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:101
+#: src/ai/ai_creation_kit.py:111
 msgid "Application"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:102
+#: src/ai/ai_creation_kit.py:112
 msgid "Game"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:103
+#: src/ai/ai_creation_kit.py:113
 msgid "Component"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:104
+#: src/ai/ai_creation_kit.py:114
 msgid "Launcher"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:105
+#: src/ai/ai_creation_kit.py:115
 msgid "IM Module"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:106
+#: src/ai/ai_creation_kit.py:116
 msgid "Gamepad Mode"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:107
+#: src/ai/ai_creation_kit.py:117
 msgid "TTS Engine"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:108
+#: src/ai/ai_creation_kit.py:118
 msgid "Widget"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:109
+#: src/ai/ai_creation_kit.py:119
 msgid "Statusbar Applet"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:111
+#: src/ai/ai_creation_kit.py:120
+msgid "Shell Add-on"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:121
+msgid "Settings Interface"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:123
 msgid "Language"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:696
+#: src/ai/ai_creation_kit.py:729 src/ai/ai_creation_kit.py:1559
+msgid "No"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1211
 msgid "The model returned no files."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:698
+#: src/ai/ai_creation_kit.py:1213
 msgid "The generated files are empty."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:702
+#: src/ai/ai_creation_kit.py:1217
 #, python-brace-format
 msgid "The manifest file {name} is missing."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:806
+#: src/ai/ai_creation_kit.py:1339
 #, python-brace-format
 msgid "Answer questions about your {kind}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:816
+#: src/ai/ai_creation_kit.py:1351
 msgid ""
-"The AI has a few questions. Answer what you can; leave anything blank to "
+"The AI has some questions. Answer what you can; leave anything blank to "
 "let the AI decide."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:831
+#: src/ai/ai_creation_kit.py:1376
 msgid "Use these answers"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:834
+#: src/ai/ai_creation_kit.py:1379
 msgid "Cancel"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:896
+#: src/ai/ai_creation_kit.py:1487
+msgid "Browse..."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1488
+#, python-brace-format
+msgid "Browse for {what}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1509
+msgid "Choose a folder"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1511
+msgid "Choose a file"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1558
 msgid "Yes"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:896
-msgid "No"
+#: src/ai/ai_creation_kit.py:1586
+#, python-brace-format
+msgid ""
+"These still need an answer:\n"
+"\n"
+"{questions}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:915
+#: src/ai/ai_creation_kit.py:1588
+msgid "Answer needed"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1609
 #, python-brace-format
 msgid "Create {kind} with AI"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:928
+#: src/ai/ai_creation_kit.py:1630
 #, python-brace-format
 msgid "Describe the {kind} you want:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:931
+#: src/ai/ai_creation_kit.py:1633
 msgid "Description"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:936 src/ai/ai_creation_kit.py:937
+#: src/ai/ai_creation_kit.py:1638 src/ai/ai_creation_kit.py:1639
 msgid "Search the web for reference"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:939 src/ai/ai_creation_kit.py:941
+#: src/ai/ai_creation_kit.py:1641 src/ai/ai_creation_kit.py:1643
 msgid "Auto-fix generated code"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:943 src/ai/ai_creation_kit.py:945
+#: src/ai/ai_creation_kit.py:1645 src/ai/ai_creation_kit.py:1647
 msgid "Let the AI ask me questions"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:946
+#: src/ai/ai_creation_kit.py:1648
 msgid ""
 "While generating, the AI may pause and ask you a few questions in a "
 "guided wizard."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:952 src/ai/ai_creation_kit.py:1135
+#: src/ai/ai_creation_kit.py:1654 src/ai/ai_creation_kit.py:1848
+#: src/ai/ai_creation_kit.py:2192
 msgid "Plan"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:955
+#: src/ai/ai_creation_kit.py:1657
 msgid "Generate"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:967
+#: src/ai/ai_creation_kit.py:1669
 msgid "Progress"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:973
+#: src/ai/ai_creation_kit.py:1675
 msgid "Live output:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:978
+#: src/ai/ai_creation_kit.py:1680
 msgid "Live output"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:982
+#: src/ai/ai_creation_kit.py:1684
 msgid "Generated files:"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:986
+#: src/ai/ai_creation_kit.py:1688
 msgid "Generated files"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:992
+#: src/ai/ai_creation_kit.py:1694
 msgid "File content"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:997
+#: src/ai/ai_creation_kit.py:1699
 msgid "Save..."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:70 src/ai/ai_creation_kit.py:1001
-#: src/ai/assistant/assistant_gui.py:98 src/ai/ocr/mimic.py:137
+#: src/ai/ai_creation_kit.py:1703 src/ai/ai_creation_kit.py:2110
+#: src/ai/ai_creation_kit.py:2122
+msgid "Save project"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1705
+msgid ""
+"Keep this session - the description, the questions and answers, the "
+"conversation and the files - so you can carry on later."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:1709
+msgid "Open project..."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:79 src/ai/ai_creation_kit.py:1712
+#: src/ai/assistant/assistant_gui.py:107 src/ai/ocr/mimic.py:137
+#: src/ai/subagents_gui.py:108
 msgid "Close"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1012
+#: src/ai/ai_creation_kit.py:1723
 msgid "Please describe what to create."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1012
+#: src/ai/ai_creation_kit.py:1723
 msgid "Error"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:185 src/ai/ai_creation_kit.py:1016
+#: src/ai/ai_agent_gui.py:180 src/ai/ai_creation_kit.py:1727
 msgid ""
 "AI features are not configured. Enable them and set a method in Settings,"
 " AI features."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:187 src/ai/ai_creation_kit.py:1018
-#: src/ai/assistant/assistant_gui.py:192 src/ai/assistant/assistant_gui.py:249
+#: src/ai/ai_agent_gui.py:182 src/ai/ai_creation_kit.py:1729
+#: src/ai/assistant/assistant_gui.py:194 src/ai/assistant/assistant_gui.py:251
 msgid "AI not configured"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:148 src/ai/ai_agent_gui.py:190
-#: src/ai/ai_creation_kit.py:1024 src/ai/assistant/assistant_gui.py:120
-#: src/ai/assistant/assistant_gui.py:171
+#: src/ai/ai_agent_gui.py:161 src/ai/ai_agent_gui.py:185
+#: src/ai/ai_creation_kit.py:1737 src/ai/assistant/assistant_gui.py:129
+#: src/ai/assistant/assistant_gui.py:173
 msgid "You"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1048
+#: src/ai/ai_creation_kit.py:1761
 msgid "Searching the web..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1049
+#: src/ai/ai_creation_kit.py:1762
 msgid "Searching the web"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1056
+#: src/ai/ai_creation_kit.py:1769
 msgid "(no web results)"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1059
+#: src/ai/ai_creation_kit.py:1772
 msgid "Web results"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1074
+#: src/ai/ai_creation_kit.py:1787
 msgid "Waiting for your answers..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1075
+#: src/ai/ai_creation_kit.py:1788
 msgid "The AI has some questions"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1096
+#: src/ai/ai_creation_kit.py:1809
 msgid "Your answers"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:231 src/ai/ai_creation_kit.py:1117
-#: src/ai/assistant/assistant_gui.py:227 src/ai/assistant/assistant_gui.py:228
-#: src/ai/assistant/headless.py:179
+#: src/ai/ai_agent_gui.py:226 src/ai/ai_creation_kit.py:1830
+#: src/ai/assistant/assistant_gui.py:229 src/ai/assistant/assistant_gui.py:230
+#: src/ai/assistant/headless.py:163
 msgid "Cancelled."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1118
+#: src/ai/ai_creation_kit.py:1831
 msgid "Cancelled"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1126
+#: src/ai/ai_creation_kit.py:1839
 msgid "Planning..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1127
+#: src/ai/ai_creation_kit.py:1840
 msgid "Planning"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1150
+#: src/ai/ai_creation_kit.py:1863
 msgid "Planning failed."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1152
+#: src/ai/ai_creation_kit.py:1865
 msgid "Planning failed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1153
+#: src/ai/ai_creation_kit.py:1866
 msgid "Planning error"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1159
+#: src/ai/ai_creation_kit.py:1873
 msgid "Plan ready. Answer any questions above, then Generate."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1162
+#: src/ai/ai_creation_kit.py:1876
 msgid "Plan ready"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1170
+#: src/ai/ai_creation_kit.py:1884
 msgid "Generating..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1171
+#: src/ai/ai_creation_kit.py:1885
 #, python-brace-format
 msgid "Generating {kind}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1216 src/ai/ai_creation_kit.py:1272
+#: src/ai/ai_creation_kit.py:1934 src/ai/ai_creation_kit.py:1990
 msgid "Generating"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1227
+#: src/ai/ai_creation_kit.py:1945
 #, python-brace-format
 msgid "Auto-fixing ({n})..."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1228
+#: src/ai/ai_creation_kit.py:1946
 msgid "Fixing code"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1230
+#: src/ai/ai_creation_kit.py:1948
 #, python-brace-format
 msgid "Auto-fix {n}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1240
+#: src/ai/ai_creation_kit.py:1958
 msgid "auto-fixed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1241
+#: src/ai/ai_creation_kit.py:1959
 msgid "auto-fix incomplete"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1263 src/ai/ai_creation_kit.py:1273
+#: src/ai/ai_creation_kit.py:1981 src/ai/ai_creation_kit.py:1991
 #, python-brace-format
 msgid "Creating: {file}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1264
+#: src/ai/ai_creation_kit.py:1982
 #, python-brace-format
 msgid "Creating {file}"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1274
+#: src/ai/ai_creation_kit.py:1992
 #, python-brace-format
 msgid "{stage}... {pct}% ({n} chars, {s}s)"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1289
+#: src/ai/ai_creation_kit.py:2007
 msgid "Generation failed."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1291
+#: src/ai/ai_creation_kit.py:2009
 msgid "Generation failed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1292
+#: src/ai/ai_creation_kit.py:2010
 msgid "Generation error"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1306
+#: src/ai/ai_creation_kit.py:2024
 msgid "You can refine your description and generate again."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1307
+#: src/ai/ai_creation_kit.py:2025
 msgid "Incomplete result"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1315
+#: src/ai/ai_creation_kit.py:2033
 #, python-brace-format
 msgid "Done: {n} file(s)."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1316
+#: src/ai/ai_creation_kit.py:2034
 msgid "Review below, then Save."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1318
+#: src/ai/ai_creation_kit.py:2036
 #, python-brace-format
 msgid "Done, {n} files generated"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1348
+#: src/ai/ai_creation_kit.py:2084
+msgid "Could not save the project"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2088 src/ai/ai_creation_kit.py:2195
+#, python-brace-format
+msgid "Create {kind} with AI - {project}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2091
+msgid "Project saved."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2094 src/ai/ai_creation_kit.py:2096
+msgid "Project saved"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2095 src/ai/ai_creation_kit.py:2257
+#, python-brace-format
+msgid ""
+"Saved to:\n"
+"{path}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2103
+msgid "There is nothing to save yet."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2103 src/ai/ai_creation_kit.py:2164
+#: src/ai/ai_creation_kit.py:2183
+msgid "Project"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2109
+msgid "Name for this project:"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2121
+#, python-brace-format
+msgid "A project called {name} already exists. Replace it?"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2132
+#, python-brace-format
+msgid ""
+"There are no saved {kind} projects yet. Press Save project to keep this "
+"one."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2135 src/ai/ai_creation_kit.py:2139
+#: src/ai/ai_creation_kit.py:2146
+msgid "Open project"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2138
+msgid "Opening a project replaces what is in this window. Continue?"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2142
+#, python-brace-format
+msgid "{name} - {files} file(s), last changed {when}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2145 src/ai/ai_creation_kit.py:2306
+msgid "Which project?"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2162
+#, python-brace-format
+msgid ""
+"That project could not be read.\n"
+"\n"
+"It should be in:\n"
+"{path}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2184
+#, python-brace-format
+msgid ""
+"{name}: {files} file(s), {turns} turn(s) so far.\n"
+"Describe what to change and press Generate - the AI still has the whole "
+"conversation."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2190
+msgid "Asked for"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2197
+msgid "Project opened."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2198
+#, python-brace-format
+msgid "Project {name} opened"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2210
 #, python-brace-format
 msgid ""
 "Package into a single {ext} file?\n"
@@ -358,33 +509,47 @@ msgid ""
 "No = a plain folder in your data directory."
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1352
+#: src/ai/ai_creation_kit.py:2214
 msgid "Package add-on?"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1366
+#: src/ai/ai_creation_kit.py:2228
 msgid "Save failed"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1369 src/ai/ai_creation_kit.py:1379
+#: src/ai/ai_creation_kit.py:2231 src/ai/ai_creation_kit.py:2257
 msgid "Saved"
 msgstr ""
 
-#: src/ai/ai_creation_kit.py:1379
-#, python-brace-format
-msgid ""
-"Saved to:\n"
-"{path}"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:277 src/ai/ai_creation_kit.py:1387
-#: src/ai/assistant/assistant_gui.py:313
+#: src/ai/ai_agent_gui.py:272 src/ai/ai_creation_kit.py:2269
+#: src/ai/ai_creation_kit.py:2287 src/ai/assistant/assistant_gui.py:315
 msgid "Enable AI components in Settings, AI features first."
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:278 src/ai/ai_creation_kit.py:1388
-#: src/ai/assistant/assistant_gui.py:314
+#: src/ai/ai_agent_gui.py:273 src/ai/ai_creation_kit.py:2270
+#: src/ai/ai_creation_kit.py:2288 src/ai/assistant/assistant_gui.py:316
 msgid "AI features disabled"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2294
+msgid ""
+"No projects yet. Create an add-on with AI and press Save project to keep "
+"the session."
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2296 src/ai/ai_creation_kit.py:2307
+#: src/ai/ai_creation_kit.py:2317
+msgid "AI projects"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2301
+#, python-brace-format
+msgid "{name} ({kind}) - {files} file(s), last changed {when}"
+msgstr ""
+
+#: src/ai/ai_creation_kit.py:2315
+#, python-brace-format
+msgid "This project was made for {kind}, which this Titan does not have."
 msgstr ""
 
 #: src/ai/agent_tools.py:38 src/ai/agent_tools.py:40
@@ -455,435 +620,314 @@ msgstr ""
 msgid "Checking what is on screen and what can be clicked"
 msgstr ""
 
-#: src/ai/agent_tools.py:75
+#: src/ai/agent_tools.py:67
+msgid "Checking which subagents there are"
+msgstr ""
+
+#: src/ai/agent_tools.py:68
+msgid "Checking on the background subagents"
+msgstr ""
+
+#: src/ai/agent_tools.py:77
 #, python-brace-format
 msgid "Listing files in {path}"
 msgstr ""
 
-#: src/ai/agent_tools.py:76
+#: src/ai/agent_tools.py:78
 #, python-brace-format
 msgid "Reading the file {path}"
 msgstr ""
 
-#: src/ai/agent_tools.py:77
-msgid "Typing text"
-msgstr ""
-
-#: src/ai/agent_tools.py:78
-#, python-brace-format
-msgid "Pressing {keys}"
-msgstr ""
-
 #: src/ai/agent_tools.py:79
-#, python-brace-format
-msgid "Clicking at {x}, {y}"
+msgid "Typing text"
 msgstr ""
 
 #: src/ai/agent_tools.py:80
 #, python-brace-format
-msgid "Moving the mouse to {x}, {y}"
+msgid "Pressing {keys}"
 msgstr ""
 
 #: src/ai/agent_tools.py:81
 #, python-brace-format
-msgid "Switching to the window {title}"
+msgid "Clicking at {x}, {y}"
 msgstr ""
 
 #: src/ai/agent_tools.py:82
 #, python-brace-format
-msgid "Launching {path}"
+msgid "Moving the mouse to {x}, {y}"
 msgstr ""
 
 #: src/ai/agent_tools.py:83
 #, python-brace-format
-msgid "Running a system command: {command}"
+msgid "Switching to the window {title}"
 msgstr ""
 
 #: src/ai/agent_tools.py:84
 #, python-brace-format
-msgid "Writing the file {path}"
+msgid "Launching {path}"
 msgstr ""
 
 #: src/ai/agent_tools.py:85
 #, python-brace-format
-msgid "Deleting {path}"
+msgid "Running a system command: {command}"
 msgstr ""
 
 #: src/ai/agent_tools.py:86
 #, python-brace-format
-msgid "Searching the web for {query}"
-msgstr ""
-
-#: src/ai/agent_tools.py:87
-#, python-brace-format
-msgid "Looking up the definition of {term}"
+msgid "Handing a task to the subagent {name}: {task}"
 msgstr ""
 
 #: src/ai/agent_tools.py:88
-#, python-brace-format
-msgid "Checking the weather for {loc}"
+msgid "Starting several subagents at once"
 msgstr ""
 
 #: src/ai/agent_tools.py:89
-msgid "Checking the weather"
+#, python-brace-format
+msgid "Starting the subagent {name} in the background: {task}"
 msgstr ""
 
-#: src/ai/agent_tools.py:90 src/ai/agent_tools.py:105
+#: src/ai/agent_tools.py:91
 #, python-brace-format
-msgid "Launching {name}"
+msgid "Saving the subagent {name}"
 msgstr ""
 
 #: src/ai/agent_tools.py:92
 #, python-brace-format
-msgid "Playing {q} on {src}"
+msgid "Deleting the subagent {name}"
+msgstr ""
+
+#: src/ai/agent_tools.py:93
+#, python-brace-format
+msgid "Writing the file {path}"
 msgstr ""
 
 #: src/ai/agent_tools.py:94
 #, python-brace-format
-msgid "Playing {q}"
+msgid "Deleting {path}"
 msgstr ""
 
 #: src/ai/agent_tools.py:95
-msgid "Playing music"
+#, python-brace-format
+msgid "Searching the web for {query}"
 msgstr ""
 
 #: src/ai/agent_tools.py:96
 #, python-brace-format
-msgid "Reading the setting {name}"
+msgid "Looking up the definition of {term}"
+msgstr ""
+
+#: src/ai/agent_tools.py:97
+#, python-brace-format
+msgid "Checking the weather for {loc}"
 msgstr ""
 
 #: src/ai/agent_tools.py:98
-#, python-brace-format
-msgid "Changing the setting {name} to {value}"
+msgid "Checking the weather"
 msgstr ""
 
-#: src/ai/agent_tools.py:100
+#: src/ai/agent_tools.py:99 src/ai/agent_tools.py:114
 #, python-brace-format
-msgid "Reading the {section} settings"
+msgid "Launching {name}"
 msgstr ""
 
 #: src/ai/agent_tools.py:101
 #, python-brace-format
-msgid "Running the component action {action}"
+msgid "Playing {q} on {src}"
 msgstr ""
 
 #: src/ai/agent_tools.py:103
 #, python-brace-format
-msgid "Enabling the component {name}"
+msgid "Playing {q}"
 msgstr ""
 
 #: src/ai/agent_tools.py:104
-#, python-brace-format
-msgid "Disabling the component {name}"
+msgid "Playing music"
 msgstr ""
 
-#: src/ai/agent_tools.py:106
+#: src/ai/agent_tools.py:105
 #, python-brace-format
-msgid "Checking what {addon} can do"
+msgid "Reading the setting {name}"
 msgstr ""
 
 #: src/ai/agent_tools.py:107
 #, python-brace-format
-msgid "Running {action} in {addon}"
+msgid "Changing the setting {name} to {value}"
 msgstr ""
 
 #: src/ai/agent_tools.py:109
 #, python-brace-format
-msgid "Logging in to {service} as {user}"
+msgid "Reading the {section} settings"
 msgstr ""
 
-#: src/ai/agent_tools.py:111
+#: src/ai/agent_tools.py:110
 #, python-brace-format
-msgid "Listing {service} contacts"
+msgid "Running the component action {action}"
 msgstr ""
 
 #: src/ai/agent_tools.py:112
 #, python-brace-format
-msgid "Sending a message to {recipient} on {service}"
+msgid "Enabling the component {name}"
 msgstr ""
 
-#: src/ai/agent_tools.py:114
+#: src/ai/agent_tools.py:113
 #, python-brace-format
-msgid "Looking for {what} on screen"
+msgid "Disabling the component {name}"
 msgstr ""
 
 #: src/ai/agent_tools.py:115
 #, python-brace-format
-msgid "Clicking {name}"
+msgid "Checking what {addon} can do"
 msgstr ""
 
-#: src/ai/agent_tools.py:117
+#: src/ai/agent_tools.py:116
 #, python-brace-format
-msgid "Scrolling {direction} in {area}"
+msgid "Running {action} in {addon}"
+msgstr ""
+
+#: src/ai/agent_tools.py:118
+#, python-brace-format
+msgid "Logging in to {service} as {user}"
 msgstr ""
 
 #: src/ai/agent_tools.py:120
 #, python-brace-format
-msgid "Scrolling {direction}"
+msgid "Listing {service} contacts"
+msgstr ""
+
+#: src/ai/agent_tools.py:121
+#, python-brace-format
+msgid "Sending a message to {recipient} on {service}"
 msgstr ""
 
 #: src/ai/agent_tools.py:123
 #, python-brace-format
-msgid "Scrolling {area} all the way to the end"
+msgid "Looking for {what} on screen"
 msgstr ""
 
 #: src/ai/agent_tools.py:124
-msgid "Scrolling all the way to the end"
+#, python-brace-format
+msgid "Clicking {name}"
 msgstr ""
 
-#: src/ai/agent_tools.py:125
+#: src/ai/agent_tools.py:126
 #, python-brace-format
-msgid "Dragging from {x}, {y} to {tx}, {ty}"
-msgstr ""
-
-#: src/ai/agent_tools.py:127
-#, python-brace-format
-msgid "Asking you: {question}"
-msgstr ""
-
-#: src/ai/agent_tools.py:128
-#, python-brace-format
-msgid "Opening the web page {url}"
+msgid "Scrolling {direction} in {area}"
 msgstr ""
 
 #: src/ai/agent_tools.py:129
-msgid "Reading the web page"
+#, python-brace-format
+msgid "Scrolling {direction}"
 msgstr ""
 
-#: src/ai/agent_tools.py:130
+#: src/ai/agent_tools.py:132
 #, python-brace-format
-msgid "Filling in the field {field}"
-msgstr ""
-
-#: src/ai/agent_tools.py:131
-#, python-brace-format
-msgid "Choosing {option} for {field}"
+msgid "Scrolling {area} all the way to the end"
 msgstr ""
 
 #: src/ai/agent_tools.py:133
-#, python-brace-format
-msgid "Ticking the box {field}"
+msgid "Scrolling all the way to the end"
 msgstr ""
 
 #: src/ai/agent_tools.py:134
 #, python-brace-format
-msgid "Clicking {target} on the page"
-msgstr ""
-
-#: src/ai/agent_tools.py:135
-msgid "Submitting the form"
+msgid "Dragging from {x}, {y} to {tx}, {ty}"
 msgstr ""
 
 #: src/ai/agent_tools.py:136
-msgid "Going back to the previous page"
+#, python-brace-format
+msgid "Asking you: {question}"
 msgstr ""
 
 #: src/ai/agent_tools.py:137
+#, python-brace-format
+msgid "Opening the web page {url}"
+msgstr ""
+
+#: src/ai/agent_tools.py:138
+msgid "Reading the web page"
+msgstr ""
+
+#: src/ai/agent_tools.py:139
+#, python-brace-format
+msgid "Filling in the field {field}"
+msgstr ""
+
+#: src/ai/agent_tools.py:140
+#, python-brace-format
+msgid "Choosing {option} for {field}"
+msgstr ""
+
+#: src/ai/agent_tools.py:142
+#, python-brace-format
+msgid "Ticking the box {field}"
+msgstr ""
+
+#: src/ai/agent_tools.py:143
+#, python-brace-format
+msgid "Clicking {target} on the page"
+msgstr ""
+
+#: src/ai/agent_tools.py:144
+msgid "Submitting the form"
+msgstr ""
+
+#: src/ai/agent_tools.py:145
+msgid "Going back to the previous page"
+msgstr ""
+
+#: src/ai/agent_tools.py:146
 msgid "Closing the browser"
 msgstr ""
 
-#: src/ai/titan_tools.py:1344
+#: src/ai/titan_tools.py:1345
 msgid "Indexing media library"
 msgstr ""
 
-#: src/ai/titan_tools.py:1345
+#: src/ai/titan_tools.py:1346
 msgid "Indexing media library, please wait..."
 msgstr ""
 
-#: src/ai/titan_tools.py:1346
-msgid "Hide"
-msgstr ""
-
 #: src/ai/titan_tools.py:1347
-#, python-brace-format
-msgid "Indexing media library... {n} files"
+msgid "Hide"
 msgstr ""
 
 #: src/ai/titan_tools.py:1348
 #, python-brace-format
-msgid "Media library indexed: {n} files."
+msgid "Indexing media library... {n} files"
 msgstr ""
 
 #: src/ai/titan_tools.py:1349
 #, python-brace-format
+msgid "Media library indexed: {n} files."
+msgstr ""
+
+#: src/ai/titan_tools.py:1350
+#, python-brace-format
 msgid "Folder: {name}"
 msgstr ""
 
-#: src/ai/action_tools.py:325
+#: src/ai/action_tools.py:451
 #, python-brace-format
 msgid "{action} in {addon}"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:35
-msgid "Titan AI Agent"
+#: src/ai/confirmation.py:167
+msgid "&Allow"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:42 src/ai/assistant/assistant_gui.py:67
-msgid "Conversation:"
+#: src/ai/confirmation.py:169
+msgid "Allow for this &session"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:46 src/ai/assistant/assistant_gui.py:71
-msgid "Conversation"
+#: src/ai/confirmation.py:170
+msgid "&Do not allow"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:49 src/ai/assistant/assistant_gui.py:49
-#: src/ai/assistant/assistant_gui.py:74 src/ai/assistant/assistant_gui.py:236
-#: src/ai/assistant/assistant_gui.py:289 src/ai/assistant/headless.py:62
-msgid "Ready."
+#: src/ai/confirmation.py:278
+msgid "Confirm action"
 msgstr ""
 
-#: src/ai/ai_agent_gui.py:52
-msgid "Your instruction:"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:59
-msgid "Your instruction (Enter for a new line, Shift+Enter to send)"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:63
-msgid "Send (Shift+Enter)"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:66 src/ai/assistant/assistant_gui.py:94
-msgid "Stop (Shift+Escape)"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:88 src/ai/ai_agent_gui.py:89
-#: src/ai/ai_agent_gui.py:132
-msgid "Agent"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:101
-msgid "Action"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:113
-msgid "Result"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:135
-msgid "The agent is asking"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:164
-#, python-brace-format
-msgid ""
-"The agent wants to run this action:\n"
-"\n"
-"{action}\n"
-"\n"
-"{desc}\n"
-"\n"
-"Allow it?"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:166 src/ai/assistant/assistant_gui.py:135
-#: src/ai/assistant/headless.py:157
-#, python-brace-format
-msgid "Confirm action: {action}"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:167
-msgid "Confirm agent action"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:196
-msgid "Working..."
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:197
-msgid "Agent working"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:232 src/ai/ai_agent_gui.py:236
-#: src/ai/assistant/assistant_gui.py:228 src/ai/assistant/assistant_gui.py:232
-#: src/ai/assistant/assistant_gui.py:256 src/ai/assistant/assistant_gui.py:287
-msgid "System"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:232
-msgid "Agent cancelled."
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:235 src/ai/assistant/assistant_gui.py:231
-msgid "Error."
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:236 src/ai/assistant/assistant_gui.py:232
-#, python-brace-format
-msgid "Error: {error}"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:237
-msgid "Agent error"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:240
-msgid "Done."
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:241
-msgid "Agent finished"
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:248 src/ai/assistant/assistant_gui.py:291
-msgid "Cancelling..."
-msgstr ""
-
-#: src/ai/ai_agent_gui.py:249
-msgid "Cancelling agent"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:43 src/ai/assistant/headless.py:57
-msgid "Listening..."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:44 src/ai/assistant/headless.py:58
-msgid "I did not hear anything."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:45 src/ai/assistant/headless.py:59
-msgid "Transcribing..."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:46 src/ai/assistant/headless.py:60
-msgid "Thinking..."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:47 src/ai/assistant/headless.py:61
-msgid "Speaking..."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:48
-msgid "Live conversation active."
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:58
-#, python-brace-format
-msgid "Titan Assistant - {name}"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:77
-msgid "Type instead of speaking (optional):"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:80
-msgid "Type instead of speaking"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:85
-msgid "Talk"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:88
-msgid "Send text"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:91 src/ai/assistant/assistant_gui.py:275
-msgid "Start live mode"
-msgstr ""
-
-#: src/ai/assistant/assistant_gui.py:138 src/ai/assistant/headless.py:160
+#: src/ai/confirmation.py:279
 #, python-brace-format
 msgid ""
 "The assistant wants to run:\n"
@@ -895,50 +939,346 @@ msgid ""
 "Allow it?"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:140 src/ai/assistant/headless.py:163
-msgid "Confirm action"
+#: src/ai/confirmation.py:282
+msgid "Confirm subagent action"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:159
+#: src/ai/confirmation.py:283
+#, python-brace-format
+msgid ""
+"A subagent wants to run:\n"
+"\n"
+"{action}\n"
+"\n"
+"{desc}\n"
+"\n"
+"Allow it?"
+msgstr ""
+
+#: src/ai/confirmation.py:286
+msgid "Confirm agent action"
+msgstr ""
+
+#: src/ai/confirmation.py:287
+#, python-brace-format
+msgid ""
+"The agent wants to run this action:\n"
+"\n"
+"{action}\n"
+"\n"
+"{desc}\n"
+"\n"
+"Allow it?"
+msgstr ""
+
+#: src/ai/confirmation.py:290
+#, python-brace-format
+msgid "Confirm action: {action}"
+msgstr ""
+
+#: src/ai/subagents.py:107
+msgid "A helper with every tool Titan has."
+msgstr ""
+
+#: src/ai/subagents.py:108
+msgid ""
+"Reads and operates what is on the screen, including windows that expose "
+"nothing (games, installers) through AI OCR."
+msgstr ""
+
+#: src/ai/subagents.py:111
+msgid "Looks things up on the web and in web pages."
+msgstr ""
+
+#: src/ai/subagents.py:112
+msgid "Works inside Titan: its settings, add-ons and services."
+msgstr ""
+
+#: src/ai/subagents.py:432
+#, python-brace-format
+msgid "Subagent {name} failed"
+msgstr ""
+
+#: src/ai/subagents.py:434
+#, python-brace-format
+msgid "Subagent {name} finished"
+msgstr ""
+
+#: src/ai/subagents_gui.py:23 src/ai/subagents_gui.py:72
+#: src/ai/subagents_gui.py:77
+msgid "Subagent"
+msgstr ""
+
+#: src/ai/subagents_gui.py:35
+msgid "&Name:"
+msgstr ""
+
+#: src/ai/subagents_gui.py:38
+msgid "&What it is for:"
+msgstr ""
+
+#: src/ai/subagents_gui.py:40
+msgid "&Instructions:"
+msgstr ""
+
+#: src/ai/subagents_gui.py:44
+msgid "&Tools it may use:"
+msgstr ""
+
+#: src/ai/subagents_gui.py:50
+msgid "Tools it may use"
+msgstr ""
+
+#: src/ai/subagents_gui.py:57
+msgid "&Steps at most:"
+msgstr ""
+
+#: src/ai/subagents_gui.py:62
+msgid "Steps at most"
+msgstr ""
+
+#: src/ai/subagents_gui.py:72
+msgid "A subagent needs a name."
+msgstr ""
+
+#: src/ai/subagents_gui.py:76
+msgid "Say how the subagent should work."
+msgstr ""
+
+#: src/ai/subagents_gui.py:93 src/ai/subagents_gui.py:102
+#: src/ai/subagents_gui.py:154 src/ai/subagents_gui.py:173
+#: src/ai/subagents_gui.py:176
+msgid "Subagents"
+msgstr ""
+
+#: src/ai/subagents_gui.py:97
+msgid ""
+"A subagent is a separate AI run the agent and the assistants can hand "
+"part of a task to. Built-in ones cannot be deleted; a subagent of your "
+"own with the same name replaces one."
+msgstr ""
+
+#: src/ai/subagents_gui.py:105
+msgid "&Add..."
+msgstr ""
+
+#: src/ai/subagents_gui.py:106
+msgid "&Change..."
+msgstr ""
+
+#: src/ai/subagents_gui.py:107
+msgid "&Delete"
+msgstr ""
+
+#: src/ai/subagents_gui.py:132
+msgid "built in"
+msgstr ""
+
+#: src/ai/subagents_gui.py:132
+msgid "your own"
+msgstr ""
+
+#: src/ai/subagents_gui.py:153
+#, python-brace-format
+msgid "The subagent could not be saved: {error}"
+msgstr ""
+
+#: src/ai/subagents_gui.py:172
+msgid "A built-in subagent cannot be deleted."
+msgstr ""
+
+#: src/ai/subagents_gui.py:175
+#, python-brace-format
+msgid "Delete the subagent {name}?"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:44
+msgid "Titan AI Agent"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:51 src/ai/assistant/assistant_gui.py:76
+msgid "Conversation:"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:55 src/ai/assistant/assistant_gui.py:80
+msgid "Conversation"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:58 src/ai/assistant/assistant_gui.py:58
+#: src/ai/assistant/assistant_gui.py:83 src/ai/assistant/assistant_gui.py:238
+#: src/ai/assistant/assistant_gui.py:291 src/ai/assistant/headless.py:62
+msgid "Ready."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:61
+msgid "Your instruction:"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:68
+msgid "Your instruction (Enter for a new line, Shift+Enter to send)"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:72
+msgid "Send (Shift+Enter)"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:75 src/ai/assistant/assistant_gui.py:103
+msgid "Stop (Shift+Escape)"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:97 src/ai/ai_agent_gui.py:98
+#: src/ai/ai_agent_gui.py:142
+msgid "Agent"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:110
+msgid "Action"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:122
+msgid "Result"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:145
+msgid "The agent is asking"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:191
+msgid "Working..."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:192
+msgid "Agent working"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:227 src/ai/ai_agent_gui.py:231
+#: src/ai/assistant/assistant_gui.py:230 src/ai/assistant/assistant_gui.py:234
+#: src/ai/assistant/assistant_gui.py:258 src/ai/assistant/assistant_gui.py:289
+msgid "System"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:227
+msgid "Agent cancelled."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:230 src/ai/assistant/assistant_gui.py:233
+msgid "Error."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:231 src/ai/assistant/assistant_gui.py:234
+#, python-brace-format
+msgid "Error: {error}"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:232
+msgid "Agent error"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:235
+msgid "Done."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:236
+msgid "Agent finished"
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:243 src/ai/assistant/assistant_gui.py:293
+msgid "Cancelling..."
+msgstr ""
+
+#: src/ai/ai_agent_gui.py:244
+msgid "Cancelling agent"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:52 src/ai/assistant/headless.py:57
+msgid "Listening..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:53 src/ai/assistant/headless.py:58
+msgid "I did not hear anything."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:54 src/ai/assistant/headless.py:59
+msgid "Transcribing..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:55 src/ai/assistant/headless.py:60
+msgid "Thinking..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:56 src/ai/assistant/headless.py:61
+msgid "Speaking..."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:57
+msgid "Live conversation active."
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:67
+#, python-brace-format
+msgid "Titan Assistant - {name}"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:86
+msgid "Type instead of speaking (optional):"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:89
+msgid "Type instead of speaking"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:94
+msgid "Talk"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:97
+msgid "Send text"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:100 src/ai/assistant/assistant_gui.py:277
+msgid "Start live mode"
+msgstr ""
+
+#: src/ai/assistant/assistant_gui.py:155
 msgid "The assistant needs more information"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:190 src/ai/assistant/assistant_gui.py:247
+#: src/ai/assistant/assistant_gui.py:192 src/ai/assistant/assistant_gui.py:249
 #: src/ai/assistant/headless.py:86
 msgid ""
 "The assistant needs AI features enabled and a Gemini API key (Settings, "
 "AI features)."
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:233 src/ai/assistant/headless.py:182
+#: src/ai/assistant/assistant_gui.py:235 src/ai/assistant/headless.py:166
 msgid "Assistant error"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:255
+#: src/ai/assistant/assistant_gui.py:257
 msgid "Stop live mode"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:256
+#: src/ai/assistant/assistant_gui.py:258
 msgid "Live mode started. Speak naturally."
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:268
+#: src/ai/assistant/assistant_gui.py:270
 msgid "Live mode failed"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:287
+#: src/ai/assistant/assistant_gui.py:289
 msgid "Live mode stopped."
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:292 src/ai/assistant/headless.py:138
+#: src/ai/assistant/assistant_gui.py:294 src/ai/assistant/headless.py:138
 msgid "Cancelling"
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:318 src/ai/assistant/headless.py:91
+#: src/ai/assistant/assistant_gui.py:320 src/ai/assistant/headless.py:91
 msgid "No assistant persona found in data/ai (Perun / Melitele)."
 msgstr ""
 
-#: src/ai/assistant/assistant_gui.py:319
+#: src/ai/assistant/assistant_gui.py:321
 msgid "Assistant unavailable"
 msgstr ""
 
@@ -1350,58 +1690,58 @@ msgid ""
 "Enter presses, F5 reads the screen again, Escape removes the overlay."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:589
+#: src/ai/ocr/overlay.py:600
 msgid "Reading the screen again..."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:648
+#: src/ai/ocr/overlay.py:668
 #, python-brace-format
 msgid "{n} controls"
 msgstr ""
 
-#: src/ai/ocr/overlay.py:670
+#: src/ai/ocr/overlay.py:690
 msgid "The window this overlay was part of has been closed."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:696
+#: src/ai/ocr/overlay.py:716
 msgid "The window changed size, reading it again."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:768
+#: src/ai/ocr/overlay.py:788
 msgid "This screen changed while you were away, reading it again."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:821
+#: src/ai/ocr/overlay.py:841
 msgid "This overlay has only one area."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:845
+#: src/ai/ocr/overlay.py:865
 #, python-brace-format
 msgid "{n} controls, read {seconds} seconds ago"
 msgstr ""
 
-#: src/ai/ocr/overlay.py:861
+#: src/ai/ocr/overlay.py:881
 msgid "This window has no menu bar that could be read."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:866
+#: src/ai/ocr/overlay.py:886
 msgid "Menu bar"
 msgstr ""
 
-#: src/ai/ocr/overlay.py:885
+#: src/ai/ocr/overlay.py:905
 msgid "Overlay hidden. Press the AI OCR shortcut again to bring it back."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:891
+#: src/ai/ocr/overlay.py:911
 #, python-brace-format
 msgid "{title}: the controls are back."
 msgstr ""
 
-#: src/ai/ocr/overlay.py:903
+#: src/ai/ocr/overlay.py:923
 msgid "Overlay out of the way"
 msgstr ""
 
-#: src/ai/ocr/overlay.py:904
+#: src/ai/ocr/overlay.py:924
 msgid "Overlay back"
 msgstr ""
 

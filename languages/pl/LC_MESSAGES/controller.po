@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,75 +20,75 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/controller/controller_ui.py:245
+#: src/controller/controller_ui.py:280
 msgid "Game pad connected"
 msgstr "Kontroler do gier podłączony"
 
-#: src/controller/controller_ui.py:259
+#: src/controller/controller_ui.py:294
 msgid "Game pad disconnected"
 msgstr "Kontroler do gier odłączony"
 
-#: src/controller/controller_ui.py:728
+#: src/controller/controller_ui.py:763
 msgid "Controller Information"
 msgstr "Informacje o kontrolerze"
 
-#: src/controller/controller_ui.py:731 src/controller/controller_ui.py:826
+#: src/controller/controller_ui.py:766 src/controller/controller_ui.py:861
 msgid "Connected controllers"
 msgstr "Podłączone kontrolery"
 
-#: src/controller/controller_ui.py:734 src/controller/controller_ui.py:829
+#: src/controller/controller_ui.py:769 src/controller/controller_ui.py:864
 msgid "Controller names"
 msgstr "Nazwy kontrolerów"
 
-#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
+#: src/controller/controller_ui.py:773 src/controller/controller_ui.py:868
 msgid "Vibration available"
 msgstr "Wibracje dostępne"
 
-#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
+#: src/controller/controller_ui.py:773 src/controller/controller_ui.py:868
 msgid "Yes"
 msgstr "Tak"
 
-#: src/controller/controller_ui.py:738 src/controller/controller_ui.py:833
+#: src/controller/controller_ui.py:773 src/controller/controller_ui.py:868
 msgid "No"
 msgstr "Nie"
 
-#: src/controller/controller_ui.py:744
+#: src/controller/controller_ui.py:779
 msgid "Vibration Settings"
 msgstr "Ustawienia wibracji"
 
-#: src/controller/controller_ui.py:746
+#: src/controller/controller_ui.py:781
 msgid "Enable vibration"
 msgstr "Włącz wibracje"
 
-#: src/controller/controller_ui.py:751
+#: src/controller/controller_ui.py:786
 msgid "Vibration strength"
 msgstr "Siła wibracji"
 
-#: src/controller/controller_ui.py:760 src/controller/controller_ui.py:836
+#: src/controller/controller_ui.py:795 src/controller/controller_ui.py:871
 msgid "Controller Settings"
 msgstr "Ustawienia kontrolera"
 
-#: src/controller/controller_ui.py:762
+#: src/controller/controller_ui.py:797
 msgid "Enable controller input"
 msgstr "Włącz obsługę kontrolera"
 
-#: src/controller/controller_ui.py:767
+#: src/controller/controller_ui.py:802
 msgid "Enable controller navigation"
 msgstr "Włącz nawigację kontrolerem"
 
-#: src/controller/controller_ui.py:772
+#: src/controller/controller_ui.py:807
 msgid "Analog stick deadzone"
 msgstr "Martwa strefa gałki analogowej"
 
-#: src/controller/controller_ui.py:783
+#: src/controller/controller_ui.py:818
 msgid "Refresh Controllers"
 msgstr "Odśwież kontrolery"
 
-#: src/controller/controller_ui.py:787
+#: src/controller/controller_ui.py:822
 msgid "Test Vibration"
 msgstr "Testuj wibracje"
 
-#: src/controller/controller_ui.py:836
+#: src/controller/controller_ui.py:871
 msgid "Controllers refreshed successfully"
 msgstr "Kontrolery odświeżone pomyślnie"
 

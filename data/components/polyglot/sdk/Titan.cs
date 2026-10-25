@@ -101,4 +101,50 @@ public static class Titan
             "action", addon, action, args ?? new Dictionary<string, object>());
         return Convert.ToString(result["text"]);
     }
+
+    /// <summary>A method of an object Titan handed the program.</summary>
+    public static object Host(object target, string method, params object[] args)
+    {
+        return Call("host", target, method, args ?? new object[0]);
+    }
+
+    /// <summary>A function Titan may keep and call later (a menu entry's action).</summary>
+    public static Dictionary<string, object> Fn(string name)
+    {
+        return new Dictionary<string, object> { { "__function", name } };
+    }
+
+    /// <summary>Every add-on Titan CALLS ends with this: the functions it may
+    /// call, by the same names a Python add-on of that kind defines.</summary>
+    public static void Serve(Dictionary<string, Func<object[], object>> handlers)
+    {
+        Call("provide", new List<string>(handlers.Keys));
+        while (true)
+        {
+            var ev = NextEvent(-1);
+            if (ev == null) continue;
+            object type;
+            ev.TryGetValue("type", out type);
+            if ("close".Equals(type)) return;
+            if (!"call".Equals(type)) continue;
+            object name, id, rawArgs;
+            ev.TryGetValue("name", out name);
+            ev.TryGetValue("id", out id);
+            ev.TryGetValue("args", out rawArgs);
+            var list = rawArgs as ArrayList;
+            object[] arguments = list != null ? list.ToArray() :
+                (rawArgs as object[] ?? new object[0]);
+            Func<object[], object> handler;
+            try
+            {
+                object value = handlers.TryGetValue(Convert.ToString(name), out handler)
+                    ? handler(arguments) : null;
+                Call("reply", id, value);
+            }
+            catch (Exception e)
+            {
+                Call("reply", id, null, e.Message);
+            }
+        }
+    }
 }

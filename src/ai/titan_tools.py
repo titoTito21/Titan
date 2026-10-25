@@ -2254,7 +2254,6 @@ def get_titan_tools():
               properties={'kind': dict(S, description="Add-on kind id (optional).")}),
         _tool('titan_launch',
               "Launch a Titan app, game or IM module by name.", titan_launch,
-              risk='confirm',
               properties={'name': dict(S, description="App, game or IM module name.")},
               required=['name']),
         _tool('titan_list_tts_engines',
@@ -2281,7 +2280,6 @@ def get_titan_tools():
               "away. Use this for the user's own media; use titan_play_audiobook "
               "for a whole folder/book, titan_play_radio for internet radio and "
               "play_music for YouTube/Spotify.", titan_play_media,
-              risk='confirm',
               properties={'query': dict(S, description="Title/series/episode/book to find and play."),
                           'url': dict(S, description="Direct media URL or file path (optional)."),
                           'position': dict(S, description="Start here instead of the beginning: '50%', '49 minutes', '1:23:45' (optional).")}),
@@ -2291,7 +2289,7 @@ def get_titan_tools():
               "the book's folder in the media library, 'path' names it directly, "
               "'position' optionally starts somewhere specific ('50%', '49 "
               "minutes', '1:23:45', 'track 4 12:30').",
-              titan_play_audiobook, risk='confirm',
+              titan_play_audiobook,
               properties={'query': dict(S, description="Audiobook/folder name to find."),
                           'path': dict(S, description="Folder path or URL (optional)."),
                           'position': dict(S, description="Where to start (optional).")}),
@@ -2303,14 +2301,14 @@ def get_titan_tools():
               "Carry on with something the user was listening to or watching: "
               "plays the saved item matching 'query' (or the most recent one) "
               "from its saved position, or from one of its named bookmarks.",
-              titan_resume_media, risk='confirm',
+              titan_resume_media,
               properties={'query': dict(S, description="Which saved item (optional - default the most recent)."),
                           'bookmark': dict(S, description="Named bookmark to jump to (optional).")}),
         _tool('titan_play_radio',
               "Play internet radio in tMedia for a country, auto-selecting that "
               "country (no manual picker). 'country' is the country in English or "
               "its ISO code (e.g. 'Poland' or 'PL'); 'station' optionally names a "
-              "station to find and auto-play.", titan_play_radio, risk='confirm',
+              "station to find and auto-play.", titan_play_radio,
               properties={'country': dict(S, description="Country in English or ISO code (e.g. Poland, PL)."),
                           'station': dict(S, description="Station name to search for (optional).")},
               required=['country']),
@@ -2319,7 +2317,7 @@ def get_titan_tools():
               "Create a reminder in tReminder (Titan Organizer). Saves it so it "
               "alerts when tReminder is running. date: today/tomorrow or "
               "YYYY-MM-DD; time: HH:MM; priority: low/medium/high.",
-              titan_create_reminder, risk='confirm',
+              titan_create_reminder,
               properties={'name': dict(S, description="Reminder title."),
                           'description': dict(S, description="Text spoken/shown when it fires (optional)."),
                           'date': dict(S, description="today/tomorrow or a date like 2026-07-25."),
@@ -2422,5 +2420,5 @@ def get_titan_tools():
               titan_stop_sounds),
         # Titan windows
         _tool('titan_open_settings', "Open Titan's Settings window.",
-              titan_open_settings, risk='confirm'),
+              titan_open_settings),
     ]

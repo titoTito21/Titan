@@ -1,3 +1,5 @@
 [component]
 name = Polyglot
 status = 0
+description = Every kind of Titan add-on in other languages: Lua, JavaScript, Ruby, C#, PowerShell and more.
+description_pl = Każdy rodzaj dodatku Titana w innych językach: Lua, JavaScript, Ruby, C#, PowerShell i inne.

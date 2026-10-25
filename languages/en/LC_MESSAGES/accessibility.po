@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -19,155 +19,170 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/accessibility/messages.py:143
+#: src/accessibility/messages.py:145
 msgid "Not set"
-msgstr ""
-
-#: src/accessibility/messages.py:146
-msgid "Ctrl"
-msgstr ""
-
-#: src/accessibility/messages.py:147
-msgid "Shift"
-msgstr ""
+msgstr "Not set"
 
 #: src/accessibility/messages.py:148
-msgid "Alt"
-msgstr ""
+msgid "Ctrl"
+msgstr "Ctrl"
 
 #: src/accessibility/messages.py:149
-msgid "Win"
-msgstr ""
+msgid "Shift"
+msgstr "Shift"
 
 #: src/accessibility/messages.py:150
-msgid "Cmd"
-msgstr ""
+msgid "Alt"
+msgstr "Alt"
 
 #: src/accessibility/messages.py:151
-msgid "Accent"
-msgstr ""
+msgid "Win"
+msgstr "Win"
 
 #: src/accessibility/messages.py:152
-msgid "Space"
-msgstr ""
+msgid "Cmd"
+msgstr "Cmd"
 
 #: src/accessibility/messages.py:153
+msgid "Accent"
+msgstr "Accent"
+
+#: src/accessibility/messages.py:154
+msgid "Space"
+msgstr "Space"
+
+#: src/accessibility/messages.py:155
 msgid "Tab"
 msgstr "Tab"
 
-#: src/accessibility/messages.py:154
-msgid "Enter"
-msgstr ""
-
-#: src/accessibility/messages.py:155
-msgid "Escape"
-msgstr ""
-
 #: src/accessibility/messages.py:156
-msgid "Backspace"
-msgstr ""
+msgid "Enter"
+msgstr "Enter"
 
 #: src/accessibility/messages.py:157
-msgid "Delete"
-msgstr ""
+msgid "Escape"
+msgstr "Escape"
 
 #: src/accessibility/messages.py:158
-msgid "Insert"
-msgstr ""
+msgid "Backspace"
+msgstr "Backspace"
 
 #: src/accessibility/messages.py:159
-msgid "Home"
-msgstr ""
+msgid "Delete"
+msgstr "Delete"
 
 #: src/accessibility/messages.py:160
-msgid "End"
-msgstr ""
+msgid "Insert"
+msgstr "Insert"
 
 #: src/accessibility/messages.py:161
-msgid "Page Up"
-msgstr ""
+msgid "Home"
+msgstr "Home"
 
 #: src/accessibility/messages.py:162
-msgid "Page Down"
-msgstr ""
+msgid "End"
+msgstr "End"
 
 #: src/accessibility/messages.py:163
-msgid "Up"
-msgstr ""
+msgid "Page Up"
+msgstr "Page Up"
 
 #: src/accessibility/messages.py:164
-msgid "Down"
-msgstr ""
+msgid "Page Down"
+msgstr "Page Down"
 
 #: src/accessibility/messages.py:165
-msgid "Left"
-msgstr ""
+msgid "Up"
+msgstr "Up"
 
 #: src/accessibility/messages.py:166
-msgid "Right"
-msgstr ""
+msgid "Down"
+msgstr "Down"
 
-#: src/accessibility/messages.py:192
+#: src/accessibility/messages.py:167
+msgid "Left"
+msgstr "Left"
+
+#: src/accessibility/messages.py:168
+msgid "Right"
+msgstr "Right"
+
+#: src/accessibility/messages.py:214
 #, python-brace-format
 msgid "To use invisible interface, press {keyname} key"
 msgstr "To use invisible interface, press {keyname} key"
 
-#: src/accessibility/messages.py:216
+#: src/accessibility/messages.py:240
 msgid "Please disable Titan UI"
 msgstr "Please disable Titan UI"
 
-#: src/accessibility/messages.py:260
+#: src/accessibility/messages.py:289
 msgid "To switch between lists, use left or right arrow keys"
 msgstr "To switch between lists, use left or right arrow keys"
 
-#: src/accessibility/messages.py:397 src/accessibility/messages.py:398
-#: src/accessibility/messages.py:419
+#: src/accessibility/messages.py:451
+msgid "Question"
+msgstr "Question"
+
+#: src/accessibility/messages.py:451
+msgid "Information"
+msgstr "Information"
+
+#: src/accessibility/messages.py:452
+msgid "Warning"
+msgstr "Warning"
+
+#: src/accessibility/messages.py:452
+msgid "Error"
+msgstr "Error"
+
+#: src/accessibility/messages.py:560 src/accessibility/messages.py:602
 msgid "Tab bar"
 msgstr "Tab bar"
 
-#: src/accessibility/messages.py:417
+#: src/accessibility/messages.py:562 src/accessibility/messages.py:603
+msgid "tab"
+msgstr "tab"
+
+#: src/accessibility/messages.py:565
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} of {}"
 
-#: src/accessibility/messages.py:421
-msgid "tab"
-msgstr "tab"
-
-#: src/accessibility/messages.py:445
+#: src/accessibility/messages.py:629
 #, python-brace-format
 msgid "Results: {count}"
 msgstr "Results: {count}"
 
-#: src/accessibility/messages.py:447
+#: src/accessibility/messages.py:631
 msgid "No results"
 msgstr "No results"
 
-#: src/accessibility/messages.py:500
+#: src/accessibility/messages.py:694
 #, python-brace-format
 msgid "{name}, {count} items"
 msgstr "{name}, {count} items"
 
-#: src/accessibility/messages.py:527
+#: src/accessibility/messages.py:716
 #, python-brace-format
 msgid "at position {}"
 msgstr "at position {}"
 
-#: src/accessibility/messages.py:545 src/accessibility/messages.py:586
-#: src/accessibility/messages.py:605
+#: src/accessibility/messages.py:748 src/accessibility/messages.py:796
+#: src/accessibility/messages.py:820
 msgid "checked"
 msgstr "checked"
 
-#: src/accessibility/messages.py:545 src/accessibility/messages.py:586
-#: src/accessibility/messages.py:605
+#: src/accessibility/messages.py:748 src/accessibility/messages.py:796
+#: src/accessibility/messages.py:820
 msgid "unchecked"
 msgstr "unchecked"
 
-#: src/accessibility/messages.py:623
+#: src/accessibility/messages.py:840
 msgid "Fn keys enabled"
 msgstr "Fn keys enabled"
 
-#: src/accessibility/messages.py:636
+#: src/accessibility/messages.py:853
 msgid "Fn keys disabled"
 msgstr "Fn keys disabled"
 

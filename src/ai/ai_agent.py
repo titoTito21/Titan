@@ -28,6 +28,7 @@ it to each provider's native shape per step, so no provider SDK object leaks out
 
 import base64
 import json
+import threading
 import traceback
 
 from src.ai import ai_provider
@@ -388,6 +389,14 @@ DEFAULT_SYSTEM = (
     "they are unavailable, open the page in the normal browser and use the "
     "screen-reading and clicking tools instead. "
     "Prefer these Titan tools over clicking through the UI when they fit. "
+    "For a request made of several self-contained parts you can hand a part "
+    "to a SUBAGENT (ai_run_subagent), or several independent parts to "
+    "subagents running at once (ai_run_subagents); give each the whole task, "
+    "since it sees nothing of this conversation, and use what they return. "
+    "When the user does not need the result in this reply - a long search, "
+    "a check that takes a while - start it IN THE BACKGROUND "
+    "(ai_start_subagent): answer at once, and Titan tells the user the "
+    "result when it is ready. "
     "Describe what you do in plain, human language: NEVER write internal tool or "
     "function names (such as run_shell, titan_send_message, press_keys) or raw "
     "function-call syntax in your replies - say it in words a person understands "
@@ -405,6 +414,42 @@ def default_system():
     except Exception:                                # noqa: BLE001
         note = ''
     return DEFAULT_SYSTEM + ((" " + note) if note else '')
+
+
+# --------------------------------------------------------------------------- #
+# The run a tool is being called from
+# --------------------------------------------------------------------------- #
+# A tool is called as ``tool['run'](**args)`` and is told nothing about the run
+# it is part of. A subagent needs exactly that - the provider and model, the
+# confirmation callback, the cancel event, the narration - so run_agent keeps
+# a stack of its runs per thread and ``current_run()`` answers the innermost.
+_runs = threading.local()
+
+
+def current_run():
+    """The run_agent call this thread is inside, as a dict, or None."""
+    stack = getattr(_runs, 'stack', None)
+    return stack[-1] if stack else None
+
+
+def run_depth():
+    """How many run_agent calls this thread is nested inside."""
+    return len(getattr(_runs, 'stack', None) or ())
+
+
+def push_run(context):
+    """Make ``context`` this thread's current run (a subagent started on a
+    thread of its own carries its parent's context there with this)."""
+    stack = getattr(_runs, 'stack', None)
+    if stack is None:
+        stack = _runs.stack = []
+    stack.append(context)
+
+
+def pop_run():
+    stack = getattr(_runs, 'stack', None)
+    if stack:
+        stack.pop()
 
 
 def run_agent(goal, tools, *, provider=None, model=None, system=None,
@@ -438,6 +483,25 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
     if step_fn is None:
         raise RuntimeError(f"Agent does not support provider '{provider}'")
     tool_by_name = {t['name']: t for t in tools}
+    push_run({'provider': provider, 'model': model, 'confirm': confirm,
+              'confirm_all': confirm_all, 'cancel_event': cancel_event,
+              'on_tool_start': on_tool_start, 'on_tool_result': on_tool_result,
+              'depth': run_depth() + 1})
+    try:
+        return _loop(goal, provider, api_key, model, system, step_fn,
+                     tool_by_name, tools, on_text, on_tool_start,
+                     on_tool_result, on_text_delta, goal_audio, confirm,
+                     confirm_all, cancel_event, max_steps, remember,
+                     memory_source)
+    finally:
+        pop_run()
+
+
+def _loop(goal, provider, api_key, model, system, step_fn, tool_by_name,
+          tools, on_text, on_tool_start, on_tool_result, on_text_delta,
+          goal_audio, confirm, confirm_all, cancel_event, max_steps,
+          remember, memory_source):
+    """The body of :func:`run_agent`, inside its run context."""
 
     def _check_cancel():
         if cancel_event is not None and cancel_event.is_set():
@@ -505,9 +569,11 @@ def run_agent(goal, tools, *, provider=None, model=None, system=None,
             # Ask the confirm callback when: policy confirms everything, the tool
             # is a 'confirm'-tier tool, or the tool demands it unconditionally
             # (e.g. run_shell) — the callback itself applies the user's policy.
-            needs_confirm = confirm is not None and (
-                confirm_all or (tool and (tool.get('risk') == 'confirm'
-                                          or tool.get('always_confirm'))))
+            # A tool that stands for many actions (titan_run_action) answers
+            # for the one it is about to run - see confirmation.risk_of.
+            from src.ai import confirmation
+            needs_confirm = confirm is not None and confirmation.needs_confirm(
+                tool, args, confirm_all)
             if tool is None:
                 out = f"Error: unknown tool '{name}'."
             elif needs_confirm and not confirm(tool, args):

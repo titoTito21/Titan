@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -53,314 +53,316 @@ msgstr "Move to the taskbar"
 
 #: src/titan_core/tce_system.py:88
 msgid "Minimise every window"
-msgstr ""
+msgstr "Minimise every window"
 
 #: src/titan_core/tce_system.py:89
 msgid "Search for files"
-msgstr ""
+msgstr "Search for files"
 
 #: src/titan_core/tce_system.py:90
 msgid "Open the system properties"
 msgstr "Open the system properties"
 
-#: src/titan_core/tce_system_net.py:650
+#: src/titan_core/tce_system_net.py:676
 msgid "Connect to WiFi Network"
-msgstr ""
+msgstr "Connect to WiFi Network"
 
-#: src/titan_core/tce_system_net.py:662
+#: src/titan_core/tce_system_net.py:688
 #, python-brace-format
 msgid "Network: {}"
 msgstr "Network: {}"
 
-#: src/titan_core/tce_system_net.py:666
+#: src/titan_core/tce_system_net.py:692
 msgid "Enter WiFi network password:"
-msgstr ""
+msgstr "Enter WiFi network password:"
 
-#: src/titan_core/tce_system_net.py:673
+#: src/titan_core/tce_system_net.py:699
 msgid "Connect automatically"
-msgstr ""
+msgstr "Connect automatically"
 
-#: src/titan_core/tce_system_net.py:679 src/titan_core/tce_system_net.py:761
+#: src/titan_core/tce_system_net.py:705 src/titan_core/tce_system_net.py:787
 msgid "Connect"
-msgstr ""
+msgstr "Connect"
 
-#: src/system/updater.py:86 src/system/updater.py:161
-#: src/titan_core/tce_system_net.py:680
+#: src/system/updater.py:176 src/system/updater.py:251
+#: src/titan_core/tce_system_net.py:706
 msgid "Cancel"
-msgstr ""
+msgstr "Cancel"
 
-#: src/titan_core/tce_system_net.py:702
+#: src/titan_core/tce_system_net.py:728
 msgid "Please enter a password"
-msgstr ""
+msgstr "Please enter a password"
 
-#: src/titan_core/tce_system_net.py:702 src/titan_core/tce_system_net.py:942
-#: src/titan_core/tce_system_net.py:1032 src/titan_core/tce_system_net.py:1040
-#: src/titan_core/tce_system_net.py:1757 src/titan_core/tce_system_net.py:1816
+#: src/titan_core/tce_system_net.py:728 src/titan_core/tce_system_net.py:968
+#: src/titan_core/tce_system_net.py:1058 src/titan_core/tce_system_net.py:1066
+#: src/titan_core/tce_system_net.py:1783 src/titan_core/tce_system_net.py:1842
 msgid "Error"
 msgstr "Error"
 
-#: src/titan_core/tce_system_net.py:717
+#: src/titan_core/tce_system_net.py:743
 msgid "Click 'Refresh' to scan for WiFi networks"
-msgstr ""
+msgstr "Click 'Refresh' to scan for WiFi networks"
 
-#: src/titan_core/tce_system_net.py:719
+#: src/titan_core/tce_system_net.py:745
 msgid "Ready"
-msgstr ""
+msgstr "Ready"
 
-#: src/titan_core/tce_system_net.py:727
+#: src/titan_core/tce_system_net.py:753
 msgid "Scanning WiFi networks..."
-msgstr ""
+msgstr "Scanning WiFi networks..."
 
-#: src/titan_core/tce_system_net.py:729
+#: src/titan_core/tce_system_net.py:755
 msgid "Please wait"
-msgstr ""
+msgstr "Please wait"
 
-#: src/titan_core/tce_system_net.py:743 src/titan_core/tce_system_net.py:1190
-#: src/titan_core/tce_system_net.py:1191 src/titan_core/tce_system_net.py:1251
-#: src/titan_core/tce_system_net.py:1253 src/titan_core/tce_system_net.py:1726
-#: src/titan_core/tce_system_net.py:1728
+#: src/titan_core/tce_system_net.py:769 src/titan_core/tce_system_net.py:1216
+#: src/titan_core/tce_system_net.py:1217 src/titan_core/tce_system_net.py:1277
+#: src/titan_core/tce_system_net.py:1279 src/titan_core/tce_system_net.py:1752
+#: src/titan_core/tce_system_net.py:1754
 msgid "WiFi"
-msgstr ""
+msgstr "WiFi"
 
-#: src/titan_core/tce_system_net.py:750
+#: src/titan_core/tce_system_net.py:776
 msgid "Network Name"
 msgstr "Network Name"
 
-#: src/titan_core/tce_system_net.py:751
+#: src/titan_core/tce_system_net.py:777
 msgid "Signal"
-msgstr ""
+msgstr "Signal"
 
-#: src/titan_core/tce_system_net.py:752
+#: src/titan_core/tce_system_net.py:778
 msgid "Security"
-msgstr ""
+msgstr "Security"
 
-#: src/titan_core/tce_system_net.py:753
+#: src/titan_core/tce_system_net.py:779
 msgid "Status"
-msgstr ""
+msgstr "Status"
 
-#: src/titan_core/tce_system_net.py:760
+#: src/titan_core/tce_system_net.py:786
 msgid "Refresh"
-msgstr ""
+msgstr "Refresh"
 
-#: src/titan_core/tce_system_net.py:762
+#: src/titan_core/tce_system_net.py:788
 msgid "Disconnect"
-msgstr ""
+msgstr "Disconnect"
 
-#: src/titan_core/tce_system_net.py:812
+#: src/titan_core/tce_system_net.py:838
 msgid "WiFi Scanner"
 msgstr "WiFi Scanner"
 
-#: src/titan_core/tce_system_net.py:813
-msgid "Scanning for networks..."
-msgstr ""
-
-#: src/titan_core/tce_system_net.py:829
-msgid "Processing results..."
-msgstr ""
-
 #: src/titan_core/tce_system_net.py:839
+msgid "Scanning for networks..."
+msgstr "Scanning for networks..."
+
+#: src/titan_core/tce_system_net.py:855
+msgid "Processing results..."
+msgstr "Processing results..."
+
+#: src/titan_core/tce_system_net.py:865
 msgid "Complete!"
 msgstr "Complete!"
 
-#: src/titan_core/tce_system_net.py:887
+#: src/titan_core/tce_system_net.py:913
 msgid ""
 "WiFi scan timed out. This may happen if your WiFi adapter is busy or "
 "there are many networks nearby. Please try again."
 msgstr ""
+"WiFi scan timed out. This may happen if your WiFi adapter is busy or "
+"there are many networks nearby. Please try again."
 
-#: src/titan_core/tce_system_net.py:888
+#: src/titan_core/tce_system_net.py:914
 msgid "Scan Timeout"
-msgstr ""
+msgstr "Scan Timeout"
 
-#: src/titan_core/tce_system_net.py:895
+#: src/titan_core/tce_system_net.py:921
 #, python-brace-format
 msgid "WiFi scan failed: {}"
-msgstr ""
+msgstr "WiFi scan failed: {}"
 
-#: src/titan_core/tce_system_net.py:896
+#: src/titan_core/tce_system_net.py:922
 msgid "Scan Error"
 msgstr "Scan Error"
 
-#: src/titan_core/tce_system_net.py:907 src/titan_core/tce_system_net.py:1178
-#: src/titan_core/tce_system_net.py:1627 src/titan_core/tce_system_net.py:1732
+#: src/titan_core/tce_system_net.py:933 src/titan_core/tce_system_net.py:1204
+#: src/titan_core/tce_system_net.py:1653 src/titan_core/tce_system_net.py:1758
 msgid "Secured"
-msgstr ""
+msgstr "Secured"
 
-#: src/titan_core/tce_system_net.py:907 src/titan_core/tce_system_net.py:1178
-#: src/titan_core/tce_system_net.py:1627 src/titan_core/tce_system_net.py:1732
+#: src/titan_core/tce_system_net.py:933 src/titan_core/tce_system_net.py:1204
+#: src/titan_core/tce_system_net.py:1653 src/titan_core/tce_system_net.py:1758
 msgid "Open"
-msgstr ""
+msgstr "Open"
 
-#: src/titan_core/tce_system_net.py:908 src/titan_core/tce_system_net.py:1177
-#: src/titan_core/tce_system_net.py:1626 src/titan_core/tce_system_net.py:1731
+#: src/titan_core/tce_system_net.py:934 src/titan_core/tce_system_net.py:1203
+#: src/titan_core/tce_system_net.py:1652 src/titan_core/tce_system_net.py:1757
 msgid "Connected"
 msgstr "Connected"
 
-#: src/titan_core/tce_system_net.py:922 src/titan_core/tce_system_net.py:1153
+#: src/titan_core/tce_system_net.py:948 src/titan_core/tce_system_net.py:1179
 msgid "No WiFi networks found"
-msgstr ""
+msgstr "No WiFi networks found"
 
-#: src/titan_core/tce_system_net.py:924
+#: src/titan_core/tce_system_net.py:950
 msgid "Try refreshing"
-msgstr ""
+msgstr "Try refreshing"
 
-#: src/titan_core/tce_system_net.py:942
+#: src/titan_core/tce_system_net.py:968
 msgid "Please select a network"
-msgstr ""
+msgstr "Please select a network"
 
-#: src/titan_core/tce_system_net.py:961
+#: src/titan_core/tce_system_net.py:987
 msgid "WiFi Connection"
-msgstr ""
+msgstr "WiFi Connection"
 
-#: src/titan_core/tce_system_net.py:962 src/titan_core/tce_system_net.py:1284
-#: src/titan_core/tce_system_net.py:1667
+#: src/titan_core/tce_system_net.py:988 src/titan_core/tce_system_net.py:1310
+#: src/titan_core/tce_system_net.py:1693
 #, python-brace-format
 msgid "Connecting to {}..."
 msgstr "Connecting to {}..."
 
-#: src/titan_core/tce_system_net.py:972
+#: src/titan_core/tce_system_net.py:998
 msgid "Authenticating..."
-msgstr ""
+msgstr "Authenticating..."
 
-#: src/titan_core/tce_system_net.py:979
+#: src/titan_core/tce_system_net.py:1005
 msgid "Establishing connection..."
-msgstr ""
+msgstr "Establishing connection..."
 
-#: src/titan_core/tce_system_net.py:988
+#: src/titan_core/tce_system_net.py:1014
 msgid "Connected!"
 msgstr "Connected!"
 
-#: src/titan_core/tce_system_net.py:988
+#: src/titan_core/tce_system_net.py:1014
 msgid "Failed!"
-msgstr ""
+msgstr "Failed!"
 
-#: src/titan_core/tce_system_net.py:1021
+#: src/titan_core/tce_system_net.py:1047
 #, python-brace-format
 msgid "Connection to {} timed out. Please check your password and try again."
-msgstr ""
+msgstr "Connection to {} timed out. Please check your password and try again."
 
-#: src/titan_core/tce_system_net.py:1022
+#: src/titan_core/tce_system_net.py:1048
 msgid "Connection Timeout"
-msgstr ""
+msgstr "Connection Timeout"
 
-#: src/system/system_monitor.py:766 src/titan_core/tce_system_net.py:1028
-#: src/titan_core/tce_system_net.py:1290 src/titan_core/tce_system_net.py:1671
+#: src/system/system_monitor.py:902 src/titan_core/tce_system_net.py:1054
+#: src/titan_core/tce_system_net.py:1316 src/titan_core/tce_system_net.py:1697
 #, python-brace-format
 msgid "Connected to {}"
 msgstr "Connected to {}"
 
-#: src/titan_core/tce_system_net.py:1028 src/titan_core/tce_system_net.py:1037
+#: src/titan_core/tce_system_net.py:1054 src/titan_core/tce_system_net.py:1063
 msgid "Success"
-msgstr ""
+msgstr "Success"
 
-#: src/titan_core/tce_system_net.py:1032 src/titan_core/tce_system_net.py:1294
-#: src/titan_core/tce_system_net.py:1676
+#: src/titan_core/tce_system_net.py:1058 src/titan_core/tce_system_net.py:1320
+#: src/titan_core/tce_system_net.py:1702
 #, python-brace-format
 msgid "Failed to connect to {}"
 msgstr "Failed to connect to {}"
 
-#: src/titan_core/tce_system_net.py:1037
+#: src/titan_core/tce_system_net.py:1063
 msgid "Disconnected from network"
-msgstr ""
+msgstr "Disconnected from network"
 
-#: src/titan_core/tce_system_net.py:1040
+#: src/titan_core/tce_system_net.py:1066
 msgid "Failed to disconnect"
-msgstr ""
+msgstr "Failed to disconnect"
 
-#: src/titan_core/tce_system_net.py:1151
+#: src/titan_core/tce_system_net.py:1177
 #, python-brace-format
 msgid "Found {} networks"
-msgstr ""
+msgstr "Found {} networks"
 
-#: src/titan_core/tce_system_net.py:1163
+#: src/titan_core/tce_system_net.py:1189
 msgid "Scanning networks in background..."
-msgstr ""
+msgstr "Scanning networks in background..."
 
-#: src/titan_core/tce_system_net.py:1176
+#: src/titan_core/tce_system_net.py:1202
 msgid "Unknown"
-msgstr ""
+msgstr "Unknown"
 
-#: src/titan_core/tce_system_net.py:1180 src/titan_core/tce_system_net.py:1631
-#: src/titan_core/tce_system_net.py:1734
+#: src/titan_core/tce_system_net.py:1206 src/titan_core/tce_system_net.py:1657
+#: src/titan_core/tce_system_net.py:1760
 msgid "list item"
-msgstr ""
+msgstr "list item"
 
-#: src/titan_core/tce_system_net.py:1188 src/titan_core/tce_system_net.py:1249
-#: src/titan_core/tce_system_net.py:1724
+#: src/titan_core/tce_system_net.py:1214 src/titan_core/tce_system_net.py:1275
+#: src/titan_core/tce_system_net.py:1750
 msgid "Checked"
-msgstr ""
+msgstr "Checked"
 
-#: src/titan_core/tce_system_net.py:1188 src/titan_core/tce_system_net.py:1249
-#: src/titan_core/tce_system_net.py:1724
+#: src/titan_core/tce_system_net.py:1214 src/titan_core/tce_system_net.py:1275
+#: src/titan_core/tce_system_net.py:1750
 msgid "Unchecked"
-msgstr ""
+msgstr "Unchecked"
 
-#: src/titan_core/tce_system_net.py:1190 src/titan_core/tce_system_net.py:1251
-#: src/titan_core/tce_system_net.py:1726
+#: src/titan_core/tce_system_net.py:1216 src/titan_core/tce_system_net.py:1277
+#: src/titan_core/tce_system_net.py:1752
 msgid "checkbox"
-msgstr ""
+msgstr "checkbox"
 
-#: src/titan_core/tce_system_net.py:1195
+#: src/titan_core/tce_system_net.py:1221
 msgid "Scanning for WiFi networks..."
 msgstr "Scanning for WiFi networks..."
 
-#: src/titan_core/tce_system_net.py:1198 src/titan_core/tce_system_net.py:1738
+#: src/titan_core/tce_system_net.py:1224 src/titan_core/tce_system_net.py:1764
 msgid "No WiFi networks available"
 msgstr "No WiFi networks available"
 
-#: src/titan_core/tce_system_net.py:1200 src/titan_core/tce_system_net.py:1355
-#: src/titan_core/tce_system_net.py:1762 src/titan_core/tce_system_net.py:1799
+#: src/titan_core/tce_system_net.py:1226 src/titan_core/tce_system_net.py:1381
+#: src/titan_core/tce_system_net.py:1788 src/titan_core/tce_system_net.py:1825
 msgid "WiFi Manager"
 msgstr "WiFi Manager"
 
-#: src/titan_core/tce_system_net.py:1268
+#: src/titan_core/tce_system_net.py:1294
 msgid "Cannot connect: missing network name"
-msgstr ""
+msgstr "Cannot connect: missing network name"
 
-#: src/titan_core/tce_system_net.py:1272 src/titan_core/tce_system_net.py:1649
+#: src/titan_core/tce_system_net.py:1298 src/titan_core/tce_system_net.py:1675
 #, python-brace-format
 msgid "Already connected to {}"
 msgstr "Already connected to {}"
 
-#: src/titan_core/tce_system_net.py:1277
+#: src/titan_core/tce_system_net.py:1303
 #, python-brace-format
 msgid "Network {} requires a password"
-msgstr ""
+msgstr "Network {} requires a password"
 
-#: src/titan_core/tce_system_net.py:1281
+#: src/titan_core/tce_system_net.py:1307
 msgid "Connection cancelled"
 msgstr "Connection cancelled"
 
-#: src/titan_core/tce_system_net.py:1298
+#: src/titan_core/tce_system_net.py:1324
 msgid "Connection error"
-msgstr ""
+msgstr "Connection error"
 
-#: src/titan_core/tce_system_net.py:1307
+#: src/titan_core/tce_system_net.py:1333
 msgid "Scan already in progress"
-msgstr ""
+msgstr "Scan already in progress"
 
-#: src/titan_core/tce_system_net.py:1353
+#: src/titan_core/tce_system_net.py:1379
 msgid "WiFi Manager: Widget"
-msgstr ""
+msgstr "WiFi Manager: Widget"
 
-#: src/titan_core/tce_system_net.py:1654
+#: src/titan_core/tce_system_net.py:1680
 #, python-brace-format
 msgid "Enter WiFi network password for {}:"
-msgstr ""
+msgstr "Enter WiFi network password for {}:"
 
-#: src/titan_core/tce_system_net.py:1656
+#: src/titan_core/tce_system_net.py:1682
 msgid "Password: "
-msgstr ""
+msgstr "Password: "
 
-#: src/titan_core/tce_system_net.py:1658
+#: src/titan_core/tce_system_net.py:1684
 msgid "Connecting to network..."
-msgstr ""
+msgstr "Connecting to network..."
 
-#: src/titan_core/tce_system_net.py:1661
+#: src/titan_core/tce_system_net.py:1687
 msgid "Password required"
-msgstr ""
+msgstr "Password required"
 
-#: src/titan_core/tce_system_net.py:1664
+#: src/titan_core/tce_system_net.py:1690
 msgid ""
 "\n"
 "Connection cancelled"
@@ -368,61 +370,63 @@ msgstr ""
 "\n"
 "Connection cancelled"
 
-#: src/titan_core/tce_system_net.py:1697
+#: src/titan_core/tce_system_net.py:1723
 msgid "WiFi manager closed"
-msgstr ""
+msgstr "WiFi manager closed"
 
-#: src/titan_core/tce_system_net.py:1743
+#: src/titan_core/tce_system_net.py:1769
 msgid "Refreshing WiFi networks..."
-msgstr ""
+msgstr "Refreshing WiFi networks..."
 
-#: src/titan_core/tce_system_net.py:1746
+#: src/titan_core/tce_system_net.py:1772
 msgid "Networks refreshed"
-msgstr ""
+msgstr "Networks refreshed"
 
-#: src/titan_core/tce_system_net.py:1756
+#: src/titan_core/tce_system_net.py:1782
 msgid ""
 "WiFi functionality requires pywifi library.\n"
 "Install with: pip install pywifi"
 msgstr ""
+"WiFi functionality requires pywifi library.\n"
+"Install with: pip install pywifi"
 
-#: src/titan_core/tce_system_net.py:1763
+#: src/titan_core/tce_system_net.py:1789
 msgid "Initializing WiFi interface..."
 msgstr "Initializing WiFi interface..."
 
-#: src/titan_core/tce_system_net.py:1770
+#: src/titan_core/tce_system_net.py:1796
 msgid "Creating network manager..."
-msgstr ""
+msgstr "Creating network manager..."
 
-#: src/titan_core/tce_system_net.py:1784
+#: src/titan_core/tce_system_net.py:1810
 msgid "WiFi initialization timed out. Please try again."
-msgstr ""
+msgstr "WiFi initialization timed out. Please try again."
 
-#: src/titan_core/tce_system_net.py:1785
+#: src/titan_core/tce_system_net.py:1811
 msgid "Timeout Error"
 msgstr "Timeout Error"
 
-#: src/titan_core/tce_system_net.py:1788
+#: src/titan_core/tce_system_net.py:1814
 msgid "Checking WiFi interfaces..."
 msgstr "Checking WiFi interfaces..."
 
-#: src/titan_core/tce_system_net.py:1792
+#: src/titan_core/tce_system_net.py:1818
 msgid "No WiFi interfaces available or WiFi initialization failed."
-msgstr ""
+msgstr "No WiFi interfaces available or WiFi initialization failed."
 
-#: src/titan_core/tce_system_net.py:1793
+#: src/titan_core/tce_system_net.py:1819
 msgid "WiFi Error"
 msgstr "WiFi Error"
 
-#: src/titan_core/tce_system_net.py:1796
+#: src/titan_core/tce_system_net.py:1822
 msgid "Creating GUI interface..."
 msgstr "Creating GUI interface..."
 
-#: src/titan_core/tce_system_net.py:1802
+#: src/titan_core/tce_system_net.py:1828
 msgid "Ready!"
-msgstr ""
+msgstr "Ready!"
 
-#: src/titan_core/tce_system_net.py:1815
+#: src/titan_core/tce_system_net.py:1841
 #, python-brace-format
 msgid ""
 "Error creating WiFi interface:\n"
@@ -431,145 +435,183 @@ msgstr ""
 "Error creating WiFi interface:\n"
 "{}"
 
-#: src/system/system_monitor.py:339
+#: src/system/system_monitor.py:343
 #, python-brace-format
 msgid "Connected to power adapter, battery level is {}%"
 msgstr "Connected to power adapter, battery level is {}%"
 
-#: src/system/system_monitor.py:344
+#: src/system/system_monitor.py:348
 #, python-brace-format
 msgid "Power adapter disconnected, battery level is {}%"
 msgstr "Power adapter disconnected, battery level is {}%"
 
-#: src/system/system_monitor.py:347
+#: src/system/system_monitor.py:351
 #, python-brace-format
 msgid "Charging battery, battery level {}%"
 msgstr "Charging battery, battery level {}%"
 
-#: src/system/system_monitor.py:350
+#: src/system/system_monitor.py:354
 msgid "Battery is fully charged"
 msgstr "Battery is fully charged"
 
-#: src/system/system_monitor.py:413
+#: src/system/system_monitor.py:417
 msgid "Low battery, please connect to charger"
 msgstr "Low battery, please connect to charger"
 
-#: src/system/system_monitor.py:418
+#: src/system/system_monitor.py:422
 msgid "Critical battery level, connect to charger now!"
 msgstr "Critical battery level, connect to charger now!"
 
-#: src/system/system_monitor.py:514
+#: src/system/system_monitor.py:601
 #, python-brace-format
 msgid "Volume: {}%"
 msgstr "Volume: {}%"
 
-#: src/system/system_monitor.py:770
+#: src/system/system_monitor.py:906
 #, python-brace-format
 msgid "Disconnected from {}"
 msgstr "Disconnected from {}"
 
-#: src/system/updater.py:28
+#: src/system/updater.py:118
 msgid "Program Update Available"
-msgstr ""
+msgstr "Program Update Available"
 
-#: src/system/updater.py:47
+#: src/system/updater.py:137
 msgid "Program update is available"
-msgstr ""
+msgstr "Program update is available"
 
-#: src/system/updater.py:58
+#: src/system/updater.py:148
 msgid "Current version:"
-msgstr ""
+msgstr "Current version:"
 
-#: src/system/updater.py:65
+#: src/system/updater.py:155
 msgid "Update to version:"
-msgstr ""
+msgstr "Update to version:"
 
-#: src/system/updater.py:74
+#: src/system/updater.py:164
 msgid "What's new:"
-msgstr ""
+msgstr "What's new:"
 
-#: src/system/updater.py:85
+#: src/system/updater.py:175
 msgid "Update"
-msgstr ""
+msgstr "Update"
 
-#: src/system/updater.py:138
+#: src/system/updater.py:228
 msgid "Downloading Update"
-msgstr ""
+msgstr "Downloading Update"
 
-#: src/system/updater.py:152
+#: src/system/updater.py:242
 msgid "Downloading update..."
-msgstr ""
+msgstr "Downloading update..."
 
-#: src/system/updater.py:287
+#: src/system/updater.py:437
 msgid "Unable to retrieve changelog."
-msgstr ""
+msgstr "Unable to retrieve changelog."
 
-#: src/system/updater.py:320
+#: src/system/updater.py:469
 msgid "Download failed"
-msgstr ""
+msgstr "Download failed"
 
-#: src/system/updater.py:531
+#: src/system/updater.py:857 src/system/updater.py:1040
 #, python-brace-format
 msgid "Extracting files... {}%"
-msgstr ""
+msgstr "Extracting files... {}%"
 
-#: src/system/updater.py:538
+#: src/system/updater.py:879 src/system/updater.py:1061
 msgid "Extraction complete"
-msgstr ""
+msgstr "Extraction complete"
 
-#: src/system/updater.py:570
+#: src/system/updater.py:1053
+msgid "Replacing files that are in use..."
+msgstr "Replacing files that are in use..."
+
+#: src/system/updater.py:1202 src/system/updater.py:1422
 msgid "Extracting update..."
-msgstr ""
+msgstr "Extracting update..."
 
-#: src/system/updater.py:577 src/system/updater.py:594
+#: src/system/updater.py:1209 src/system/updater.py:1226
 msgid "Downloading Python interpreter..."
-msgstr ""
+msgstr "Downloading Python interpreter..."
 
-#: src/system/updater.py:601
+#: src/system/updater.py:1232
 msgid "Interpreter download failed"
-msgstr ""
+msgstr "Interpreter download failed"
 
-#: src/system/updater.py:615
+#: src/system/updater.py:1247 src/system/updater.py:1425
 msgid "Extracting Python interpreter..."
 msgstr "Extracting Python interpreter..."
 
-#: src/system/updater.py:720
-msgid "Update completed successfully! Please restart the application."
-msgstr ""
-
-#: src/system/updater.py:721
-msgid "Update Complete"
-msgstr ""
-
-#: src/system/updater.py:730
+#: src/system/updater.py:1375
 msgid "Update failed. Please try again later."
-msgstr ""
+msgstr "Update failed. Please try again later."
 
-#: src/system/updater.py:731
+#: src/system/updater.py:1377
+msgid "Some files could not be put back; see the log."
+msgstr "Some files could not be put back; see the log."
+
+#: src/system/updater.py:1379
+msgid "The installation was left as it was."
+msgstr "The installation was left as it was."
+
+#: src/system/updater.py:1381
+#, python-brace-format
+msgid "Reason: {}"
+msgstr "Reason: {}"
+
+#: src/system/updater.py:1388
+#, python-brace-format
+msgid "and {} more"
+msgstr "and {} more"
+
+#: src/system/updater.py:1389
+#, python-brace-format
+msgid "Files in use by a running program: {}"
+msgstr "Files in use by a running program: {}"
+
+#: src/system/updater.py:1391
+#, python-brace-format
+msgid "Details were written to {}"
+msgstr "Details were written to {}"
+
+#: src/system/updater.py:1399
+msgid "Update completed successfully! Please restart the application."
+msgstr "Update completed successfully! Please restart the application."
+
+#: src/system/updater.py:1400
+msgid "Update Complete"
+msgstr "Update Complete"
+
+#: src/system/updater.py:1410
 msgid "Update Error"
-msgstr ""
+msgstr "Update Error"
 
-#: src/system/lockscreen_monitor_improved.py:238
+#: src/system/updater.py:1429
+msgid "Copying archive..."
+msgstr "Copying archive..."
+
+#: src/system/lockscreen_monitor_improved.py:235
 msgid "Screen locked"
-msgstr ""
+msgstr "Screen locked"
 
-#: src/system/lockscreen_monitor_improved.py:244
+#: src/system/lockscreen_monitor_improved.py:241
 msgid "Screen unlocked"
-msgstr ""
+msgstr "Screen unlocked"
 
 #: src/ui/shutdown_question.py:14
 msgid "Are you sure you want to exit Titan?"
-msgstr ""
+msgstr "Are you sure you want to exit Titan?"
 
 #: src/ui/shutdown_question.py:15
 msgid "Confirm Exit"
-msgstr ""
+msgstr "Confirm Exit"
 
 #: src/system/mic_permission.py:117
 msgid ""
 "Microphone access is turned off for this computer. Open Settings, Privacy"
 " and security, Microphone, and turn on Microphone access."
 msgstr ""
+"Microphone access is turned off for this computer. Open Settings, Privacy"
+" and security, Microphone, and turn on Microphone access."
 
 #: src/system/mic_permission.py:121
 msgid ""
@@ -577,22 +619,25 @@ msgid ""
 "Settings, Privacy and security, Microphone, and turn on Let desktop apps "
 "access your microphone."
 msgstr ""
+"Windows is blocking desktop applications from using the microphone. Open "
+"Settings, Privacy and security, Microphone, and turn on Let desktop apps "
+"access your microphone."
 
 #: src/system/mic_permission.py:125
 msgid "No microphone was found. Connect a microphone or headset and try again."
-msgstr ""
+msgstr "No microphone was found. Connect a microphone or headset and try again."
 
 #: src/system/mic_permission.py:127
 msgid "The microphone is not available."
-msgstr ""
+msgstr "The microphone is not available."
 
 #: src/system/mic_permission.py:183
 msgid "Do you want to open microphone settings now?"
-msgstr ""
+msgstr "Do you want to open microphone settings now?"
 
 #: src/system/mic_permission.py:184
 msgid "Microphone blocked"
-msgstr ""
+msgstr "Microphone blocked"
 
 #: src/system/tray_icons.py:137 src/system/tray_icons.py:765
 msgid "Notification icon"
@@ -607,18 +652,20 @@ msgid ""
 "System Tray Icons (Enter = click, Applications key/Context menu = right "
 "click)"
 msgstr ""
+"System Tray Icons (Enter = click, Applications key/Context menu = right "
+"click)"
 
 #: src/system/system_tray_list.py:82
 msgid "Click (Enter)"
-msgstr ""
+msgstr "Click (Enter)"
 
 #: src/system/system_tray_list.py:86
 msgid "Context Menu (Applications key)"
-msgstr ""
+msgstr "Context Menu (Applications key)"
 
 #: src/system/system_tray_list.py:90
 msgid "Close"
-msgstr ""
+msgstr "Close"
 
 #: src/system/system_tray_list.py:114
 msgid "No system tray icons found"
@@ -626,11 +673,11 @@ msgstr "No system tray icons found"
 
 #: src/system/system_tray_list.py:121
 msgid "hidden"
-msgstr ""
+msgstr "hidden"
 
 #: src/system/system_tray_list.py:194
 msgid "System tray list is only available on Windows"
-msgstr ""
+msgstr "System tray list is only available on Windows"
 
 #: src/system/system_tray_list.py:195
 msgid "Not Available"
@@ -1187,40 +1234,9 @@ msgstr "Not Available"
 #~ msgid "Open the Titan Menu"
 #~ msgstr "Open the Titan Menu"
 
-msgid "External client initialized"
-msgstr "External client initialized"
+#~ msgid "External client initialized"
+#~ msgstr "External client initialized"
 
-msgid "External client closed"
-msgstr "External client closed"
+#~ msgid "External client closed"
+#~ msgstr "External client closed"
 
-#: src/system/updater.py
-msgid "The installation was left as it was."
-msgstr "The installation was left as it was."
-
-#: src/system/updater.py
-msgid "Some files could not be put back; see the log."
-msgstr "Some files could not be put back; see the log."
-
-#: src/system/updater.py
-msgid "Reason: {}"
-msgstr "Reason: {}"
-
-#: src/system/updater.py
-msgid "and {} more"
-msgstr "and {} more"
-
-#: src/system/updater.py
-msgid "Files in use by a running program: {}"
-msgstr "Files in use by a running program: {}"
-
-#: src/system/updater.py
-msgid "Details were written to {}"
-msgstr "Details were written to {}"
-
-#: src/system/updater.py
-msgid "Copying archive..."
-msgstr "Copying archive..."
-
-#: src/system/updater.py
-msgid "Replacing files that are in use..."
-msgstr "Replacing files that are in use..."

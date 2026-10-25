@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2026-02-05 11:39+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: en\n"
@@ -19,64 +19,64 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/classic_start_menu.py:214 src/ui/classic_start_menu.py:219
+#: src/ui/classic_start_menu.py:215 src/ui/classic_start_menu.py:220
 msgid "Start menu"
 msgstr "Start menu"
 
-#: src/ui/classic_start_menu.py:272
+#: src/ui/classic_start_menu.py:273
 msgid "Menu"
 msgstr "Menu"
 
-#: src/ui/classic_start_menu.py:305
+#: src/ui/classic_start_menu.py:318
 #, python-brace-format
 msgid "Log Off \"{user}\"..."
 msgstr "Log Off \"{user}\"..."
 
-#: src/ui/classic_start_menu.py:306
+#: src/ui/classic_start_menu.py:319
 msgid "Log Off..."
 msgstr "Log Off..."
 
-#: src/ui/classic_start_menu.py:310
+#: src/ui/classic_start_menu.py:323
 msgid "Titan"
 msgstr "Titan"
 
-#: src/ui/classic_start_menu.py:311
+#: src/ui/classic_start_menu.py:324
 msgid "Programs"
 msgstr "Programs"
 
-#: src/ui/classic_start_menu.py:312
+#: src/ui/classic_start_menu.py:325
 msgid "Documents"
 msgstr "Documents"
 
-#: src/ui/classic_start_menu.py:313 src/ui/classic_start_menu.py:487
+#: src/ui/classic_start_menu.py:326
 msgid "Settings"
 msgstr "Settings"
 
-#: src/ui/classic_start_menu.py:314
+#: src/ui/classic_start_menu.py:327
 msgid "Search"
 msgstr "Search"
 
-#: src/ui/classic_start_menu.py:315
+#: src/ui/classic_start_menu.py:328
 msgid "Help and Support"
 msgstr "Help and Support"
 
-#: src/ui/classic_start_menu.py:316
+#: src/ui/classic_start_menu.py:329
 msgid "Run..."
 msgstr "Run..."
 
-#: src/ui/classic_start_menu.py:319
+#: src/ui/classic_start_menu.py:333
 msgid "Separator"
 msgstr "Separator"
 
-#: src/ui/classic_start_menu.py:321
+#: src/ui/classic_start_menu.py:335
 msgid "Shut Down..."
 msgstr "Shut Down..."
 
-#: src/ui/classic_start_menu.py:758
+#: src/ui/classic_start_menu.py:782
 msgid "Help function"
 msgstr "Help function"
 
-#: src/ui/classic_start_menu.py:758
+#: src/ui/classic_start_menu.py:782
 msgid "Help"
 msgstr "Help"
 

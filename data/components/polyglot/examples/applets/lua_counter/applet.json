@@ -1,0 +1,7 @@
+{
+  "name": "Lua counter",
+  "name_pl": "Licznik w Lua",
+  "type": "grid",
+  "description": "A widget written in Lua: Left and Right move, Enter adds one.",
+  "polyglot": "main.lua"
+}

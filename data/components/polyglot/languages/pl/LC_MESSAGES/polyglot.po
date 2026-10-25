@@ -1,19 +1,24 @@
+#
 msgid ""
 msgstr ""
-"Content-Type: text/plain; charset=UTF-8\n"
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-10-22 19:45+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: pl <LL@li.org>\n"
 "Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
 
 msgid "Languages"
 msgstr "Języki"
 
 msgid "&Close"
-msgstr "&Zamknij"
-
-msgid "The new applications and games appear in Titan's lists after Titan is restarted; the component example is started then too."
-msgstr "Nowe aplikacje i gry pojawią się na listach Titana po jego ponownym uruchomieniu; wtedy też uruchomi się przykładowy komponent."
-
-msgid "Programming languages"
-msgstr "Języki programowania"
+msgstr "Zam&knij"
 
 msgid "No component in another language is running."
 msgstr "Nie działa żaden komponent napisany w innym języku."
@@ -23,9 +28,6 @@ msgstr "gotowy"
 
 msgid "not found"
 msgstr "nie znaleziono"
-
-msgid "Applications, games and components may be written in these languages. Lua needs nothing; the others need their interpreter or compiler on this computer."
-msgstr "Aplikacje, gry i komponenty mogą być napisane w tych językach. Lua nie wymaga niczego; pozostałe wymagają swojego interpretera lub kompilatora na tym komputerze."
 
 msgid "Language"
 msgstr "Język"
@@ -42,9 +44,6 @@ msgstr "Interpreter"
 msgid "&Install the examples"
 msgstr "&Zainstaluj przykłady"
 
-msgid "&Open the languages file"
-msgstr "&Otwórz plik języków"
-
 msgid "There are no examples to install."
 msgstr "Nie ma przykładów do zainstalowania."
 
@@ -57,21 +56,27 @@ msgstr "działa"
 msgid "built in"
 msgstr "wbudowany"
 
+#, python-brace-format
 msgid "There is no file at {}."
 msgstr "Nie ma pliku {}."
 
+#, python-brace-format
 msgid "No language is registered for {}."
 msgstr "Żaden język nie obsługuje pliku {}."
 
+#, python-brace-format
 msgid "Started {} ({})."
 msgstr "Uruchomiono {} ({})."
 
+#, python-brace-format
 msgid "{} could not be started."
 msgstr "Nie udało się uruchomić {}."
 
+#, python-brace-format
 msgid "Installed: {}."
 msgstr "Zainstalowano: {}."
 
+#, python-brace-format
 msgid "Already there, left as they were: {}."
 msgstr "Już były, pozostawiono bez zmian: {}."
 
@@ -87,18 +92,285 @@ msgstr "Zamknij"
 msgid "Only a component can add a menu entry."
 msgstr "Tylko komponent może dodać pozycję menu."
 
+#, python-brace-format
 msgid "There is no call named '{}'."
 msgstr "Nie ma wywołania o nazwie '{}'."
 
+#, python-brace-format
 msgid "There is no sound called '{}'."
 msgstr "Nie ma dźwięku '{}'."
 
-msgid "{} stopped with an error (code {}).\n\n{}"
-msgstr "Program {} zakończył się błędem (kod {}).\n\n{}"
+#, python-brace-format
+msgid ""
+"{} stopped with an error (code {}).\n"
+"\n"
+"{}"
+msgstr ""
+"Program {} zakończył się błędem (kod {}).\n"
+"\n"
+"{}"
 
 msgid "It said nothing about why."
 msgstr "Nie podał przyczyny."
 
-msgid "No interpreter or compiler for {} was found (looked for: {}). Install it, or name its path in {}."
-msgstr "Nie znaleziono interpretera ani kompilatora języka {} (szukano: {}). Zainstaluj go albo wpisz jego ścieżkę w pliku {}."
+msgid "The new add-ons appear in Titan after Titan is restarted."
+msgstr "Nowe dodatki pojawią się w Titanie po jego ponownym uruchomieniu."
 
+msgid "There is no add-on in another language."
+msgstr "Nie ma dodatku w innym języku."
+
+msgid ""
+"Every kind of Titan add-on - applications, games, components, Titan IM "
+"modules, widgets, statusbar applets, launchers, settings interfaces, shell "
+"add-ons, gamepad modes and TTS engines - may be written in these languages. "
+"Lua needs nothing; the others need their interpreter or compiler on this "
+"computer."
+msgstr ""
+"Każdy rodzaj dodatku Titana - aplikacje, gry, komponenty, moduły Titan IM, "
+"widżety, aplety paska stanu, launchery, interfejsy ustawień, dodatki "
+"powłoki, tryby pada i silniki mowy - może być napisany w tych językach. Lua "
+"nie potrzebuje niczego; pozostałe potrzebują swojego interpretera lub "
+"kompilatora na tym komputerze."
+
+msgid "&Prepare add-ons in other languages"
+msgstr "&Przygotuj dodatki w innych językach"
+
+msgid "&Add-ons in other languages"
+msgstr "&Dodatki w innych językach"
+
+msgid "They are loaded when Titan is restarted."
+msgstr "Zostaną załadowane po ponownym uruchomieniu Titana."
+
+msgid "All of them were ready."
+msgstr "Wszystkie były gotowe."
+
+msgid "not loaded"
+msgstr "niezaładowany"
+
+#, python-brace-format
+msgid "Add-ons in other languages: {}."
+msgstr "Dodatki w innych językach: {}."
+
+#, python-brace-format
+msgid "Prepared now: {}."
+msgstr "Przygotowano teraz: {}."
+
+msgid "Only an add-on Titan calls into can do this."
+msgstr "Tylko dodatek, który Titan wywołuje, może to zrobić."
+
+#, python-brace-format
+msgid "There is no add-on called {} in another language."
+msgstr "Nie ma dodatku o nazwie {} w innym języku."
+
+#, python-brace-format
+msgid "{} ({}, {}) is loaded by Titan and answers: {}"
+msgstr "Titan ładuje {} ({}, {}), a dodatek odpowiada: {}"
+
+#, python-brace-format
+msgid "{} ({}, {}) could not be loaded: {}"
+msgstr "Nie udało się załadować {} ({}, {}): {}"
+
+msgid "Language &settings..."
+msgstr "Ustawienia &języków..."
+
+msgid ""
+"No interpreter or compiler for {} was found (looked for: {}). Install it, or"
+" give its path in Settings -> Polyglot."
+msgstr ""
+"Nie znaleziono interpretera ani kompilatora dla {} (szukano: {}). Zainstaluj"
+" go albo podaj jego ścieżkę w Ustawienia -> Polyglot."
+
+msgid "switched off"
+msgstr "wyłączony"
+
+msgid "nothing"
+msgstr "niczego"
+
+msgid "{}: found {}."
+msgstr "{}: znaleziono {}."
+
+msgid "Add a language"
+msgstr "Dodaj język"
+
+msgid "&Identifier:"
+msgstr "&Identyfikator:"
+
+msgid "&Name:"
+msgstr "&Nazwa:"
+
+msgid "File &extensions:"
+msgstr "&Rozszerzenia plików:"
+
+msgid ""
+"Interpreter or com&piler (one path or program name per line, the first found"
+" is used):"
+msgstr ""
+"Interpreter lub &kompilator (jedna ścieżka lub nazwa programu w wierszu; "
+"używany jest pierwszy znaleziony):"
+
+msgid "&Run command:"
+msgstr "Polecenie &uruchomienia:"
+
+msgid "&Compile command (empty if the language is not compiled):"
+msgstr "Polecenie k&ompilacji (puste, jeśli język nie jest kompilowany):"
+
+msgid "Compiled &output file:"
+msgstr "Plik &wynikowy kompilacji:"
+
+msgid "En&vironment variables (NAME=value, one per line):"
+msgstr "Zmienne środowiskow&e (NAZWA=wartość, jedna w wierszu):"
+
+msgid "N&ote:"
+msgstr "O&pis:"
+
+msgid "How a command is written"
+msgstr "Jak zapisać polecenie"
+
+msgid ""
+"The languages add-ons may be written in. Add one by giving its interpreter "
+"or compiler, or change where a built-in language finds its own. Changes are "
+"written when the settings are saved."
+msgstr ""
+"Języki, w których mogą być pisane dodatki. Dodaj język, podając jego "
+"interpreter lub kompilator, albo zmień, gdzie wbudowany język szuka swojego."
+" Zmiany są zapisywane razem z ustawieniami."
+
+msgid "&Add a language..."
+msgstr "&Dodaj język..."
+
+msgid "C&hange..."
+msgstr "&Zmień..."
+
+msgid "&Remove"
+msgstr "&Usuń"
+
+msgid "Switch o&ff"
+msgstr "&Wyłącz"
+
+msgid "Chec&k"
+msgstr "&Sprawdź"
+
+msgid "Open the languages &file"
+msgstr "Otwórz plik &języków"
+
+msgid ""
+"The identifier must be lower-case letters, digits and - _ . + only, for "
+"example: kotlin."
+msgstr ""
+"Identyfikator może zawierać tylko małe litery, cyfry oraz znaki - _ . +, na "
+"przykład: kotlin."
+
+msgid "Give at least one file extension, for example: .kt"
+msgstr "Podaj co najmniej jedno rozszerzenie pliku, na przykład: .kt"
+
+msgid "Give the command that runs a program, or the command that compiles it."
+msgstr ""
+"Podaj polecenie, które uruchamia program, albo polecenie, które go "
+"kompiluje."
+
+msgid "{} is built into Polyglot and needs nothing."
+msgstr "{} jest wbudowany w Polyglot i niczego nie wymaga."
+
+msgid "{}: no interpreter or compiler was found. Looked for: {}."
+msgstr "{}: nie znaleziono interpretera ani kompilatora. Szukano: {}."
+
+msgid "{}: found {}. It says: {}"
+msgstr "{}: znaleziono {}. Program podaje: {}"
+
+msgid "built in, changed"
+msgstr "wbudowany, zmieniony"
+
+msgid "added by you"
+msgstr "dodany przez ciebie"
+
+msgid "Interpreter or compiler"
+msgstr "Interpreter lub kompilator"
+
+msgid "&Browse for the program..."
+msgstr "Wsk&aż program..."
+
+msgid "Compile command"
+msgstr "Polecenie kompilacji"
+
+msgid "Environment variables"
+msgstr "Zmienne środowiskowe"
+
+msgid "Put Titan's &SDK folder on the language's search paths"
+msgstr "Dodaj folder &SDK Titana do ścieżek wyszukiwania języka"
+
+msgid "S&witched off"
+msgstr "Wy&łączony"
+
+msgid ""
+"In a command: {exe} is the interpreter or compiler found above, {file} the "
+"program's file, {dir} its folder, {name} the file's name without its "
+"extension, {out} the file the compile command made, {sdk} Polyglot's SDK "
+"folder, {python} Titan's own Python. A part with a space in it goes in "
+"double quotes. A compiled language usually runs with the command {out}."
+msgstr ""
+"W poleceniu: {exe} to znaleziony powyżej interpreter lub kompilator, {file} "
+"plik programu, {dir} jego folder, {name} nazwa pliku bez rozszerzenia, {out}"
+" plik utworzony przez polecenie kompilacji, {sdk} folder SDK Polyglota, "
+"{python} własny Python Titana. Część zawierającą spację zapisuje się w "
+"cudzysłowie. Język kompilowany zwykle uruchamia się poleceniem {out}."
+
+msgid "Programs"
+msgstr "Programy"
+
+msgid "Choose the interpreter or compiler"
+msgstr "Wybierz interpreter lub kompilator"
+
+msgid "Source"
+msgstr "Pochodzenie"
+
+msgid "&Restore default"
+msgstr "&Przywróć domyślne"
+
+msgid "Switch o&n"
+msgstr "&Włącz"
+
+msgid "Change {}"
+msgstr "Zmień: {}"
+
+msgid "Remove {}?"
+msgstr "Usunąć {}?"
+
+msgid "Put {} back the way Polyglot ships it?"
+msgstr "Przywrócić {} do ustawień, z którymi dostarcza go Polyglot?"
+
+msgid "These lines are not NAME=value: {}"
+msgstr "Te wiersze nie mają postaci NAZWA=wartość: {}"
+
+msgid ""
+"These extensions also belong to another language: {}. A language you added "
+"is used for them first. Keep them?"
+msgstr ""
+"Te rozszerzenia należą też do innego języka: {}. Dla nich najpierw używany "
+"jest język dodany przez ciebie. Zachować je?"
+
+msgid "There is already a language called {}."
+msgstr "Język o nazwie {} już istnieje."
+
+msgid "All files"
+msgstr "Wszystkie pliki"
+
+msgid "&Languages:"
+msgstr "&Lista języków:"
+
+msgid "No&te:"
+msgstr "O&pis:"
+
+msgid "Note"
+msgstr "Opis"
+
+msgid "How a command is written:"
+msgstr "Jak zapisać polecenie:"
+
+msgid "Install the examples"
+msgstr "Instalowanie przykładów"
+
+msgid "Prepare add-ons in other languages"
+msgstr "Przygotowanie dodatków w innych językach"
+
+msgid "Add-ons in other languages"
+msgstr "Dodatki w innych językach"

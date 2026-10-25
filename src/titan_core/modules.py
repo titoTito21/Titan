@@ -91,6 +91,7 @@ def kind_label(kind):
         'settings_interface': _("Settings interfaces"),
         'launcher': _("Launchers"),
         'macro': _("Macros"),
+        'client': _("External clients"),
     }.get(kind, kind)
 
 
@@ -436,11 +437,16 @@ def services():
 
 def all_kinds():
     """('service', ...KIND_IDS) - every tab the manager can show."""
-    return ('service',) + KIND_IDS
+    return ('service', 'client') + KIND_IDS
 
 
 def modules(kind_id):
-    return services() if kind_id == 'service' else entries(kind_id)
+    if kind_id == 'service':
+        return services()
+    if kind_id == 'client':
+        from src.titan_core import external_clients
+        return external_clients.rows()
+    return entries(kind_id)
 
 
 def find(kind_id, ident):
@@ -558,6 +564,9 @@ def set_enabled(module, enabled):
     try:
         if module.kind == 'service':
             change = _set_service(module, enabled)
+        elif module.kind == 'client':
+            from src.titan_core import external_clients
+            change = external_clients.set_enabled(module, enabled)
         else:
             change = _set_addon(module, enabled)
     except Exception as error:

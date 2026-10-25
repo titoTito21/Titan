@@ -178,6 +178,24 @@ def _format_titan_ui_key_label(key_string):
     return '+'.join(display_parts)
 
 
+def usage_tips_enabled():
+    """Settings -> General -> "Speak tips on using TCE".
+
+    The one switch for every usage tip in this module - switching between
+    lists from the tab bar, how to reach the invisible interface, turning
+    Titan UI off in a window that wants its keys.  A tip is said to a
+    person learning Titan; somebody who knows it has asked not to hear it
+    again.  The tab bar tip asks again when its delay is over, so leaving
+    the box unticked silences one already waiting.  On by default: the people the tips are for are the ones who have not
+    found the setting yet.
+    """
+    try:
+        value = get_setting('speak_usage_tips', 'True', section='general')
+    except Exception:
+        return True
+    return str(value).strip().lower() not in ('false', '0', 'no', 'off')
+
+
 def show_invisible_ui_tip(delay=5.0):
     """
     Show tip about using invisible UI after minimization.
@@ -185,6 +203,8 @@ def show_invisible_ui_tip(delay=5.0):
     Args:
         delay (float): Delay in seconds before showing the tip (default: 5.0)
     """
+    if not usage_tips_enabled():
+        return None
     messenger = get_messenger()
     try:
         key_string = (get_setting('titan_ui_key', 'grave', section='general') or 'grave').strip()
@@ -214,6 +234,8 @@ def show_disable_titan_ui_tip(delay=0.6):
     Args:
         delay (float): Delay in seconds before speaking the tip.
     """
+    if not usage_tips_enabled():
+        return None
     messenger = get_messenger()
     message = _("Please disable Titan UI")
 
@@ -251,11 +273,16 @@ def show_tab_bar_tip(delay=4.0):
     # Cancel any previously pending tip first
     cancel_tab_bar_tip()
 
+    if not usage_tips_enabled():
+        return None
+
     cancel_event = threading.Event()
 
     def _worker():
         # Wait for the delay OR a cancel request, whichever comes first
         if cancel_event.wait(timeout=delay):
+            return
+        if not usage_tips_enabled():
             return
         messenger = get_messenger()
         messenger.speak_message(

@@ -21,7 +21,7 @@ DOMAIN_FILES = {
     'main': ['main.py'],
     'apps': ['src/titan_core/app_manager.py'],
     'games': ['src/titan_core/game_manager.py'],
-    'components': ['src/titan_core/component_manager.py', 'src/ui/componentmanagergui.py', 'src/titan_core/modules.py'],
+    'components': ['src/titan_core/component_manager.py', 'src/ui/componentmanagergui.py', 'src/titan_core/modules.py', 'src/titan_core/external_clients.py', 'src/titan_core/client_consent.py'],
     'notifications': ['src/system/notifications.py', 'src/ui/notificationcenter.py'],
     'network': [
         'src/network/messenger_client.py', 'src/network/messenger_gui.py', 'src/network/messenger_webview.py',
@@ -67,7 +67,7 @@ DOMAIN_FILES = {
               'src/shell/addons.py'],
     'interactive_games': ['src/network/interactive_games.py', 'src/network/interactive_game_session.py'],
     'buffers_system': ['src/buffers/buffer_announcer.py', 'src/buffers/buffer_system.py', 'src/buffers/tts_buffer.py', 'src/buffers/ai_buffer.py'],
-    'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/titan_tools.py', 'src/ai/action_tools.py', 'src/ai/ai_agent_gui.py', 'src/ai/assistant/personas.py', 'src/ai/assistant/voice_io.py', 'src/ai/assistant/voice_assistant.py', 'src/ai/assistant/assistant_gui.py', 'src/ai/assistant/hotkeys.py', 'src/ai/assistant/headless.py', 'src/ai/assistant/reminder_watcher.py', 'src/ai/ocr/mimic.py', 'src/ai/ocr/form_view.py', 'src/ai/ocr/controls.py', 'src/ai/ocr/overlay.py'],
+    'ai': ['src/ai/ai_provider.py', 'src/ai/ai_creation_kit.py', 'src/ai/ai_agent.py', 'src/ai/agent_tools.py', 'src/ai/titan_tools.py', 'src/ai/action_tools.py', 'src/ai/confirmation.py', 'src/ai/subagents.py', 'src/ai/subagents_gui.py', 'src/ai/ai_agent_gui.py', 'src/ai/assistant/personas.py', 'src/ai/assistant/voice_io.py', 'src/ai/assistant/voice_assistant.py', 'src/ai/assistant/assistant_gui.py', 'src/ai/assistant/hotkeys.py', 'src/ai/assistant/headless.py', 'src/ai/assistant/reminder_watcher.py', 'src/ai/ocr/mimic.py', 'src/ai/ocr/form_view.py', 'src/ai/ocr/controls.py', 'src/ai/ocr/overlay.py'],
 }
 
 def extract_domain(domain, files):

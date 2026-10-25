@@ -38,6 +38,42 @@ import time
 #: so the user can see and change them like anything else.
 SECTION = 'external_clients'
 
+#: Titan's own settings ABOUT clients, kept apart from the answers: every key
+#: of SECTION is a client, and `clients()` lists them all.
+OPTIONS_SECTION = 'external_clients_options'
+POLICIES = ('ask', 'allow', 'deny')
+
+
+def new_client_policy():
+    """What happens when a client nobody has answered about connects:
+    'ask' (the default), 'allow' or 'deny'. Set in the Component Manager,
+    External clients."""
+    from src.settings.settings import get_setting
+    value = str(get_setting('new_client', 'ask', OPTIONS_SECTION) or '').strip().lower()
+    return value if value in POLICIES else 'ask'
+
+
+def set_new_client_policy(policy):
+    from src.settings.settings import set_setting
+    policy = str(policy or '').strip().lower()
+    if policy not in POLICIES:
+        policy = 'ask'
+    set_setting('new_client', policy, OPTIONS_SECTION)
+    return policy
+
+
+def announce_clients():
+    """Whether a client connecting and closing is said out loud."""
+    from src.settings.settings import get_setting
+    value = str(get_setting('announce', 'yes', OPTIONS_SECTION) or '').strip().lower()
+    return value not in ('no', 'false', '0', 'off')
+
+
+def set_announce_clients(on):
+    from src.settings.settings import set_setting
+    set_setting('announce', 'yes' if on else 'no', OPTIONS_SECTION)
+    return bool(on)
+
 #: How long a client that arrived while the user was away may keep a
 #: question standing. A dialog nobody answers is not consent.
 ASK_SECONDS = 180.0
@@ -106,6 +142,10 @@ def may_drive(client_id, label=''):
     answer = known(client_id)
     if answer is not None:
         return answer
+    # Nobody answered about this one: the user's rule for new clients.
+    policy = new_client_policy()
+    if policy != 'ask':
+        return policy == 'allow'
     ask(client_id, label)
     return False
 
@@ -122,8 +162,8 @@ def refusal(client_id, label=''):
     name = str(label or client_id or 'a program')
     if known(client_id) is False:
         return translate(
-            "%s is not allowed to control Titan. Turn it on in Settings, "
-            "General, under External clients.") % name
+            "%s is not allowed to control Titan. Allow it in the "
+            "TCE Environment Manager, on the External clients tab.") % name
     return translate(
         "%s has asked to control Titan and Titan is asking you whether it "
         "may. Answer the question and try again.") % name
@@ -140,6 +180,8 @@ def ask(client_id, label=''):
     client_id = str(client_id or '').strip()
     if not client_id:
         return
+    if new_client_policy() != 'ask':
+        return                       # the user's rule answers, not a dialog
     with _LOCK:
         if known(client_id) is not None:
             return
@@ -230,12 +272,41 @@ def _dialog(client_id, label):
 
     def put():
         import wx
+        # **The keyboard has to reach it.** With Titan in the tray and Titan
+        # UI on, the Invisible UI holds Enter, Space and Escape as system-wide
+        # hotkeys, so this question could not be answered: it waited out its
+        # three minutes, counted as no answer, and was asked again at the
+        # next connection - "Titan keeps asking about the external client".
+        # And a Titan in the tray is not the foreground process, so the
+        # dialog is brought in front once it is up.
+        taken = False
+        try:
+            from src.shell import keyboard_handover
+            taken = keyboard_handover.take_keyboard('client_consent')
+        except Exception:
+            keyboard_handover = None
         dialog = wx.MessageDialog(None, question, title,
-                                  wx.YES_NO | wx.ICON_QUESTION)
+                                  wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+
+        def front():
+            try:
+                from src.shell import win_shell
+                import ctypes
+                hwnd = ctypes.windll.user32.FindWindowW(None, title)
+                if hwnd:
+                    win_shell.take_foreground(hwnd)
+            except Exception:
+                pass
+        wx.CallLater(150, front)
         try:
             return dialog.ShowModal() == wx.ID_YES
         finally:
             dialog.Destroy()
+            if taken and keyboard_handover is not None:
+                try:
+                    keyboard_handover.give_keyboard_back('client_consent')
+                except Exception:
+                    pass
     # **Long enough for a person to answer.** `run_on_gui`'s own default
     # is thirty seconds, which is right for an add-on's handler and wrong
     # for a question: it would give up while the dialog was still on the

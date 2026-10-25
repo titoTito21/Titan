@@ -24,7 +24,7 @@ Titan oferuje pełne wsparcie dla gier TCE oraz zewnętrznych aplikacji rozrywko
 Informacja dla programistów: Dokumentacja dotycząca tworzenia aplikacji i gier dostępna jest w katalogu titan/data/docu/programming guide
 
 #Komponenty
-Komponenty to rozszerzenia działające w tle, które dodają nowe funkcje do Titana - integracje, czytniki, narzędzia dostępności i inne. Komponentami zarządzasz w Menedżerze komponentów, gdzie możesz je włączać i wyłączać. Niektóre komponenty dodają własną kategorię ustawień albo własny widok w głównym panelu (przełączany klawiszem Ctrl+Tab).
+Komponenty to rozszerzenia działające w tle, które dodają nowe funkcje do Titana - integracje, czytniki, narzędzia dostępności i inne. Komponentami zarządzasz w Menedżerze środowiska TCE (menu Program), gdzie możesz je włączać i wyłączać. Niektóre komponenty dodają własną kategorię ustawień albo własny widok w głównym panelu (przełączany klawiszem Ctrl+Tab).
 
 #Tryby gamepada
 Titan obsługuje pełną nawigację gamepadem. Wbudowane tryby to: System, Kontroler, Czytnik ekranu oraz Klawiatura ekranowa.

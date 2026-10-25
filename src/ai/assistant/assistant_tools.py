@@ -306,14 +306,13 @@ def get_assistant_only_tools():
               list_tce_items),
         _tool('launch_tce_item',
               "Launch a Titan app or game by name.", launch_tce_item,
-              risk='confirm',
               properties={'name': dict(S, description="App or game name.")},
               required=['name']),
         _tool('play_music',
               "Play music. YouTube and the user's own files play INSIDE Titan's "
               "media player (tMedia, which has YouTube search built in); only if "
               "tMedia is not installed does YouTube open in the web browser.",
-              play_music, risk='confirm',
+              play_music,
               properties={'query': dict(S, description="Artist, track, station or genre (optional)."),
                           'source': dict(S, description="tmedia (default), youtube, spotify or radio.")}),
     ]

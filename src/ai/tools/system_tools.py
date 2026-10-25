@@ -549,7 +549,6 @@ def _tool_table(impl, _tool, S, N, B):
               required=['name']),
         _tool('system_set_brightness',
               "Set the built-in screen's brightness.", impl.system_set_brightness,
-              risk='confirm',
               properties={'percent': dict(N, description="0 to 100.")},
               required=['percent']),
         _tool('system_get_power_plan', "Which power plan (or profile) is active.",
@@ -588,7 +587,7 @@ def _tool_table(impl, _tool, S, N, B):
         _tool('system_open_settings_page',
               "Open a page of the system settings and let the user finish there. "
               "Use this for anything Titan cannot change itself.",
-              impl.system_open_settings_page, risk='confirm',
+              impl.system_open_settings_page,
               properties={'page': dict(S, description="sound, display, network, "
                                        "wifi, bluetooth, power, battery, "
                                        "accessibility, apps, startup, update, "

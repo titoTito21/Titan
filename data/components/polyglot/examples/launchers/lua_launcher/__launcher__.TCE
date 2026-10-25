@@ -1,0 +1,7 @@
+[launcher]
+name = Lua launcher
+description = A launcher written in Lua: one list of Titan's applications, and a way out.
+author = TCE Team
+version = 1.0
+status = 0
+polyglot = main.lua

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2026-02-04 14:46+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
 "Language: pl\n"
@@ -20,173 +20,176 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/accessibility/messages.py:143
+#: src/accessibility/messages.py:145
 msgid "Not set"
 msgstr "Nie ustawiono"
 
-#: src/accessibility/messages.py:146
+#: src/accessibility/messages.py:148
 msgid "Ctrl"
 msgstr "Ctrl"
 
-#: src/accessibility/messages.py:147
+#: src/accessibility/messages.py:149
 msgid "Shift"
 msgstr "Shift"
 
-#: src/accessibility/messages.py:148
+#: src/accessibility/messages.py:150
 msgid "Alt"
 msgstr "Alt"
 
-#: src/accessibility/messages.py:149
+#: src/accessibility/messages.py:151
 msgid "Win"
 msgstr "Win"
 
-#: src/accessibility/messages.py:150
+#: src/accessibility/messages.py:152
 msgid "Cmd"
 msgstr "Cmd"
 
-#: src/accessibility/messages.py:151
+#: src/accessibility/messages.py:153
 msgid "Accent"
 msgstr "Akcent"
 
-#: src/accessibility/messages.py:152
+#: src/accessibility/messages.py:154
 msgid "Space"
 msgstr "Spacja"
 
-#: src/accessibility/messages.py:153
+#: src/accessibility/messages.py:155
 msgid "Tab"
 msgstr "Tab"
 
-#: src/accessibility/messages.py:154
+#: src/accessibility/messages.py:156
 msgid "Enter"
 msgstr "Enter"
 
-#: src/accessibility/messages.py:155
+#: src/accessibility/messages.py:157
 msgid "Escape"
 msgstr "Escape"
 
-#: src/accessibility/messages.py:156
+#: src/accessibility/messages.py:158
 msgid "Backspace"
 msgstr "Backspace"
 
-#: src/accessibility/messages.py:157
+#: src/accessibility/messages.py:159
 msgid "Delete"
 msgstr "Delete"
 
-#: src/accessibility/messages.py:158
+#: src/accessibility/messages.py:160
 msgid "Insert"
 msgstr "Insert"
 
-#: src/accessibility/messages.py:159
+#: src/accessibility/messages.py:161
 msgid "Home"
 msgstr "Home"
 
-#: src/accessibility/messages.py:160
+#: src/accessibility/messages.py:162
 msgid "End"
 msgstr "End"
 
-#: src/accessibility/messages.py:161
+#: src/accessibility/messages.py:163
 msgid "Page Up"
 msgstr "Page Up"
 
-#: src/accessibility/messages.py:162
+#: src/accessibility/messages.py:164
 msgid "Page Down"
 msgstr "Page Down"
 
-#: src/accessibility/messages.py:163
+#: src/accessibility/messages.py:165
 msgid "Up"
 msgstr "Góra"
 
-#: src/accessibility/messages.py:164
+#: src/accessibility/messages.py:166
 msgid "Down"
 msgstr "Dół"
 
-#: src/accessibility/messages.py:165
+#: src/accessibility/messages.py:167
 msgid "Left"
 msgstr "Lewo"
 
-#: src/accessibility/messages.py:166
+#: src/accessibility/messages.py:168
 msgid "Right"
 msgstr "Prawo"
 
-#: src/accessibility/messages.py:192
+#: src/accessibility/messages.py:214
 #, python-brace-format
 msgid "To use invisible interface, press {keyname} key"
 msgstr "Aby użyć niewidzialnego interfejsu, naciśnij klawisz {keyname}"
 
-#: src/accessibility/messages.py:216
+#: src/accessibility/messages.py:240
 msgid "Please disable Titan UI"
 msgstr "Proszę wyłączyć Titan UI"
 
-#: src/accessibility/messages.py:260
+#: src/accessibility/messages.py:289
 msgid "To switch between lists, use left or right arrow keys"
 msgstr "Aby przełączać między listami, użyj strzałek w lewo lub w prawo"
 
-#: src/accessibility/messages.py:397 src/accessibility/messages.py:398
-#: src/accessibility/messages.py:419
+# The kind of dialog about to appear, said in front of (or after) its own
+# title. Titan Access's catalogue is used where that component is
+# installed, so these are the floor rather than the usual answer.
+#: src/accessibility/messages.py:451
+msgid "Question"
+msgstr "Pytanie"
+
+#: src/accessibility/messages.py:451
+msgid "Information"
+msgstr "Informacja"
+
+#: src/accessibility/messages.py:452
+msgid "Warning"
+msgstr "Uwaga!"
+
+#: src/accessibility/messages.py:452
+msgid "Error"
+msgstr "Błąd"
+
+#: src/accessibility/messages.py:560 src/accessibility/messages.py:602
 msgid "Tab bar"
 msgstr "Pasek kart"
 
-#: src/accessibility/messages.py:417
+#: src/accessibility/messages.py:562 src/accessibility/messages.py:603
+msgid "tab"
+msgstr "zakładka"
+
+#: src/accessibility/messages.py:565
 #, python-brace-format
 msgid "{}, {} of {}"
 msgstr "{}, {} z {}"
 
-#: src/accessibility/messages.py:421
-msgid "tab"
-msgstr "zakładka"
-
-#: src/accessibility/messages.py:445
+#: src/accessibility/messages.py:629
 #, python-brace-format
 msgid "Results: {count}"
 msgstr "Wyniki: {count}"
 
-#: src/accessibility/messages.py:447
+#: src/accessibility/messages.py:631
 msgid "No results"
 msgstr "Brak wyników"
 
-#: src/accessibility/messages.py:500
+#: src/accessibility/messages.py:694
 #, python-brace-format
 msgid "{name}, {count} items"
 msgstr "{name}, elementów: {count}"
 
-#: src/accessibility/messages.py:527
+#: src/accessibility/messages.py:716
 #, python-brace-format
 msgid "at position {}"
 msgstr "na pozycji {}"
 
-#: src/accessibility/messages.py:545 src/accessibility/messages.py:586
-#: src/accessibility/messages.py:605
+#: src/accessibility/messages.py:748 src/accessibility/messages.py:796
+#: src/accessibility/messages.py:820
 msgid "checked"
 msgstr "zaznaczone"
 
-#: src/accessibility/messages.py:545 src/accessibility/messages.py:586
-#: src/accessibility/messages.py:605
+#: src/accessibility/messages.py:748 src/accessibility/messages.py:796
+#: src/accessibility/messages.py:820
 msgid "unchecked"
 msgstr "niezaznaczone"
 
-#: src/accessibility/messages.py:623
+#: src/accessibility/messages.py:840
 msgid "Fn keys enabled"
 msgstr "Klawisze Fn włączone"
 
-#: src/accessibility/messages.py:636
+#: src/accessibility/messages.py:853
 msgid "Fn keys disabled"
 msgstr "Klawisze Fn wyłączone"
 
 #~ msgid "status bar item"
 #~ msgstr "element paska stanu"
 
-#: src/accessibility/messages.py
-# The kind of dialog about to appear, said in front of (or after) its own
-# title. Titan Access's catalogue is used where that component is
-# installed, so these are the floor rather than the usual answer.
-msgid "Question"
-msgstr "Pytanie"
-
-msgid "Information"
-msgstr "Informacja"
-
-msgid "Warning"
-msgstr "Uwaga!"
-
-msgid "Error"
-msgstr "Błąd"

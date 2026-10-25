@@ -1380,7 +1380,7 @@ class InvisibleUI:
                 # Auto-disable Titan UI when component manager dialog opens
                 if self.titan_ui_mode:
                     self.temporarily_disable_titan_ui("component_manager")
-                dialog = componentmanagergui.ComponentManagerDialog(self.main_frame, _("Component Manager"), self.component_manager)
+                dialog = componentmanagergui.ComponentManagerDialog(self.main_frame, _("TCE Environment Manager"), self.component_manager)
                 # Bind close event to re-enable Titan UI if it was disabled
                 dialog.Bind(wx.EVT_CLOSE, lambda evt: self._on_dialog_close("component_manager", evt))
                 dialog.ShowModal()
@@ -1471,7 +1471,7 @@ class InvisibleUI:
 
         # The **Program** menu, in the same order the graphical one has it.
         program_actions = {
-            _("Component Manager"): lambda: safe_call_after(show_component_manager),
+            _("TCE Environment Manager"): lambda: safe_call_after(show_component_manager),
             # _("Log in to Titan-Network"): lambda: safe_call_after(show_titan_net_login),  # DISABLED
             _("Program settings"): lambda: safe_call_after(show_settings),
         }
@@ -3654,6 +3654,17 @@ class InvisibleUI:
             self.titan_ui_temporarily_disabled = True
             self.disabled_by_dialog = dialog_name
             print(f"Titan UI temporarily disabled by {dialog_name}")
+            # The flag alone is not enough: the navigation keys (arrows,
+            # Enter, Space, Escape) are RegisterHotKey hotkeys, which Windows
+            # takes from EVERY window, and _handle_nav_key merely ignored them
+            # - so a dialog that had "taken the keyboard" still could not be
+            # answered with Enter, Space or Escape. Measured: an AI
+            # confirmation in front, Enter sent, never received. They are
+            # unregistered while the window is up.
+            try:
+                self._update_hotkeys()
+            except Exception as e:
+                print(f"Error releasing navigation hotkeys for {dialog_name}: {e}")
 
     def _bring_window_forward(self, window):
         """Bring a TCE window to the foreground after launching it from IUI.
@@ -3781,6 +3792,10 @@ class InvisibleUI:
             self.titan_ui_temporarily_disabled = False
             self.disabled_by_dialog = None
             print(f"Titan UI re-enabled after {dialog_name} dialog closed")
+            try:
+                self._update_hotkeys()
+            except Exception as e:
+                print(f"Error restoring navigation hotkeys after {dialog_name}: {e}")
         
         if event:
             event.Skip()

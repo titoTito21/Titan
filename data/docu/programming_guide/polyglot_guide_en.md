@@ -19,9 +19,15 @@ Nothing has to be installed. Polyglot carries its interpreters:
 
 Other languages are used when their tools are on the computer: Node.js
 (`.cjs`), TypeScript through Deno (`.ts`), Go, C, C++, Rust, Perl, PHP. Any
-other language with a command line can be added in the user's
-`%APPDATA%/titosoft/Titan/polyglot/runtimes.json` (Components -> Programming
-languages -> Open the languages file).
+other language with a command line can be added in **Settings -> Polyglot**:
+Add a language asks for its name, extensions, interpreter or compiler (with
+Browse), run and compile commands, output file, environment variables and
+whether Titan's SDK goes on its search paths. A built-in language can be
+changed there too (for example given another interpreter), switched off, and
+put back with Restore default; Check says whether the program is found and
+what version it reports. Everything is kept in
+`%APPDATA%/titosoft/Titan/polyglot/runtimes.json`, written when the settings
+are saved, and the file can still be edited by hand.
 
 Nothing in Titan is changed by Polyglot: it reaches Titan's application and
 game managers from outside, so it works in a Titan built before it existed.
@@ -178,7 +184,7 @@ Titan -> program   {"id": 1, "ok": true, "value": true}
 output and goes to the log. The protocol is synchronous: write a call, read its
 answer - a client in a new language is a dozen lines, with no threads.
 
-To add a language, put an entry in `runtimes.json`:
+Settings -> Polyglot writes entries like these into `runtimes.json`:
 
 ```json
 {"runtimes": [
@@ -192,8 +198,10 @@ To add a language, put an entry in `runtimes.json`:
 Placeholders: `{file}` the source, `{dir}` its folder, `{name}` the file name
 without extension, `{out}` what the compile step wrote (cached until a source
 in the folder changes), `{exe}` the first of `find` that exists, `{sdk}`
-Polyglot's SDK folder. An entry with the id of a built-in language changes only
-what it names.
+Polyglot's SDK folder, `{python}` Titan's own Python. An entry with the id of a
+built-in language changes only what it names; `"disabled": true` switches a
+language off. A language the user added wins an extension it shares with a
+built-in one.
 
 ## A component
 
@@ -238,13 +246,131 @@ menu = My clock: say the time
 menu_pl = Mój zegar: powiedz godzinę
 ```
 
+## Every other kind of add-on
+
+An application, a game and a component are things Titan STARTS. Every other
+kind of add-on is something Titan CALLS - a statusbar applet is asked for its
+text, a widget is told to move, a TTS engine is handed a sentence - and every
+one of them may be written in another language too:
+
+| Kind | Folder | Manifest | The functions Titan calls |
+|---|---|---|---|
+| Titan IM module | `data/titanIM_modules/` | `__im.TCE` | `open(parent)`, `get_status_text()` |
+| Widget | `data/applets/` | `applet.json` | `get_widget_info()`, `create()`, `navigate(direction)`, `get_current_element()`, `activate_current_element()` |
+| Statusbar applet | `data/statusbar_applets/` | `applet.json` | `get_statusbar_item_text()`, `get_statusbar_item_info()`, `on_statusbar_item_activate(parent)` |
+| Launcher | `data/launchers/` | `__launcher__.TCE` | `start(api)` |
+| Settings interface | `data/settings interfaces/` | `__settings_ui__.TCE` | `open_settings(api)` |
+| Shell add-on | `data/shell addons/` | `__shell_addon__.TCE` | the hooks of a Python shell add-on: `start_menu_items(api, menu)`, `explorer_columns(...)`... |
+| Gamepad mode | `data/gamepad/modes/` | `__mode__.TCE` with `main = mode.py` | `on_activate(manager)`, `handle_button(id)`, `handle_axis(id, value)`, `handle_hat(x, y)`, `handle_bumper(is_left)`, `get_display_name()` |
+| TTS engine | `data/titantts engines/` | `__engine__.TCE` | `generate(text, pitch)` answering the path of a WAV file, `get_voices()`, `set_voice(id)`, `set_rate(n)`, `is_available()` |
+
+A **macro** is a program that runs once, like an application: in
+`__macro__.TCE`, `openfile = main.lua` (or `.rb`, `.js`...), and the Macro
+Manager runs it through Polyglot from its list, its shortcut and the
+`macros.run_macro` action. Lua runs `main()` if the file defines one.
+
+The functions are the ones a Python add-on of that kind defines, under the
+same names, so the guide for each kind applies unchanged. A function the
+program does not define is simply not asked for.
+
+The program is `main.<extension>` (or the manifest says `polyglot = file`).
+Titan's loader for each kind looks for a Python file, so Polyglot writes one
+beside the program - a few lines marked `# Polyglot entry` that hand the folder
+to Polyglot. It is written when Polyglot starts, when the examples are
+installed, and by Components -> Polyglot -> Prepare add-ons in
+other languages, which is what to run before packing such an add-on. An add-on
+with a Python file of its own is a Python add-on and is never touched.
+
+### In Lua
+
+Define the functions. A function you return (a menu entry's `action`) is kept
+by Titan and called later:
+
+```lua
+function get_statusbar_item_text()
+  return "Session: " .. math.floor((os.time() - started) / 60) .. " min"
+end
+
+function start_menu_items(api, menu)
+  return {{id = "hello", label = "Hello",
+           action = function() titan.speak("Hello") end}}
+end
+```
+
+### In any other language: serve
+
+The program ends with `serve`, which tells Titan which functions exist and
+answers Titan's calls until Titan is done with it:
+
+```ruby
+require 'titan'
+Titan.serve('get_statusbar_item_text' => -> { Time.now.strftime('%H:%M') })
+```
+
+```javascript
+titan.serve({ get_statusbar_item_text: () => new Date().toTimeString() });
+```
+
+```powershell
+Import-Module Titan
+Start-TitanServe @{ get_statusbar_item_text = { (Get-Date).ToString('HH:mm') } }
+```
+
+```csharp
+var h = new Dictionary<string, Func<object[], object>>();
+h["get_statusbar_item_text"] = a => DateTime.Now.ToString("HH:mm");
+Titan.Serve(h);
+```
+
+On the wire a call from Titan is an event from `next_event`,
+`{"type": "call", "id": 7, "name": "...", "args": [...]}`, answered with
+`reply(7, value)` (or `reply(7, null, "what went wrong")`); `provide([names])`
+says which functions exist. A function Titan should keep is answered as
+`{"__function": "name"}` (`Titan.fn("name")`, `titan.fn`, `New-TitanFunction`,
+`Titan.Fn`).
+
+### Titan's objects: host
+
+What Titan hands an add-on - a launcher's API, a settings interface's API, a
+shell add-on's API, the parent window - arrives as a handle,
+`{"__handle": 3, "__type": "LauncherAPI"}`, and its methods are called with
+`host`:
+
+```lua
+local apps = titan.host(api, "get_applications")
+titan.host(api, "open_application", {apps[1]})
+```
+
+The objects every add-on of a kind has are also there by name: a Titan IM
+module's `sounds`, `config`, `ui` and `buffers` (`titan.host("sounds",
+"new_message")`), and a gamepad mode's `gamepad` helpers
+(`titan.host("gamepad", "tap", {"ctrl+c"})`).
+
+### Launchers and settings interfaces
+
+A launcher's `start(api)` runs for as long as the launcher does; when it
+returns, Titan closes. A settings interface's `open_settings(api)` may keep
+asking questions for as long as it likes - Titan does not wait for it.
+
+### TTS engines
+
+`generate(text, pitch)` writes the speech to a WAV file and answers its path
+(relative to the engine's folder, or absolute); an answer of
+`{"base64": "...", "format": "wav"}` works too. `Titan.data_dir` is a good place
+to write it.
+
 ## Examples
 
-Components -> Programming languages -> Install the examples copies a Lua
-application, a Lua game, a Lua component and applications in JavaScript, Ruby,
-C# and PowerShell into the user's own folders (`examples/` in the component).
+Components -> Polyglot -> Install the examples copies into the
+user's own folders (`examples/` in the component): a Lua application, game and
+component; applications in JavaScript, Ruby, C# and PowerShell; and one add-on
+of every other kind - a Titan IM module, a widget, a statusbar applet, a
+macro, a launcher, a settings interface, a shell add-on and a gamepad mode in Lua, a
+statusbar applet in JavaScript, a widget in Ruby and a TTS engine in Ruby.
 
 ## Action API
 
 `polyglot.list_languages`, `polyglot.run_file` (`path`, `kind`),
-`polyglot.install_examples`, `polyglot.components`.
+`polyglot.install_examples`, `polyglot.prepare_addons` (write the Python
+entries), `polyglot.addons` (every add-on in another language and whether it
+runs), `polyglot.components`.

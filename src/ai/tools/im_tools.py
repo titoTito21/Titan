@@ -327,7 +327,7 @@ def get_im_tools():
               properties={'service': service, 'chat': chat},
               required=['service', 'chat']),
         _tool('im_mark_read', "Mark a Titan IM conversation as read.",
-              im_mark_read, risk='confirm',
+              im_mark_read,
               properties={'service': service, 'chat': chat},
               required=['service', 'chat']),
     ]

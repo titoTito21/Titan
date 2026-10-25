@@ -215,7 +215,7 @@ class KlangoMode:
             {"name": _("Menu"), "type": "submenu", "items": [
                 {"name": _("Program"), "type": "submenu", "items": [
                     {"name": _("Settings"), "type": "action", "action": self.open_settings},
-                    {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
+                    {"name": _("TCE Environment Manager"), "type": "action", "action": self.open_component_manager},
                 ] + self._get_program_menu_items() + [
                     {"name": _("Help"), "type": "action", "action": self.show_help},
                     {"name": _("Exit"), "type": "action", "action": self.exit_program}
@@ -1286,17 +1286,17 @@ class KlangoMode:
             if WX_AVAILABLE:
                 from src.ui.componentmanagergui import ComponentManagerDialog
                 if ComponentManagerDialog and self.component_manager:
-                    manager_dialog = ComponentManagerDialog(None, title=_("Component Manager"), component_manager=self.component_manager)
+                    manager_dialog = ComponentManagerDialog(None, title=_("TCE Environment Manager"), component_manager=self.component_manager)
                     manager_dialog.ShowModal()
                     manager_dialog.Destroy()
                 elif not ComponentManagerDialog:
-                    speak_klango(_("Cannot load Component Manager (componentmanagergui.py not found)"))
+                    speak_klango(_("Cannot load TCE Environment Manager (componentmanagergui.py not found)"))
                 elif not self.component_manager:
-                    speak_klango(_("Component Manager has not been initialized."))
+                    speak_klango(_("TCE Environment Manager has not been initialized."))
             self.close_menu()
         except Exception as e:
             print(f"Error opening component manager: {e}")
-            speak_klango(_("Error opening component manager"))
+            speak_klango(_("Error opening the TCE Environment Manager"))
     
     def show_help(self):
         """Show help."""
@@ -1488,7 +1488,7 @@ class KlangoFrame(wx.Frame):
             {"name": _("Menu"), "type": "submenu", "items": [
                 {"name": _("Program"), "type": "submenu", "items": [
                     {"name": _("Settings"), "type": "action", "action": self.open_settings},
-                    {"name": _("Component Manager"), "type": "action", "action": self.open_component_manager},
+                    {"name": _("TCE Environment Manager"), "type": "action", "action": self.open_component_manager},
                 ] + self._get_program_menu_items() + [
                     {"name": _("Help"), "type": "action", "action": self.show_help},
                     {"name": _("Exit"), "type": "action", "action": self.exit_program}
@@ -2475,17 +2475,17 @@ class KlangoFrame(wx.Frame):
             # Open without announcement
             from src.ui.componentmanagergui import ComponentManagerDialog
             if ComponentManagerDialog and self.component_manager:
-                manager_dialog = ComponentManagerDialog(self, title=_("Component Manager"), component_manager=self.component_manager)
+                manager_dialog = ComponentManagerDialog(self, title=_("TCE Environment Manager"), component_manager=self.component_manager)
                 manager_dialog.ShowModal()
                 manager_dialog.Destroy()
             elif not ComponentManagerDialog:
-                speak_klango(_("Cannot load Component Manager (componentmanagergui.py not found)"))
+                speak_klango(_("Cannot load TCE Environment Manager (componentmanagergui.py not found)"))
             elif not self.component_manager:
-                speak_klango(_("Component Manager has not been initialized."))
+                speak_klango(_("TCE Environment Manager has not been initialized."))
             self.close_menu()
         except Exception as e:
             print(f"Error opening component manager: {e}")
-            speak_klango(_("Error opening component manager"))
+            speak_klango(_("Error opening the TCE Environment Manager"))
     
     def show_help(self):
         """Show help."""

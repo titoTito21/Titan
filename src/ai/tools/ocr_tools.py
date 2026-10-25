@@ -334,6 +334,12 @@ def ocr_close_overlay(**_):
 
 
 def get_ocr_tools():
+    # None of these asks first. Reading is what the user switched AI OCR on
+    # for (it is off by default, and that switch says a picture goes to the
+    # provider); pressing and typing are gated by AI OCR's own "Let AI OCR
+    # press controls" switch and are what `click` and `type_text` already do
+    # without asking. Marked 'confirm', a reading of one window was three
+    # questions.
     from src.ai.agent_tools import _tool
     S = {'type': 'string'}
     return [
@@ -342,7 +348,7 @@ def get_ocr_tools():
               "installer, an app that exposes nothing. Takes a picture and "
               "returns its controls and text as structured lines. Use this "
               "when read_focused_window or list_elements comes back empty or "
-              "useless.", ocr_read_window, risk='confirm', needs_gui=False,
+              "useless.", ocr_read_window, needs_gui=False,
               properties={'scope': dict(S, description="'window' (default) or 'screen'."),
                           'question': dict(S, description="Optional: what to look for."),
                           'hwnd': dict(S, description="Optional: the window to "
@@ -353,7 +359,7 @@ def get_ocr_tools():
         _tool('ocr_ask',
               "Ask one question about what is on the screen right now ('is "
               "there a Skip button?', 'what does the error say?'). Reads the "
-              "screen with that question in mind.", ocr_ask, risk='confirm', needs_gui=False,
+              "screen with that question in mind.", ocr_ask, needs_gui=False,
               properties={'question': dict(S, description="The question."),
                           'scope': dict(S, description="'window' (default) or 'screen'."),
                           'hwnd': dict(S, description="Optional: the window to "
@@ -365,32 +371,29 @@ def get_ocr_tools():
               "afresh.", ocr_last_reading, needs_gui=False),
         _tool('ocr_press',
               "Press a control AI OCR has read, by its name.", ocr_press,
-              risk='confirm',
               properties={'name': dict(S, description="The control's name as it was read."),
                           'double': {'type': 'boolean',
                                      'description': "Double-click it instead "
                                                     "of one click."}},
               required=['name']),
         _tool('ocr_type', "Type into a field AI OCR has read.", ocr_type,
-              risk='confirm',
               properties={'name': dict(S, description="The field's name."),
                           'text': dict(S, description="What to type.")},
               required=['name', 'text']),
         _tool('ocr_toggle', "Tick or untick a box AI OCR has read.",
-              ocr_toggle, risk='confirm',
+              ocr_toggle,
               properties={'name': dict(S, description="The box's name.")},
               required=['name']),
         _tool('ocr_send_key',
               "Send a whole key (Escape, Enter, an arrow) to the window AI OCR "
               "read. Needs no coordinates, so it works even when the reading "
-              "could not place a control.", ocr_send_key, risk='confirm',
+              "could not place a control.", ocr_send_key,
               properties={'key': dict(S, description="Key name, e.g. 'escape', 'enter', 'down'.")},
               required=['key']),
         _tool('ocr_show_overlay',
               "Hand the reading to the user: the controls appear on the real "
               "window as real accessible controls they can Tab through. Use "
-              "this when the user should take over.", ocr_show_overlay,
-              risk='confirm'),
+              "this when the user should take over.", ocr_show_overlay),
         _tool('ocr_refresh_overlay',
               "Look at the window under the overlay again and rebuild its "
               "controls if it has become something else. Costs nothing when "

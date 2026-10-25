@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,74 +17,75 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/system/notifications.py:145
+#: src/system/notifications.py:157 src/system/notifications.py:174
 msgid "Not connected, no WiFi networks available"
 msgstr ""
 
-#: src/system/notifications.py:147 src/system/notifications.py:148
-#: src/system/notifications.py:169 src/system/notifications.py:185
-#: src/system/notifications.py:199 src/system/notifications.py:202
-#: src/system/notifications.py:213 src/system/notifications.py:219
-#: src/system/notifications.py:221
+#: src/system/notifications.py:160 src/system/notifications.py:176
+#: src/system/notifications.py:177 src/system/notifications.py:198
+#: src/system/notifications.py:214 src/system/notifications.py:228
+#: src/system/notifications.py:231 src/system/notifications.py:242
+#: src/system/notifications.py:248 src/system/notifications.py:250
 msgid "Unknown"
 msgstr ""
 
-#: src/system/notifications.py:155 src/system/notifications.py:170
-#: src/system/notifications.py:186 src/system/notifications.py:214
+#: src/system/notifications.py:161 src/system/notifications.py:184
+#: src/system/notifications.py:199 src/system/notifications.py:215
+#: src/system/notifications.py:243
 #, python-brace-format
 msgid "Connected to {ssid}, signal strength: {signal}"
 msgstr ""
 
-#: src/system/notifications.py:157
+#: src/system/notifications.py:163 src/system/notifications.py:186
 msgid "Not connected, WiFi networks available"
 msgstr ""
 
-#: src/system/notifications.py:168
+#: src/system/notifications.py:197
 msgid "Hidden Network"
 msgstr ""
 
-#: src/system/notifications.py:195
+#: src/system/notifications.py:224
 msgid "Connected to network (ethernet or WiFi)"
 msgstr ""
 
-#: src/system/notifications.py:197
+#: src/system/notifications.py:226
 msgid "Not connected to network"
 msgstr ""
 
-#: src/system/notifications.py:216
+#: src/system/notifications.py:245
 msgid "Not connected to WiFi"
 msgstr ""
 
-#: src/ui/notificationcenter.py:49
+#: src/ui/notificationcenter.py:47
 msgid "Titan"
 msgstr ""
 
-#: src/ui/notificationcenter.py:50
+#: src/ui/notificationcenter.py:48
 msgid "Notifications"
 msgstr ""
 
-#: src/ui/notificationcenter.py:210
+#: src/ui/notificationcenter.py:215
 msgid "Notification center"
 msgstr ""
 
-#: src/ui/notificationcenter.py:218
+#: src/ui/notificationcenter.py:223
 msgid "Notifications:"
 msgstr ""
 
-#: src/ui/notificationcenter.py:225
+#: src/ui/notificationcenter.py:230
 msgid "Clear all"
 msgstr ""
 
-#: src/ui/notificationcenter.py:226
+#: src/ui/notificationcenter.py:231
 msgid "Close"
 msgstr ""
 
-#: src/ui/notificationcenter.py:254
+#: src/ui/notificationcenter.py:259
 #, python-brace-format
 msgid "Notification center, {} items"
 msgstr ""
 
-#: src/ui/notificationcenter.py:257
+#: src/ui/notificationcenter.py:262
 msgid "Notification center, no notifications"
 msgstr ""
 

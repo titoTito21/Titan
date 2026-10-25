@@ -8991,17 +8991,11 @@ class TitanNetMainWindow(wx.Frame):
             speak_notification(error_msg, 'error')
 
     def _build_package_save_path(self, app):
-        """Build the on-disk save path for a downloaded package."""
-        import os
-        download_dir = os.path.join('data', 'downloaded packages')
-        os.makedirs(download_dir, exist_ok=True)
-        author = app.get('uploader_username', app.get('author_username', 'unknown'))
-        safe_author = "".join(c for c in author if c.isalnum() or c in ('-', '_')).strip()
-        safe_name = "".join(c for c in app['name'] if c.isalnum() or c in ('-', '_')).strip()
-        version = app.get('version', '1.0')
-        safe_version = "".join(c for c in version if c.isalnum() or c in ('-', '_', '.')).strip()
-        filename = f"{safe_author}_{safe_name}_v{safe_version}.TCEPACKAGE"
-        return os.path.join(download_dir, filename)
+        """Build the on-disk save path for a downloaded package - in the
+        folder chosen in Settings -> Titan-Net, the user's Downloads by
+        default (src/network/package_downloads.py)."""
+        from src.network.package_downloads import save_path_for
+        return save_path_for(app)
 
     def _download_package_with_progress(self, app_id, app):
         """Download a package straight to disk with a GUI progress bar."""

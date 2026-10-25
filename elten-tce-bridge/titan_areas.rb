@@ -75,7 +75,7 @@ class TitanAreas
     list.push(["apps_view", _("TCE applications")]) if addon("app_ui") != nil
     list.push(["ai_view", _("Titan AI")]) if @ai_available
     list.push(["widgets", _("Widgets")])
-    list.push(["components_view", _("Component Manager")])
+    list.push(["components_view", _("TCE Environment Manager")])
     list.push(["buffers", _("Messages and notifications")])
     list.push(["reader", _("Screen reader")]) if addon("titan_access") != nil
     # Each of these is a screen of its own: a gamepad mode is something to

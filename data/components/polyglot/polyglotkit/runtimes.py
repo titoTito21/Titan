@@ -9,7 +9,7 @@ machine may have (Ruby - including the one the Elten bridge carries - Node.js,
 PowerShell, .NET, Go, a C compiler). The user's own table,
 ``%APPDATA%/titosoft/Titan/polyglot/runtimes.json``, is read after it and wins
 on an id it shares, so any language with a command line can be added without
-touching Titan or this component.
+touching Titan or this component. Settings -> Polyglot edits that table.
 
 Placeholders in a command: ``{file}`` the source, ``{dir}`` its folder,
 ``{name}`` the file name without its extension, ``{out}`` what a compile step
@@ -81,6 +81,7 @@ class Runtime(object):
         self.sdk = bool(sdk)
         self.note = note
         self.source = source
+        self.disabled = False
 
     # ------------------------------------------------------------ finding
     def executable(self):
@@ -109,8 +110,8 @@ class Runtime(object):
         from .i18n import _
         names = ', '.join(os.path.basename(f) for f in self.find) or self.id
         return _("No interpreter or compiler for {} was found (looked for: "
-                 "{}). Install it, or name its path in {}.").format(
-                     self.name, names, user_table_path())
+                 "{}). Install it, or give its path in Settings -> "
+                 "Polyglot.").format(self.name, names)
 
     # ----------------------------------------------------------- commands
     def values(self, path):
@@ -181,7 +182,8 @@ class Runtime(object):
         return {'id': self.id, 'name': self.name,
                 'extensions': self.extensions, 'available': self.available(),
                 'state': state, 'path': where, 'source': self.source,
-                'compiles': bool(self.compile), 'note': self.note}
+                'compiles': bool(self.compile), 'note': self.note,
+                'disabled': self.disabled}
 
 
 def _newest_source(folder):
@@ -303,7 +305,17 @@ def builtin():
     return table
 
 
-def _load_user_table(log=None):
+#: The fields of an entry in the user's table, in the order they are shown.
+FIELDS = ('id', 'name', 'extensions', 'find', 'command', 'compile', 'output',
+          'env', 'sdk', 'note', 'disabled')
+
+
+def read_user_entries(log=None):
+    """The user's table as it is on the disk: a list of plain dicts.
+
+    An entry whose ``id`` is a built-in language changes only the fields it
+    names; any other entry is a language of the user's own.
+    """
     path = user_table_path()
     if not os.path.isfile(path):
         return []
@@ -315,39 +327,106 @@ def _load_user_table(log=None):
             log('cannot read %s: %s' % (path, error))
         return []
     entries = data.get('runtimes', data) if isinstance(data, dict) else data
-    out = []
-    for entry in entries if isinstance(entries, list) else []:
-        if not isinstance(entry, dict) or not entry.get('id'):
-            continue
+    return [dict(entry) for entry in (entries if isinstance(entries, list)
+                                      else [])
+            if isinstance(entry, dict) and entry.get('id')]
+
+
+def write_user_entries(entries):
+    """Write the user's table; anything else in the file is kept."""
+    path = user_table_path()
+    data = {}
+    if os.path.isfile(path):
         try:
-            out.append(Runtime(
-                entry['id'], entry.get('name'), entry.get('extensions'),
-                command=entry.get('command'), compile=entry.get('compile'),
-                output=entry.get('output', '{name}' + EXE),
-                find=entry.get('find'), env=entry.get('env'),
-                sdk=entry.get('sdk', True), note=entry.get('note', ''),
-                source='user'))
-        except Exception as error:
-            if log:
-                log('runtime %r refused: %s' % (entry.get('id'), error))
+            with open(path, 'r', encoding='utf-8') as handle:
+                data = json.load(handle)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data['runtimes'] = [dict(entry) for entry in entries if entry.get('id')]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temporary = path + '.tmp'
+    with open(temporary, 'w', encoding='utf-8') as handle:
+        json.dump(data, handle, indent=2, ensure_ascii=False)
+    os.replace(temporary, path)
+    return path
+
+
+def entry_of(runtime):
+    """Everything about a runtime, as an entry of the user's table."""
+    return {'id': runtime.id, 'name': runtime.name,
+            'extensions': list(runtime.extensions), 'find': list(runtime.find),
+            'command': list(runtime.command), 'compile': list(runtime.compile),
+            'output': runtime.output, 'env': dict(runtime.env),
+            'sdk': runtime.sdk, 'note': runtime.note,
+            'disabled': runtime.disabled}
+
+
+def difference(base, entry):
+    """Only what ``entry`` changes about the built-in ``base``.
+
+    Answers ``{'id': ...}`` and nothing else when it changes nothing - which
+    is how putting a built-in language back the way it was is written.
+    """
+    full = entry_of(base)
+    out = {'id': base.id}
+    for key in FIELDS[1:]:
+        if key not in entry:
+            continue
+        value = entry[key]
+        if key == 'extensions':
+            value = Runtime('x', 'x', value).extensions
+        if value != full[key]:
+            out[key] = value
     return out
 
 
-def all_runtimes(log=None):
-    """Built-in first, the user's own over them by id."""
+def _runtime_from(entry, base=None):
+    """A Runtime out of a user entry, over ``base`` when it is a built-in."""
+    fields = entry_of(base) if base is not None else {}
+    fields.update({k: v for k, v in entry.items() if k in FIELDS})
+    runtime = Runtime(
+        fields['id'], fields.get('name') or fields['id'],
+        fields.get('extensions'), command=fields.get('command'),
+        compile=fields.get('compile'),
+        output=fields.get('output') or '{name}' + EXE,
+        find=fields.get('find'), env=fields.get('env'),
+        inprocess=bool(base is not None and base.inprocess
+                       and not entry.get('command')),
+        sdk=fields.get('sdk', True), note=fields.get('note', ''),
+        source='changed' if base is not None else 'user')
+    runtime.disabled = bool(fields.get('disabled'))
+    return runtime
+
+
+def runtimes_from(entries, log=None, include_disabled=False):
+    """The built-in table with ``entries`` laid over it.
+
+    Built-in languages first, in their own order, then the user's own; a
+    switched-off language is left out unless ``include_disabled``.
+    """
     table = {r.id: r for r in builtin()}
-    for runtime in _load_user_table(log):
-        base = table.get(runtime.id)
-        if base is not None:
-            # A user entry may name only what it changes - typically ``find``.
-            runtime.extensions = runtime.extensions or base.extensions
-            runtime.command = runtime.command or base.command
-            runtime.compile = runtime.compile or base.compile
-            runtime.find = runtime.find or base.find
-            runtime.inprocess = base.inprocess and not runtime.command
-            runtime.note = runtime.note or base.note
+    for entry in entries:
+        try:
+            runtime = _runtime_from(entry, table.get(str(entry['id'])))
+        except Exception as error:
+            if log:
+                log('runtime %r refused: %s' % (entry.get('id'), error))
+            continue
+        if runtime.source == 'changed' and difference(
+                table[runtime.id], entry) == {'id': runtime.id}:
+            runtime.source = 'builtin'
         table[runtime.id] = runtime
-    return list(table.values())
+    out = list(table.values())
+    if not include_disabled:
+        out = [r for r in out if not r.disabled]
+    return out
+
+
+def all_runtimes(log=None, include_disabled=False):
+    """Built-in first, the user's own over them by id."""
+    return runtimes_from(read_user_entries(log), log, include_disabled)
 
 
 def by_id(runtime_id):
@@ -363,7 +442,11 @@ def for_file(path):
     if not ext or ext in ('.py', '.pyc', '.pyd', '.pyw', '.so', '.exe',
                           '.app', '.tce'):
         return None
-    for runtime in all_runtimes():
+    table = all_runtimes()
+    # A language the user added wins an extension it shares with a built-in
+    # one: adding it is how somebody says which interpreter a .js should get.
+    table.sort(key=lambda r: 0 if r.source == 'user' else 1)
+    for runtime in table:
         if ext in runtime.extensions:
             return runtime
     return None

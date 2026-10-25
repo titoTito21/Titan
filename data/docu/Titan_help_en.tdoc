@@ -24,7 +24,7 @@ Titan offers full support for TCE games and external entertainment applications.
 Information for developers: Documentation for creating applications and games is available in the titan/data/docu/programming guide directory
 
 #Components
-Components are background extensions that add new functionality to Titan - integrations, readers, accessibility tools, and more. Manage components in the Component Manager, where you can enable and disable them. Some components add their own settings category, or their own view in the main panel (switched with Ctrl+Tab).
+Components are background extensions that add new functionality to Titan - integrations, readers, accessibility tools, and more. Manage components in the TCE Environment Manager (Program menu), where you can enable and disable them. Some components add their own settings category, or their own view in the main panel (switched with Ctrl+Tab).
 
 #Gamepad Modes
 Titan supports full gamepad navigation. Built-in modes are: System, Controller, Screen Reader, and Screen Keyboard.

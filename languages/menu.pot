@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,178 +17,136 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/menu.py:52
+#: src/ui/menu.py:52 src/ui/program_menu.py:278
 msgid "Install data package..."
 msgstr ""
 
 #: src/ui/menu.py:59
-msgid "Component Manager..."
+msgid "TCE Environment Manager..."
 msgstr ""
 
 #: src/ui/menu.py:73
 msgid "Program settings"
 msgstr ""
 
-#: src/ui/menu.py:87
-msgid "AI Agent..."
-msgstr ""
-
-#: src/ui/menu.py:89
-msgid "AI Assistant..."
-msgstr ""
-
-#: src/ui/menu.py:93
-msgid "AI Assistant (Live mode)..."
-msgstr ""
-
-#: src/ui/menu.py:106
-msgid "AI OCR (read this screen)..."
-msgstr ""
-
-#: src/ui/menu.py:112
+#: src/ui/menu.py:91
 msgid "Help"
 msgstr ""
 
-#: src/ui/menu.py:121
+#: src/ui/menu.py:100
 msgid "Minimize"
 msgstr ""
 
-#: src/ui/menu.py:128
+#: src/ui/menu.py:107
 msgid "Exit"
 msgstr ""
 
-#: src/ui/menu.py:142
+#: src/ui/menu.py:121
 msgid "Program"
 msgstr ""
 
-#: src/ui/menu.py:147
+#: src/ui/menu.py:126
 msgid "Switch to"
 msgstr ""
 
-#: src/ui/menu.py:162
+#: src/ui/menu.py:141
 msgid "Components"
 msgstr ""
 
-#: src/ui/menu.py:188
-#, python-brace-format
-msgid "Create {kind}..."
-msgstr ""
-
-#: src/ui/menu.py:193
+#: src/ui/menu.py:165
 msgid "Enable AI features in Settings, AI features"
 msgstr ""
 
-#: src/ui/menu.py:195
+#: src/ui/menu.py:167 src/ui/program_menu.py:299
 msgid "AI"
 msgstr ""
 
-#: src/ui/menu.py:197
+#: src/ui/menu.py:169 src/ui/program_menu.py:302
 msgid "Programmer"
 msgstr ""
 
-#: src/ui/menu.py:212
-#, python-brace-format
-msgid "Could not open the AI creator: {error}"
-msgstr ""
-
-#: src/ui/menu.py:213 src/ui/menu.py:230 src/ui/menu.py:244 src/ui/menu.py:260
-#: src/ui/menu.py:282 src/ui/menu.py:284 src/ui/menu.py:399 src/ui/menu.py:406
-#: src/ui/menu.py:411
-msgid "Error"
-msgstr ""
-
-#: src/ui/menu.py:229
-#, python-brace-format
-msgid "Could not open the AI Agent: {error}"
-msgstr ""
-
-#: src/ui/menu.py:243
-#, python-brace-format
-msgid "Could not open AI OCR: {error}"
-msgstr ""
-
-#: src/ui/menu.py:259
-#, python-brace-format
-msgid "Could not open the AI Assistant: {error}"
-msgstr ""
-
-#: src/ui/menu.py:263
+#: src/ui/menu.py:184
 msgid "Select data package"
 msgstr ""
 
-#: src/ui/menu.py:263
+#: src/ui/menu.py:184
 msgid ""
 "Data packages "
 "(*.zip;*.7z;*.tcepackage;*.TCEPACKAGE)|*.zip;*.7z;*.tcepackage;*.TCEPACKAGE"
 msgstr ""
 
-#: src/ui/menu.py:268
+#: src/ui/menu.py:189
 msgid "Package installation"
 msgstr ""
 
-#: src/ui/menu.py:268
+#: src/ui/menu.py:189
 msgid "Preparing for installation..."
 msgstr ""
 
-#: src/ui/menu.py:278
-msgid "Component Manager"
+#: src/ui/menu.py:199
+msgid "TCE Environment Manager"
 msgstr ""
 
-#: src/ui/menu.py:282
-msgid "Cannot load Component Manager (componentmanagergui.py not found)"
+#: src/ui/menu.py:203
+msgid "Cannot load TCE Environment Manager (componentmanagergui.py not found)"
+msgstr ""
+
+#: src/ui/menu.py:203 src/ui/menu.py:205 src/ui/menu.py:320 src/ui/menu.py:327
+#: src/ui/menu.py:332 src/ui/program_menu.py:49
+msgid "Error"
+msgstr ""
+
+#: src/ui/menu.py:205
+msgid "TCE Environment Manager has not been initialized."
 msgstr ""
 
 #: src/ui/menu.py:284
-msgid "Component Manager has not been initialized."
-msgstr ""
-
-#: src/ui/menu.py:363
 msgid "Unpacking .tcepackage package..."
 msgstr ""
 
-#: src/ui/menu.py:365
+#: src/ui/menu.py:286
 msgid "Unpacking ZIP package..."
 msgstr ""
 
-#: src/ui/menu.py:386
+#: src/ui/menu.py:307
 msgid ""
 "Error: 7z executable not found. Make sure it is installed or in the "
 "'data/bin/' directory."
 msgstr ""
 
-#: src/ui/menu.py:386
+#: src/ui/menu.py:307
 msgid "Executable file error"
 msgstr ""
 
-#: src/ui/menu.py:391
+#: src/ui/menu.py:312
 msgid "Unpacking 7z package..."
 msgstr ""
 
-#: src/ui/menu.py:393
+#: src/ui/menu.py:314
 msgid "Starting 7z process..."
 msgstr ""
 
-#: src/ui/menu.py:399
+#: src/ui/menu.py:320
 #, python-brace-format
 msgid ""
 "Error during package installation:\n"
 "{}"
 msgstr ""
 
-#: src/ui/menu.py:402
+#: src/ui/menu.py:323
 msgid "Finished unpacking 7z."
 msgstr ""
 
-#: src/ui/menu.py:406
+#: src/ui/menu.py:327
 #, python-brace-format
 msgid "Unsupported file format: {}"
 msgstr ""
 
-#: src/ui/menu.py:406
+#: src/ui/menu.py:327
 msgid "(no extension)"
 msgstr ""
 
-#: src/ui/menu.py:411
+#: src/ui/menu.py:332
 #, python-brace-format
 msgid ""
 "Error during package installation: {}\n"
@@ -197,15 +155,66 @@ msgid ""
 "{}"
 msgstr ""
 
-#: src/ui/menu.py:416
+#: src/ui/menu.py:337
 msgid "Data package has been installed!"
 msgstr ""
 
-#: src/ui/menu.py:416
+#: src/ui/menu.py:337
 msgid "Success"
 msgstr ""
 
-#: src/ui/menu.py:424
-msgid "Settings"
+#: src/ui/program_menu.py:101
+#, python-brace-format
+msgid "Could not open the AI Agent: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:113
+#, python-brace-format
+msgid "Could not open the AI Assistant: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:126
+#, python-brace-format
+msgid "Could not open AI OCR: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:138
+#, python-brace-format
+msgid "Could not open the AI creator: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:151
+#, python-brace-format
+msgid "Could not open the AI projects: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:179
+#, python-brace-format
+msgid "Could not install the data package: {error}"
+msgstr ""
+
+#: src/ui/program_menu.py:215
+msgid "AI Agent..."
+msgstr ""
+
+#: src/ui/program_menu.py:219
+msgid "AI Assistant..."
+msgstr ""
+
+#: src/ui/program_menu.py:223
+msgid "AI Assistant (Live mode)..."
+msgstr ""
+
+#: src/ui/program_menu.py:232
+msgid "AI OCR (read this screen)..."
+msgstr ""
+
+#: src/ui/program_menu.py:256
+#, python-brace-format
+msgid "Create {kind}..."
+msgstr ""
+
+#: src/ui/program_menu.py:263
+msgid "Projects (continue building)..."
 msgstr ""
 

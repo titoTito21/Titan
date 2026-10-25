@@ -274,6 +274,67 @@ def titan_run_actions(steps, stop_on_error=True, **_):
     return text
 
 
+def _declared_risk(addon_id, action_name):
+    """What the action itself declares: 'auto', 'confirm' or
+    'always_confirm'. An action that cannot be found is 'confirm' - the run
+    will say it does not exist, and nothing unknown is waved through."""
+    try:
+        from src.titan_core.actions.registry import find_action
+        addon, action = find_action(addon_id or '', action_name or '')
+    except Exception:                                # noqa: BLE001
+        return 'confirm'
+    if addon is None or action is None:
+        return 'confirm'
+    return action.risk if action.risk in ('auto', 'confirm',
+                                          'always_confirm') else 'confirm'
+
+
+_RISK_ORDER = {'auto': 0, 'confirm': 1, 'always_confirm': 2}
+
+
+def _run_action_risk(args):
+    """``titan_run_action`` is one tool for every action of every add-on, so
+    it asks only when the action it is about to run would. Marked 'confirm'
+    whatever the action was, it asked before saying the time."""
+    return _declared_risk(args.get('addon'), args.get('action'))
+
+
+def _run_action_key(args):
+    return f"{args.get('addon') or ''}.{args.get('action') or ''}".lower()
+
+
+def _steps_of(args):
+    steps = args.get('steps')
+    if isinstance(steps, str):
+        try:
+            steps = json.loads(steps)
+        except Exception:                            # noqa: BLE001
+            return None
+    return steps if isinstance(steps, list) else None
+
+
+def _run_actions_risk(args):
+    """The riskiest step decides for a sequence."""
+    steps = _steps_of(args)
+    if not steps:
+        return 'confirm'
+    worst = 'auto'
+    for step in steps:
+        if not isinstance(step, dict):
+            return 'confirm'
+        risk = _declared_risk(step.get('addon'), step.get('action'))
+        if _RISK_ORDER[risk] > _RISK_ORDER[worst]:
+            worst = risk
+    return worst
+
+
+def _run_actions_key(args):
+    steps = _steps_of(args) or []
+    return ','.join(sorted({
+        f"{s.get('addon') or ''}.{s.get('action') or ''}".lower()
+        for s in steps if isinstance(s, dict)}))
+
+
 def _make_runner(addon_id, action_name):
     def run(**args):
         if not actions_enabled():
@@ -337,6 +398,7 @@ def get_action_tools():
               "application when there is one, and starts it or runs the "
               "function on its own when there is not.",
               titan_run_action, risk='confirm',
+              risk_of=_run_action_risk, approval_key=_run_action_key,
               properties={'addon': dict(S, description="Add-on id, e.g. 'tedit'."),
                           'action': dict(S, description="Action name, e.g. 'open_file'."),
                           'args': dict(S, description="Arguments as a JSON object, "
@@ -350,6 +412,7 @@ def get_action_tools():
               "string argument. The run stops at the first step that fails or "
               "that needs an answer, and tells you which steps did happen.",
               titan_run_actions, risk='confirm',
+              risk_of=_run_actions_risk, approval_key=_run_actions_key,
               properties={'steps': dict(S, description=
                           'A JSON list of steps, e.g. [{"addon": "tnotes", '
                           '"action": "create_note", "args": {"title": "Shopping", '

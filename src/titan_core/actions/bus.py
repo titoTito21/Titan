@@ -397,6 +397,12 @@ def _announce_client(peer, joined):
         except Exception:
             _log(f"could not say: {text}")
 
+    try:
+        from src.titan_core import client_consent
+        if not client_consent.announce_clients():
+            return                   # switched off in the Component Manager
+    except Exception:
+        pass
     threading.Thread(target=say, name='TitanActionBusSay', daemon=True).start()
 
 

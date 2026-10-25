@@ -33,7 +33,7 @@ TAB_BAR_MARKER = {'type': 'tab_bar'}
 
 # The order of the tab bar. The window is the COMPONENT manager, so
 # components come first; the kinds that have nothing installed are left out.
-TAB_ORDER = ('component', 'service', 'app', 'game', 'im_module', 'tts_engine',
+TAB_ORDER = ('component', 'service', 'client', 'app', 'game', 'im_module', 'tts_engine',
              'gamepad_mode', 'widget', 'statusbar_applet', 'shell_addon',
              'settings_interface', 'launcher', 'macro')
 
@@ -183,7 +183,8 @@ class ComponentManagerDialog(wx.Dialog):
 
     def row_text(self, module):
         modules = _modules()
-        state = _("Enabled") if module.enabled else _("Disabled")
+        state = getattr(module, 'state_text', None) or (
+            _("Enabled") if module.enabled else _("Disabled"))
         text = f"{module.name}, {state}"
         if modules.waits_for_restart(module):
             text += ", " + _("after restart")
@@ -259,13 +260,14 @@ class ComponentManagerDialog(wx.Dialog):
         modules = _modules()
         lines = [module.name,
                  _("Kind: {}").format(modules.kind_label(module.kind)),
-                 _("State: {}").format(_("Enabled") if module.enabled
-                                       else _("Disabled"))]
+                 _("State: {}").format(
+                     getattr(module, 'state_text', None)
+                     or (_("Enabled") if module.enabled else _("Disabled")))]
         if modules.waits_for_restart(module):
             lines.append(_("The change takes effect after Titan restarts."))
         if module.description:
             lines.append(_("Description: {}").format(module.description))
-        if module.kind != 'service':
+        if module.kind not in ('service', 'client'):
             lines.append(_("Identifier: {}").format(module.id))
         if module.packaged:
             lines.append(_("Installed as a package."))
@@ -276,6 +278,15 @@ class ComponentManagerDialog(wx.Dialog):
     def update_summary(self):
         if not self.items:
             self.summary.SetLabel('')
+            return
+        if self.current_tab == 'client':
+            from src.titan_core import external_clients
+            clients = [m for m in self.items
+                       if m.id not in (external_clients.POLICY_ROW,
+                                       external_clients.ANNOUNCE_ROW)]
+            allowed = sum(1 for module in clients if module.enabled)
+            self.summary.SetLabel(_("{} of {} clients may control Titan").format(
+                allowed, len(clients)))
             return
         on = sum(1 for module in self.items if module.enabled)
         self.summary.SetLabel(_("{} of {} switched on").format(on, len(self.items)))
@@ -403,7 +414,25 @@ class ComponentManagerDialog(wx.Dialog):
         module = self.selected_module()
         if module is None:
             return
+        if module.kind == 'client':
+            from src.titan_core import external_clients
+            self._client_done(module, external_clients.toggle(module))
+            return
         self.set_module_enabled(module, not module.enabled)
+
+    def _client_done(self, module, message):
+        """A row of the External clients tab was changed: say what it is
+        now and show it. Its own words, not "switched on"."""
+        try:
+            play_sound('core/SELECT.ogg')
+        except Exception:
+            pass
+        index = self.component_listbox.GetSelection()
+        if index > 0:
+            self.component_listbox.SetString(index, self.row_text(module))
+        self.tts.output(message)
+        self.update_details()
+        self.update_summary()
 
     def set_module_enabled(self, module, enabled):
         modules = _modules()
@@ -415,7 +444,7 @@ class ComponentManagerDialog(wx.Dialog):
                 pass
             _show_skinned_message(
                 change.message or _("The change could not be made."),
-                _("Component Manager"), wx.OK | wx.ICON_ERROR, self)
+                _("TCE Environment Manager"), wx.OK | wx.ICON_ERROR, self)
             return
         try:
             play_sound('core/SELECT.ogg')
@@ -446,6 +475,11 @@ class ComponentManagerDialog(wx.Dialog):
 
     def menu_entries(self, module):
         """[(label, callable)] for the selected module."""
+        if module.kind == 'client':
+            from src.titan_core import external_clients
+            return [(label, lambda f=func: self._client_done(module, f()))
+                    for label, func in external_clients.menu(module)] + [
+                (_("Details"), lambda: self.show_details(module))]
         entries = [(_("Switch off") if module.enabled else _("Switch on"),
                     lambda: self.set_module_enabled(module, not module.enabled))]
         if module.enabled:
@@ -593,7 +627,7 @@ class ComponentManagerDialog(wx.Dialog):
         if action.risk in ('confirm', 'always_confirm'):
             answer = _show_skinned_message(
                 _("Run '{}' of {}?").format(action.name.replace('_', ' '), addon.label),
-                _("Component Manager"), wx.YES_NO | wx.ICON_QUESTION, self)
+                _("TCE Environment Manager"), wx.YES_NO | wx.ICON_QUESTION, self)
             if answer != wx.ID_YES:
                 return
         try:
@@ -628,7 +662,7 @@ class ComponentManagerDialog(wx.Dialog):
             answer = _show_skinned_message(
                 _("{} changes take effect only after Titan restarts. "
                   "Restart Titan now?").format(len(pending)),
-                _("Component Manager"), wx.YES_NO | wx.ICON_QUESTION, self)
+                _("TCE Environment Manager"), wx.YES_NO | wx.ICON_QUESTION, self)
             if answer != wx.ID_YES:
                 return False
         if modules.restart_titan():
@@ -693,7 +727,7 @@ class ComponentManagerDialog(wx.Dialog):
 def show_component_manager(parent=None, component_manager=None):
     """Open the Component Manager modally. The one way in for code that has
     no reason to build the dialog itself (actions, the Start menu)."""
-    dialog = ComponentManagerDialog(parent, _("Component Manager"),
+    dialog = ComponentManagerDialog(parent, _("TCE Environment Manager"),
                                     component_manager=component_manager)
     try:
         dialog.ShowModal()

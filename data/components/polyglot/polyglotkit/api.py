@@ -483,9 +483,17 @@ class TitanAPI(object):
 
     def provide(self, names=None):
         """The functions this program answers when Titan calls it."""
-        if isinstance(names, str):
-            names = [names]
-        self._need_bridge().provided(list(names or []))
+        flat = []
+
+        def collect(value):
+            # PowerShell wraps an array in another one; any depth is one list.
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    collect(item)
+            elif value is not None:
+                flat.append(str(value))
+        collect(names)
+        self._need_bridge().provided(flat)
         return True
 
     def reply(self, id=None, value=None, error=None):

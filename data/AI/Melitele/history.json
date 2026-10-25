@@ -768,5 +768,35 @@
     "role": "assistant",
     "content": "Poprawiłam aplet paska stanu **Stoper** i przetestowałam jego działanie.\n\nGdy stoper odlicza czas, w tle działa lekki wątek, który co każdą pełną sekundę sprawdza, czy w aktualnie aktywnym motywie dźwiękowym Titana istnieje plik `core/click.ogg` (lub w motywie domyślnym, jeśli włączone jest zastępowanie brakujących dźwięków), i jeśli plik istnieje, odtwarza go przez system dźwiękowy Titana. Gdy stoper zostanie wstrzymany lub zresetowany, tykanie od razu ustaje.",
     "timestamp": 1792406758.921944
+  },
+  {
+    "role": "user",
+    "content": "napisz mi jakiś tekst notatki, treść notatki np \"srał to pies\", następnie napisz do tito w Titan-necie",
+    "timestamp": 1792750753.0013363
+  },
+  {
+    "role": "assistant",
+    "content": "Gotowe, moje dziecko. Zapisałam notatkę o treści „srał to pies” i wysłałam wiadomość do użytkownika tito w Titan-necie. Niech spokój natury ci sprzyja.",
+    "timestamp": 1792750920.4365616
+  },
+  {
+    "role": "user",
+    "content": "sprawdź, czy są aktualizacje sygnatur w Titan antivirus",
+    "timestamp": 1792767255.2237473
+  },
+  {
+    "role": "assistant",
+    "content": "Sprawdziłam bazę wirusów w Titan Antivirus, moje dziecko. Wszystkie bazy sygnatur silnika ClamAV są w pełni aktualne i nie ma teraz nowych aktualizacji do pobrania:\n\n- **Baza dzienna (daily.cld):** aktualna (wersja 28162, ponad 355 tysięcy sygnatur)\n- **Baza główna (main.cvd):** aktualna (wersja 63, ponad 3,28 miliona sygnatur)\n- **Baza bytecode (bytecode.cvd):** aktualna (wersja 339)\n\nTwój system jest pod dobrą opieką.",
+    "timestamp": 1792767451.5020516
+  },
+  {
+    "role": "user",
+    "content": "Jaki jest status Poliglot?",
+    "timestamp": 1792923021.6582644
+  },
+  {
+    "role": "assistant",
+    "content": "Komponent Polyglot jest włączony i załadowany, moje dziecko. \n\nOto jego szczegółowy status:\n- **Gotowe języki programowania:** Lua, Ruby, C# oraz PowerShell. (Dla pozostałych, takich jak JavaScript/Node.js, Go, C, C++ czy Rust, nie znaleziono zainstalowanych interpreterów lub kompilatorów).\n- **Działające komponenty i dodatki:** `lua_clock`, `lua_echo`, `lua_counter`, `ruby_dice`, `lua_uptime`, `lua_announcer` oraz silnik mowy `ruby_tones`.\n- **Niedziałające lub niezaładowane:** aplet `js_clock` nie działa z powodu braku Node.js, a `lua_launcher`, `lua_settings` oraz `lua_shell_addon` są obecnie niezaładowane.",
+    "timestamp": 1792923049.6857347
   }
 ]

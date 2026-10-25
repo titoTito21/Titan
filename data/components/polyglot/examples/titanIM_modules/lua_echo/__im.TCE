@@ -1,0 +1,5 @@
+[im_module]
+name = Lua echo
+status = 0
+description = A Titan IM module written in Lua: everything you write is said back.
+polyglot = main.lua

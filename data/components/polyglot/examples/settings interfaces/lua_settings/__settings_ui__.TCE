@@ -1,0 +1,8 @@
+[settings interface]
+name = Settings, one question at a time (Lua)
+name_pl = Ustawienia, pytanie po pytaniu (Lua)
+description = Titan's settings as lists and questions, written in Lua.
+author = TCE Team
+version = 1.0
+status = 0
+polyglot = main.lua

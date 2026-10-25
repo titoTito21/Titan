@@ -56,7 +56,7 @@ class MenuBar(wx.MenuBar):
             pass
 
         # Component Manager with icon
-        component_manager_item = program_menu.Append(wx.ID_ANY, _("Component Manager..."))
+        component_manager_item = program_menu.Append(wx.ID_ANY, _("TCE Environment Manager..."))
         try:
             component_manager_item.SetBitmap(self.skin.get_icon('components_icon', (16, 16)))
         except:
@@ -196,13 +196,13 @@ class MenuBar(wx.MenuBar):
             if not self.parent.IsShown():
                 self.parent.restore_from_tray()
 
-            manager_dialog = ComponentManagerDialog(self.parent, title=_("Component Manager"), component_manager=self.component_manager)
+            manager_dialog = ComponentManagerDialog(self.parent, title=_("TCE Environment Manager"), component_manager=self.component_manager)
             manager_dialog.ShowModal()
             manager_dialog.Destroy()
         elif not ComponentManagerDialog:
-             _show_skinned_message(_("Cannot load Component Manager (componentmanagergui.py not found)"), _("Error"), wx.OK | wx.ICON_ERROR)
+             _show_skinned_message(_("Cannot load TCE Environment Manager (componentmanagergui.py not found)"), _("Error"), wx.OK | wx.ICON_ERROR)
         elif not self.component_manager:
-             _show_skinned_message(_("Component Manager has not been initialized."), _("Error"), wx.OK | wx.ICON_ERROR)
+             _show_skinned_message(_("TCE Environment Manager has not been initialized."), _("Error"), wx.OK | wx.ICON_ERROR)
 
     # DISABLED - Titan-Net login
     # def on_titan_net_login(self, event):

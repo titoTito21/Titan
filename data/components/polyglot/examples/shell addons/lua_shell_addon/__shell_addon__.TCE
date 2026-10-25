@@ -1,0 +1,10 @@
+[shell addon]
+name = Lua shell add-on
+name_pl = Dodatek powłoki w Lua
+description = Puts an entry written in Lua into the Start menu.
+description_pl = Dodaje do menu Start pozycję napisaną w Lua.
+author = TCE Team
+version = 1.0
+status = 1
+surfaces = start_menu
+polyglot = main.lua

@@ -479,7 +479,7 @@ class TitanConsole
     # only what every face SHARES, and each face adds its own settings,
     # component manager and help. So does this one.
     program[2].push(["__settings__", _("Settings")])
-    program[2].push(["__components__", _("Component Manager")])
+    program[2].push(["__components__", _("TCE Environment Manager")])
     program[2].push(["__help__", _("Help")])
     # **One entry, not two.** Which of them applies is a question about
     # where Titan is right now - hidden with a tray icon and the Invisible

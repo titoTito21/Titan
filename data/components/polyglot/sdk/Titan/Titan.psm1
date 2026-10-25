@@ -1,4 +1,4 @@
-# Titan for PowerShell - the Polyglot line protocol.
+﻿# Titan for PowerShell - the Polyglot line protocol.
 #   Import-Module Titan        (the SDK folder is on PSModulePath)
 #   Invoke-Titan speak 'Hello'
 #   $name = Invoke-Titan ask 'Your name?'
@@ -31,4 +31,31 @@ function Invoke-Titan {
     }
 }
 
-Export-ModuleMember -Function Invoke-Titan
+# A function of this program Titan may keep and call later.
+function New-TitanFunction([string]$Name) { return @{ __function = $Name } }
+
+# Every add-on Titan CALLS ends with this: the functions it may call, by the
+# same names a Python add-on of that kind defines.
+#   Start-TitanServe @{ get_statusbar_item_text = { (Get-Date).ToString('HH:mm') } }
+function Start-TitanServe {
+    param([Parameter(Mandatory = $true)][hashtable]$Handlers)
+    Invoke-Titan provide @(,[string[]]$Handlers.Keys) | Out-Null
+    while ($true) {
+        $event = Invoke-Titan next_event -1
+        if ($null -eq $event) { continue }
+        if ($event.type -eq 'close') { return }
+        if ($event.type -ne 'call') { continue }
+        $handler = $Handlers[$event.name]
+        try {
+            $value = $null
+            # Splatted, so each argument is a parameter of the handler.
+            $arguments = @($event.args)
+            if ($null -ne $handler) { $value = & $handler @arguments }
+            Invoke-Titan reply $event.id $value | Out-Null
+        } catch {
+            Invoke-Titan reply $event.id $null $_.Exception.Message | Out-Null
+        }
+    }
+}
+
+Export-ModuleMember -Function Invoke-Titan, New-TitanFunction, Start-TitanServe

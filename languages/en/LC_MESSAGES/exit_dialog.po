@@ -21,17 +21,17 @@ msgstr ""
 
 #: src/ui/shutdown_question.py:15
 msgid "Confirm Exit"
-msgstr ""
+msgstr "Confirm Exit"
 
 #: src/ui/shutdown_question.py:22
 msgid "Are you sure you want to exit Titan?"
-msgstr ""
+msgstr "Are you sure you want to exit Titan?"
 
 #: src/ui/shutdown_question.py:26
 msgid "OK"
-msgstr ""
+msgstr "OK"
 
 #: src/ui/shutdown_question.py:30
 msgid "Cancel"
-msgstr ""
+msgstr "Cancel"
 

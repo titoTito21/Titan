@@ -1,7 +1,18 @@
+#
 msgid ""
 msgstr ""
-"Content-Type: text/plain; charset=UTF-8\n"
-"Language: \n"
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-10-22 19:45+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: pl <LL@li.org>\n"
+"Language: pl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Generated-By: Babel 2.18.0\n"
 
 msgid "Languages"
 msgstr ""
@@ -9,10 +20,10 @@ msgstr ""
 msgid "&Close"
 msgstr ""
 
-msgid "The new applications and games appear in Titan's lists after Titan is restarted; the component example is started then too."
+msgid "The new add-ons appear in Titan after Titan is restarted."
 msgstr ""
 
-msgid "Programming languages"
+msgid "There is no add-on in another language."
 msgstr ""
 
 msgid "No component in another language is running."
@@ -24,7 +35,12 @@ msgstr ""
 msgid "not found"
 msgstr ""
 
-msgid "Applications, games and components may be written in these languages. Lua needs nothing; the others need their interpreter or compiler on this computer."
+msgid ""
+"Every kind of Titan add-on - applications, games, components, Titan IM "
+"modules, widgets, statusbar applets, launchers, settings interfaces, shell "
+"add-ons, gamepad modes and TTS engines - may be written in these languages. "
+"Lua needs nothing; the others need their interpreter or compiler on this "
+"computer."
 msgstr ""
 
 msgid "Language"
@@ -42,19 +58,40 @@ msgstr ""
 msgid "&Install the examples"
 msgstr ""
 
-msgid "&Open the languages file"
+msgid "&Prepare add-ons in other languages"
+msgstr ""
+
+msgid "&Add-ons in other languages"
+msgstr ""
+
+msgid "Language &settings..."
 msgstr ""
 
 msgid "There are no examples to install."
 msgstr ""
 
+msgid "They are loaded when Titan is restarted."
+msgstr ""
+
+msgid "All of them were ready."
+msgstr ""
+
 msgid "Languages Titan programs may be written in:"
+msgstr ""
+
+msgid "not loaded"
+msgstr ""
+
+msgid "There is no add-on called {} in another language."
 msgstr ""
 
 msgid "running"
 msgstr ""
 
 msgid "built in"
+msgstr ""
+
+msgid "Add-ons in other languages: {}."
 msgstr ""
 
 msgid "There is no file at {}."
@@ -69,10 +106,19 @@ msgstr ""
 msgid "{} could not be started."
 msgstr ""
 
+msgid "{} ({}, {}) is loaded by Titan and answers: {}"
+msgstr ""
+
 msgid "Installed: {}."
 msgstr ""
 
 msgid "Already there, left as they were: {}."
+msgstr ""
+
+msgid "Prepared now: {}."
+msgstr ""
+
+msgid "{} ({}, {}) could not be loaded: {}"
 msgstr ""
 
 msgid "Titan is not running."
@@ -84,6 +130,9 @@ msgstr ""
 msgid "Close"
 msgstr ""
 
+msgid "Only an add-on Titan calls into can do this."
+msgstr ""
+
 msgid "Only a component can add a menu entry."
 msgstr ""
 
@@ -93,12 +142,195 @@ msgstr ""
 msgid "There is no sound called '{}'."
 msgstr ""
 
-msgid "{} stopped with an error (code {}).\n\n{}"
+msgid ""
+"{} stopped with an error (code {}).\n"
+"\n"
+"{}"
 msgstr ""
 
 msgid "It said nothing about why."
 msgstr ""
 
-msgid "No interpreter or compiler for {} was found (looked for: {}). Install it, or name its path in {}."
+msgid ""
+"No interpreter or compiler for {} was found (looked for: {}). Install it, or"
+" give its path in Settings -> Polyglot."
 msgstr ""
 
+msgid "switched off"
+msgstr ""
+
+msgid "nothing"
+msgstr ""
+
+msgid "{}: found {}."
+msgstr ""
+
+msgid "Add a language"
+msgstr ""
+
+msgid "&Identifier:"
+msgstr ""
+
+msgid "&Name:"
+msgstr ""
+
+msgid "File &extensions:"
+msgstr ""
+
+msgid ""
+"Interpreter or com&piler (one path or program name per line, the first found"
+" is used):"
+msgstr ""
+
+msgid "&Run command:"
+msgstr ""
+
+msgid "&Compile command (empty if the language is not compiled):"
+msgstr ""
+
+msgid "Compiled &output file:"
+msgstr ""
+
+msgid "En&vironment variables (NAME=value, one per line):"
+msgstr ""
+
+msgid "N&ote:"
+msgstr ""
+
+msgid "How a command is written"
+msgstr ""
+
+msgid ""
+"The languages add-ons may be written in. Add one by giving its interpreter "
+"or compiler, or change where a built-in language finds its own. Changes are "
+"written when the settings are saved."
+msgstr ""
+
+msgid "&Add a language..."
+msgstr ""
+
+msgid "C&hange..."
+msgstr ""
+
+msgid "&Remove"
+msgstr ""
+
+msgid "Switch o&ff"
+msgstr ""
+
+msgid "Chec&k"
+msgstr ""
+
+msgid "Open the languages &file"
+msgstr ""
+
+msgid ""
+"The identifier must be lower-case letters, digits and - _ . + only, for "
+"example: kotlin."
+msgstr ""
+
+msgid "Give at least one file extension, for example: .kt"
+msgstr ""
+
+msgid "Give the command that runs a program, or the command that compiles it."
+msgstr ""
+
+msgid "{} is built into Polyglot and needs nothing."
+msgstr ""
+
+msgid "{}: no interpreter or compiler was found. Looked for: {}."
+msgstr ""
+
+msgid "{}: found {}. It says: {}"
+msgstr ""
+
+msgid "built in, changed"
+msgstr ""
+
+msgid "added by you"
+msgstr ""
+
+msgid "Interpreter or compiler"
+msgstr ""
+
+msgid "&Browse for the program..."
+msgstr ""
+
+msgid "Compile command"
+msgstr ""
+
+msgid "Environment variables"
+msgstr ""
+
+msgid "Put Titan's &SDK folder on the language's search paths"
+msgstr ""
+
+msgid "S&witched off"
+msgstr ""
+
+msgid ""
+"In a command: {exe} is the interpreter or compiler found above, {file} the "
+"program's file, {dir} its folder, {name} the file's name without its "
+"extension, {out} the file the compile command made, {sdk} Polyglot's SDK "
+"folder, {python} Titan's own Python. A part with a space in it goes in "
+"double quotes. A compiled language usually runs with the command {out}."
+msgstr ""
+
+msgid "Programs"
+msgstr ""
+
+msgid "Choose the interpreter or compiler"
+msgstr ""
+
+msgid "Source"
+msgstr ""
+
+msgid "&Restore default"
+msgstr ""
+
+msgid "Switch o&n"
+msgstr ""
+
+msgid "Change {}"
+msgstr ""
+
+msgid "Remove {}?"
+msgstr ""
+
+msgid "Put {} back the way Polyglot ships it?"
+msgstr ""
+
+msgid "These lines are not NAME=value: {}"
+msgstr ""
+
+msgid ""
+"These extensions also belong to another language: {}. A language you added "
+"is used for them first. Keep them?"
+msgstr ""
+
+msgid "There is already a language called {}."
+msgstr ""
+
+msgid "All files"
+msgstr ""
+
+msgid "&Languages:"
+msgstr ""
+
+msgid "No&te:"
+msgstr ""
+
+msgid "Note"
+msgstr ""
+
+msgid "How a command is written:"
+msgstr ""
+
+msgid "Install the examples"
+msgstr ""
+
+msgid "Prepare add-ons in other languages"
+msgstr ""
+
+msgid "Add-ons in other languages"
+msgstr ""

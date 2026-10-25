@@ -1,0 +1,7 @@
+[mode]
+name = Button announcer (Lua)
+name_pl = Mówiące przyciski (Lua)
+main = mode.py
+description = A gamepad mode written in Lua: every button says its number.
+status = 0
+polyglot = main.lua

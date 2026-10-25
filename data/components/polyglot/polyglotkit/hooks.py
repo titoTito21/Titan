@@ -91,6 +91,56 @@ def _make_run(module_name, kind, original):
     return _run_executable
 
 
+#: The Macro Manager component, as the component manager registers it.
+_MACROS_MODULE = 'macros'
+
+
+def _make_run_macro(original):
+    """A macro whose ``openfile`` is a program in another language runs the
+    way an application does, once; every other macro is the Macro Manager's
+    own business."""
+    def run_macro(macro_info, parent_frame=None, *args, **kwargs):
+        script = (macro_info or {}).get('script_path', '') or ''
+        runtime = runtimes.for_file(script) if script else None
+        if runtime is None or not os.path.isfile(script):
+            return original(macro_info, parent_frame, *args, **kwargs)
+        try:
+            if not runtime.available():
+                raise RuntimeError(runtime.why_not())
+            pid = launch(script, os.path.dirname(script), 'macro', runtime)
+            # So `titan.processes` says which process is this macro.
+            try:
+                from src.titan_core import app_manager
+                app_manager.note_process(pid, {
+                    'name': macro_info.get('name', ''),
+                    'shortname': macro_info.get('folder_name', ''),
+                    'path': os.path.dirname(script)}, kind='macro')
+            except Exception:
+                pass
+            return pid
+        except Exception as error:
+            _log('macro failed: %s' % error)
+            _tell(str(error))
+            return 0
+    run_macro.polyglot = True
+    return run_macro
+
+
+def _install_macros():
+    """Wrap the Macro Manager's ``run_macro`` - looked up by name by every
+    way a macro is started (its list, its shortcuts, its triggers, the Start
+    menu, the ``macros.run_macro`` action)."""
+    module = sys.modules.get(_MACROS_MODULE)
+    run = getattr(module, 'run_macro', None) if module is not None else None
+    if run is None or not hasattr(module, 'MacroManager')             and not hasattr(module, 'run_tcs'):
+        return False
+    if getattr(run, 'polyglot', False):
+        return True
+    _ORIGINALS[_MACROS_MODULE] = run
+    module.run_macro = _make_run_macro(run)
+    return True
+
+
 def install():
     """Put the two helpers in place. Safe to call twice."""
     with _installed:
@@ -109,16 +159,26 @@ def install():
             module.find_executable_file = _make_find(module_name, find)
             module._run_executable = _make_run(module_name, kind, run)
             done.append(kind)
+        try:
+            if _install_macros():
+                done.append('macro')
+        except Exception as error:
+            _log('cannot reach the macros: %s' % error)
         return done
 
 
 def uninstall():
     with _installed:
-        for module_name, (find, run) in list(_ORIGINALS.items()):
+        for module_name, original in list(_ORIGINALS.items()):
             module = sys.modules.get(module_name)
-            if module is not None:
-                module.find_executable_file = find
-                module._run_executable = run
+            if module is None:
+                continue
+            if module_name == _MACROS_MODULE:
+                module.run_macro = original
+                continue
+            find, run = original
+            module.find_executable_file = find
+            module._run_executable = run
         _ORIGINALS.clear()
 
 

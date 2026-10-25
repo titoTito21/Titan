@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 08:44+0200\n"
+"POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,64 +17,64 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/ui/classic_start_menu.py:214 src/ui/classic_start_menu.py:219
+#: src/ui/classic_start_menu.py:215 src/ui/classic_start_menu.py:220
 msgid "Start menu"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:272
+#: src/ui/classic_start_menu.py:273
 msgid "Menu"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:305
+#: src/ui/classic_start_menu.py:318
 #, python-brace-format
 msgid "Log Off \"{user}\"..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:306
+#: src/ui/classic_start_menu.py:319
 msgid "Log Off..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:310
+#: src/ui/classic_start_menu.py:323
 msgid "Titan"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:311
+#: src/ui/classic_start_menu.py:324
 msgid "Programs"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:312
+#: src/ui/classic_start_menu.py:325
 msgid "Documents"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:313 src/ui/classic_start_menu.py:487
+#: src/ui/classic_start_menu.py:326
 msgid "Settings"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:314
+#: src/ui/classic_start_menu.py:327
 msgid "Search"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:315
+#: src/ui/classic_start_menu.py:328
 msgid "Help and Support"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:316
+#: src/ui/classic_start_menu.py:329
 msgid "Run..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:319
+#: src/ui/classic_start_menu.py:333
 msgid "Separator"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:321
+#: src/ui/classic_start_menu.py:335
 msgid "Shut Down..."
 msgstr ""
 
-#: src/ui/classic_start_menu.py:758
+#: src/ui/classic_start_menu.py:782
 msgid "Help function"
 msgstr ""
 
-#: src/ui/classic_start_menu.py:758
+#: src/ui/classic_start_menu.py:782
 msgid "Help"
 msgstr ""
 

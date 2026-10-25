@@ -1,0 +1,7 @@
+[macro]
+name_pl = Powitanie w Lua
+name_en = Greeting in Lua
+openfile = main.lua
+
+[macrocfg]
+hotkey =

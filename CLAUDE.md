@@ -1033,9 +1033,81 @@ raised (`get_component_display_name` called with one argument of two).
 - Also fixed on the way: `im_ui_common` imported feedback_hub's
   argument-less `_announce_tab_bar` as `announce_tab_bar` and called it with
   the tab, so arriving on a Titan IM client's tab bar raised `TypeError`.
-- Translation domain `components` (now with `modules.py`).
-- Tests: `tests/test_component_manager.py` (15; temporary APPDATA, add-ons
+- **External clients tab** (`src/titan_core/external_clients.py`, kind
+  `client`): Titan's settings ABOUT the programs on its Action Bus - "When a
+  new external client connects" (ask me / allow / do not allow,
+  `client_consent.new_client_policy`, section `external_clients_options`;
+  `may_drive` and `ask` follow it, so a rule answers instead of a dialog),
+  "Announce when an external client connects or closes" (the bus's sound and
+  sentence, `announce_clients`), then one row per client met (connected now
+  or answered about): may it control Titan. Space switches (the policy row
+  cycles), the actions menu has Allow / Do not allow / Ask again when it next
+  connects; rows say their own state (`Module.state_text`) and the summary
+  counts clients that may control Titan. The refusal used to send the user to
+  "Settings, General, under External clients", which never existed; it names
+  this tab now. Also: the consent question itself was never translated, and
+  with Titan in the tray and Titan UI on it could not be answered (the
+  Invisible UI held Enter/Escape) - it timed out as no answer and was asked
+  again at every connection. It takes the keyboard (`keyboard_handover`) and
+  the foreground now; measured with the real Invisible UI: Enter answered in
+  1.4 s.
+- Translation domain `components` (now with `modules.py`,
+  `external_clients.py` and `client_consent.py`).
+- Tests: `tests/test_component_manager.py` (21; temporary APPDATA, add-ons
   made in the user overlay, nothing shown).
+
+### Usage tips, the package folder, and the manager's name (2026-10-25)
+
+- **Settings -> General -> "Speak tips on using TCE"** (`general/speak_usage_tips`,
+  on by default) is the one switch for the usage tips in
+  `src/accessibility/messages.py` - switching lists from the tab bar, how
+  to reach the Invisible UI after minimising, turning Titan UI off in a
+  window that wants its keys (`usage_tips_enabled()`; the tab bar tip asks
+  again when its delay is over).
+- **Settings -> General -> "Titan-Net: folder for downloaded packages"**
+  (`titannet/packages_folder`, empty = the user's Downloads folder, asked of
+  Windows by FOLDERID_Downloads / XDG). `src/network/package_downloads.py`
+  is the one place: the Titan-Net window and `titannet.repository_download`
+  save there, never over an existing file. Packages used to go to
+  `data/downloaded packages` relative to the WORKING directory, and the
+  action downloaded into memory and wrote nothing.
+- **The Component Manager is called "TCE Environment Manager"** ("Menedżer
+  środowiska TCE") in every menu, title and message, the Elten bridge's
+  too (its `locale/pl.mo` has the entry). Code names (`componentmanagergui`,
+  `open_component_manager`) are unchanged.
+- **Polyglot, labelled**: a field's `wx.StaticText` must be created BEFORE
+  its control - Windows names an edit box after the static text preceding
+  it and a mnemonic jumps to the control after its label, so the language
+  dialog read every field with the previous row's label. Native controls are
+  named through `a11y.name_control`; the window stands the Invisible UI down
+  while open; long results open in a read-only text box, not a message box.
+  Verified through Titan Access's own UIA provider and `accessible.describe`
+  (windows shown off-screen, never activated): every control of the
+  language dialog, the settings page, the Polyglot window and the new
+  General controls is read with its name, type and state; none unnamed -
+  and through the engine's own `announce_object` into the real speech
+  queue ("Identyfikator Pole edycji", "Wyłączony Pole wyboru
+  niezaznaczono"...; `tests/check_polyglot_reader_live.py`, adapter in
+  print mode so nothing plays over another reader). The REAL InvisibleUI in
+  Titan UI mode holds Up/Enter (asked of Windows with RegisterHotKey),
+  releases them while the Polyglot window is open and takes them back after
+  (`tests/check_polyglot_iui_live.py`; holds the keys for ~2 s). A real
+  `TitanNetClient.download_app` against a local server streamed into
+  `C:\Users\<user>\Downloads` with the setting empty.
+- Babel is installed for the machine's Python 3.15 (`python -m
+  babel.messages.frontend`); `src/scripts/extract_translations.py` runs.
+  **An earlier extraction had pushed ~400 translated titannet strings into
+  the obsolete (`#~`) section** (735 obsolete at HEAD); the next update made
+  them fuzzy guesses ("Discussion" -> "Rozłącz"). They were restored from
+  the obsolete entries by exact msgid; six translations written twice back
+  to back were cut to one, two wrong ones fixed ("Volume Level",
+  "Titan-Net GUI not available"), and three Polish-source msgids in code
+  replaced by English. `check_translations.py`: 49 catalogues, nothing to
+  fix. `telegram.po` is not updated by the extraction.
+- `tests/test_shell.py` reads the REAL `modules.json`: with Messenger and
+  WhatsApp switched off there, two Start-menu tests fail. Run it with a
+  temporary APPDATA.
+- Tests: `tests/test_tips_packages_polyglot.py` (13).
 
 ### Core Managers
 - `src/titan_core/app_manager.py`: Handles loading/running applications from `data/applications/`
@@ -3600,7 +3672,7 @@ tags, and "-->" - so comments, the XML declaration and a DOCTYPE are taken
 out before anything is parsed, and a CDATA section is its text. Everything
 else came back clean.
 
-### Polyglot: applications, games and components in other languages
+### Polyglot: every kind of add-on in other languages
 
 `data/components/polyglot/` (package `polyglotkit`, not `polyglot` - the
 component manager registers the folder name in `sys.modules`). An app's or
@@ -3629,6 +3701,25 @@ Ruby, C#, PowerShell - or anything in the user's
   `NothingHasToBeInstalled` checks each is found with only Windows on PATH.
   `.gitignore` re-includes `interpreters/**` (the global `*.so`/`*.pem` rules
   would leave a clone's Ruby without digest and TLS).
+- **It is called Polyglot**, in every language: the Components-menu entry
+  and the window's title are the name, not "Programming languages".
+- **Languages are added in Settings -> Polyglot** (`settings_page.py`,
+  `add_settings_category`): a list of every language (state, built in /
+  changed / added by you, interpreter) with Add, Change, Remove / Restore
+  default, Switch off/on, Check (finds the program, asks `--version`) and
+  Open the languages file. The dialog carries every field of a runtime -
+  id, name, extensions, `find` (one per line, Browse), run and compile
+  commands (one line; a part with a space in double quotes,
+  `split_command` keeps backslashes, which shlex would not), output, env
+  (`NAME=value`), SDK, note, switched off. It edits a working copy
+  (`Languages`) and writes `runtimes.json` on Titan's Save, as every
+  category does. A built-in language is stored only as what was changed
+  (`runtimes.difference`), so changing nothing writes nothing and Restore
+  default removes the entry; `"disabled": true` switches a language off
+  (`all_runtimes(include_disabled=)`); a language the user ADDED wins an
+  extension it shares with a built-in one (`for_file`). The window's
+  "Language settings..." opens Titan's own settings at this category
+  (`settings_page.open_page`). Tests: `LanguagesAreAddedInTheSettings`.
 - **The host process** (`host.py`): Titan's own Python
   (`app_manager.get_python_executable`, `-c` bootstrap, as Titan runs Python
   apps) with wx for the dialogs and the game window, joined to the Action
@@ -3664,9 +3755,105 @@ Ruby, C#, PowerShell - or anything in the user's
   `polyglot.list_languages`, `run_file`, `install_examples`, `components`.
   Examples in `examples/` (Lua app, game, component; JS, Ruby, C#,
   PowerShell apps), installed into the user's overlay on request.
-- Tests: `tests/test_polyglot.py` (44; temporary APPDATA, Titan replaced by
+- Tests: `tests/test_polyglot.py` (52; temporary APPDATA, Titan replaced by
   a recorder, dialogs built for real and answered in code, the examples run
   on the real carried interpreters).
+- **Every other kind, too** (`polyglotkit/adapters.py`, `stubs.py`): Titan
+  IM modules, widgets, statusbar applets, launchers, settings interfaces,
+  shell add-ons, gamepad modes and TTS engines. These are kinds Titan CALLS,
+  so the program defines the functions a Python add-on of that kind defines,
+  under the same names (`get_statusbar_item_text`, `navigate`,
+  `handle_button`, `generate`, `start_menu_items`...).
+  - **The loader finds a Python file Polyglot writes**: each kind's loader
+    looks for `init.py` / `main.py` / `__engine__.py` / the gamepad mode's
+    `main =` file (`mode.py`), so beside `main.<ext>` (or `polyglot = file`
+    in the manifest) Polyglot writes a stub marked `# Polyglot entry` that
+    calls `adapters.bind(globals(), kind, __file__, source)`. Written at
+    component import (`stubs.ensure_all`, every kind's folders), on
+    installing the examples, and by `polyglot.prepare_addons` / the window's
+    button (run before packing). Never into a folder without that kind's
+    manifest, never over a Python file that is not ours.
+  - **Titan calling the program**: Lua is called directly on one worker
+    thread; any other language gets `{"type": "call", "id", "name", "args"}`
+    from `next_event` and answers `reply(id, value[, error])`, having said
+    which functions exist with `provide`. Every SDK has `serve(handlers)`
+    (`Titan.serve`, `titan.serve`, `Start-TitanServe`, `Titan.Serve`) and a
+    function reference (`fn` -> `{"__function": name}`); a Lua function
+    returned is kept as a callable. Ruby 3 hands `serve('a' => ...)` over as
+    keywords, PowerShell nests the names one array deeper (`provide`
+    flattens) and needs real splatting for the arguments.
+  - **Objects cross as handles** (`{"__handle", "__type"}` plus the object's
+    `as_dict()` when it has one) and are used with `host(target, method,
+    args)`; a kind's own objects are named (`sounds`/`config`/`ui`/`buffers`
+    of an IM module, `gamepad` helpers, a launcher's or settings interface's
+    `api`).
+  - **wx's thread waiting for the program** pumps (the program's dialogs
+    are handed to it; `app.Yield` lets Titan's own queued work through), and
+    open/activate calls do not wait at all. A launcher's `start` runs on a
+    thread with a hidden anchor frame keeping wx's loop up, and ends Titan
+    (`request_exit`) when it returns; `open_settings` is not waited for.
+  - A TTS engine's `generate` answers a WAV path (or `{"base64", "format"}`);
+    pydub is told the format, or it asks ffmpeg even for a WAV.
+  - **Macros** run once, like an application: `openfile = main.lua` in
+    `__macro__.TCE`. `hooks.install` also wraps the Macro Manager's
+    `run_macro` (`sys.modules['macros']`, looked up by name by its list, its
+    shortcuts, its triggers and `macros.run_macro`), so a macro whose file a
+    runtime answers is launched with kind `macro`; everything else is the
+    Macro Manager's own. Lua runs `main()` for a macro as for an app.
+  - Examples: a Lua IM module, macro, widget, statusbar applet, launcher, settings
+    interface, shell add-on (ships off) and gamepad mode, a JavaScript
+    statusbar applet, a Ruby widget and a Ruby TTS engine.
+  - `polyglot.check_addon <name>` loads one add-on through the loader
+    Titan uses for its kind, in the running Titan, and says what it answers
+    (a statusbar text, a widget's element, the shell add-on's own Start menu
+    entries, a TTS engine's voices) without opening or running anything.
+    With `run=true` it also USES the add-on where Titan does: a shell
+    add-on's entry is found among Titan's own classic Start menu's
+    `addon_entries()` (the same code the XP menu inside the shell uses; no
+    shell needed) and chosen through the menu's `_activate_entry`; a
+    gamepad mode is switched in on the real `ControllerModeManager`, handed
+    `handle_button_press(0)` - where a pad's button arrives - and the user's
+    mode is put back. (A Start menu entry that is a branch carries
+    `('__addon__', item)` as its payload, not the item.)
+    A foreign macro's process is noted (`note_process`, kind `macro`), so
+    `titan.processes` names it.
+  - **No wait may be "for ever" as a number**: `Event.wait(10 ** 9)` is
+    refused on Windows ("timeout value is too large"), which ended a Lua
+    launcher - and with it Titan - the moment it started. `timeout=None` is
+    for ever; a test reads the source for the old spelling.
+  - **Verified in a live Titan** (source, a throwaway APPDATA, the update
+    check stubbed so a test run can never "update" the checkout, the bus
+    client's consent pre-written): every example loaded and answered through
+    its real loader, widgets moved and pressed over `widgets.move/press`,
+    both applets on `statusbar.read`, the Ruby engine wrote a WAV and spoke,
+    the Lua gamepad mode switched in with `gamepad.set_mode` and used a
+    button through the real mode manager, the Lua shell add-on's entry was
+    chosen in Titan's Start menu and its Lua action ran, the Lua
+    settings interface opened from `titan.open_settings`, the Lua macro ran
+    and was listed by `titan.processes`, and Titan started in launcher mode
+    with the Lua launcher and stayed up.
+    Then USED through their own windows, driven by UI Automation aimed at
+    those windows (no global keystrokes): the Lua launcher's list opened
+    Notes and its Exit closed Titan cleanly (exit 0); and with the user's
+    consent the real Titan shell was started (`shell.start`), its Start menu
+    offered "Hello from Lua", choosing it ran the Lua action (its message
+    box came up and was closed by its OK), and `shell.stop` gave Windows'
+    taskbar back - always in a `finally`. Two traps of the harness, not of
+    Polyglot: UI Automation lists a list box's SCROLL BAR among its
+    children, so pick a row by text (`LB_FINDSTRINGEXACT`), never by its
+    position there; and on Windows `os.kill(pid, 0)` TERMINATES the process
+    (use `psutil.pid_exists`). Not done: a physical gamepad (none attached);
+    the gamepad mode was handed a button by the real mode manager instead. Note that "Hello from Lua" is ALSO
+    the name of the Lua example application, so a Start menu search is not
+    evidence about the shell add-on - `check_addon` asks the add-on itself.
+- Tests: `tests/test_polyglot_addons.py` (29; every Component Manager and
+  Action API add-on kind must be in `adapters.KINDS` with an example;
+  temporary APPDATA, every
+  example through Titan's REAL loader - `StatusbarAppletManager`,
+  `_widget_modules`, `TitanIMModuleManager`, `load_custom_modes`,
+  `EngineRegistry`, `ShellAddonManager`, `interfaces.manager`,
+  `LauncherManager` - with speech, dialogs, the IM sounds and the gamepad
+  helpers replaced by recorders; and `serve` in all four process SDKs).
 
 ### SMP says the whole label
 
@@ -11357,6 +11544,89 @@ dialog used to lose all of it.
   (`project.json`), the folder is `safe_name()` of what was typed, and
   `find_project` is what makes the two meet - by the obvious path, then by
   folder name, then by what a project calls itself.
+
+### AI confirmations, and subagents
+
+Reported as "with the default settings 'confirm risky actions' keeps asking,
+and the question hangs the program". Both were true.
+
+- **It asked about everything.** `titan_run_action` is one tool for every
+  action of every add-on and was `risk='confirm'` whatever the action
+  declared, so saying the time or listing notes asked first; every AI OCR
+  tool asked too (a reading was three questions). Now a tool may carry
+  `risk_of(args)` / `approval_key(args)` (`agent_tools._tool`), and
+  `titan_run_action` / `titan_run_actions` answer with the action's OWN
+  declared risk (a sequence: its riskiest step; an unknown action is
+  'confirm', never 'auto'). AI OCR's tools are 'auto' (the user switched AI
+  OCR on, and pressing has its own switch), and so are playing media,
+  launching Titan's own apps, opening settings, a reminder, brightness and
+  marking read. Still asked: shell, writing and deleting files, launching a
+  program, sending and posting, Wi-Fi, autostart, power plan - and volume
+  and mute, because muting silences a blind user's screen reader.
+- **The question could not end.** Three copies of `CallAfter(ask)` +
+  `done.wait()` with no deadline: a dialog that failed to build left the run
+  waiting for ever (Shift+Escape could not reach it), one parented to a frame
+  hidden in the tray sat behind everything with the Invisible UI taking every
+  key, and asked from the GUI thread it waited for a CallAfter that thread
+  would never run. `src/ai/confirmation.py` is the one implementation:
+  policy first ('none' never asks), a dialog of Titan's own (Allow / Allow
+  for this session / Do not allow, STAY_ON_TOP, foreground taken after it is
+  shown, the Invisible UI stood down round it), shown directly on the GUI
+  thread, refused at once with no running main loop, the wait polling the
+  cancel event, one dialog at a time for parallel subagents (re-checking
+  approvals after the lock). Settings -> AI features -> "Ask again about
+  actions allowed for this session" forgets them. The agent's and the
+  assistant's follow-up questions set `done` in a `finally` and poll cancel.
+- **The agent's and the assistants' questions sound like the agent**:
+  `ai_speech.play_question_sound(agent=True)` plays `SOUND_AGENT_QUESTION`
+  (`ai/agent_question.ogg`, asked for), falling back to `SOUND_QUESTION`
+  where the theme has not got it; the creation kit keeps the status-bar cue.
+- **Subagents** (`src/ai/subagents.py`): another `run_agent` for one part of
+  a request - its own short history, instructions, a narrower toolset (tool
+  groups: desktop, ui, ocr, browser, web, titan, services, actions, memory,
+  all), a step budget, no memory, no asking the user. `ai_run_subagent`
+  waits for one; `ai_run_subagents` runs up to 4 at once (8 per call) on
+  threads and returns the results in order. A subagent uses its parent's
+  provider, model, confirmation, cancel event and narration: `run_agent`
+  keeps a per-thread stack of runs (`ai_agent.current_run()` / `push_run`),
+  and a parallel thread pushes its parent's context. Nesting stops at
+  `MAX_DEPTH` 3 (the deepest gets no subagent tools). Built in: general,
+  screen (desktop + ui + ocr), web, titan; the user's own in
+  `%APPDATA%/titosoft/Titan/ai/subagents.json`, added by `ai_create_subagent`
+  or Settings -> AI features -> Subagents... (`subagents_gui.py`). In the
+  agent's and the assistants' toolsets (`agent_tools._subagent_tools`) and
+  the Action API's `subagents` provider (`run_subagent` / `run_subagents`
+  are `needs_ai` and off the GUI thread), so macros, Titan Script and reader
+  add-ons can start one; started there, the confirmation is the ordinary
+  dialog under the user's policy.
+- **In the background** (`ai_start_subagent`, `ai_subagent_status`,
+  `ai_cancel_subagent`; Action API `subagents.start_subagent`): asked for as
+  "can they work asynchronously so there is no long wait". The run answers
+  at once; the subagent runs on a thread with a context of its OWN (the
+  parent's provider and model, its own cancel event, the ordinary
+  confirmation dialog - the parent's window may be gone by then), at most
+  `MAX_BACKGROUND` 4 running, and its result is delivered by itself:
+  `show_notification` (sound + speech) and the AI buffer. A cancelled job is
+  not announced. Live on Gemini: the agent answered without waiting and the
+  result arrived ten seconds later as "Subagent general skończył".
+- **The Invisible UI kept Enter, Space, the arrows and Escape while a dialog
+  had "taken the keyboard".** `temporarily_disable_titan_ui` only set a flag;
+  the navigation keys are `RegisterHotKey` hotkeys, which Windows takes from
+  EVERY window, and `_handle_nav_key` merely ignored them - so with Titan UI
+  on, a dialog could not be answered with Enter or Escape. That is the
+  freeze a screen-reader user meets. Measured with the real `InvisibleUI`,
+  the real dialog in the foreground and a real Enter through SendInput: not
+  received (ended only by cancelling after 9 s); after
+  `temporarily_disable_titan_ui` / `_on_dialog_close` re-run
+  `_update_hotkeys`, answered in 1.4 s. Applies to every one of the ~46
+  callers. And the dialog's message is a StaticText with the focus on Allow:
+  a multi-line read-only TextCtrl keeps Enter for itself.
+- Tests: `tests/test_ai_subagents_and_confirmation.py` (30; a scripted step
+  function as the model, the real `run_agent`, a real wx main loop with the
+  dialog built and its button fired by an event, never shown). Live: a real
+  Gemini run with the dialog really shown (one question for two risky calls
+  after "for this session", GUI's longest stall 0.30 s, cancelling closed an
+  open question in 3.1 s).
 
 ### AI memory across runs
 

@@ -1,0 +1,7 @@
+{
+  "name": "Clock (JavaScript)",
+  "name_pl": "Zegar (JavaScript)",
+  "description": "A statusbar applet written in JavaScript.",
+  "update_interval": 15,
+  "polyglot": "main.js"
+}

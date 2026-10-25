@@ -64,6 +64,8 @@ def describe_action(name, args):
         'titan_list_actions': _("Checking what Titan's add-ons can do"),
         'list_tce_items': _("Listing Titan apps and games"),
         'list_elements': _("Checking what is on screen and what can be clicked"),
+        'ai_list_subagents': _("Checking which subagents there are"),
+        'ai_subagent_status': _("Checking on the background subagents"),
     }
     detailed = ((name == 'titan_list_settings' and a.get('section'))
                 or (name == 'titan_list_actions' and a.get('addon'))
@@ -81,6 +83,13 @@ def describe_action(name, args):
         'focus_window': lambda: _("Switching to the window {title}").format(title=g('title')),
         'launch_program': lambda: _("Launching {path}").format(path=g('path')),
         'run_shell': lambda: _("Running a system command: {command}").format(command=g('command')),
+        'ai_run_subagent': lambda: _("Handing a task to the subagent {name}: {task}").format(
+            name=g('subagent') or 'general', task=g('task')),
+        'ai_run_subagents': lambda: _("Starting several subagents at once"),
+        'ai_start_subagent': lambda: _("Starting the subagent {name} in the background: {task}").format(
+            name=g('subagent') or 'general', task=g('task')),
+        'ai_create_subagent': lambda: _("Saving the subagent {name}").format(name=g('name')),
+        'ai_delete_subagent': lambda: _("Deleting the subagent {name}").format(name=g('name')),
         'write_file': lambda: _("Writing the file {path}").format(path=g('path')),
         'delete_path': lambda: _("Deleting {path}").format(path=g('path')),
         'web_search': lambda: _("Searching the web for {query}").format(query=g('query')),
@@ -684,8 +693,8 @@ def delete_path(path, **_):
 # Tool registry
 # --------------------------------------------------------------------------- #
 def _tool(name, description, run, risk='auto', properties=None, required=None,
-          always_confirm=False, needs_gui=True):
-    return {
+          always_confirm=False, needs_gui=True, risk_of=None, approval_key=None):
+    tool = {
         'name': name, 'description': description, 'run': run, 'risk': risk,
         'always_confirm': always_confirm,
         # False is a promise that this tool touches no wx, so the Action API
@@ -698,6 +707,12 @@ def _tool(name, description, run, risk='auto', properties=None, required=None,
             'required': required or [],
         },
     }
+    # A tool standing for many actions answers per call (confirmation.py).
+    if risk_of is not None:
+        tool['risk_of'] = risk_of
+    if approval_key is not None:
+        tool['approval_key'] = approval_key
+    return tool
 
 
 def get_desktop_tools():
@@ -783,7 +798,8 @@ def get_tools(ask_user=None):
     """
     return get_desktop_tools() + (
         _ui_tools() + _browser_tools() + _titan_tools() + _subsystem_tools()
-        + _memory_tools() + _action_tools() + _ask_tools(ask_user))
+        + _memory_tools() + _action_tools() + _subagent_tools()
+        + _ask_tools(ask_user))
 
 
 def _ui_tools():
@@ -833,6 +849,16 @@ def _ask_tools(ask_user):
         return [make_ask_user_tool(ask_user)]
     except Exception as e:
         print(f"[agent_tools] Follow-up questions unavailable: {e}")
+        return []
+
+
+def _subagent_tools():
+    """Handing part of the work to another AI run (src/ai/subagents.py)."""
+    try:
+        from src.ai.subagents import get_subagent_tools
+        return get_subagent_tools()
+    except Exception as e:
+        print(f"[agent_tools] Subagent tools unavailable: {e}")
         return []
 
 

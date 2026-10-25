@@ -572,7 +572,7 @@ class StartMenuContent:
         entries = [
             MenuEntry(_("Titan settings"), 'action', 'titan_settings',
                       description=_("Settings")),
-            MenuEntry(_("Component Manager"), 'action', 'component_manager',
+            MenuEntry(_("TCE Environment Manager"), 'action', 'component_manager',
                       description=_("Settings")),
             MenuEntry(_("Control Panel"), 'action', 'control_panel',
                       description=_("Settings")),

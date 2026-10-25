@@ -28,10 +28,10 @@ except Exception:
 
 
 def _question_sound():
-    """The sound of the AI asking something - see `ai_speech.SOUND_QUESTION`."""
+    """The agent's question sound - see `ai_speech.SOUND_AGENT_QUESTION`."""
     try:
         from src.ai.ai_speech import play_question_sound
-        play_question_sound()
+        play_question_sound(agent=True)
     except Exception:
         pass
 
@@ -134,26 +134,9 @@ class AssistantFrame(wx.Frame):
 
     # -- confirmation (worker thread) ------------------------------------ #
     def _confirm(self, tool, args):
-        result = {}
-        done = threading.Event()
-
-        def ask():
-            from src.ai.agent_tools import describe_action
-            desc = (describe_action(tool['name'], args)
-                    or tool.get('description') or tool['name'])
-            _speak(_("Confirm action: {action}").format(action=desc))
-            dlg = wx.MessageDialog(
-                self,
-                _("The assistant wants to run:\n\n{action}\n\n{desc}\n\nAllow it?").format(
-                    action=desc, desc=tool.get('description', '')),
-                _("Confirm action"), wx.YES_NO | wx.ICON_QUESTION)
-            result['ok'] = (dlg.ShowModal() == wx.ID_YES)
-            dlg.Destroy()
-            done.set()
-
-        wx.CallAfter(ask)
-        done.wait()
-        return result.get('ok', False)
+        from src.ai import confirmation
+        return confirmation.ask(tool, args, parent=self,
+                                cancel_event=self._cancel, who='assistant')
 
     # -- interactive follow-up question (text mode) ---------------------- #
     def _gui_ask(self, question):
@@ -164,16 +147,25 @@ class AssistantFrame(wx.Frame):
         done = threading.Event()
 
         def ask():
-            _speak(question)
-            _question_sound()
-            dlg = wx.TextEntryDialog(self, question, _("The assistant needs more information"))
-            result['ok'] = (dlg.ShowModal() == wx.ID_OK)
-            result['text'] = dlg.GetValue().strip()
-            dlg.Destroy()
-            done.set()
+            # done is set however this ends, or a dialog that failed to
+            # build would leave the run waiting for ever.
+            try:
+                _speak(question)
+                _question_sound()
+                dlg = wx.TextEntryDialog(self, question, _("The assistant needs more information"))
+                result['ok'] = (dlg.ShowModal() == wx.ID_OK)
+                result['text'] = dlg.GetValue().strip()
+                dlg.Destroy()
+            except Exception as e:
+                print(f"[assistant] the question could not be shown: {e}")
+            finally:
+                done.set()
 
         wx.CallAfter(ask)
-        done.wait()
+        # Shift+Escape must still end a run that is waiting for an answer.
+        while not done.wait(0.25):
+            if self._cancel is not None and self._cancel.is_set():
+                raise AgentCancelled()
         if not result.get('ok'):
             return None
         answer = result.get('text') or ''

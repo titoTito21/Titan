@@ -8,7 +8,7 @@ Bus under its own name - which is how it speaks in the user's voice and plays
 through the user's mixer without loading either itself.
 
     host.py --file <source> --runtime <id> --dir <app folder>
-            --kind app|game --title <name> --id <shortname>
+            --kind app|game|macro --title <name> --id <shortname>
 """
 
 import argparse

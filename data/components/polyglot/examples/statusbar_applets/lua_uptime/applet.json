@@ -1,0 +1,7 @@
+{
+  "name": "Session time (Lua)",
+  "name_pl": "Czas sesji (Lua)",
+  "description": "A statusbar applet written in Lua: how long Titan has been running.",
+  "update_interval": 30,
+  "polyglot": "main.lua"
+}

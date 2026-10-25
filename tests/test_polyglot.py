@@ -132,7 +132,7 @@ class TheLanguagesAreData(unittest.TestCase):
                                    find=['no-such-interpreter-anywhere'])
         self.assertFalse(runtime.available())
         self.assertIn('no-such-interpreter-anywhere', runtime.why_not())
-        self.assertIn('runtimes.json', runtime.why_not())
+        self.assertIn('Polyglot', runtime.why_not())
 
     def test_the_users_table_adds_a_language_and_moves_an_interpreter(self):
         os.makedirs(os.path.dirname(runtimes.user_table_path()), exist_ok=True)
@@ -771,7 +771,8 @@ class TheComponentItself(unittest.TestCase):
             hooks.install = saved
         names = [a['name'] for a in module.TITAN_ACTIONS]
         self.assertEqual(names, ['list_languages', 'run_file',
-                                 'install_examples', 'components'])
+                                 'install_examples', 'prepare_addons',
+                             'addons', 'check_addon', 'components'])
         self.assertIn('Lua', module.action_list_languages())
         self.assertIn('There is no file',
                       module.action_run_file(os.path.join(_APPDATA, 'none.lua')))
@@ -827,6 +828,147 @@ class TheComponentItself(unittest.TestCase):
         with open(os.path.join(EXAMPLES, 'applications', 'powershell_hello',
                                'main.ps1'), 'rb') as handle:
             self.assertEqual(handle.read(3), b'\xef\xbb\xbf')
+
+
+class LanguagesAreAddedInTheSettings(unittest.TestCase):
+    """Settings -> Polyglot: the user's table, edited through the page."""
+
+    def setUp(self):
+        from polyglotkit import settings_page
+        self.page = settings_page
+        if os.path.isfile(runtimes.user_table_path()):
+            os.remove(runtimes.user_table_path())
+
+    tearDown = setUp
+
+    def test_a_command_is_one_line_and_a_list_of_arguments(self):
+        parts = ['{exe}', r'C:\Program Files\x\run.js', '--flag', '{file}']
+        line = self.page.join_command(parts)
+        self.assertEqual(line, r'{exe} "C:\Program Files\x\run.js" --flag {file}')
+        self.assertEqual(self.page.split_command(line), parts)
+        self.assertEqual(self.page.split_command(''), [])
+        self.assertEqual(self.page.split_extensions('kt, .KTS .kt'),
+                         ['.kt', '.kts'])
+        self.assertEqual(self.page.split_env('A=1\nbroken\nB = x=y'),
+                         ({'A': '1', 'B': 'x=y'}, ['broken']))
+
+    def test_a_language_added_is_run_and_wins_its_extension(self):
+        languages = self.page.Languages()
+        entry = {'id': 'mynode', 'name': 'My Node', 'extensions': ['.js', '.mn'],
+                 'find': [sys.executable], 'command': ['{exe}', '{file}']}
+        self.assertEqual(languages.problems(entry, True), [])
+        self.assertTrue(languages.shared_extensions(entry))
+        languages.put(entry)
+        self.assertFalse(os.path.isfile(runtimes.user_table_path()))
+        languages.save()
+        self.assertEqual(runtimes.for_file('a.mn').id, 'mynode')
+        self.assertEqual(runtimes.for_file('a.js').id, 'mynode')
+        self.assertEqual(runtimes.by_id('mynode').source, 'user')
+        self.assertIn('mynode', languages.problems(dict(entry), True)[0])
+
+    def test_a_built_in_language_keeps_only_what_was_changed(self):
+        languages = self.page.Languages()
+        ruby = languages.find('ruby')
+        entry = runtimes.entry_of(ruby)
+        entry['find'] = [sys.executable]
+        languages.put(entry)
+        self.assertEqual(languages.entries, [{'id': 'ruby',
+                                              'find': [sys.executable]}])
+        languages.save()
+        changed = runtimes.by_id('ruby')
+        self.assertEqual(changed.source, 'changed')
+        self.assertEqual(changed.executable(), sys.executable)
+        self.assertEqual(changed.extensions, ['.rb'])
+        self.assertEqual(changed.name, 'Ruby')
+        # Changing nothing writes nothing; Restore default takes it away.
+        languages.put(runtimes.entry_of(runtimes.by_id('lua')))
+        self.assertEqual(len(languages.entries), 1)
+        self.assertTrue(languages.remove('ruby'))
+        languages.save()
+        self.assertEqual(runtimes.by_id('ruby').source, 'builtin')
+        self.assertTrue(runtimes.by_id('lua').inprocess)
+
+    def test_a_language_switched_off_runs_nothing(self):
+        languages = self.page.Languages()
+        languages.set_disabled('ruby', True)
+        languages.save()
+        self.assertIsNone(runtimes.for_file('a.rb'))
+        self.assertIsNone(runtimes.by_id('ruby'))
+        listed = [r for r in runtimes.all_runtimes(include_disabled=True)
+                  if r.id == 'ruby']
+        self.assertTrue(listed and listed[0].disabled)
+        languages.set_disabled('ruby', False)
+        self.assertEqual(languages.entries, [])
+
+    def test_a_bad_entry_is_refused_in_words(self):
+        languages = self.page.Languages()
+        problems = languages.problems({'id': 'Bad Id'}, True)
+        self.assertEqual(len(problems), 3)
+        self.assertEqual(languages.problems({'id': 'lua', 'extensions':
+                                             ['.lua']}, False), [])
+
+    def test_the_rest_of_the_file_is_kept(self):
+        path = self.page.ensure_user_table()
+        runtimes.write_user_entries([{'id': 'x', 'extensions': ['.x'],
+                                      'command': ['{exe}']}])
+        with open(path, encoding='utf-8') as handle:
+            data = json.load(handle)
+        self.assertIn('_comment', data)
+        self.assertEqual(data['runtimes'][0]['id'], 'x')
+
+    def test_the_page_and_the_dialog_are_real_controls(self):
+        import wx
+        app = wx.GetApp() or wx.App(False)
+        frame = wx.Frame(None)
+        try:
+            panel = self.page.build(frame)
+            count = panel.listing.GetItemCount()
+            self.assertEqual(count, len(runtimes.all_runtimes()))
+            dialog = self.page.LanguageDialog(panel, panel.languages,
+                                              panel.languages.find('ruby'))
+            dialog.find.SetValue(sys.executable)
+            entry, refused = dialog.entry()
+            dialog.dialog.Destroy()
+            self.assertEqual(refused, [])
+            panel.languages.put(entry)
+            self.page.save(panel)
+            self.assertEqual(runtimes.by_id('ruby').executable(),
+                             sys.executable)
+            self.page.load(panel)
+            self.assertEqual(panel.listing.GetItemCount(), count)
+            self.assertIn(sys.executable, self.page.check(
+                runtimes.by_id('ruby')))
+        finally:
+            frame.Destroy()
+        del app
+
+    def test_the_component_is_called_polyglot(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'polyglot_component_named', os.path.join(COMPONENT, 'init.py'))
+        module = importlib.util.module_from_spec(spec)
+        saved = hooks.install
+        hooks.install = lambda: []
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            hooks.install = saved
+        seen = []
+
+        class Manager(object):
+            def register_menu_function(self, name, function):
+                seen.append(('menu', name))
+
+            def register_settings_category(self, name, *callbacks):
+                seen.append(('settings', name))
+        saved_start = components.start_all
+        components.start_all = lambda manager: []
+        try:
+            module.add_menu(Manager())
+            module.add_settings_category(Manager())
+        finally:
+            components.start_all = saved_start
+        self.assertEqual(seen, [('menu', 'Polyglot'), ('settings', 'Polyglot')])
 
 
 if __name__ == '__main__':

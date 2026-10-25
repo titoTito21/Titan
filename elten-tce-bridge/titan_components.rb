@@ -15,7 +15,7 @@ class TitanComponents
 
   def open
     return if !TitanUI.require_tce(@bus)
-    TitanUI::Screen.new(@bus, _("Component Manager"),
+    TitanUI::Screen.new(@bus, _("TCE Environment Manager"),
                         [[_("Installed components"), proc { rows }]],
                         :on_open => method(:toggle),
                         :on_menu => method(:component_menu)).open
