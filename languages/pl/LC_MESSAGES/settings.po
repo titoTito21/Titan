@@ -11,13 +11,12 @@ msgstr ""
 "POT-Creation-Date: 2026-10-25 11:26+0100\n"
 "PO-Revision-Date: 2025-11-05 10:38+0100\n"
 "Last-Translator: Klaudiusz Wypych <klaldekwypych@gmail.com>\n"
-"Language: pl\n"
 "Language-Team: pl <LL@li.org>\n"
-"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && "
-"(n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Language: pl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 "Generated-By: Babel 2.18.0\n"
 
 #: src/ui/settingsgui.py:157
@@ -29,8 +28,7 @@ msgid ""
 "Press the key or key combination you want to use as the Titan UI key.\n"
 "Press Escape twice to cancel."
 msgstr ""
-"Naciśnij klawisz lub kombinację klawiszy, którą chcesz ustawić jako "
-"klawisz Titan UI.\n"
+"Naciśnij klawisz lub kombinację klawiszy, którą chcesz ustawić jako klawisz Titan UI.\n"
 "Naciśnij Escape dwukrotnie, aby anulować."
 
 #: src/ui/settingsgui.py:173
@@ -164,8 +162,8 @@ msgid ""
 "Use equivalent from default theme when a sound is unavailable in the "
 "selected sound theme"
 msgstr ""
-"Użyj odpowiednika z domyślnego tematu, gdy dźwięk jest niedostępny w "
-"danym temacie dźwiękowym"
+"Użyj odpowiednika z domyślnego tematu, gdy dźwięk jest niedostępny w danym "
+"temacie dźwiękowym"
 
 #: src/settings/configvizard.py:381 src/ui/settingsgui.py:951
 msgid "Sound theme volume:"
@@ -205,8 +203,8 @@ msgstr ""
 
 #: src/ui/settingsgui.py:1014
 msgid ""
-"Remember the gamepad mode between sessions (otherwise Titan always starts"
-" in system mode)"
+"Remember the gamepad mode between sessions (otherwise Titan always starts in"
+" system mode)"
 msgstr ""
 "Zapamiętuj tryb gamepada między sesjami (w przeciwnym razie Titan zawsze "
 "uruchamia się w trybie systemowym)"
@@ -457,8 +455,8 @@ msgstr "Pokaż sekundy na zegarze"
 
 #: src/ui/settingsgui.py:1459
 msgid ""
-"The taskbar's own properties - where it sits, whether it hides itself - "
-"are on its context menu, under Properties."
+"The taskbar's own properties - where it sits, whether it hides itself - are "
+"on its context menu, under Properties."
 msgstr ""
 "Własne właściwości paska zadań - gdzie stoi i czy się ukrywa - są w jego "
 "menu kontekstowym, w pozycji Właściwości."
@@ -469,7 +467,8 @@ msgstr "Dźwięki"
 
 #: src/ui/settingsgui.py:1468
 msgid "Play the shell's own sounds (starting, closing, opening a folder)"
-msgstr "Odtwarzaj dźwięki powłoki (uruchomienie, zamknięcie, otwarcie folderu)"
+msgstr ""
+"Odtwarzaj dźwięki powłoki (uruchomienie, zamknięcie, otwarcie folderu)"
 
 #: src/ui/settingsgui.py:1470
 msgid "Play a sound when the focus moves"
@@ -477,8 +476,8 @@ msgstr "Odtwarzaj dźwięk przy zmianie fokusu"
 
 #: src/ui/settingsgui.py:1472
 msgid ""
-"The Titan shell never speaks by itself - your screen reader announces it,"
-" like any other program."
+"The Titan shell never speaks by itself - your screen reader announces it, "
+"like any other program."
 msgstr ""
 "Powłoka Titana nigdy nie mówi sama z siebie — odczytuje ją Twój czytnik "
 "ekranu, tak jak każdy inny program."
@@ -489,9 +488,9 @@ msgstr "Dodatki powłoki"
 
 #: src/ui/settingsgui.py:1480
 msgid ""
-"Add-ons in data/shell addons/ can add to the Start menu, the file "
-"browser, the taskbar and the desktop. One that provides a Start menu of "
-"its own appears in the list above."
+"Add-ons in data/shell addons/ can add to the Start menu, the file browser, "
+"the taskbar and the desktop. One that provides a Start menu of its own "
+"appears in the list above."
 msgstr ""
 "Dodatki w data/shell addons/ mogą dodawać elementy do menu Start, "
 "przeglądarki plików, paska zadań i pulpitu. Dodatek z własnym menu Start "
@@ -511,8 +510,8 @@ msgstr "Skróty przejmowane przez Titana"
 
 #: src/ui/settingsgui.py:1528
 msgid ""
-"Windows+L keeps locking the workstation and shortcuts using Control are "
-"left to Windows."
+"Windows+L keeps locking the workstation and shortcuts using Control are left"
+" to Windows."
 msgstr ""
 "Windows+L nadal blokuje stację roboczą, a skróty z klawiszem Control są "
 "pozostawione systemowi Windows."
@@ -591,12 +590,11 @@ msgstr "Krytyczny poziom baterii:"
 
 #: src/ui/settingsgui.py:1615
 msgid ""
-"Enable AI components to generate apps, games, components and other add-"
-"ons with the AI creation kit (Programmer menu)."
+"Enable AI components to generate apps, games, components and other add-ons "
+"with the AI creation kit (Programmer menu)."
 msgstr ""
 "Włącz składniki sztucznej inteligencji, aby generować aplikacje, gry, "
-"komponenty i inne dodatki za pomocą zestawu tworzenia AI (menu "
-"Programista)."
+"komponenty i inne dodatki za pomocą zestawu tworzenia AI (menu Programista)."
 
 #: src/ui/settingsgui.py:1620
 msgid "Enable AI components"
@@ -716,8 +714,8 @@ msgstr "Globalny skrót asystenta"
 
 #: src/ui/settingsgui.py:1788
 msgid ""
-"Titan UI assistant shortcut (active only in Titan UI; arrows and Tab are "
-"not allowed):"
+"Titan UI assistant shortcut (active only in Titan UI; arrows and Tab are not"
+" allowed):"
 msgstr ""
 "Skrót asystenta Titan UI (aktywny tylko w Titan UI; strzałki i Tab są "
 "niedozwolone):"
@@ -728,11 +726,11 @@ msgstr "Skrót asystenta Titan UI"
 
 #: src/ui/settingsgui.py:1802
 msgid ""
-"Dictate into text fields (an assistant shortcut pressed while a text "
-"field is focused types what you say into it)"
+"Dictate into text fields (an assistant shortcut pressed while a text field "
+"is focused types what you say into it)"
 msgstr ""
-"Dyktowanie do pól tekstowych (skrót asystenta naciśnięty, gdy fokus jest "
-"w polu tekstowym, wpisuje do niego to, co mówisz)"
+"Dyktowanie do pól tekstowych (skrót asystenta naciśnięty, gdy fokus jest w "
+"polu tekstowym, wpisuje do niego to, co mówisz)"
 
 #: src/ui/settingsgui.py:1811
 msgid "Announce reminders automatically"
@@ -752,11 +750,11 @@ msgstr "Nie odczytuj ich"
 
 #: src/ui/settingsgui.py:1820
 msgid ""
-"Let the AI word the reminder announcement in the assistant's own style (a"
-" fixed wording is used otherwise)"
+"Let the AI word the reminder announcement in the assistant's own style (a "
+"fixed wording is used otherwise)"
 msgstr ""
-"Pozwól AI ułożyć treść przypomnienia w stylu asystenta (w przeciwnym "
-"razie używany jest stały tekst)"
+"Pozwól AI ułożyć treść przypomnienia w stylu asystenta (w przeciwnym razie "
+"używany jest stały tekst)"
 
 #: src/ui/settingsgui.py:1828
 msgid "AI OCR (reading a screen that a screen reader cannot)"
@@ -764,9 +762,10 @@ msgstr "AI OCR (odczyt ekranu, którego czytnik ekranu nie widzi)"
 
 #: src/ui/settingsgui.py:1833
 msgid ""
-"Enable AI OCR (a scan sends a picture of the window to the AI provider "
-"you configured above)"
-msgstr "Włącz AI OCR (odczyt wysyła obraz okna do dostawcy AI wybranego powyżej)"
+"Enable AI OCR (a scan sends a picture of the window to the AI provider you "
+"configured above)"
+msgstr ""
+"Włącz AI OCR (odczyt wysyła obraz okna do dostawcy AI wybranego powyżej)"
 
 #: src/ui/settingsgui.py:1841
 msgid "What a scan looks at"
@@ -802,8 +801,8 @@ msgstr "Globalny skrót AI OCR"
 
 #: src/ui/settingsgui.py:1874
 msgid ""
-"Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab are not"
-" allowed):"
+"Titan UI AI OCR shortcut (active only in Titan UI; arrows and Tab are not "
+"allowed):"
 msgstr ""
 "Skrót AI OCR w Titan UI (aktywny tylko w Titan UI; strzałki i Tab są "
 "niedozwolone):"
@@ -814,8 +813,8 @@ msgstr "Skrót AI OCR w Titan UI"
 
 #: src/ui/settingsgui.py:1885
 msgid ""
-"Let AI OCR press controls (Enter on an entry clicks it in the real "
-"program; with this off the screen is only read out)"
+"Let AI OCR press controls (Enter on an entry clicks it in the real program; "
+"with this off the screen is only read out)"
 msgstr ""
 "Pozwól AI OCR naciskać elementy (Enter na pozycji klika ją w prawdziwym "
 "programie; przy wyłączonej opcji ekran jest tylko odczytywany)"
@@ -825,8 +824,8 @@ msgid ""
 "Check what the AI read against Windows itself (more exact positions and "
 "states where the program exposes any)"
 msgstr ""
-"Sprawdzaj odczyt AI z danymi samego Windows (dokładniejsze położenia i "
-"stany tam, gdzie program je udostępnia)"
+"Sprawdzaj odczyt AI z danymi samego Windows (dokładniejsze położenia i stany"
+" tam, gdzie program je udostępnia)"
 
 #: src/ui/settingsgui.py:1897
 msgid "Re-read a watched screen every (seconds, 0 = only when I ask):"
@@ -853,8 +852,8 @@ msgstr "{count} funkcji"
 #: src/ui/settingsgui.py:2059
 #, python-brace-format
 msgid ""
-"The AI will ask again before every risky action ({count} allowed for this"
-" session forgotten)."
+"The AI will ask again before every risky action ({count} allowed for this "
+"session forgotten)."
 msgstr ""
 "SI znowu będzie pytać przed każdym ryzykownym działaniem (zapomniano "
 "dozwolonych na tę sesję: {count})."
@@ -866,11 +865,11 @@ msgstr "Nie udało się pokazać subagentów: {error}"
 
 #: src/ui/settingsgui.py:2076
 msgid ""
-"Forget everything the AI remembers of your conversations so far? Facts "
-"you asked it to remember are kept."
+"Forget everything the AI remembers of your conversations so far? Facts you "
+"asked it to remember are kept."
 msgstr ""
-"Zapomnieć wszystko, co AI pamięta z dotychczasowych rozmów? Fakty, o "
-"których zapamiętanie prosiłeś, zostaną zachowane."
+"Zapomnieć wszystko, co AI pamięta z dotychczasowych rozmów? Fakty, o których"
+" zapamiętanie prosiłeś, zostaną zachowane."
 
 #: src/ui/settingsgui.py:2078
 msgid "Forget the conversation"
@@ -907,12 +906,11 @@ msgstr "Port HTTP:"
 
 #: src/ui/settingsgui.py:2315
 msgid ""
-"Audio business card allows you to personalize sounds that other users "
-"hear when you log in, send a message, or view your profile."
+"Audio business card allows you to personalize sounds that other users hear "
+"when you log in, send a message, or view your profile."
 msgstr ""
 "Audiowizytówka pozwala spersonalizować dźwięki, które inni użytkownicy "
-"słyszą, kiedy się logujesz, wysyłasz wiadomość lub przeglądają Twój "
-"profil."
+"słyszą, kiedy się logujesz, wysyłasz wiadomość lub przeglądają Twój profil."
 
 #: src/ui/settingsgui.py:2323
 msgid "Custom business card"
@@ -1075,8 +1073,8 @@ msgid ""
 "Error: Executable control.exe not found. Make sure Windows is working "
 "correctly."
 msgstr ""
-"Błąd: nie znaleziono programu control.exe. Upewnij się, że system Windows"
-" działa poprawnie."
+"Błąd: nie znaleziono programu control.exe. Upewnij się, że system Windows "
+"działa poprawnie."
 
 #: src/ui/settingsgui.py:3169
 #, python-brace-format
@@ -1240,11 +1238,11 @@ msgstr "Błąd kalibracji"
 
 #: src/ui/settingsgui.py:3807
 msgid ""
-"Settings have been saved. Please restart the application for changes to "
-"take full effect."
+"Settings have been saved. Please restart the application for changes to take"
+" full effect."
 msgstr ""
-"Ustawienia zostały zapisane. Uruchom program ponownie, aby wszystkie "
-"zmiany zaczęły działać."
+"Ustawienia zostały zapisane. Uruchom program ponownie, aby wszystkie zmiany "
+"zaczęły działać."
 
 #: src/ui/settingsgui.py:3809
 msgid "Settings have been saved."
@@ -1284,8 +1282,8 @@ msgid ""
 "Press Next to continue, or Close to leave the wizard."
 msgstr ""
 "Ten kreator przeprowadzi Cię przez proces konfigurowania TCE do własnych "
-"potrzeb. Naciśnij przycisk Dalej, aby kontynuować konfigurację lub "
-"Zamknij, aby opuścić ten kreator."
+"potrzeb. Naciśnij przycisk Dalej, aby kontynuować konfigurację lub Zamknij, "
+"aby opuścić ten kreator."
 
 #: src/settings/configvizard.py:320 src/settings/configvizard.py:324
 msgid "Available languages:"
@@ -1293,33 +1291,30 @@ msgstr "Dostępne języki:"
 
 #: src/settings/configvizard.py:343
 msgid ""
-"Titan supports skins and sound themes. Additional sound themes and skins "
-"can be downloaded from the application repository in titan-net or from "
-"other creators."
+"Titan supports skins and sound themes. Additional sound themes and skins can"
+" be downloaded from the application repository in titan-net or from other "
+"creators."
 msgstr ""
-"Titan wspiera skórki i tematy dźwiękowe. Dodatkowe tematy dźwiękowe i "
-"skórki można pobrać z repozytorium aplikacji w titan-net lub od innych "
-"twórców."
+"Titan wspiera skórki i tematy dźwiękowe. Dodatkowe tematy dźwiękowe i skórki"
+" można pobrać z repozytorium aplikacji w titan-net lub od innych twórców."
 
 #: src/settings/configvizard.py:409
 msgid ""
-"Titan can also switch to an invisible interface so you do not have to "
-"keep a window open all the time. You can configure the invisible "
-"interface here."
+"Titan can also switch to an invisible interface so you do not have to keep a"
+" window open all the time. You can configure the invisible interface here."
 msgstr ""
-"Titan umożliwia również przejście do niewidzialnego interfejsu, dzięki "
-"czemu nie musisz mieć cały czas otwartego okna. Na tym etapie możesz "
+"Titan umożliwia również przejście do niewidzialnego interfejsu, dzięki czemu"
+" nie musisz mieć cały czas otwartego okna. Na tym etapie możesz "
 "skonfigurować ustawienia niewidzialnego interfejsu."
 
 #: src/settings/configvizard.py:463
 msgid ""
-"Titan also includes the titan-net portal, which lets you communicate with"
-" other TCE users and download add-ons for TCE from a dedicated "
-"repository."
+"Titan also includes the titan-net portal, which lets you communicate with "
+"other TCE users and download add-ons for TCE from a dedicated repository."
 msgstr ""
-"Titan zawiera również portal titan-net, dzięki czemu możesz kontaktować "
-"się z innymi użytkownikami TCE, a także pobierać dodatki do TCE z "
-"przeznaczonego do tego repozytorium."
+"Titan zawiera również portal titan-net, dzięki czemu możesz kontaktować się "
+"z innymi użytkownikami TCE, a także pobierać dodatki do TCE z przeznaczonego"
+" do tego repozytorium."
 
 #: src/settings/configvizard.py:481
 msgid "I am using my own titan-net server"
@@ -1330,11 +1325,12 @@ msgid "Create titan-net account"
 msgstr "Stwórz konto titan-net"
 
 #: src/settings/configvizard.py:538
-msgid "On this step you can enable features that may affect the operating system."
+msgid ""
+"On this step you can enable features that may affect the operating system."
 msgstr ""
 "W tym kroku możesz włączyć funkcje, które mogą wpływać na system "
-"operacyjny.Na tym etapie możesz włączyć funkcje, które mogą mieć wpływ na"
-" system operacyjny."
+"operacyjny.Na tym etapie możesz włączyć funkcje, które mogą mieć wpływ na "
+"system operacyjny."
 
 #: src/settings/configvizard.py:616
 msgid "Language selection"
@@ -1363,12 +1359,11 @@ msgstr "Zakończ"
 #: src/settings/configvizard.py:688
 #, python-brace-format
 msgid ""
-"Titan is currently set to {language}. If this message is in the language "
-"you want to use TCE in, press Next."
+"Titan is currently set to {language}. If this message is in the language you"
+" want to use TCE in, press Next."
 msgstr ""
-"Obecnie Titan jest ustawiony na język {language}. Jeśli ten komunikat "
-"jest w języku, którego chcesz używać do korzystania z TCE, naciśnij "
-"Dalej."
+"Obecnie Titan jest ustawiony na język {language}. Jeśli ten komunikat jest w"
+" języku, którego chcesz używać do korzystania z TCE, naciśnij Dalej."
 
 #: src/settings/configvizard.py:986
 msgid "Titan-net is not available."
@@ -1379,12 +1374,65 @@ msgid ""
 "The configuration wizard is complete. You can now use Titan without "
 "restrictions."
 msgstr ""
-"Kreator konfiguracji został zakończony. Możesz już bez ograniczeń "
-"korzystać z Titana."
+"Kreator konfiguracji został zakończony. Możesz już bez ograniczeń korzystać "
+"z Titana."
 
 #: src/settings/configvizard.py:1022
 msgid "Congratulations!"
 msgstr "Gratulacje!"
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Type a number to change one, or Enter to go back."
+msgstr "Wpisz numer, aby zmienić ustawienie, albo naciśnij Enter, aby wrócić."
+
+#: data/settings interfaces/console_settings/init.py
+msgid "New value (Enter to leave it): "
+msgstr "Nowa wartość (Enter zostawia obecną): "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Type a number, a word to search for, 's' to save or 'q' to leave."
+msgstr ""
+"Wpisz numer, słowo do wyszukania, 's', aby zapisać, albo 'q', aby wyjść."
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Nothing matches."
+msgstr "Nic nie pasuje."
+
+#: data/settings interfaces/console_settings/init.py
+msgid "on or off: "
+msgstr "tak lub nie: "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Number or name: "
+msgstr "Numer lub nazwa: "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Numbers to tick, separated by commas: "
+msgstr "Numery do zaznaczenia, oddzielone przecinkami: "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "(set)"
+msgstr "(ustawione)"
+
+#: data/settings interfaces/console_settings/init.py
+msgid "(not set)"
+msgstr "(nieustawione)"
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Press it? (y/n) "
+msgstr "Nacisnąć? (t/n) "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "(press)"
+msgstr "(przycisk)"
+
+#: data/settings interfaces/console_settings/init.py
+msgid "A number between {low} and {high}: "
+msgstr "Liczba od {low} do {high}: "
+
+#: data/settings interfaces/console_settings/init.py
+msgid "Search settings"
+msgstr "Szukaj w ustawieniach"
 
 #~ msgid "Titan key:"
 #~ msgstr "Klawisz Titan:"
@@ -1408,8 +1456,7 @@ msgstr "Gratulacje!"
 #~ msgstr ""
 
 #~ msgid ""
-#~ "Settings have been saved. Please restart"
-#~ " the application for the language "
+#~ "Settings have been saved. Please restart the application for the language "
 #~ "change to take full effect."
 #~ msgstr ""
 
@@ -1444,24 +1491,17 @@ msgstr "Gratulacje!"
 #~ msgstr "Dźwięki stereo"
 
 #~ msgid ""
-#~ "These shortcuts are active only when "
-#~ "\"Modify system interface\" is enabled "
+#~ "These shortcuts are active only when \"Modify system interface\" is enabled "
 #~ "under Environment."
 #~ msgstr ""
-#~ "Te skróty działają tylko wtedy, gdy "
-#~ "w kategorii Środowisko włączona jest "
+#~ "Te skróty działają tylko wtedy, gdy w kategorii Środowisko włączona jest "
 #~ "opcja \"Modyfikuj interfejs systemu\"."
 
 #~ msgid ""
-#~ "Add-ons in data/shell addons/ can "
-#~ "add to the Start menu, the file"
-#~ " browser, the taskbar and the "
-#~ "desktop. Which Start menu you use "
-#~ "is on the taskbar's own Properties."
+#~ "Add-ons in data/shell addons/ can add to the Start menu, the file browser, "
+#~ "the taskbar and the desktop. Which Start menu you use is on the taskbar's "
+#~ "own Properties."
 #~ msgstr ""
-#~ "Dodatki w data/shell addons/ mogą "
-#~ "dodawać elementy do menu Start, "
-#~ "przeglądarki plików, paska zadań i "
-#~ "pulpitu. Wybór menu Start znajdziesz we"
-#~ " właściwościach paska zadań."
-
+#~ "Dodatki w data/shell addons/ mogą dodawać elementy do menu Start, "
+#~ "przeglądarki plików, paska zadań i pulpitu. Wybór menu Start znajdziesz we "
+#~ "właściwościach paska zadań."

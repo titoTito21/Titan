@@ -3720,6 +3720,76 @@ Ruby, C#, PowerShell - or anything in the user's
   extension it shares with a built-in one (`for_file`). The window's
   "Language settings..." opens Titan's own settings at this category
   (`settings_page.open_page`). Tests: `LanguagesAreAddedInTheSettings`.
+- **The page and the windows behave like Titan's** (`polyglotkit/tce_ui.py`).
+  The languages were a five-column `wx.ListCtrl`, which `ui_model` cannot
+  describe - so the HTML / console settings interfaces and the walked
+  settings showed Polyglot as buttons acting on a list nobody could reach.
+  Now the list is Titan's `CheckList` (a ticked language is switched on;
+  the row's words are `row_label` - name, files, ready / not found - and
+  never change with the tick, so an interface finds the row again), and
+  what the columns said is a read-only **Details** box (KIND_INFO). The
+  page and the language dialog are `wx.StaticBox` groups ("The language",
+  "Running it") with every control a child of its box and its label made
+  before it. Everywhere: `core/FOCUS.ogg` on focus (`cue_tree`), a list's
+  rows panned by position and `ui/endoflist.ogg` at its ends
+  (`cue_list`), `ui/dialog.ogg` / `dialogclose.ogg` round a modal and the
+  Invisible UI stood down while it is up (`modal`, `keyboard_taken`), and
+  message boxes that tell the reader their kind first
+  (`message` / `ask` -> `announce_dialog_kind`). The Switch off button is
+  gone: Space on the row is the switch. **"Language the buttons act on"**
+  (a `wx.Choice` kept in step with the list) is how a settings interface
+  picks the row Change / Check / Remove act on - `ui_model` describes a
+  tick list as values, not as a cursor - and Check's answer is also
+  written under the Details, which is where an interface reads it. A
+  built-in language's note is translated when shown (`_(runtime.note)`),
+  never in the stored entry. The window is centred on the screen (Klango
+  mode passes its off-screen frame). `html_settings` now keeps a read-only
+  box's lines apart. Verified through MSAA (every row a check box with its
+  state, every field named) and by rendering the page through the HTML
+  interface's own `_control`. Tests: `ThePolyglotWindowsBehaveLikeTitans`
+  (7).
+- **Checked live, not only in tests**: `tests/check_polyglot_iui_live.py`
+  (the real InvisibleUI with Titan UI on: Up and Enter are released while
+  the Polyglot window, the Add-a-language dialog and a question are up, and
+  taken back after - asked of Windows with RegisterHotKey; `wx.MessageDialog`
+  has a ShowModal of its own and must be stubbed too, or a real box goes up
+  and the check hangs), `tests/check_polyglot_html_live.py` (the real
+  `html_settings` window in WebView2, off the screen: choosing Ruby moved
+  the list, Check wrote its answer under Details, unticking Ruby switched
+  it off; give WebView2 its own `WEBVIEW2_USER_DATA_FOLDER`, the default is
+  shared with any running `python.exe` Titan and answers 0x800700aa) and
+  `tests/check_polyglot_console_live.py` (the real `ConsoleSettings` loop on
+  a worker with typed answers - the same three results),
+  `tests/check_polyglot_klango_live.py` (the real `KlangoFrame`, which sits
+  at -10000,-10000, presses its own Components card's Polyglot entry: the
+  window is on a screen with the keyboard on its list, and Klango's menu is
+  closed after; Klango has no global key hook, so a modal is enough - and
+  Titan Access's engine then reads that very window: every control named),
+  `tests/check_polyglot_html_reader.py` (Titan Access builds its
+  browse-mode document from the real WebView2 page the way it reads any web
+  page - `_find_main_document` + `build_uia(web=True)`; a `prefer='uia'`
+  window build drops what is below the viewport: 34 lines, every language a
+  checkbox with its state, each line of Details, the buttons, Restore
+  "unavailable"), `tests/check_polyglot_console_reader.py` (the real console
+  interface in a HIDDEN conhost - never Windows Terminal, never on the
+  screen - read back through the console's UIA text pattern, which is what
+  Titan Access's terminal module reads: all Polish, one setting a line) and
+  `tests/check_polyglot_reader_live.py` (Titan Access's own engine reads
+  every control of the Polyglot window, the settings page and the language
+  dialog - walked into the static boxes now - with name, type and state:
+  0 unnamed). The language dialog's buttons are Titan's words, not wx's
+  stock "Cancel". The console and HTML interfaces' own prompts were never
+  translated: they are in the `settings` domain now (and in
+  `extract_translations.py`, so an extraction does not make them obsolete).
+- **The HTML settings interface had never worked.** Its page script is a
+  Python string, and `chosen.join('
+')` written with ONE backslash put a
+  real line break inside a JavaScript string literal: the script did not
+  parse, `titanSet` / `titanPress` / `titanGo` were undefined, and no
+  setting, button or Save on the page reached Titan (the `titan:` scheme
+  itself was measured fine). Fixed, and `TheHtmlPageScriptRuns` in
+  `tests/test_settings_interfaces.py` fails if a literal breaks again. Its
+  read-only boxes also keep their lines now.
 - **The host process** (`host.py`): Titan's own Python
   (`app_manager.get_python_executable`, `-c` bootstrap, as Titan runs Python
   apps) with wx for the dialogs and the game window, joined to the Action
@@ -3755,7 +3825,7 @@ Ruby, C#, PowerShell - or anything in the user's
   `polyglot.list_languages`, `run_file`, `install_examples`, `components`.
   Examples in `examples/` (Lua app, game, component; JS, Ruby, C#,
   PowerShell apps), installed into the user's overlay on request.
-- Tests: `tests/test_polyglot.py` (52; temporary APPDATA, Titan replaced by
+- Tests: `tests/test_polyglot.py` (59; temporary APPDATA, Titan replaced by
   a recorder, dialogs built for real and answered in code, the examples run
   on the real carried interpreters).
 - **Every other kind, too** (`polyglotkit/adapters.py`, `stubs.py`): Titan

@@ -368,3 +368,95 @@ msgstr "Prepare add-ons in other languages"
 
 msgid "Add-ons in other languages"
 msgstr "Add-ons in other languages"
+
+msgid "&Details:"
+msgstr "&Details:"
+
+msgid "Details"
+msgstr "Details"
+
+msgid "Compile command: {}"
+msgstr "Compile command: {}"
+
+msgid "Files: {}"
+msgstr "Files: {}"
+
+msgid "Identifier: {}"
+msgstr "Identifier: {}"
+
+msgid "Interpreter: built into Polyglot"
+msgstr "Interpreter: built into Polyglot"
+
+msgid "Interpreter: {}"
+msgstr "Interpreter: {}"
+
+msgid "Language: {}"
+msgstr "Language: {}"
+
+msgid "No language is selected."
+msgstr "No language is selected."
+
+msgid "Note: {}"
+msgstr "Note: {}"
+
+msgid "Run command: {}"
+msgstr "Run command: {}"
+
+msgid "Running it"
+msgstr "Running it"
+
+msgid "Source: {}"
+msgstr "Source: {}"
+
+msgid "State: {}"
+msgstr "State: {}"
+
+msgid "The language"
+msgstr "The language"
+
+msgid ""
+"The languages add-ons may be written in. A ticked language is switched on. "
+"Add one by giving its interpreter or compiler, or change where a built-in "
+"language finds its own. Changes are written when the settings are saved."
+msgstr ""
+"The languages add-ons may be written in. A ticked language is switched on. "
+"Add one by giving its interpreter or compiler, or change where a built-in "
+"language finds its own. Changes are written when the settings are saved."
+
+msgid "{name} ({files}): {state}"
+msgstr "{name} ({files}): {state}"
+
+msgid "Language the &buttons act on:"
+msgstr "Language the &buttons act on:"
+
+msgid "Language the buttons act on"
+msgstr "Language the buttons act on"
+
+msgid "Lua 5.1, interpreted by this component itself."
+msgstr "Lua 5.1, interpreted by this component itself."
+
+msgid "QuickJS-ng 0.17, carried by this component."
+msgstr "QuickJS-ng 0.17, carried by this component."
+
+msgid "Ruby 4.0, carried by this component."
+msgstr "Ruby 4.0, carried by this component."
+
+msgid ""
+"C# 5, compiled by the .NET Framework compiler that is part of Windows; the "
+"SDK's Titan class is compiled in."
+msgstr ""
+"C# 5, compiled by the .NET Framework compiler that is part of Windows; the "
+"SDK's Titan class is compiled in."
+
+msgid ""
+"Part of Windows. Windows PowerShell 5.1 needs a script saved as UTF-8 with a"
+" BOM."
+msgstr ""
+"Part of Windows. Windows PowerShell 5.1 needs a script saved as UTF-8 with a"
+" BOM."
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Cancel"
+msgstr "Cancel"

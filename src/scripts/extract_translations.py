@@ -14,7 +14,11 @@ DOMAIN_FILES = {
     'invisibleui': ['src/ui/invisibleui.py'],
     'settings': ['src/settings/settings.py', 'src/ui/settingsgui.py', 'src/settings/configvizard.py',
                  # Choosing which window the settings themselves open in
-                 'src/settings/interfaces.py', 'src/settings/ui_model.py'],
+                 'src/settings/interfaces.py', 'src/settings/ui_model.py',
+                 # The two settings interfaces Titan ships speak through
+                 # Titan's own `_`, so their words live in this domain.
+                 'data/settings interfaces/console_settings/init.py',
+                 'data/settings interfaces/html_settings/init.py'],
     # The menu bar, and the Program menu entries it shares with the
     # Invisible UI and Klango mode.
     'menu': ['src/ui/menu.py', 'src/ui/program_menu.py'],

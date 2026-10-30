@@ -172,8 +172,10 @@ def _control(item):
         return ('<p><button type="button" onclick="titanPress(\'%s\')"%s>%s'
                 '</button></p>' % (identifier, disabled, label))
     if kind == 'info':
+        # A read-only box holds lines (Polyglot's details, a launcher's
+        # description); HTML would run them into one.
         return '<p class="info"><strong>%s</strong><br>%s</p>' % (
-            label, _escape(item['value'] or ''))
+            label, _escape(item['value'] or '').replace(chr(10), '<br>'))
     return ''
 
 
@@ -209,6 +211,10 @@ _HEAD = """<!doctype html>
    titanGo('titan:set?item=' + encodeURIComponent(id) +
            '&value=' + encodeURIComponent(titanValue(control)));
  }
+ // This script lives in a Python string: the line break joined below is
+ // written with a doubled backslash, or it reaches the page as a real line
+ // break inside a string literal and the whole script fails to parse -
+ // which left every control of this page dead.
  function titanSetMulti(id) {
    var boxes = document.getElementsByName(id);
    var chosen = [];
@@ -216,7 +222,7 @@ _HEAD = """<!doctype html>
      if (boxes[i].checked) { chosen.push(boxes[i].value); }
    }
    titanGo('titan:set?item=' + encodeURIComponent(id) +
-           '&value=' + encodeURIComponent(chosen.join('\n')));
+           '&value=' + encodeURIComponent(chosen.join('\\n')));
  }
  function titanPress(id) {
    titanGo('titan:press?item=' + encodeURIComponent(id));

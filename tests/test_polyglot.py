@@ -971,6 +971,209 @@ class LanguagesAreAddedInTheSettings(unittest.TestCase):
         self.assertEqual(seen, [('menu', 'Polyglot'), ('settings', 'Polyglot')])
 
 
+
+class ThePolyglotWindowsBehaveLikeTitans(unittest.TestCase):
+    """Settings -> Polyglot is a Titan settings page in every respect: every
+    settings interface can reach it, and its windows sound like Titan's."""
+
+    def setUp(self):
+        from polyglotkit import settings_page, tce_ui
+        self.page, self.tce_ui = settings_page, tce_ui
+        if os.path.isfile(runtimes.user_table_path()):
+            os.remove(runtimes.user_table_path())
+        self.played = []
+        self._saved_play = tce_ui.play
+        tce_ui.play = lambda name, pan=None: self.played.append((name, pan))
+
+    def tearDown(self):
+        self.tce_ui.play = self._saved_play
+        if os.path.isfile(runtimes.user_table_path()):
+            os.remove(runtimes.user_table_path())
+
+    def _frame_with_page(self):
+        import wx
+        app = wx.GetApp() or wx.App(False)
+        frame = wx.Frame(None)
+        panel = self.page.build(frame)
+        frame.categories = {'Polyglot': panel}
+        frame.category_order = ['Polyglot']
+        return app, frame, panel
+
+    def test_every_settings_interface_reaches_the_languages(self):
+        import wx
+        from src.settings import ui_model
+        app, frame, panel = self._frame_with_page()
+        try:
+            model = ui_model.SettingsModel(frame)
+            (category,) = model.categories()
+            kinds = {item['label']: item for item in category['items']}
+            languages = kinds[self.page._("Languages")]
+            self.assertEqual(languages['kind'], ui_model.KIND_MULTI)
+            table = runtimes.all_runtimes(include_disabled=True)
+            self.assertEqual(len(languages['options']), len(table))
+            ruby = [o for o in languages['options'] if o.startswith('Ruby')][0]
+            self.assertIn(ruby, languages['value'])
+            details = kinds[self.page._("Details")]
+            self.assertEqual(details['kind'], ui_model.KIND_INFO)
+            self.assertIn(self.page._("Language: {}").format(table[0].name),
+                          details['value'])
+            commands = [i['label'] for i in category['items']
+                        if i['kind'] == ui_model.KIND_COMMAND]
+            self.assertIn(self.page._("Add a language..."), commands)
+            # Unticking a row in an interface switches the language off,
+            # and the row keeps its words, so it can be found again.
+            item = [i for i in model.items()
+                    if i.kind == ui_model.KIND_MULTI][0]
+            self.assertTrue(item.set([o for o in languages['options']
+                                      if o != ruby]))
+            app.ProcessPendingEvents()
+            self.assertTrue(panel.languages.find('ruby').disabled)
+            self.assertIn(ruby, item.options)
+            self.assertEqual(panel.listing.GetString(
+                panel.ids.index('ruby')), ruby)
+            self.page.save(panel)
+            self.assertIsNone(runtimes.by_id('ruby'))
+            # An interface picks the language the buttons act on, and reads
+            # what Check found under the details.
+            model.read()
+            target = [i for i in model.items()
+                      if i.label == self.page._("Language the buttons act on")][0]
+            self.assertEqual(target.kind, ui_model.KIND_CHOICE)
+            self.assertTrue(target.set('Lua'))
+            app.ProcessPendingEvents()
+            self.assertEqual(panel.ids[panel.listing.GetFirstSelected()], 'lua')
+            shown = []
+            saved = self.tce_ui.message
+            self.tce_ui.message = lambda *a, **k: shown.append(a)
+            try:
+                check = [i for i in model.items()
+                         if i.label == self.page._("Check")][0]
+                self.assertTrue(check.press())
+                app.ProcessPendingEvents()
+            finally:
+                self.tce_ui.message = saved
+            self.assertEqual(len(shown), 1)
+            self.assertIn(self.page.check(panel.languages.find('lua')),
+                          panel.details.GetValue())
+        finally:
+            frame.Destroy()
+        del app, wx
+
+    def test_every_field_of_the_dialog_is_named_and_grouped(self):
+        import wx
+        app, frame, panel = self._frame_with_page()
+        try:
+            dialog = self.page.LanguageDialog(panel, panel.languages,
+                                              panel.languages.find('ruby'))
+            boxes = [c for c in self.tce_ui._walk(dialog.dialog)
+                     if isinstance(c, wx.StaticBox)]
+            self.assertEqual(len(boxes), 2)
+            for control in self.tce_ui._walk(dialog.dialog):
+                if not isinstance(control, wx.TextCtrl) or \
+                        control.GetWindowStyleFlag() & wx.TE_READONLY:
+                    continue
+                self.assertIsInstance(control.GetParent(), wx.StaticBox)
+                siblings = list(control.GetParent().GetChildren())
+                before = siblings[siblings.index(control) - 1]
+                self.assertIsInstance(before, wx.StaticText)
+                self.assertTrue(control.GetName())
+            dialog.dialog.Destroy()
+        finally:
+            frame.Destroy()
+        del app
+
+    def test_the_windows_sound_like_titan(self):
+        self.assertEqual(self.tce_ui.row_pan(0, 5), 0.0)
+        self.assertEqual(self.tce_ui.row_pan(4, 5), 1.0)
+        self.assertEqual(self.tce_ui.row_pan(0, 1), 0.5)
+
+        class Dialog(object):
+            def ShowModal(self):
+                return 5100
+        self.assertEqual(self.tce_ui.modal(Dialog()), 5100)
+        self.assertEqual([n for n, _p in self.played],
+                         ['ui/dialog.ogg', 'ui/dialogclose.ogg'])
+
+    def test_a_message_says_what_kind_it_is(self):
+        import wx
+        from src.accessibility import messages
+        told = []
+        saved_kind = messages.announce_dialog_kind
+        saved_dialog = wx.MessageDialog
+
+        class Answered(object):
+            def __init__(self, *args):
+                self.args = args
+
+            def ShowModal(self):
+                return wx.ID_YES
+
+            def Destroy(self):
+                pass
+        messages.announce_dialog_kind = told.append
+        wx.MessageDialog = Answered
+        try:
+            self.assertTrue(self.tce_ui.ask(None, 'Remove?', 'Polyglot'))
+            self.tce_ui.message(None, 'Broken', 'Polyglot', 'error')
+        finally:
+            messages.announce_dialog_kind = saved_kind
+            wx.MessageDialog = saved_dialog
+        self.assertEqual(told, ['question', 'error'])
+        self.assertIn('core/error.ogg', [n for n, _p in self.played])
+
+    def test_a_built_in_languages_note_is_said_in_polish(self):
+        import gettext
+        catalogue = gettext.translation(
+            'polyglot', os.path.join(COMPONENT, 'languages'), ['pl'])
+        untranslated = [r.note for r in runtimes.builtin()
+                        if r.note and catalogue.gettext(r.note) == r.note]
+        self.assertEqual(untranslated, [])
+
+    def test_the_invisible_ui_gives_the_keyboard_to_a_polyglot_window(self):
+        import wx
+        app = wx.GetApp() or wx.App(False)
+        frame = wx.Frame(None)
+        calls = []
+
+        class Interface(object):
+            def temporarily_disable_titan_ui(self, name):
+                calls.append(('take', name))
+
+            def _on_dialog_close(self, name, _event):
+                calls.append(('give', name))
+
+        class Dialog(object):
+            def ShowModal(self):
+                calls.append(('shown',))
+                return 0
+        frame.invisible_ui = Interface()
+        try:
+            self.tce_ui.modal(Dialog())
+        finally:
+            frame.Destroy()
+        self.assertEqual(calls, [('take', 'polyglot'), ('shown',),
+                                 ('give', 'polyglot')])
+        del app
+
+    def test_a_list_runs_out_with_titans_sound(self):
+        import wx
+        app = wx.GetApp() or wx.App(False)
+        frame = wx.Frame(None)
+        try:
+            listing = wx.ListCtrl(frame, style=wx.LC_REPORT)
+            listing.InsertColumn(0, 'x')
+            for row in range(3):
+                listing.InsertItem(row, str(row))
+            self.tce_ui.cue_list(listing)
+            listing.Focus(2)
+            event = wx.KeyEvent(wx.wxEVT_KEY_DOWN)
+            event.SetKeyCode(wx.WXK_DOWN)
+            listing.GetEventHandler().ProcessEvent(event)
+            self.assertIn('ui/endoflist.ogg', [n for n, _p in self.played])
+        finally:
+            frame.Destroy()
+        del app
+
 if __name__ == '__main__':
     try:
         unittest.main(verbosity=1)

@@ -25,7 +25,7 @@ if COMPONENT_DIR not in sys.path:
 
 from polyglotkit import hooks, runtimes, components   # noqa: E402
 from polyglotkit import adapters, stubs                # noqa: E402
-from polyglotkit import settings_page                  # noqa: E402
+from polyglotkit import settings_page, tce_ui          # noqa: E402
 from polyglotkit.i18n import _                        # noqa: E402
 
 EXAMPLES_DIR = os.path.join(COMPONENT_DIR, 'examples')
@@ -106,9 +106,10 @@ def _show_text(parent, title, text):
     sizer.Add(close, 0, wx.ALIGN_RIGHT | wx.ALL, 8)
     dialog.SetSizer(sizer)
     dialog.SetEscapeId(wx.ID_CANCEL)
+    tce_ui.cue_tree(dialog)
     box.SetFocus()
     try:
-        dialog.ShowModal()
+        tce_ui.modal(dialog)
     finally:
         dialog.Destroy()
 
@@ -182,26 +183,27 @@ def show_window(parent=None):
     sizer.Add(buttons, 0, wx.ALIGN_RIGHT | wx.ALL, 4)
     dialog.SetSizer(sizer)
     dialog.SetEscapeId(wx.ID_CANCEL)
+    # Titan's own sounds: the focus cue on every control, the list's rows
+    # heard where they are and its ends heard as ends, the dialog sound in
+    # and out - and, opened from the Invisible UI, the keyboard is this
+    # window's while it is in front (`tce_ui.modal`).
+    tce_ui.cue_list(listing)
+    tce_ui.cue_tree(dialog, skip=(listing,))
+    # Opened from Klango mode the parent is Klango's frame, which lives off
+    # the screen; a dialog centred on it would be too. Every face gets the
+    # window in the middle of the screen, in front.
+    dialog.CentreOnScreen()
+    dialog.Raise()
     listing.SetFocus()
-    # Opened from the Invisible UI's components, its arrows, Enter and
-    # Escape would otherwise still be the Invisible UI's while this window
-    # is in front (CLAUDE.md, "A Titan window in front means the keys are
-    # that window's").
     try:
-        from src.shell.keyboard_handover import take_keyboard, give_keyboard_back
-    except Exception:
-        take_keyboard = give_keyboard_back = None
-    if take_keyboard:
-        take_keyboard('polyglot')
-    try:
-        dialog.ShowModal()
+        tce_ui.modal(dialog)
     finally:
         dialog.Destroy()
-        if give_keyboard_back:
-            give_keyboard_back('polyglot')
 
 
 def _on_menu(event=None):
+    # The Components menu, the Invisible UI (``None``) and Klango mode (its
+    # own frame) all come here; none of them is a parent worth keeping.
     show_window()
 
 

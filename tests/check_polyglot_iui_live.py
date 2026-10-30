@@ -60,22 +60,36 @@ def _trap(code=0):
 os._exit = _trap
 
 
+where = ['Polyglot window open']
+
+
 def modal(self):
     settle()
-    log.append(('Polyglot window open', held_by_someone(VK_UP), held_by_someone(VK_RETURN)))
+    log.append((where[0], held_by_someone(VK_UP), held_by_someone(VK_RETURN)))
     return wx.ID_CANCEL
 
 
 wx.Dialog.ShowModal = modal
+# A message box has a ShowModal of its own: never let a real one up.
+wx.MessageDialog.ShowModal = modal
 import atexit, traceback
 atexit.register(lambda: print('S atexit', flush=True))
 _real_exit = sys.exit
 sys.exit = lambda *a: (traceback.print_stack(), print('S sys.exit', a, flush=True), _real_exit(*a))
 try:
     polyglot.show_window(frame)
-finally:
     settle()
     log.append(('Polyglot window closed', held_by_someone(VK_UP), held_by_someone(VK_RETURN)))
+    # Settings -> Polyglot: the language dialog and a question, both modal.
+    from polyglotkit import settings_page, tce_ui
+    page = settings_page.build(frame)
+    where[0] = 'Add a language open'
+    settings_page.LanguageDialog(page, page.languages).show()
+    where[0] = 'Remove? question open'
+    tce_ui.ask(page, 'Remove?', 'Polyglot')
+finally:
+    settle()
+    log.append(('All closed', held_by_someone(VK_UP), held_by_someone(VK_RETURN)))
     iui.titan_ui_mode = False
     iui._update_hotkeys(); settle()
     log.append(('Titan UI off again', held_by_someone(VK_UP), held_by_someone(VK_RETURN)))

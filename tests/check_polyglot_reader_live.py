@@ -21,13 +21,24 @@ from src.ui import settingsgui
 spec = importlib.util.spec_from_file_location(
     'polyglot', os.path.join(ROOT, 'data', 'components', 'polyglot', 'init.py'))
 polyglot = importlib.util.module_from_spec(spec); spec.loader.exec_module(polyglot)
+polyglot.tce_ui.play = lambda *a, **k: None
 
 OFF = (-32000, -32000)
-not_label = lambda cs: [c for c in cs if not isinstance(c, wx.StaticText)]
+def not_label(cs):
+    """Every control a reader lands on, inside groups too."""
+    out = []
+    for c in cs:
+        if isinstance(c, wx.StaticBox):
+            out.extend(not_label(c.GetChildren()))
+        elif isinstance(c, (wx.ScrolledWindow, wx.Panel)) and                 not isinstance(c, wx.ListCtrl):
+            out.extend(not_label(c.GetChildren()))
+        elif not isinstance(c, wx.StaticText):
+            out.append(c)
+    return out
 windows = []
 host = wx.Frame(None, pos=OFF)
 dlg = settings_page.LanguageDialog(host, settings_page.Languages([]))
-windows.append(('Add a language', dlg.dialog, not_label(dlg.ident.GetParent().GetChildren())))
+windows.append(('Add a language', dlg.dialog, not_label(dlg.dialog.GetChildren())))
 page_frame = wx.Frame(None, pos=OFF, size=(700, 500))
 panel = settings_page.build(page_frame)
 windows.append(('Settings -> Polyglot', page_frame, not_label(panel.GetChildren())))

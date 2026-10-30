@@ -598,5 +598,39 @@ class TheReaderSectionsAreASecondList(unittest.TestCase):
         self.assertEqual(self.frame.subcategory_list.GetSelection(), 0)
 
 
+class TheHtmlPageScriptRuns(unittest.TestCase):
+    """The HTML interface's whole page talks to Titan through one script.
+
+    That script lives in a Python string, and a `'\n'` written there with
+    one backslash reached the page as a real line break inside a JavaScript
+    string literal: the script did not parse, every handler was undefined,
+    and the page changed no setting, pressed no button and could not save -
+    measured in a real WebView2 (`tests/check_polyglot_html_live.py`).
+    """
+
+    def _module(self):
+        import importlib.util
+        path = os.path.join(ROOT, 'data', 'settings interfaces',
+                            'html_settings', 'init.py')
+        spec = importlib.util.spec_from_file_location('html_ui_check', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_no_string_literal_is_broken_across_lines(self):
+        script = self._module()._HEAD.split('<script>')[1].split(
+            '</script>')[0]
+        for line in script.splitlines():
+            code = line.split('//')[0] if line.strip().startswith('//')                 else line
+            self.assertEqual(code.count("'") % 2, 0, line)
+
+    def test_every_handler_the_controls_call_is_defined(self):
+        module = self._module()
+        script = module._HEAD
+        for name in ('titanGo', 'titanSet', 'titanSetMulti', 'titanPress',
+                     'titanFilter'):
+            self.assertIn('function %s(' % name, script)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

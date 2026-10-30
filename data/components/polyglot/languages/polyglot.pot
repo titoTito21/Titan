@@ -334,3 +334,88 @@ msgstr ""
 
 msgid "Add-ons in other languages"
 msgstr ""
+
+msgid "&Details:"
+msgstr ""
+
+msgid "Details"
+msgstr ""
+
+msgid "Compile command: {}"
+msgstr ""
+
+msgid "Files: {}"
+msgstr ""
+
+msgid "Identifier: {}"
+msgstr ""
+
+msgid "Interpreter: built into Polyglot"
+msgstr ""
+
+msgid "Interpreter: {}"
+msgstr ""
+
+msgid "Language: {}"
+msgstr ""
+
+msgid "No language is selected."
+msgstr ""
+
+msgid "Note: {}"
+msgstr ""
+
+msgid "Run command: {}"
+msgstr ""
+
+msgid "Running it"
+msgstr ""
+
+msgid "Source: {}"
+msgstr ""
+
+msgid "State: {}"
+msgstr ""
+
+msgid "The language"
+msgstr ""
+
+msgid ""
+"The languages add-ons may be written in. A ticked language is switched on. "
+"Add one by giving its interpreter or compiler, or change where a built-in "
+"language finds its own. Changes are written when the settings are saved."
+msgstr ""
+
+msgid "{name} ({files}): {state}"
+msgstr ""
+
+msgid "Language the &buttons act on:"
+msgstr ""
+
+msgid "Language the buttons act on"
+msgstr ""
+
+msgid "Lua 5.1, interpreted by this component itself."
+msgstr ""
+
+msgid "QuickJS-ng 0.17, carried by this component."
+msgstr ""
+
+msgid "Ruby 4.0, carried by this component."
+msgstr ""
+
+msgid ""
+"C# 5, compiled by the .NET Framework compiler that is part of Windows; the "
+"SDK's Titan class is compiled in."
+msgstr ""
+
+msgid ""
+"Part of Windows. Windows PowerShell 5.1 needs a script saved as UTF-8 with a"
+" BOM."
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
